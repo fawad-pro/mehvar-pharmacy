@@ -76,3 +76,45 @@
     text-align: right;
   }
 }
+
+/* =============================================================================
+   Receipt print — ADR-6, Phase 10 §7.
+
+   Kiosk silent printing (`--kiosk-printing`) is a Chrome launch flag set once
+   at physical installation (Phase 12 §6). This stylesheet is the software half:
+   when `window.print()` fires, only #printable-receipt is visible to the print
+   engine, sized for 80mm thermal paper, regardless of what screen it was called
+   from. The counter UI (cart, key bar, top bar) never appears on paper — and
+   never appears on screen either, since the receipt is mounted the moment there
+   is one to print (so `window.print()` can fire synchronously) but stays
+   `display: none` until a print actually happens.
+   ========================================================================== */
+#printable-receipt {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible;
+  }
+
+  #printable-receipt {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 80mm;
+    padding: 2mm;
+  }
+
+  @page {
+    size: 80mm auto;
+    margin: 0;
+  }
+}
+
