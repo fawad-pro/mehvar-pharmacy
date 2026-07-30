@@ -65,6 +65,75 @@ export async function createProduct(
   return { ok: true, value: id };
 }
 
+/**
+ * A quick item — W6, D3.
+ *
+ *   "From an empty search result, one key → name + price → line lands in cart,
+ *    sale continues. Creates a real product flagged *needs completion*."
+ *
+ * Two things make this different from `createProduct`, and both come from
+ * ADR-3 listing quick-item creation among the four offline-capturable events:
+ *
+ *  - **The id arrives from the client.** The cart line references this product
+ *    before it has reached the server, so the counter mints the identity, the
+ *    same way it already mints sale and payment ids.
+ *  - **It is idempotent on that id.** Sync may deliver the same creation twice;
+ *    delivery repeats, effects never do. A second delivery is a no-op, not a
+ *    duplicate product and not an error.
+ *
+ * "Real product" is the load-bearing phrase (D3): never an anonymous line, so
+ * every report and every stock figure keeps working. `needsCompletion` is what
+ * makes the queue nag until someone enriches it.
+ */
+export async function createQuickItem(
+  scope: TenantScope,
+  input: { id: Uuid; name: string; pricePaisa: number; baseUnitName: string },
+): Promise<CatalogResult<Uuid>> {
+  const existing = await findProduct(scope, input.id);
+  if (existing) {
+    return { ok: true, value: input.id };
+  }
+
+  const validated = validateProductDraft({
+    name: input.name,
+    manufacturer: null,
+    form: null,
+    strength: null,
+    formulaText: null,
+    baseUnitName: input.baseUnitName,
+    // A quick item is deliberately structureless: W6 asks for a name and a
+    // price and nothing else, and pack levels are exactly the kind of thing
+    // that gets guessed wrong under time pressure. Completion adds them.
+    packLevels: [],
+    pricePaisa: input.pricePaisa,
+    mrpPaisa: null,
+    minStockBaseUnits: null,
+    needsCompletion: true,
+  });
+  if (!validated.ok) {
+    return validated;
+  }
+
+  await insertProduct(scope, {
+    id: input.id,
+    tenantId: scope.tenantId,
+    globalProductId: null,
+    name: validated.value.name,
+    manufacturer: null,
+    form: null,
+    strength: null,
+    formulaText: null,
+    baseUnitName: validated.value.baseUnitName,
+    packLevels: [],
+    defaultPricePerBaseUnit: validated.value.pricePaisa,
+    currentMrpPerBaseUnit: null,
+    minStockBaseUnits: null,
+    needsCompletion: true,
+  });
+
+  return { ok: true, value: input.id };
+}
+
 export async function editProduct(
   scope: TenantScope,
   productId: Uuid,
