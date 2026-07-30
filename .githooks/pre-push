@@ -1,0 +1,21 @@
+#!/bin/sh
+#
+# Pre-push gate — Phase 11 §4.
+#
+# "No CI in week one; the pre-push script runs typecheck + tests
+#  (P6: ceremony proportional to team size)."
+#
+# Enable once per clone:  npm run hooks:install
+# Bypass in a genuine emergency:  git push --no-verify
+set -e
+
+echo "pre-push: typecheck"
+npm run typecheck
+
+echo "pre-push: lint"
+npm run lint
+
+echo "pre-push: tests"
+npm run test
+
+echo "pre-push: ok"
