@@ -41,6 +41,21 @@ Verified green: `typecheck`, `lint`, `test` (60), `build`, `e2e` (3).
 §5.1's "app role" is never provisioned. Implemented under the recommendation;
 see `docs/PLAN_CHANGE_NOTES.md`.
 
+## Session 2 — Day 2, Catalog & search
+
+- [x] Client-side index (ADR-4): sorted-token prefix search, consonant-skeleton
+      matching, trigram-prefiltered fuzzy, barcode hash
+- [x] Ranking ladder per Phase 10 §5, with the ranking table as its spec
+- [x] IndexedDB cache with incremental refresh against an `updated_at` watermark
+- [x] `GET /api/catalog` — whole or `?since=` delta
+- [x] Products CRUD: server-paginated list, pack-level editor with preview,
+      barcode linking, completion queue
+- [x] Search UI on the Sale surface, keyboard-only
+- [x] Tests: ranking table, scale characteristics at 3,000 and 12,000 products,
+      pack-level and barcode validation, six E2E paths
+
+Verified green: `typecheck`, `lint`, `test` (137), `build`, `e2e` (9).
+
 ## Pre-implementation track (Phase 13 §2 — owner-side, blocks Day 1 where noted)
 
 - [ ] **Catalog curation** — hand-verified head of ~1,500–3,000 fast movers with
@@ -58,7 +73,7 @@ see `docs/PLAN_CHANGE_NOTES.md`.
 ## Phase 13 — the build week
 
 - [x] Day 1 — Foundation: schema, chokepoint, migrations + seed, app shell, auth
-- [ ] Day 2 — Catalog & search
+- [x] Day 2 — Catalog & search
 - [ ] Day 3 — Sale core (**highest consequence**; the crown test suite lands here)
 - [ ] Day 4 — Payment, receipt, udhaar
 - [ ] Day 5 — Offline capture & sync

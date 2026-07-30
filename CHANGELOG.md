@@ -2,6 +2,59 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 2 — Day 2, Catalog & search
+
+Built for the 2,000–3,000 product catalog Phase 6 §3.2 describes, not the 53
+seeded ones. The distinction is the whole session: the naive implementation —
+scan the catalog and edit-distance every product per keystroke — passes a demo
+and misses I2 at a real counter.
+
+**The client index (ADR-4)**
+
+- Prefix matching binary-searches a sorted token array; skeleton matching is a
+  hash lookup; fuzzy matching never touches the catalog, being nominated by a
+  trigram posting list and capped before any edit distance is computed. Build is
+  O(catalog); search is bounded by absolute constants.
+- Transliteration drift is handled by a consonant skeleton — "panadol",
+  "pandol" and "penadol" all reduce to "pndl" — with bounded Damerau-Levenshtein
+  as the backstop. Two cheap gatherers beat one expensive one.
+- Cached in IndexedDB and refreshed incrementally against an `updated_at`
+  watermark, so a corrected price ships one row rather than three thousand.
+  Every cache failure degrades to a slower path, never to a counter that cannot
+  search (P2).
+
+**Ranking (Phase 10 §5)**
+
+- The ladder in order: exact → name prefix → word boundary → fuzzy → salt and
+  manufacturer. Salt matches are labelled in the UI, because a salesman shown an
+  unasked-for brand needs to know why (substitution support, Phase 1 §5).
+- Barcodes bypass ranking and carry the unit level they map to.
+- The ranking table in `catalog-index.test.ts` is the specification, per the
+  day's risk note that "the ranking table defines good enough".
+
+**Products screen**
+
+- Server-paginated list with search across name, salt and maker; create and edit
+  with a pack-level editor that previews "1 box = 200 tab" before saving, because
+  a wrong pack factor corrupts stock silently rather than loudly.
+- Barcode linking, scanner-first, with the unit level a required choice.
+- The completion queue (D3) surfaces from the partial index added on Day 1.
+
+**Schema**
+
+- `updated_at` on `products` and `product_barcodes` — mechanical columns that
+  make incremental index refresh possible. Stamped by `TenantScope.update`, so no
+  writer can forget them.
+
+**Fixed**
+
+- `formatPaisa` truncated paisa by default, rendering a Rs 3.50 tablet as "3" on
+  the search results and the catalog list. Paisa are now shown by default and
+  suppressing them is the opt-in — a wrong price on a counter screen is the kind
+  of silent money error the whole codebase is arranged to prevent.
+- The seeded udhaar sale consumed Panadol's entire opening batch, leaving the
+  demo's most-searched product at zero stock.
+
 ## Session 1 — Day 1, Foundation
 
 **Schema (Phase 9, verbatim)**
