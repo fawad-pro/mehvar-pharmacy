@@ -179,10 +179,12 @@ async function main(): Promise<void> {
     const productId = productIds[index];
     if (!productId) continue;
 
-    // A plausible shelf: more of the fast movers, a couple deliberately at zero
-    // so the low-stock list (W12) has something to say on day one.
+    // A plausible shelf: a couple of products deliberately at zero so the
+    // low-stock list (W12) has something to say on day one — but never the
+    // demo's headline products, which are the first thing anyone searches for.
     const packSize = seed.packLevels[0]?.factor ?? 1;
-    const qty = index % 17 === 0 ? 0 : packSize * (2 + (index % 9));
+    const outOfStock = index === 13 || index === 29;
+    const qty = outOfStock ? 0 : packSize * (3 + (index % 9));
     if (qty === 0) continue;
 
     const [adjustment] = await scope.insert(adjustments, {
@@ -226,9 +228,11 @@ async function main(): Promise<void> {
     // path entirely; until it exists, the seed writes the same rows the domain
     // writer will, and Day 3's rebuild-equivalence suite will hold this data to
     // the same standard as anything the application produces.
-    const batch = openingBatches[0];
+    // Deliberately not the first batch: the udhaar sale must not empty the
+    // shelf of the product every demo starts by searching for.
+    const batch = openingBatches[5] ?? openingBatches[0];
     if (batch) {
-      const qty = 20;
+      const qty = 10;
       const unitPrice = batch.price;
       const total = qty * unitPrice;
 

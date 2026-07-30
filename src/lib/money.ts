@@ -54,12 +54,17 @@ export function rupeesToPaisa(rupees: number): Paisa {
  * Formats paisa for display. Grouping is applied; the currency symbol is
  * omitted by default because Phase 10 §4 stacks totals as bare numerals with
  * the unit implied by context (I6: numbers are the loudest thing on screen).
+ *
+ * Paisa are shown by default, and suppressing them is the opt-in. A Rs 3.50
+ * tablet rendered as "3" is a wrong price on a counter screen, and truncation
+ * that has to be remembered at every call site will eventually be forgotten —
+ * so the safe behaviour is the default and `decimals: false` is deliberate.
  */
 export function formatPaisa(
   amount: Paisa,
   options: { withSymbol?: boolean; decimals?: boolean } = {},
 ): string {
-  const { withSymbol = false, decimals = false } = options;
+  const { withSymbol = false, decimals = true } = options;
   const negative = amount < 0;
   const absolute = Math.abs(amount);
   const rupees = Math.trunc(absolute / PAISA_PER_RUPEE);
