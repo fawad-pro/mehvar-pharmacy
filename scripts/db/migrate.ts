@@ -16,7 +16,7 @@ import { Pool } from 'pg';
 const MIGRATIONS_FOLDER = path.join(process.cwd(), 'src/db/migrations');
 
 async function main(): Promise<void> {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!url) {
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env first.');
   }

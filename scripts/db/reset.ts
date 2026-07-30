@@ -12,7 +12,7 @@ import 'dotenv/config';
 import { Pool } from 'pg';
 
 async function main(): Promise<void> {
-  const url = process.env.DATABASE_URL;
+  const url = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!url) {
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env first.');
   }
@@ -24,6 +24,11 @@ async function main(): Promise<void> {
   try {
     await pool.query('DROP SCHEMA IF EXISTS public CASCADE');
     await pool.query('CREATE SCHEMA public');
+    // Drizzle records applied migrations in its own schema. Dropping `public`
+    // alone leaves that ledger intact, so the next `db:migrate` believes it has
+    // nothing to do and yields an empty database that claims to be migrated —
+    // silently breaking Phase 11 §4's "always one command away" contract.
+    await pool.query('DROP SCHEMA IF EXISTS drizzle CASCADE');
     console.log('Schema reset. Run `npm run db:migrate` next.');
   } finally {
     await pool.end();
