@@ -38,41 +38,16 @@ import { paisa, type Paisa } from '@/lib/branded';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { planAllocation } from '../inventory/allocation';
+import { validateSaleCommand, type SaleCommand, type SaleRejection } from './sale-command';
 
-export interface SaleLineCommand {
-  /** Client-generated; becomes `sale_lines.id`. */
-  readonly lineId: Uuid;
-  readonly productId: Uuid;
-  readonly qtyBase: number;
-  readonly enteredUnitLevel: string;
-  /** Per base unit, as charged (ADR-5: the client's last-known price). */
-  readonly unitPricePaisa: number;
-  readonly lineDiscountPaisa: number;
-  readonly priceOverridden: boolean;
-}
-
-export interface SaleCommand {
-  /** Client-generated (ADR-3). The idempotency key. */
-  readonly saleId: Uuid;
-  readonly receiptNumber: string;
-  readonly customerId: Uuid | null;
-  readonly lines: readonly SaleLineCommand[];
-  readonly invoiceDiscountPaisa: number;
-  readonly cashPaisa: number;
-  readonly creditPaisa: number;
-  readonly changePaisa: number;
-  readonly origin: 'online' | 'offline_sync';
-  readonly clientSchemaVersion: number;
-  readonly clientCommittedAt: Date;
-}
-
-export type SaleRejection =
-  | 'empty_cart'
-  | 'invalid_quantity'
-  | 'split_mismatch'
-  | 'credit_without_customer'
-  | 'negative_amount'
-  | 'stale_batch_state';
+// The command and its validator are pure and live apart (see `sale-command.ts`
+// for why); re-exported so every existing caller keeps one import.
+export {
+  validateSaleCommand,
+  type SaleCommand,
+  type SaleLineCommand,
+  type SaleRejection,
+} from './sale-command';
 
 export interface SaleCommitted {
   readonly saleId: Uuid;
@@ -97,51 +72,6 @@ export interface SaleCommitted {
 }
 
 export type SaleResult = { ok: true; value: SaleCommitted } | { ok: false; reason: SaleRejection };
-
-/**
- * Validates a command against Phase 5 invariant 4 before any row is written.
- *
- * Pure and exported so the UI can check the same rules it will be judged by,
- * and so the schema's CHECK constraints are a backstop rather than the first
- * line of defence — a CHECK violation reaching a counter is an error message
- * nobody can act on.
- */
-export function validateSaleCommand(
-  command: SaleCommand,
-): { ok: true; subtotalPaisa: number; totalPaisa: number } | { ok: false; reason: SaleRejection } {
-  if (command.lines.length === 0) {
-    return { ok: false, reason: 'empty_cart' };
-  }
-
-  let subtotal = 0;
-  for (const line of command.lines) {
-    if (!Number.isSafeInteger(line.qtyBase) || line.qtyBase <= 0) {
-      return { ok: false, reason: 'invalid_quantity' };
-    }
-    if (line.unitPricePaisa < 0 || line.lineDiscountPaisa < 0) {
-      return { ok: false, reason: 'negative_amount' };
-    }
-    const gross = line.unitPricePaisa * line.qtyBase;
-    subtotal += Math.max(0, gross - line.lineDiscountPaisa);
-  }
-
-  if (command.invoiceDiscountPaisa < 0 || command.cashPaisa < 0 || command.creditPaisa < 0) {
-    return { ok: false, reason: 'negative_amount' };
-  }
-
-  const total = subtotal - command.invoiceDiscountPaisa;
-  if (total < 0) {
-    return { ok: false, reason: 'negative_amount' };
-  }
-  if (command.cashPaisa + command.creditPaisa !== total) {
-    return { ok: false, reason: 'split_mismatch' };
-  }
-  if (command.creditPaisa > 0 && command.customerId === null) {
-    return { ok: false, reason: 'credit_without_customer' };
-  }
-
-  return { ok: true, subtotalPaisa: subtotal, totalPaisa: total };
-}
 
 /**
  * Commits a sale.
