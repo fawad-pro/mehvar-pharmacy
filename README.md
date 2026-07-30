@@ -111,7 +111,13 @@ Everything else is enforced by review against `CLAUDE.md` and the master plan.
 
 The planning package deliberately leaves these open; they are not architectural
 and are cheap to reverse: **npm**, **Node 22**, **Vitest**, **Playwright**,
-**ESLint flat config + Prettier**, **Tailwind v4** with tokens as CSS variables.
+**ESLint 9 flat config + Prettier**, **Tailwind v4** with tokens as CSS
+variables.
+
+ESLint is pinned to 9.x because that is what Next 16 supports: the plugins
+`eslint-config-next` bundles (`eslint-plugin-react`, `eslint-plugin-import`,
+`eslint-plugin-jsx-a11y`) all cap their peer range at ESLint 9. Do not move to 10
+until Next ships plugins that accept it.
 
 There is deliberately **no CI** — Phase 11 §4: "No CI in week one; the pre-push
 script runs typecheck + tests (P6: ceremony proportional to team size)."
