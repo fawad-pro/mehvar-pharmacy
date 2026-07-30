@@ -15,9 +15,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { searchCustomersAction, createCustomerAction, type CustomerHit } from '@/app/(counter)/customers/actions';
+import { searchCustomersAction, type CustomerHit } from '@/app/(counter)/customers/actions';
+import { useSync } from '@/client/sync/provider';
+import { validateCustomerDraft } from '@/domain/udhaar/customer';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
+import { uuidv7 } from '@/lib/uuid';
 
 export function CustomerPicker({
   title = 'Customer',
@@ -34,6 +37,7 @@ export function CustomerPicker({
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { capture } = useSync();
   const field = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,12 +50,19 @@ export function CustomerPicker({
       return;
     }
     let cancelled = false;
-    void searchCustomersAction(trimmed).then((result) => {
-      if (!cancelled) {
-        setHits(result);
-        setActive(0);
-      }
-    });
+    void searchCustomersAction(trimmed)
+      .then((result) => {
+        if (!cancelled) {
+          setHits(result);
+          setActive(0);
+        }
+      })
+      .catch(() => {
+        // Offline (ADR-3): the customer book lives on the server, so lookup is
+        // one of the things that stops working. What remains is the thing that
+        // matters mid-rush — the inline create below is still right there, so
+        // W2 continues rather than dead-ending (P2).
+      });
     return () => {
       cancelled = true;
     };
@@ -62,20 +73,44 @@ export function CustomerPicker({
   // previous term never renders, it just never gets asked for).
   const visibleHits = term.trim() === '' ? [] : hits;
 
+  /**
+   * W2's inline create — "udhaar is extended mid-rush, not pre-registered".
+   *
+   * Captured through the outbox rather than committed directly, because a new
+   * customer during a disruption is part of W2 and ADR-3 makes W2 work through
+   * one. The counter mints the id, so the sale queued a moment later can
+   * reference this customer before either has reached the server; FIFO delivery
+   * is what guarantees the customer lands first.
+   */
   async function createInline(): Promise<void> {
     const name = term.trim();
     if (name === '' || busy) {
       return;
     }
-    setBusy(true);
-    setError(null);
-    const result = await createCustomerAction({ name, phone: null });
-    setBusy(false);
-    if (!result.ok) {
-      setError(result.message);
+
+    const validated = validateCustomerDraft({ name, phone: null });
+    if (!validated.ok) {
+      setError('A name is needed.');
       return;
     }
-    onPick(result.customer);
+
+    setBusy(true);
+    setError(null);
+
+    const id = uuidv7();
+    try {
+      await capture({
+        kind: 'customer',
+        payload: { id, name: validated.value.name, phone: validated.value.phone },
+      });
+    } catch {
+      setError('This machine could not save the customer. Try again.');
+      setBusy(false);
+      return;
+    }
+
+    setBusy(false);
+    onPick({ id, name: validated.value.name, phone: validated.value.phone, balancePaisa: 0 });
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {

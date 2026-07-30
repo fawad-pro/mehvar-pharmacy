@@ -14,6 +14,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { useGlobalKeys } from '@/client/keyboard/use-global-keys';
 import { F8Provider, useF8Registry } from '@/client/keyboard/f8-context';
 import { ReceiptContextProvider } from '@/client/receipt/receipt-context';
+import { SyncProvider } from '@/client/sync/provider';
+import { ServiceWorker } from '@/client/sync/service-worker';
 
 import { KeyBar } from './key-bar';
 import { PinSwitchOverlay, type SwitchableUser } from './pin-switch-overlay';
@@ -82,43 +84,50 @@ export function AppShell({
   }, [router]);
 
   return (
-    <div className="flex h-screen flex-col">
-      <TopBar
-        tenantName={tenantName}
-        userName={userName}
-        userRole={userRole}
-        deviceName={deviceName}
-        onSwitchUser={() => {
-          setSwitching(true);
-        }}
-      />
+    // Both providers wrap the whole shell, not just the surface: the top bar's
+    // unsynced badge (ADR-3) reads the sync context, and Settle Udhaar (W3)
+    // captures through it from outside any page.
+    <ReceiptContextProvider tenantId={tenantId}>
+      <SyncProvider tenantId={tenantId}>
+        <ServiceWorker />
 
-      <ReceiptContextProvider tenantId={tenantId}>
-        <F8Provider register={register}>
-          <main className="min-h-0 flex-1 overflow-auto">{children}</main>
-        </F8Provider>
-
-        <KeyBar role={userRole} />
-
-        {switching ? (
-          <PinSwitchOverlay
-            users={users}
-            currentUserId={userId}
-            onClose={() => {
-              setSwitching(false);
-            }}
-            onSwitched={onSwitched}
-          />
-        ) : null}
-
-        {settling ? (
-          <SettleUdhaarOverlay
-            onClose={() => {
-              setSettling(false);
+        <div className="flex h-screen flex-col">
+          <TopBar
+            tenantName={tenantName}
+            userName={userName}
+            userRole={userRole}
+            deviceName={deviceName}
+            onSwitchUser={() => {
+              setSwitching(true);
             }}
           />
-        ) : null}
-      </ReceiptContextProvider>
-    </div>
+
+          <F8Provider register={register}>
+            <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+          </F8Provider>
+
+          <KeyBar role={userRole} />
+
+          {switching ? (
+            <PinSwitchOverlay
+              users={users}
+              currentUserId={userId}
+              onClose={() => {
+                setSwitching(false);
+              }}
+              onSwitched={onSwitched}
+            />
+          ) : null}
+
+          {settling ? (
+            <SettleUdhaarOverlay
+              onClose={() => {
+                setSettling(false);
+              }}
+            />
+          ) : null}
+        </div>
+      </SyncProvider>
+    </ReceiptContextProvider>
   );
 }

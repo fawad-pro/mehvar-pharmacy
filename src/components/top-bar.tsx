@@ -4,13 +4,20 @@
  * The top bar — Phase 10 §1: "a slim top bar (pharmacy name, active user chip
  * with PIN-switch, connectivity/unsynced badge)".
  *
- * The unsynced badge is the visible semantic state ADR-3 requires. Its count is
- * wired in Session 5 (Day 5) when the offline queue exists; until then it
- * reports connectivity only, which is honest — there is nothing to be unsynced
- * yet, and a badge that lies about zero is worse than no badge.
+ * The unsynced badge is the visible semantic state ADR-3 requires: "unsynced-
+ * record count is a visible semantic state (I7)". It counts the outbox, which
+ * is the only honest number — "offline" describes the network, and what the
+ * operator actually needs to know is whether any of their sales are still only
+ * on this machine.
+ *
+ * Amber throughout, never red (I7): unsynced is the caution family, alongside
+ * near-expiry and negative stock. A queue draining normally is not an alarm,
+ * and colouring it like one would teach the counter to ignore the alarm colour.
  */
 
 import { useEffect, useState } from 'react';
+
+import { useSync } from '@/client/sync/provider';
 
 export function TopBar({
   tenantName,
@@ -26,6 +33,7 @@ export function TopBar({
   onSwitchUser: () => void;
 }) {
   const [online, setOnline] = useState(true);
+  const { unsyncedCount, stuck } = useSync();
 
   useEffect(() => {
     const update = () => {
@@ -49,7 +57,18 @@ export function TopBar({
       <div className="ml-auto flex items-center gap-3">
         {/* I7 — semantic colour only with meaning. Amber is the caution family:
             near-expiry, negative stock, unsynced. Nothing else may borrow it. */}
-        {online ? null : (
+        {unsyncedCount > 0 ? (
+          <span
+            className="text-amber border-amber/40 rounded border px-2 py-0.5 text-xs"
+            role="status"
+            aria-label={`${unsyncedCount} record${unsyncedCount === 1 ? '' : 's'} waiting to sync`}
+          >
+            <span className="numeral font-medium">{unsyncedCount}</span> waiting to sync
+            {/* ADR-3's calm sentence, and it is literally true — the queue is
+                what keeps it true. */}
+            {stuck ? ' — needs attention' : online ? '' : ' — selling keeps working'}
+          </span>
+        ) : online ? null : (
           <span className="text-amber border-amber/40 rounded border px-2 py-0.5 text-xs">
             Offline — selling keeps working
           </span>
