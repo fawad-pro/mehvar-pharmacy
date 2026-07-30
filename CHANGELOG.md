@@ -2,6 +2,100 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 5 — Day 5, Offline capture & sync
+
+The second-highest-consequence day, and the one where "lost or duplicated
+sales — existential for trust" (Phase 13 §4) stops being a risk register entry
+and becomes tested behaviour.
+
+**Every sale is captured locally first**
+
+- The counter writes the sale into a durable IndexedDB outbox and prints the
+  receipt on that write — never on a server response. Phase 7 rule 3:
+  "nothing in a sale path awaits anything slower than the local machine except
+  the final online commit, which the operator does not wait on for receipt
+  printing."
+- Online or offline takes the same path, deliberately. An offline path that
+  only runs during outages is a path that is never really tested; routing all
+  captures through one queue means the disruption path is exercised a few
+  hundred times a day and a reconnect is not a special mode, just the normal
+  loop finding the network already there.
+- `enqueue` waits for the IndexedDB *transaction to complete*, not for the
+  request to succeed. The difference is invisible in every test and decisive in
+  a power cut, and it is what lets the receipt print immediately afterwards.
+- Two receipt figures are consequently the client's last-known values — the
+  customer's balance and whether the sale outran stock. That is ADR-5's stated
+  posture applied to the other two numbers on a receipt; the authoritative
+  pending layer is created server-side at ingestion, and Phase 5 invariant 3
+  keeps the true balance re-derivable regardless of what any slip says.
+
+**Delivery (ADR-3, ADR-5)**
+
+- `domain/sync/ingest.ts` contains no business rules on purpose: it routes each
+  record to the writer that already owns it. A rule appearing there would mean
+  an offline sale had started meaning something different from an online one.
+- Idempotency is not implemented at the boundary either — it is a property the
+  writers already had, because every one keys on a client-generated id. A batch
+  replayed five times is exactly-once by construction.
+- Strictly FIFO, stopping at the first failure: a quick item (W6) must land
+  before the sale whose line references it, and a customer created inline (W2)
+  before the udhaar sale that owes against it.
+- A taken receipt number is re-minted and retried rather than surfaced; a
+  domain rejection is kept and made visible rather than dropped, because a
+  record that printed a receipt and cannot be stored is something a person has
+  to see.
+
+**W6 quick item (D3)**
+
+- Enter on a search that found nothing opens a two-field form pre-filled with
+  what was typed. The product is real from that moment — added to the local
+  index so the cart line renders and the next search finds it, queued so it
+  becomes real on the server whenever the server is next reachable.
+- What the form does *not* ask for is the design: pack structure guessed wrong
+  under time pressure corrupts stock silently, so it belongs to the completion
+  queue where there is time to be right.
+
+**PWA shell**
+
+- A service worker so a counter that reloads mid-outage still boots. Never
+  touches a non-GET request — a cached or swallowed server action would make a
+  sale look delivered when it was not — and never caches `/api`, which has its
+  own watermarked cache.
+- Registered in production only; the behaviour is verified against
+  `npm run build && npm run start`, and `e2e/pwa.spec.ts` skips in dev the same
+  way the integration suites skip without a database.
+
+**Unsynced badge (I7)**
+
+- The top bar counts the outbox, which is the only honest number: "offline"
+  describes the network, and what the operator needs to know is whether any of
+  their sales are still only on this machine. Amber, never red — a queue
+  draining normally is not an alarm.
+
+**Fixed / found while building**
+
+- A client component importing `validateSaleCommand` pulled `commit-sale.ts`'s
+  database imports into the browser bundle, where `server-only` refused them.
+  Neither typecheck nor lint can see this; the marker did its job. The pure
+  command and its validator now live in `domain/sales/sale-command.ts` with no
+  imports below `lib/` — the split Phase 11 §2 already asked for, made physical
+  by the one thing that could detect it.
+- Backoff was driven by the record's stored attempt count, so a counter that
+  traded through a long outage came back with its backoff already at the 30s
+  ceiling and sat with a lit badge after the network was visibly back. Backoff
+  is now the pump's own consecutive-failure count, cleared on `online` — the
+  record's `attempts` remains its history, feeding `origin` and the stuck
+  warning.
+- The customer type-ahead rejected unhandled while offline. It now degrades to
+  the inline create, which is the part that matters mid-rush (P2).
+
+**Plan reading worth flagging:** ADR-3 lists four capturable events and does not
+name customer creation, but it names W2, and W2 makes inline customer create
+mandatory ("udhaar is extended mid-rush, not pre-registered"). Capturing W2
+offline therefore includes its inline create; refusing it would put a wall in
+the middle of a named workflow, which P2 forbids. Implemented on that reading
+rather than raised as a plan change — say so if you read it differently.
+
 ## Session 4 — Day 4, Payment, receipt, udhaar
 
 W1's cash path gets a real payment overlay; W2 and W3 land in full, end to end,
