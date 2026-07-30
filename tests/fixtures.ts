@@ -9,7 +9,7 @@
 
 import { createTenant } from '@/db/provisioning';
 import { tenantScope, type TenantScope } from '@/db/scoped';
-import { adjustments, batches, products, users, type TenantSettings } from '@/db/schema';
+import { adjustments, batches, customers, products, users, type TenantSettings } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { purgeTenant } from './db-admin';
@@ -119,6 +119,16 @@ export async function addOpeningStock(
   });
 
   return batchId;
+}
+
+export async function createTestCustomer(
+  scope: TenantScope,
+  name: string,
+  phone: string | null = null,
+): Promise<Uuid> {
+  const id = uuidv7();
+  await scope.insert(customers, { id, name, phone });
+  return id;
 }
 
 /**
