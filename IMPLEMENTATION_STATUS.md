@@ -56,6 +56,22 @@ see `docs/PLAN_CHANGE_NOTES.md`.
 
 Verified green: `typecheck`, `lint`, `test` (137), `build`, `e2e` (9).
 
+## Session 3 — Day 3, Sale core
+
+- [x] `commitSale` as one transaction: lines, FEFO allocation, pending layer,
+      discounts, override flags, cash split
+- [x] Idempotent on client id (ADR-3), with `FOR UPDATE` batch locking
+- [x] Pure FEFO planner (D1) and pending layer (D2)
+- [x] Rebuild + verifier (ADR-8), plus `npm run db:verify`
+- [x] Cart UI: quantity grammar, unit-level cycling, in-place line edit
+- [x] Device-scoped receipt numbers (Phase 9 §3)
+- [x] **Rebuild-equivalence suite (the crown)** — randomized, seeded histories
+- [x] Transaction semantics, FEFO ordering incl. NULLS LAST, pending creation
+- [x] Done-when: a keyboard-only cash sale commits, stock derives correctly, and
+      `db:verify` agrees against the real database
+
+Verified green: `typecheck`, `lint`, `test` (219), `build`, `e2e` (14).
+
 ## Pre-implementation track (Phase 13 §2 — owner-side, blocks Day 1 where noted)
 
 - [ ] **Catalog curation** — hand-verified head of ~1,500–3,000 fast movers with
@@ -74,7 +90,7 @@ Verified green: `typecheck`, `lint`, `test` (137), `build`, `e2e` (9).
 
 - [x] Day 1 — Foundation: schema, chokepoint, migrations + seed, app shell, auth
 - [x] Day 2 — Catalog & search
-- [ ] Day 3 — Sale core (**highest consequence**; the crown test suite lands here)
+- [x] Day 3 — Sale core (**highest consequence**; the crown test suite lands here)
 - [ ] Day 4 — Payment, receipt, udhaar
 - [ ] Day 5 — Offline capture & sync
 - [ ] Day 6 — Purchases, batches, stock operations

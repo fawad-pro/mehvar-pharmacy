@@ -88,6 +88,20 @@ export default tseslint.config(
     },
   },
 
+  // Tests read the database directly, on purpose.
+  //
+  // ADR-2's chokepoint is a guarantee about application code: no *call site* may
+  // construct a query, because a forgotten WHERE clause leaks a tenant. A test
+  // asserting what actually landed in a row is the opposite activity — it is the
+  // verification that makes the guarantee checkable — so condition builders are
+  // permitted here. The layering rule still applies.
+  {
+    files: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [LAYERING_IMPORTS] }],
+    },
+  },
+
   // Phase 10 §6/§9 — tokens ship as CSS variables; components reference them,
   // never raw colour values. globals.css is where the hex values legitimately live.
   {

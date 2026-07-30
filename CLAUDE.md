@@ -83,17 +83,17 @@ their feature, never after — rebuild equivalence ships the same day as
 
 ## Session plan (Phase 13 §3)
 
-| Session | Day | Slice                                                                        |
-| ------- | --- | ---------------------------------------------------------------------------- |
-| 0       | —   | Bootstrap: scaffold, tooling, tokens, unit primitives ✅                     |
-| 1       | 1   | Schema, `scoped.ts`, migrations + seed, app shell, ADR-7 auth ✅             |
-| 2       | 2   | Catalog & search: CRUD, client index, ranking ladder, barcodes               |
-| 3       | 3   | **Sale core** — `commitSale`, FEFO, pending layer, cart UI + the crown suite |
-| 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement             |
-| 5       | 5   | Offline capture & sync                                                       |
-| 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution           |
-| 7       | 7   | Day close, reports, owner surface, returns, settings, export                 |
-| 8       | 8   | Buffer & hardening: E2E, token lint sweep, restore drill, verifier, deploy   |
+| Session | Day | Slice                                                                       |
+| ------- | --- | --------------------------------------------------------------------------- |
+| 0       | —   | Bootstrap: scaffold, tooling, tokens, unit primitives ✅                    |
+| 1       | 1   | Schema, `scoped.ts`, migrations + seed, app shell, ADR-7 auth ✅            |
+| 2       | 2   | Catalog & search: CRUD, client index, ranking ladder, barcodes ✅           |
+| 3       | 3   | **Sale core** — `commitSale`, FEFO, pending layer, cart UI + crown suite ✅ |
+| 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement            |
+| 5       | 5   | Offline capture & sync                                                      |
+| 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution          |
+| 7       | 7   | Day close, reports, owner surface, returns, settings, export                |
+| 8       | 8   | Buffer & hardening: E2E, token lint sweep, restore drill, verifier, deploy  |
 
 Day 3 is the highest-consequence day. **If anything slips, it slips _into_ that
 day, never out of it.**
@@ -123,6 +123,19 @@ exception visibility.
 - **Integration suites skip without a database**, and immutability assertions
   additionally skip without `APP_DB_ROLE`. Green locally is not proof; the
   pre-deploy gate runs them for real.
+
+## Things Day 3 established
+
+- **`commitSale` is the one writer for sales.** It owns its transaction whole and
+  is already idempotent on client id — Day 5 ingests through it unchanged.
+- **Run `npm run db:verify` after anything that moves stock.** It is the ADR-8
+  verifier; a mismatch is sev-1.
+- **Extend the crown suite, never fork it.** Purchases (Day 6) and returns
+  (Day 7) add event kinds to `applyRandomEvent`; the value is that one history
+  mixes everything.
+- **Never build a verifier query with a correlated `sql` subquery.** Drizzle
+  renders the interpolated outer column unqualified, and it resolves silently
+  against the inner table. Use plain aggregates.
 
 ## Commits
 

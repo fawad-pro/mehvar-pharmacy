@@ -21,6 +21,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --conditions=react-server scripts/db/migrate.ts",
     "db:grants": "tsx --conditions=react-server scripts/db/grants.ts",
+    "db:verify": "tsx --conditions=react-server scripts/db/verify.ts",
     "db:reset": "tsx --conditions=react-server scripts/db/reset.ts",
     "db:seed": "tsx --conditions=react-server scripts/db/seed.ts",
     "db:studio": "drizzle-kit studio",

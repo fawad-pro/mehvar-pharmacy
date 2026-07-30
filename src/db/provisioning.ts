@@ -19,7 +19,7 @@ import { eq } from 'drizzle-orm';
 import type { Uuid } from '@/lib/uuid';
 
 import { globalCatalog } from './scoped';
-import { tenants, type TenantSettings } from './schema';
+import { tenants, users, type TenantSettings } from './schema';
 
 export async function createTenant(input: {
   id: Uuid;
@@ -46,4 +46,26 @@ export async function setTenantStatus(
   status: 'active' | 'suspended',
 ): Promise<void> {
   await globalCatalog().update(tenants).set({ status }).where(eq(tenants.id, tenantId));
+}
+
+/**
+ * Every tenant id — founder-side tooling only (the ADR-8 verifier, exports).
+ *
+ * Necessarily unscoped: a cross-tenant sweep is the one legitimate reason to
+ * enumerate tenants, and it lives here beside the other unscoped door rather
+ * than widening `TenantScope`.
+ */
+export async function listTenantIds(): Promise<Uuid[]> {
+  const rows = await globalCatalog().select({ id: tenants.id }).from(tenants);
+  return rows.map((row) => row.id);
+}
+
+/** Any active user of a tenant, to satisfy the chokepoint's attribution contract. */
+export async function anyUserId(tenantId: Uuid): Promise<Uuid | undefined> {
+  const rows = await globalCatalog()
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.tenantId, tenantId))
+    .limit(1);
+  return rows[0]?.id;
 }

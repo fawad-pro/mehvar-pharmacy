@@ -18,6 +18,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
+import { parseQuantityQuery } from '@/client/search/quantity-grammar';
 import { MatchTier, type SearchHit } from '@/client/search/catalog-index';
 import { formatPaisa } from '@/lib/money';
 import { describeQuantity } from '@/lib/quantity';
@@ -28,34 +29,47 @@ const RESULT_LIMIT = 10;
 export function ProductSearch({
   onSelect,
   autoFocus = true,
+  inputRef,
+  onEnterCart,
 }: {
-  onSelect: (hit: SearchHit) => void;
+  /** Receives the chosen hit and the raw query, so quantity grammar survives. */
+  onSelect: (hit: SearchHit, rawQuery: string) => void;
   autoFocus?: boolean;
+  /** Lets the sale surface return focus here after a commit (Phase 7 rule 1). */
+  inputRef?: React.RefObject<HTMLInputElement | null>;
+  /** ArrowUp on an empty query moves into the cart (Phase 10 §4). */
+  onEnterCart?: () => void;
 }) {
   const { index, status, productCount } = useCatalog();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
-  const field = useRef<HTMLInputElement>(null);
+  const ownRef = useRef<HTMLInputElement>(null);
+  const field = inputRef ?? ownRef;
 
   useEffect(() => {
     if (autoFocus) {
       field.current?.focus();
     }
+    // `field` is a stable ref object; re-running on it would refocus on render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocus]);
 
   // Recomputed per keystroke, which is affordable precisely because the index
   // bounds the work (see catalog-index.ts). No debounce: a debounce would add
   // latency to hide cost that is not there.
+  // Searched on the text with any quantity prefix removed, so "3*pana" finds
+  // Panadol rather than nothing (Phase 10 §4).
+  const parsed = useMemo(() => parseQuantityQuery(query), [query]);
   const hits = useMemo<SearchHit[]>(
-    () => (index && query.trim() !== '' ? index.search(query, RESULT_LIMIT) : []),
-    [index, query],
+    () => (index && parsed.query !== '' ? index.search(parsed.query, RESULT_LIMIT) : []),
+    [index, parsed.query],
   );
 
   function choose(hit: SearchHit | undefined): void {
     if (!hit) {
       return;
     }
-    onSelect(hit);
+    onSelect(hit, query);
     setQuery('');
     setActive(0);
     field.current?.focus();
@@ -67,6 +81,12 @@ export function ProductSearch({
       setActive((current) => Math.min(current + 1, hits.length - 1));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
+      // At the top of the list — or with nothing typed — ArrowUp leaves search
+      // and enters the cart, which is how a line gets edited without the mouse.
+      if (active === 0 || hits.length === 0) {
+        onEnterCart?.();
+        return;
+      }
       setActive((current) => Math.max(current - 1, 0));
     } else if (event.key === 'Enter') {
       event.preventDefault();
@@ -104,6 +124,12 @@ export function ProductSearch({
         className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
       />
 
+      {parsed.hasExplicitCount ? (
+        <p className="text-green-600 mt-1 text-xs">
+          Quantity {parsed.count} — searching “{parsed.query}”
+        </p>
+      ) : null}
+
       <p className="text-ink/40 mt-1 text-xs">
         {status === 'loading'
           ? 'Loading catalog…'
@@ -114,7 +140,7 @@ export function ProductSearch({
               : `${productCount} products`}
       </p>
 
-      {query.trim() !== '' ? (
+      {parsed.query !== '' ? (
         <ul
           id="product-search-results"
           role="listbox"
