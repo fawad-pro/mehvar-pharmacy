@@ -46,16 +46,21 @@ describe('arithmetic', () => {
 });
 
 describe('formatting', () => {
-  it('renders grouped rupees by default (I6: numerals are the loudest thing)', () => {
-    expect(formatPaisa(paisa(123456700))).toBe('1,234,567');
+  it('shows paisa by default — a Rs 3.50 tablet must never render as "3"', () => {
+    expect(formatPaisa(paisa(350))).toBe('3.50');
+    expect(formatPaisa(paisa(5))).toBe('0.05');
+    expect(formatPaisa(paisa(123456700))).toBe('1,234,567.00');
   });
 
-  it('renders paisa precision and the currency prefix on request', () => {
-    expect(formatPaisa(paisa(125050), { withSymbol: true, decimals: true })).toBe('Rs 1,250.50');
-    expect(formatPaisa(paisa(5), { decimals: true })).toBe('0.05');
+  it('groups thousands and adds the currency prefix on request (I6)', () => {
+    expect(formatPaisa(paisa(125050), { withSymbol: true })).toBe('Rs 1,250.50');
+  });
+
+  it('drops paisa only when explicitly asked', () => {
+    expect(formatPaisa(paisa(123456700), { decimals: false })).toBe('1,234,567');
   });
 
   it('keeps the sign in front', () => {
-    expect(formatPaisa(paisa(-25000), { withSymbol: true })).toBe('-Rs 250');
+    expect(formatPaisa(paisa(-25000), { withSymbol: true })).toBe('-Rs 250.00');
   });
 });

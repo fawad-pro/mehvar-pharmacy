@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { switchableUsers } from '@/auth/actions';
 import { currentSession } from '@/auth/session';
+import { CatalogProvider } from '@/client/search/provider';
 import { AppShell } from '@/components/app-shell';
 
 /**
@@ -21,15 +22,19 @@ export default async function CounterLayout({ children }: { children: React.Reac
   const users = await switchableUsers();
 
   return (
-    <AppShell
-      tenantName={session.tenantName}
-      deviceName={session.deviceName}
-      userId={session.userId}
-      userName={session.userName}
-      userRole={session.userRole}
-      users={users}
-    >
-      {children}
-    </AppShell>
+    // The catalog index is built once per session and lives above the surfaces
+    // (ADR-4), so moving between Sale and Products never rebuilds it.
+    <CatalogProvider tenantId={session.tenantId}>
+      <AppShell
+        tenantName={session.tenantName}
+        deviceName={session.deviceName}
+        userId={session.userId}
+        userName={session.userName}
+        userRole={session.userRole}
+        users={users}
+      >
+        {children}
+      </AppShell>
+    </CatalogProvider>
   );
 }

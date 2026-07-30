@@ -33,8 +33,8 @@ async function setUpCounter(page: Page): Promise<void> {
 test('device login, shell furniture, and PIN switch', async ({ page }) => {
   await setUpCounter(page);
 
-  // Sale is home (Phase 10 §1).
-  await expect(page.getByRole('heading', { name: 'Sale' })).toBeVisible();
+  // Sale is home, and focus lives in search (Phase 10 §1, Phase 7 rule 1).
+  await expect(page.getByRole('combobox', { name: 'Search products' })).toBeFocused();
 
   // The key bar is furniture, and it prints the whole map (I1, Phase 10 §3).
   const keyBar = page.getByRole('navigation', { name: 'Function keys' });
