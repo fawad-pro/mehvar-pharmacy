@@ -540,6 +540,15 @@ export const payments = pgTable(
     method: paymentMethod('method').notNull().default('cash'),
     /** Set when part of a sale commit; standalone = settlement (W3). */
     saleId: uuid('sale_id').references(() => sales.id),
+    /**
+     * [PCN-002] Client-generated, device-scoped, identical in shape to
+     * `sales.receipt_number` — Phase 10 §7 requires a settlement receipt to
+     * print a footer with one, and Phase 9 §3 named no column for it. The
+     * device's local counter (Phase 9 §3, built for `sales`) is shared with
+     * this table rather than kept separate: one receipt book, one sequence,
+     * regardless of what the slip records.
+     */
+    receiptNumber: text('receipt_number').notNull(),
     origin: saleOrigin('origin').notNull(),
     clientSchemaVersion: integer('client_schema_version').notNull(),
     clientCommittedAt: timestamp('client_committed_at', { withTimezone: true }).notNull(),
@@ -551,6 +560,7 @@ export const payments = pgTable(
   (table) => [
     index('payments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('payments_tenant_customer_idx').on(table.tenantId, table.customerId),
+    uniqueIndex('payments_tenant_receipt_key').on(table.tenantId, table.receiptNumber),
     check('payments_amount_positive', sql`${table.amountPaisa} > 0`),
   ],
 );

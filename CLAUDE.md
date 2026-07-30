@@ -89,7 +89,7 @@ their feature, never after — rebuild equivalence ships the same day as
 | 1       | 1   | Schema, `scoped.ts`, migrations + seed, app shell, ADR-7 auth ✅            |
 | 2       | 2   | Catalog & search: CRUD, client index, ranking ladder, barcodes ✅           |
 | 3       | 3   | **Sale core** — `commitSale`, FEFO, pending layer, cart UI + crown suite ✅ |
-| 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement            |
+| 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement ✅         |
 | 5       | 5   | Offline capture & sync                                                      |
 | 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution          |
 | 7       | 7   | Day close, reports, owner surface, returns, settings, export                |
@@ -136,6 +136,31 @@ exception visibility.
 - **Never build a verifier query with a correlated `sql` subquery.** Drizzle
   renders the interpolated outer column unqualified, and it resolves silently
   against the inner table. Use plain aggregates.
+
+## Things Day 4 established
+
+- **`commitSettlement` is the one writer for standalone payments**, idempotent
+  on client id from day one, exactly as `commitSale` was on Day 3 — Day 5
+  ingests it unchanged.
+- **`sales` and `payments` share one receipt-number sequence** (PCN-002).
+  `highestReceiptCounterAcrossReceipts` checks both tables; a writer that only
+  checked `sales` would let a settlement collide with a sale's number.
+- **F8 is dispatched, never shared state.** `f8-context.tsx`'s registry is how
+  the Sale surface takes the key for itself (cart has items) without either
+  screen importing the other's internals; extend by registering a handler, not
+  by teaching `AppShell` about a new screen's state.
+- **The receipt is one shape for every receipt-producing event**
+  (`ReceiptData` in `src/client/print/receipt.ts`). A settlement is a sale
+  receipt with no `lines` — add a new receipt-producing event (returns, Day 7)
+  by constructing this same shape, not a new one.
+- **`export type` re-exports do not survive a `'use server'` file.** Next's
+  server-actions transform throws a runtime `ReferenceError` on a type-only
+  re-export inside a directive module; re-export types from a plain module
+  instead, or don't re-export what nothing imports.
+- **Extend the crown suite, never fork it.** Udhaar sales and settlements are
+  now event kinds in `applyRandomEvent`, and Phase 5 invariant 3 (customer
+  balance) is checked every 10 events alongside the stock invariants —
+  purchases (Day 6) and returns (Day 7) add their own kinds the same way.
 
 ## Commits
 

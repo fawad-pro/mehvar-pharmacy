@@ -6,14 +6,11 @@
  *   "Search bar, full width, top. Cart, left ~62%. Right rail ~38%: totals
  *    stacked large-to-small, TOTAL in the display's biggest numerals (I6)."
  *
- * Day 3 delivers the cart and a cash commit. The payment overlay with tendered
- * amount and change, the udhaar path, and the printed receipt are Day 4; Enter
- * here commits the exact amount, which is what W1's "amount tendered (defaults
- * to exact)" resolves to when nobody types a different figure.
- *
- * Focus discipline is the thing to preserve when this file grows: focus lives in
- * search (Phase 7 rule 1), returns there after every commit, and every cart edit
- * is reachable without the mouse.
+ * Day 4 adds the payment overlay (tendered/change, split cash-credit), the
+ * udhaar attach (F8, defect C5), and the printed receipt (ADR-6). Focus
+ * discipline is the thing to preserve as this file grows: focus lives in
+ * search (Phase 7 rule 1), returns there after every commit, and every cart
+ * edit is reachable without the mouse.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -24,28 +21,32 @@ import {
   parseQuantityQuery,
   resolveQuantity,
 } from '@/client/search/quantity-grammar';
-import {
-  nextReceiptNumber,
-  seedReceiptCounter,
-  skipReceiptNumber,
-} from '@/client/print/receipt-number';
+import { useReceiptContext } from '@/client/receipt/receipt-context';
+import { useRegisterF8Handler } from '@/client/keyboard/f8-context';
+import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import type { SearchHit } from '@/client/search/catalog-index';
 import { ProductSearch } from '@/components/product-search';
+import { CustomerPicker } from '@/components/customer-picker';
+import { ReceiptView } from '@/components/receipt-view';
+import type { CustomerHit } from '@/app/(counter)/customers/actions';
+import { miniStatement } from '@/domain/udhaar/settlement';
 import {
   addToCart,
   cartTotals,
   isPriceOverridden,
+  lineTotal,
   removeLine,
-  splitPayment,
   updateLine,
   type CartLine,
 } from '@/domain/sales/cart';
 import { paisa, ZERO_PAISA } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
+import { describeQuantity } from '@/lib/quantity';
 import { uuidv7 } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
-import { commitCashSale, receiptCounterHint } from './actions';
+import { PaymentOverlay, type PaymentSplit } from './payment-overlay';
+import { commitCashSale } from './actions';
 
 interface Committed {
   receiptNumber: string;
@@ -53,26 +54,31 @@ interface Committed {
   pendingByProduct: Record<string, number>;
 }
 
-export function SaleSurface({ tenantId }: { tenantId: string }) {
+export function SaleSurface() {
   const { index, refresh } = useCatalog();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<Committed | null>(null);
-  const [devicePrefix, setDevicePrefix] = useState<string | null>(null);
+  const [customer, setCustomer] = useState<CustomerHit | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [pickingCustomer, setPickingCustomer] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
-  // Seeded once: a re-imaged machine must not restart its receipt sequence at 1
-  // and collide with everything it has already printed (Phase 9 §3).
-  useEffect(() => {
-    void receiptCounterHint().then((hint) => {
-      if (hint) {
-        seedReceiptCounter(tenantId, hint.prefix, hint.highest);
-        setDevicePrefix(hint.prefix);
-      }
-    });
-  }, [tenantId]);
+  const receiptContext = useReceiptContext();
+  const { receipt, print } = usePrintReceipt();
+
+  // Defect C5: F8 belongs to Sale only while the cart has something to bill.
+  // An empty cart leaves F8 unregistered, so AppShell's Settle Udhaar fallback
+  // runs instead.
+  useRegisterF8Handler(
+    lines.length > 0
+      ? () => {
+          setPickingCustomer(true);
+        }
+      : null,
+  );
 
   const totals = useMemo(() => cartTotals(lines), [lines]);
 
@@ -120,77 +126,128 @@ export function SaleSurface({ tenantId }: { tenantId: string }) {
     setError(null);
   }, []);
 
-  const commit = useCallback(async () => {
-    if (lines.length === 0 || busy || !devicePrefix) {
+  const commitWithSplit = useCallback(
+    async (split: PaymentSplit) => {
+      if (lines.length === 0 || busy || !receiptContext) {
+        return;
+      }
+      setBusy(true);
+      setError(null);
+
+      const soldLines = lines;
+      const soldTotals = totals;
+      const soldCustomer = customer;
+
+      // Two attempts: the second exists only for a receipt number that turned
+      // out to be taken (two devices sharing a prefix, or a restored backup).
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const receiptNumber = receiptContext.nextReceiptNumber();
+        const outcome = await commitCashSale({
+          saleId: uuidv7(),
+          receiptNumber,
+          customerId: soldCustomer?.id ?? null,
+          lines: soldLines.map((line) => ({
+            lineId: line.lineId,
+            productId: line.productId,
+            qtyBase: line.qtyBase,
+            enteredUnitLevel: line.enteredUnitLevel,
+            unitPricePaisa: line.unitPricePaisa,
+            lineDiscountPaisa: line.lineDiscountPaisa,
+            priceOverridden: isPriceOverridden(line),
+          })),
+          invoiceDiscountPaisa: soldTotals.invoiceDiscountPaisa,
+          cashPaisa: split.cashPaisa,
+          creditPaisa: split.creditPaisa,
+          tenderedPaisa: split.tenderedPaisa,
+          changePaisa: split.changePaisa,
+          clientCommittedAt: new Date().toISOString(),
+        });
+
+        if (outcome.ok) {
+          setLines([]);
+          setCustomer(null);
+          setPaying(false);
+          setLastSale({
+            receiptNumber: outcome.receiptNumber,
+            totalPaisa: outcome.totalPaisa,
+            pendingByProduct: outcome.pendingByProduct,
+          });
+
+          const pendingUnits = Object.values(outcome.pendingByProduct).reduce(
+            (sum, qty) => sum + qty,
+            0,
+          );
+
+          print({
+            receiptNumber: outcome.receiptNumber,
+            dateTime: new Date(),
+            salesmanName: receiptContext.salesmanName,
+            tenantHeaderLines: receiptContext.tenantHeaderLines,
+            tenantFooterLine: receiptContext.tenantFooterLine,
+            lines: soldLines.map((line) => ({
+              name: line.name,
+              quantityLabel: describeQuantity(line.qtyBase, line.baseUnitName, [
+                ...line.packLevels,
+              ]),
+              amountPaisa: lineTotal(line),
+            })),
+            subtotalPaisa: soldTotals.subtotalPaisa,
+            discountPaisa: soldTotals.invoiceDiscountPaisa,
+            totalPaisa: soldTotals.totalPaisa,
+            cashPaisa: split.cashPaisa,
+            tenderedPaisa: split.tenderedPaisa,
+            changePaisa: split.changePaisa,
+            creditPaisa: split.creditPaisa,
+            ...(soldCustomer ? { customerName: soldCustomer.name } : {}),
+            ...(outcome.balanceBeforePaisa !== undefined
+              ? { miniStatement: miniStatement(outcome.balanceBeforePaisa, split.creditPaisa) }
+              : {}),
+            ...(pendingUnits > 0
+              ? { pendingNote: 'Sold more than the system had. It is on the owner’s exception list.' }
+              : {}),
+          });
+
+          // Stock moved, so the index's advisory snapshot is stale.
+          refresh();
+          setBusy(false);
+          focusSearch();
+          return;
+        }
+
+        if (!outcome.retryWithNewReceipt) {
+          setError(outcome.message);
+          setBusy(false);
+          return;
+        }
+        receiptContext.skipReceiptNumber(receiptNumber);
+      }
+
+      setError('Could not save the sale. Try again.');
+      setBusy(false);
+    },
+    [lines, busy, receiptContext, totals, customer, refresh, focusSearch, print],
+  );
+
+  const openPayment = useCallback(() => {
+    if (lines.length === 0 || busy || paying) {
       return;
     }
-    setBusy(true);
-    setError(null);
+    setPaying(true);
+  }, [lines, busy, paying]);
 
-    const split = splitPayment(totals.totalPaisa, totals.totalPaisa);
-
-    // Two attempts: the second exists only for a receipt number that turned out
-    // to be taken (two devices sharing a prefix, or a restored backup).
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      const receiptNumber = nextReceiptNumber(tenantId, devicePrefix);
-      const outcome = await commitCashSale({
-        saleId: uuidv7(),
-        receiptNumber,
-        lines: lines.map((line) => ({
-          lineId: line.lineId,
-          productId: line.productId,
-          qtyBase: line.qtyBase,
-          enteredUnitLevel: line.enteredUnitLevel,
-          unitPricePaisa: line.unitPricePaisa,
-          lineDiscountPaisa: line.lineDiscountPaisa,
-          priceOverridden: isPriceOverridden(line),
-        })),
-        invoiceDiscountPaisa: totals.invoiceDiscountPaisa,
-        cashPaisa: split.cashPaisa,
-        changePaisa: split.changePaisa,
-        clientCommittedAt: new Date().toISOString(),
-      });
-
-      if (outcome.ok) {
-        setLines([]);
-        setLastSale({
-          receiptNumber: outcome.receiptNumber,
-          totalPaisa: outcome.totalPaisa,
-          pendingByProduct: outcome.pendingByProduct,
-        });
-        // Stock moved, so the index's advisory snapshot is stale.
-        refresh();
-        setBusy(false);
-        focusSearch();
-        return;
-      }
-
-      if (!outcome.retryWithNewReceipt) {
-        setError(outcome.message);
-        setBusy(false);
-        return;
-      }
-      skipReceiptNumber(tenantId, devicePrefix, receiptNumber);
-    }
-
-    setError('Could not save the sale. Try again.');
-    setBusy(false);
-  }, [lines, busy, devicePrefix, tenantId, totals, refresh, focusSearch]);
-
-  // F12 pays, per Phase 10 §4's payment overlay trigger. The overlay itself is
-  // Day 4; today the key commits the exact amount.
+  // F12 opens the payment overlay from anywhere on the surface (Phase 10 §4).
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
       if (event.key === 'F12') {
         event.preventDefault();
-        void commit();
+        openPayment();
       }
     }
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
     };
-  }, [commit]);
+  }, [openPayment]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -223,6 +280,7 @@ export function SaleSurface({ tenantId }: { tenantId: string }) {
               focusSearch();
             }}
             onLeaveCart={focusSearch}
+            onPay={openPayment}
           />
         </div>
 
@@ -239,6 +297,30 @@ export function SaleSurface({ tenantId }: { tenantId: string }) {
               {totals.itemCount === 1 ? '' : 's'}
             </p>
           </div>
+
+          {customer ? (
+            <div className="border-line bg-green-100/50 flex items-center justify-between rounded border p-2 text-sm">
+              <span>
+                <span className="font-medium">{customer.name}</span>
+                {customer.balancePaisa > 0 ? (
+                  <span className="text-amber ml-2 numeral">
+                    {formatPaisa(paisa(customer.balancePaisa))} owed
+                  </span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomer(null);
+                }}
+                className="text-ink/50 text-xs"
+              >
+                remove
+              </button>
+            </div>
+          ) : (
+            <p className="text-ink/40 text-xs">F8 — attach a customer for udhaar</p>
+          )}
 
           {error ? (
             <p className="text-red text-sm" role="alert">
@@ -263,19 +345,46 @@ export function SaleSurface({ tenantId }: { tenantId: string }) {
 
           <button
             type="button"
-            onClick={() => {
-              void commit();
-            }}
-            disabled={lines.length === 0 || busy || !devicePrefix}
+            onClick={openPayment}
+            disabled={lines.length === 0 || busy || !receiptContext}
             className="bg-green-600 text-paper min-h-touch mt-auto rounded text-lg font-medium disabled:opacity-40"
           >
-            {busy ? 'Saving…' : 'Cash — F12'}
+            {busy ? 'Saving…' : 'Pay — F12'}
           </button>
-          <p className="text-ink/40 text-center text-xs">
-            Payment overlay, change and udhaar arrive in Session 4.
-          </p>
         </aside>
       </div>
+
+      {paying ? (
+        <PaymentOverlay
+          totalPaisa={totals.totalPaisa}
+          customerName={customer?.name ?? null}
+          busy={busy}
+          onCancel={() => {
+            setPaying(false);
+            focusSearch();
+          }}
+          onCommit={(split) => {
+            void commitWithSplit(split);
+          }}
+        />
+      ) : null}
+
+      {pickingCustomer ? (
+        <CustomerPicker
+          title="Attach customer"
+          onPick={(hit) => {
+            setCustomer(hit);
+            setPickingCustomer(false);
+            focusSearch();
+          }}
+          onCancel={() => {
+            setPickingCustomer(false);
+            focusSearch();
+          }}
+        />
+      ) : null}
+
+      {receipt ? <ReceiptView receipt={receipt} /> : null}
     </div>
   );
 }

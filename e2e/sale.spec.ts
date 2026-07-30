@@ -58,8 +58,11 @@ test('W1: a cash sale, start to finish, without touching the mouse', async ({ pa
   // Rs 3.50 × 10 + Rs 9.00 × 30 = Rs 305.00
   await expect(total(page)).toHaveText('305.00');
 
-  // F12 pays.
+  // F12 opens the payment overlay; Enter commits the exact tendered amount
+  // (Phase 10 §4's default).
   await page.keyboard.press('F12');
+  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
+  await page.keyboard.press('Enter');
 
   const receipt = page.getByRole('status');
   await expect(receipt).toContainText(/Saved — A-\d+/);
@@ -124,6 +127,7 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   await expect(cart(page)).toContainText(/more than in stock|not in stock/);
 
   await page.keyboard.press('F12');
+  await page.keyboard.press('Enter');
 
   // The sale is not refused; the shortfall is surfaced (D2).
   const receipt = page.getByRole('status');
@@ -139,6 +143,7 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     await search(page).fill('disprin');
     await page.keyboard.press('Enter');
     await page.keyboard.press('F12');
+    await page.keyboard.press('Enter');
 
     const text = (await page.getByRole('status').textContent()) ?? '';
     const match = /A-(\d+)/.exec(text);

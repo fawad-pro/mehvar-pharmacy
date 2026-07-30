@@ -292,6 +292,32 @@ suite('commitSale against Postgres', () => {
     expect(sale?.totalPaisa).toBe(2_700);
   });
 
+  it('reports the balance before, only when credit was extended (Day 4 mini-statement)', async () => {
+    await addOpeningStock(tenant.scope, panadol.id, 100);
+    const customerId = uuidv7();
+    const { customers } = await import('@/db/schema');
+    await tenant.scope.insert(customers, { id: customerId, name: 'Rashid', phone: null });
+
+    const cashOnly = await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 10)], cashPaisa: 3_500 }),
+    );
+    expect(cashOnly.ok && cashOnly.value.balanceBeforePaisa).toBeUndefined();
+
+    const firstCredit = await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 10)], customerId, creditPaisa: 3_500 }),
+    );
+    expect(firstCredit.ok && firstCredit.value.balanceBeforePaisa).toBe(0);
+
+    const secondCredit = await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 10)], customerId, creditPaisa: 3_500 }),
+    );
+    // The customer already owed 3,500 from the first credit sale.
+    expect(secondCredit.ok && secondCredit.value.balanceBeforePaisa).toBe(3_500);
+  });
+
   it('is idempotent on the client id (ADR-3)', async () => {
     const batchId = await addOpeningStock(tenant.scope, panadol.id, 100);
     const cmd = command({ lines: [saleLine(panadol.id, 10)], cashPaisa: 3_500 });

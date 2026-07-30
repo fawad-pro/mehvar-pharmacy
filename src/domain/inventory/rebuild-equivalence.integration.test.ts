@@ -25,22 +25,35 @@
  * ## Scope today, and what extends it
  *
  * Day 3 has sales (online and offline-origin, including replays), opening-stock
- * adjustments, and stock adjustments. Purchases arrive on Day 6 and returns on
- * Day 7; each must add its event kind to `applyRandomEvent` below rather than
- * get its own separate suite — the whole point is that one history mixes
- * everything.
+ * adjustments, and stock adjustments. Day 4 adds udhaar sales and standalone
+ * settlements — the same event kinds any counter now writes — and checks Phase
+ * 5 invariant 3 (customer balance) alongside the stock invariants. Purchases
+ * arrive on Day 6 and returns on Day 7; each must add its event kind to
+ * `applyRandomEvent` below rather than get its own separate suite — the whole
+ * point is that one history mixes everything.
  */
 
 import { afterAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
-import { adjustments, batches, saleLineAllocations, saleLines, sales } from '@/db/schema';
-import { uuidv7 } from '@/lib/uuid';
+import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
+import { customerBalance } from '@/db/udhaar-queries';
+import {
+  adjustments,
+  batches,
+  customers,
+  payments,
+  saleLineAllocations,
+  saleLines,
+  sales,
+} from '@/db/schema';
+import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import {
   addOpeningStock,
   between,
+  createTestCustomer,
   createTestProduct,
   pick,
   provisionTestTenant,
@@ -61,16 +74,20 @@ const EVENTS_PER_HISTORY = Number(process.env.REBUILD_EVENTS ?? 40);
 interface World {
   tenant: TestTenant;
   products: TestProduct[];
+  customers: Uuid[];
   random: () => number;
   /** Every sale command issued, so replays can be produced from real history. */
   issued: SaleCommand[];
+  /** Every settlement issued, so replays can exercise its idempotency too. */
+  issuedPayments: SettlementCommand[];
   /**
    * Receipt counter for this history.
    *
    * A counter, not a timestamp: receipt numbers derived from a clock collide
    * when two sales land in the same millisecond, which the unique index on
    * (tenant_id, receipt_number) rightly refuses. The real scheme is a
-   * per-device counter for exactly this reason (Phase 9 §3).
+   * per-device counter for exactly this reason (Phase 9 §3). Sales and
+   * payments share one sequence (PCN-002), so both draw from this counter.
    */
   receiptCounter: number;
 }
@@ -127,15 +144,86 @@ async function applyRandomEvent(world: World): Promise<void> {
     return;
   }
 
-  if (roll < 0.32 && world.issued.length > 0) {
-    // A replay: sync delivering a sale the server already has (ADR-3).
-    const earlier = pick(random, world.issued);
-    await commitSale(tenant.scope, earlier);
+  if (roll < 0.32 && (world.issued.length > 0 || world.issuedPayments.length > 0)) {
+    // A replay: sync delivering a sale or a settlement the server already has
+    // (ADR-3). Either can repeat; delivery repeats, effects never do.
+    if (world.issuedPayments.length > 0 && random() < 0.3) {
+      const earlier = pick(random, world.issuedPayments);
+      await commitSettlement(tenant.scope, earlier);
+    } else if (world.issued.length > 0) {
+      const earlier = pick(random, world.issued);
+      await commitSale(tenant.scope, earlier);
+    }
     return;
   }
 
-  // A sale. Quantities deliberately overshoot available stock sometimes, so the
-  // pending layer is exercised rather than assumed.
+  if (roll < 0.4 && world.customers.length > 0) {
+    // An udhaar sale (W2): some or all of the total goes on a customer's
+    // account rather than being paid in cash.
+    const customerId = pick(random, world.customers);
+    const lineCount = between(random, 1, 3);
+    const lines = Array.from({ length: lineCount }, () => {
+      const product = pick(random, world.products);
+      return {
+        lineId: uuidv7(),
+        productId: product.id,
+        qtyBase: between(random, 1, 60),
+        enteredUnitLevel: pick(random, ['tab', 'strip']),
+        unitPricePaisa: product.pricePaisa,
+        lineDiscountPaisa: 0,
+        priceOverridden: false,
+      };
+    });
+    const total = lines.reduce((sum, line) => sum + line.unitPricePaisa * line.qtyBase, 0);
+    // Sometimes fully on credit, sometimes a cash/credit split.
+    const cashPaisa = random() < 0.4 ? 0 : between(random, 0, total);
+    const creditPaisa = total - cashPaisa;
+
+    const command: SaleCommand = {
+      saleId: uuidv7(),
+      receiptNumber: `A-${(world.receiptCounter += 1)}`,
+      customerId,
+      lines,
+      invoiceDiscountPaisa: 0,
+      cashPaisa,
+      creditPaisa,
+      changePaisa: 0,
+      origin: random() < 0.3 ? 'offline_sync' : 'online',
+      clientSchemaVersion: 1,
+      clientCommittedAt: new Date(),
+    };
+
+    const result = await commitSale(tenant.scope, command);
+    if (result.ok) {
+      world.issued.push(command);
+    }
+    return;
+  }
+
+  if (roll < 0.48 && world.customers.length > 0) {
+    // A settlement (W3): the customer pays down debt, unrelated to any sale.
+    // No floor on the amount — Phase 5 invariant 3 allows an overpayment to
+    // leave the customer in credit, so this is not clamped to their balance.
+    const customerId = pick(random, world.customers);
+    const command: SettlementCommand = {
+      paymentId: uuidv7(),
+      receiptNumber: `A-${(world.receiptCounter += 1)}`,
+      customerId,
+      amountPaisa: between(random, 50, 5000),
+      origin: random() < 0.3 ? 'offline_sync' : 'online',
+      clientSchemaVersion: 1,
+      clientCommittedAt: new Date(),
+    };
+
+    const result = await commitSettlement(tenant.scope, command);
+    if (result.ok) {
+      world.issuedPayments.push(command);
+    }
+    return;
+  }
+
+  // A cash sale. Quantities deliberately overshoot available stock sometimes,
+  // so the pending layer is exercised rather than assumed.
   const lineCount = between(random, 1, 3);
   const lines = Array.from({ length: lineCount }, () => {
     const product = pick(random, world.products);
@@ -273,6 +361,42 @@ async function assertInvariants(world: World, label: string): Promise<void> {
       expect(allocation.unitCostPaisa, `${label}: pending row carries a cost`).toBeNull();
     }
   }
+
+  /* Invariant 3 — a customer's balance is Σ credit extended − Σ payments,
+     always derived, never stored. Checked two ways: independently recomputed
+     from the raw rows here, and through `customerBalance` itself, so the query
+     the product actually calls is what gets proven right. */
+  const allCustomers = await tenant.scope.select(customers);
+  const allPayments = await tenant.scope.select(payments);
+  for (const customer of allCustomers) {
+    const extended = allSales
+      .filter((sale) => sale.customerId === customer.id)
+      .reduce((sum, sale) => sum + sale.creditPaisa, 0);
+    const paid = allPayments
+      .filter((payment) => payment.customerId === customer.id)
+      .reduce((sum, payment) => sum + payment.amountPaisa, 0);
+    const expectedBalance = extended - paid;
+
+    const actualBalance = await customerBalance(tenant.scope, customer.id);
+    expect(actualBalance, `${label}: balance for customer ${customer.id}`).toBe(expectedBalance);
+  }
+
+  /* Every payment is attributed, same as invariant 5 for sales. */
+  for (const payment of allPayments) {
+    expect(payment.createdBy, `${label}: attribution on payment ${payment.receiptNumber}`).toBe(
+      tenant.userId,
+    );
+  }
+
+  /* PCN-002 — sales and payments share one receipt sequence: no number may
+     appear on both sides of the split. */
+  const saleReceipts = new Set(allSales.map((sale) => sale.receiptNumber));
+  for (const payment of allPayments) {
+    expect(
+      saleReceipts.has(payment.receiptNumber),
+      `${label}: receipt ${payment.receiptNumber} used by both a sale and a payment`,
+    ).toBe(false);
+  }
 }
 
 suite('rebuild equivalence — randomized histories', () => {
@@ -308,7 +432,22 @@ suite('rebuild equivalence — randomized histories', () => {
         await addOpeningStock(tenant.scope, product.id, between(random, 20, 150));
       }
 
-      const world: World = { tenant, products, random, issued: [], receiptCounter: 0 };
+      const customerIds: Uuid[] = [];
+      for (let index = 0; index < 3; index += 1) {
+        customerIds.push(
+          await createTestCustomer(tenant.scope, `Customer ${index} ${uuidv7().slice(0, 6)}`),
+        );
+      }
+
+      const world: World = {
+        tenant,
+        products,
+        customers: customerIds,
+        random,
+        issued: [],
+        issuedPayments: [],
+        receiptCounter: 0,
+      };
 
       for (let event = 0; event < EVENTS_PER_HISTORY; event += 1) {
         await applyRandomEvent(world);

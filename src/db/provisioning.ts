@@ -69,3 +69,20 @@ export async function anyUserId(tenantId: Uuid): Promise<Uuid | undefined> {
     .limit(1);
   return rows[0]?.id;
 }
+
+/**
+ * A tenant's own settings — the receipt header/footer Phase 10 §7 prints.
+ *
+ * Reading a tenant's own reference row is the ordinary counterpart to
+ * `createTenant`, not founder tooling; it lives here for the same structural
+ * reason everything else in this file does — `tenants` has no `tenant_id` to
+ * scope on.
+ */
+export async function tenantSettings(tenantId: Uuid): Promise<TenantSettings | undefined> {
+  const rows = await globalCatalog()
+    .select({ settings: tenants.settings })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  return rows[0]?.settings;
+}

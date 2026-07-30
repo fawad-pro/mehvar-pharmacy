@@ -12,12 +12,16 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { useGlobalKeys } from '@/client/keyboard/use-global-keys';
+import { F8Provider, useF8Registry } from '@/client/keyboard/f8-context';
+import { ReceiptContextProvider } from '@/client/receipt/receipt-context';
 
 import { KeyBar } from './key-bar';
 import { PinSwitchOverlay, type SwitchableUser } from './pin-switch-overlay';
+import { SettleUdhaarOverlay } from './settle-udhaar-overlay';
 import { TopBar } from './top-bar';
 
 export function AppShell({
+  tenantId,
   tenantName,
   deviceName,
   userId,
@@ -26,6 +30,7 @@ export function AppShell({
   users,
   children,
 }: {
+  tenantId: string;
   tenantName: string;
   deviceName: string | null;
   userId: string;
@@ -36,21 +41,35 @@ export function AppShell({
 }) {
   const router = useRouter();
   const [switching, setSwitching] = useState(false);
+  const [settling, setSettling] = useState(false);
+  const { register, dispatch } = useF8Registry();
 
   const handlers = useMemo(
     () => ({
       onSwitchUser: () => {
         setSwitching(true);
       },
+      onUdhaar: () => {
+        // Defect C5: the Sale surface takes F8 for itself when the cart has
+        // items (attach customer, W2); with nothing registered — an empty
+        // cart, or any other screen — this is the fallback (Settle Udhaar, W3).
+        dispatch(() => {
+          setSettling(true);
+        });
+      },
       onEscape: () => {
         if (switching) {
           setSwitching(false);
           return true;
         }
+        if (settling) {
+          setSettling(false);
+          return true;
+        }
         return false;
       },
     }),
-    [switching],
+    [switching, settling, dispatch],
   );
 
   useGlobalKeys(handlers);
@@ -74,20 +93,32 @@ export function AppShell({
         }}
       />
 
-      <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+      <ReceiptContextProvider tenantId={tenantId}>
+        <F8Provider register={register}>
+          <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+        </F8Provider>
 
-      <KeyBar role={userRole} />
+        <KeyBar role={userRole} />
 
-      {switching ? (
-        <PinSwitchOverlay
-          users={users}
-          currentUserId={userId}
-          onClose={() => {
-            setSwitching(false);
-          }}
-          onSwitched={onSwitched}
-        />
-      ) : null}
+        {switching ? (
+          <PinSwitchOverlay
+            users={users}
+            currentUserId={userId}
+            onClose={() => {
+              setSwitching(false);
+            }}
+            onSwitched={onSwitched}
+          />
+        ) : null}
+
+        {settling ? (
+          <SettleUdhaarOverlay
+            onClose={() => {
+              setSettling(false);
+            }}
+          />
+        ) : null}
+      </ReceiptContextProvider>
     </div>
   );
 }

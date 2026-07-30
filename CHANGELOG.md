@@ -2,6 +2,85 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 4 — Day 4, Payment, receipt, udhaar
+
+W1's cash path gets a real payment overlay; W2 and W3 land in full, end to end,
+with a printed receipt in hand.
+
+**Payment overlay (Phase 10 §4)**
+
+- F12 anywhere on the Sale surface, or Space from a focused cart row, opens the
+  overlay. Tendered defaults to the exact total; change renders at the
+  display's largest size next to TOTAL. Enter commits, Esc returns to the cart.
+- Attaching a customer (F8, defect C5) turns the same overlay into a
+  cash/credit split: whatever is tendered is cash, the remainder goes on the
+  customer's account. With nobody attached, a shortfall is refused at the
+  overlay — the same `credit_without_customer` rule the domain already
+  enforces, surfaced before the commit rather than after.
+
+**F8 is genuinely contextual (defect C5)**
+
+- A small registry (`f8-context.tsx`) lets the Sale surface claim F8 for
+  itself whenever the cart has items (attach customer, W2); with nothing
+  registered — an empty cart, or any other screen — `AppShell` falls back to
+  the global Settle Udhaar overlay (W3). Neither screen imports the other's
+  internals; the fallback is a dispatch, not a shared state object.
+
+**Udhaar sale and settlement (W2, W3)**
+
+- `commitSettlement` — the one transaction for a standalone payment, idempotent
+  on the client id exactly as `commitSale` was on Day 3, so Day 5 ingests it
+  unchanged. No ceiling on the amount: Phase 5 invariant 3 has no floor, so an
+  overpayment is legal and simply leaves the customer in credit.
+- Customer creation is inline everywhere a customer is picked — name and phone
+  only (Phase 5 §2's D-boundary), validated the same way whether the picker is
+  attaching to a sale or settling a balance.
+- The mini-statement (T4/T5: previous balance → this transaction → new
+  balance) is computed from the balance read once inside the same transaction
+  as the commit, so a concurrent settlement cannot read a stale figure.
+
+**Receipt (ADR-6, Phase 10 §7)**
+
+- One `ReceiptData` shape for a cash sale, an udhaar sale and a settlement — a
+  settlement simply carries no `lines`. `usePrintReceipt` mounts the receipt
+  and calls `window.print()` after two animation frames, so React has
+  committed the DOM before the print engine walks it.
+- Print CSS scopes everything outside `#printable-receipt` to
+  `visibility: hidden` under `@media print`, sized for 80mm thermal paper; the
+  receipt itself stays `display: none` on screen so it never appears in normal
+  page flow.
+
+**Customers (Phase 10 §2, W11)**
+
+- List, balances derived and sorted largest-first; detail view is the T4
+  ledger — every transaction behind a balance, running total alongside. Both
+  read `src/db/udhaar-queries.ts` directly, the same pattern the Products
+  screens established on Day 2.
+
+**Rebuild equivalence, extended (Phase 11 §3.1)**
+
+- Udhaar sales and settlements (including replays of both) join the randomized
+  event mix. Phase 5 invariant 3 — a customer's balance, independently
+  recomputed from the raw rows and through `customerBalance` itself — is now
+  checked continuously alongside the stock invariants, so one history proves
+  both trust promises at once.
+
+**Fixed**
+
+- A `'use server'` file exporting `export type { CustomerListItem }` threw
+  `ReferenceError: CustomerListItem is not defined` at runtime — Next's server
+  actions transform does not tolerate a type-only re-export in a directive
+  file the way an ordinary module does. The re-export was unused; removed
+  rather than worked around.
+- Three E2E tests that pressed F12 expecting an immediate commit needed a
+  following Enter once F12 started opening the payment overlay instead — an
+  expected consequence of the day's own change, not a regression.
+
+**Open for review: PCN-002** — Phase 10 §7 requires a receipt number on every
+receipt, including settlements, but Phase 9 §3 named no such column for
+`payments`. Implemented under the recommendation (a `receipt_number` column
+sharing the device's counter with `sales`); see `docs/PLAN_CHANGE_NOTES.md`.
+
 ## Session 3 — Day 3, Sale core
 
 The highest-consequence day. Everything the business promises passes through

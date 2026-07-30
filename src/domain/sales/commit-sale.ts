@@ -32,6 +32,7 @@ import {
   insertSaleLines,
   lockBatchesForProducts,
 } from '@/db/sales-queries';
+import { customerBalance } from '@/db/udhaar-queries';
 import type { TenantScope } from '@/db/scoped';
 import { paisa, type Paisa } from '@/lib/branded';
 import { uuidv7, type Uuid } from '@/lib/uuid';
@@ -82,6 +83,17 @@ export interface SaleCommitted {
   readonly pendingByProduct: Readonly<Record<string, number>>;
   /** True when this call found the sale already committed (ADR-3 replay). */
   readonly alreadyCommitted: boolean;
+  /**
+   * The customer's balance immediately before this sale, when credit was
+   * extended — W2/Phase 10 §7's mini-statement needs it. Undefined for a
+   * fully-cash sale, and on a replay (the figure would already be stale).
+   *
+   * A display figure, not an authority: Phase 5 invariant 3 means the balance
+   * is always re-derivable from records regardless of what any receipt claims,
+   * so this is read once inside the transaction rather than locked — the same
+   * posture ADR-5 takes on batch-price variance.
+   */
+  readonly balanceBeforePaisa?: Paisa;
 }
 
 export type SaleResult = { ok: true; value: SaleCommitted } | { ok: false; reason: SaleRejection };
@@ -163,6 +175,13 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
 
     const productIds = [...new Set(command.lines.map((line) => line.productId))];
     const available = await lockBatchesForProducts(tx, productIds);
+
+    // Read before the sale lands, so the mini-statement's "previous balance"
+    // means what it says (T4/T5, Phase 10 §7).
+    const balanceBeforePaisa =
+      command.creditPaisa > 0 && command.customerId
+        ? paisa(await customerBalance(tx, command.customerId))
+        : undefined;
 
     await insertSale(tx, {
       id: command.saleId,
@@ -258,6 +277,7 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
         totalPaisa: paisa(validation.totalPaisa),
         pendingByProduct,
         alreadyCommitted: false,
+        ...(balanceBeforePaisa !== undefined ? { balanceBeforePaisa } : {}),
       },
     } satisfies SaleResult;
   });
