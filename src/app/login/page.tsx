@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { loginDeviceAction } from '@/auth/actions';
 import { currentSession } from '@/auth/session';
+import { PIN_LENGTH } from '@/auth/pin-policy';
 
 /**
  * Device login — ADR-7, performed once per counter machine during assisted
@@ -10,14 +11,22 @@ import { currentSession } from '@/auth/session';
  * (P8: the counter works every morning, unconditionally).
  *
  * Day-to-day identity is the PIN switch, not this screen.
+ *
+ * The copy here carries one job beyond labelling the inputs: all three values
+ * come from the same place — the setup sheet handed over during onboarding
+ * (Phase 3's assisted setup) — and saying that once, up front, removes the real
+ * uncertainty. Three fields read as three mysteries otherwise. I5 applies to
+ * getting things right, not only to errors: prevent the wrong state rather than
+ * explain it afterwards.
  */
 
 const MESSAGES: Record<string, string> = {
-  unknown_device: 'No counter with that name at that pharmacy. Check both, then try again.',
-  bad_pairing_key: 'That setup key is not right. Check the setup sheet.',
-  device_inactive: 'This counter has been deactivated. The owner can re-enable it.',
+  unknown_device:
+    'No counter with that name at that pharmacy. Check the pharmacy code and counter name against your setup sheet.',
+  bad_pairing_key: 'That setup key is not right. Copy it again from your setup sheet.',
+  device_inactive: 'This counter has been turned off. The owner can switch it back on in Settings.',
   tenant_suspended: 'This pharmacy’s account is on hold. Contact support to reactivate it.',
-  no_owner: 'This pharmacy has no active owner account yet. Contact support.',
+  no_owner: 'This pharmacy has no owner account yet. Contact support.',
 };
 
 export default async function LoginPage({
@@ -33,29 +42,67 @@ export default async function LoginPage({
   const message = error ? (MESSAGES[error] ?? 'That did not work. Try again.') : null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <form action={loginDeviceAction} className="flex w-full max-w-sm flex-col gap-4">
-        <div>
-          <p className="text-green-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
-          <h1 className="text-green-900 text-2xl font-semibold">Set up this counter</h1>
-          <p className="text-ink/60 mt-1 text-sm">
-            One time only. After this, sign in with your PIN.
+    <main className="flex min-h-screen items-start justify-center p-6 sm:items-center">
+      <form action={loginDeviceAction} className="w-full max-w-md">
+        <p className="text-green-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
+        <h1 className="text-green-900 mt-1 text-2xl font-semibold">Set up this counter</h1>
+        <p className="text-ink/70 mt-2 leading-relaxed">
+          This links this machine to your pharmacy. You do this once, on this machine.
+        </p>
+
+        {/* Where every value comes from, and who has it — said once, not three
+            times. This single sentence is the point of the redesign. */}
+        <div className="border-line bg-green-100/60 mt-5 rounded border p-3">
+          <p className="text-green-900 text-sm font-medium">
+            All three are on your setup sheet from Mehvar.
+          </p>
+          <p className="text-ink/70 mt-0.5 text-sm">
+            Don’t have it? Ask the owner — or message us on WhatsApp.
           </p>
         </div>
 
-        <Field name="tenantSlug" label="Pharmacy code" autoFocus />
-        <Field name="deviceName" label="Counter name" />
-        <Field name="pairingKey" label="Setup key" type="password" />
+        <div className="mt-5 flex flex-col gap-4">
+          <Field
+            name="tenantSlug"
+            label="Pharmacy code"
+            hint="Your pharmacy’s short name in Mehvar, e.g. al-shifa"
+            autoFocus
+          />
+          <Field
+            name="deviceName"
+            label="Counter name"
+            hint="Names this machine in reports, e.g. Counter 1"
+          />
+          <Field
+            name="pairingKey"
+            label="Setup key"
+            // The likeliest wrong entry is someone's PIN, so rule it out here
+            // rather than in an error message afterwards (I5).
+            hint="The one-time key on the sheet — not anyone’s PIN"
+            type="password"
+          />
+        </div>
 
         {message ? (
-          <p className="text-red text-sm" role="alert">
+          <p className="text-red mt-4 text-sm" role="alert">
             {message}
           </p>
         ) : null}
 
-        <button type="submit" className="bg-green-600 text-paper min-h-touch rounded font-medium">
+        <button
+          type="submit"
+          className="bg-green-600 text-paper min-h-touch mt-5 w-full rounded font-medium"
+        >
           Set up counter
         </button>
+
+        {/* The reassurance that matters most to the person who will actually use
+            this machine every day, and who is probably not the person holding
+            the sheet. */}
+        <p className="text-ink/60 border-line mt-5 border-t pt-4 text-sm leading-relaxed">
+          After this, the counter stays signed in. Every day you just tap your name and type your{' '}
+          {PIN_LENGTH}-digit PIN.
+        </p>
       </form>
     </main>
   );
@@ -64,25 +111,39 @@ export default async function LoginPage({
 function Field({
   name,
   label,
+  hint,
   type = 'text',
   autoFocus = false,
 }: {
   name: string;
   label: string;
+  hint: string;
   type?: string;
   autoFocus?: boolean;
 }) {
+  const hintId = `${name}-hint`;
+
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-ink/60 text-xs">{label}</span>
+    <div>
+      <label htmlFor={name} className="text-ink block text-sm font-medium">
+        {label}
+      </label>
+      {/* Hint above the input, not below it: it is read before typing, and it
+          keeps the validation message the only thing that ever appears under a
+          field. */}
+      <p id={hintId} className="text-ink/60 mt-0.5 text-sm leading-snug">
+        {hint}
+      </p>
       <input
+        id={name}
         name={name}
         type={type}
         required
         autoFocus={autoFocus}
         autoComplete="off"
-        className="border-line focus:border-green-600 h-touch rounded border px-3 outline-none"
+        aria-describedby={hintId}
+        className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
       />
-    </label>
+    </div>
   );
 }
