@@ -20,10 +20,13 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      // See tests/server-only-stub.ts.
+      'server-only': fileURLToPath(new URL('./tests/server-only-stub.ts', import.meta.url)),
     },
   },
   test: {
     environment: 'node',
+    setupFiles: ['./tests/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}', 'tests/**/*.test.{ts,tsx}'],
     exclude: ['node_modules/**', '.next/**', 'e2e/**'],
     // Deterministic dates and money formatting: the suites assert exact strings.
