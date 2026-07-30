@@ -50,13 +50,6 @@ export default tseslint.config(
   ...nextTypescript,
 
   {
-    // Pinned explicitly: eslint-plugin-react's automatic version detection uses
-    // an ESLint 9 context API that ESLint 10 removed, and it only runs when this
-    // setting is absent.
-    settings: { react: { version: '19.2' } },
-  },
-
-  {
     files: ['**/*.{ts,tsx,mts,cts}'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
