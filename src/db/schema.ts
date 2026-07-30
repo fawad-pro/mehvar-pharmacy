@@ -79,6 +79,21 @@ export const proposalStatus = pgEnum('proposal_status', ['pending', 'accepted', 
 
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 
+/**
+ * [mechanical] Modification timestamp for MUTABLE reference entities only.
+ *
+ * Immutable event tables never get this — Phase 9 §1: "Immutable tables have no
+ * `updated_at`: there are no updates." Reference entities are editable, so a
+ * modification timestamp is a convention column of the kind Phase 9's preamble
+ * sanctions.
+ *
+ * It earns its place by making the ADR-4 client index refreshable incrementally:
+ * the counter asks for rows changed since its last sync instead of re-downloading
+ * a 3,000-product catalog whenever one price is corrected. `TenantScope.update`
+ * stamps it, so no writer can forget to.
+ */
+const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
+
 /** Tenant settings (Phase 9 §2): receipt header/footer, timezone, expiry horizons. */
 export interface TenantSettings {
   receiptHeader: string;
@@ -208,10 +223,14 @@ export const products = pgTable(
     needsCompletion: boolean('needs_completion').notNull().default(false),
     isActive: boolean('is_active').notNull().default(true),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (table) => [
     index('products_tenant_idx').on(table.tenantId),
     index('products_tenant_name_idx').on(table.tenantId, table.name),
+    // ADR-4's incremental index refresh reads this range. Without it, every
+    // catalog change costs a full-catalog download at 3,000 products.
+    index('products_tenant_updated_idx').on(table.tenantId, table.updatedAt),
     // Phase 9 §5.5 — partial index feeding the completion queue.
     index('products_needs_completion_idx')
       .on(table.tenantId)
@@ -233,10 +252,12 @@ export const productBarcodes = pgTable(
     /** A box barcode and a strip barcode differ (Phase 5 §2). */
     unitLevelName: text('unit_level_name').notNull(),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (table) => [
     uniqueIndex('product_barcodes_tenant_barcode_key').on(table.tenantId, table.barcode),
     index('product_barcodes_product_idx').on(table.tenantId, table.productId),
+    index('product_barcodes_tenant_updated_idx').on(table.tenantId, table.updatedAt),
   ],
 );
 

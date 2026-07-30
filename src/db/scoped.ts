@@ -174,9 +174,15 @@ export class TenantScope {
     patch: Partial<T['$inferInsert']>,
     ...conditions: Array<SQL | undefined>
   ): Promise<Array<ScopedRow<T>>> {
+    // Stamped here for the same reason `tenant_id` and `created_by` are: a
+    // writer cannot forget a column it never sets. ADR-4's incremental index
+    // refresh depends on this being true of every catalog edit, everywhere.
+    const stamped =
+      'updatedAt' in getTableColumns(table) ? { ...patch, updatedAt: new Date() } : patch;
+
     const rows = await this.db
       .update(table as PgTable)
-      .set(patch)
+      .set(stamped)
       .where(this.scopeOf(table, ...conditions))
       .returning();
     return rows as Array<ScopedRow<T>>;
