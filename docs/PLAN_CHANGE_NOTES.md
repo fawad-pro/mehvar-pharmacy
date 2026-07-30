@@ -35,7 +35,99 @@ then the code follows the corrected plan.
 
 ## Open notes
 
-_None._
+## PCN-001 — ADR-7's login flow has no schema, and §5.1's REVOKE has no role
+
+Session: 1 (Day 1) · Raised: 2026-07-30 · Status: **open — implemented under the
+recommendation below, pending your decision**
+
+### Plan sections in tension
+
+- **ADR-7:** "Tenant device login (long-lived session on the counter machine)
+  with in-app user switching by PIN per salesman/owner; owner logs in normally
+  from any device."
+- **Phase 9 §3 (`sales`):** `receipt_number` is "client-generated at commit,
+  device-scoped: short device prefix + per-device counter, e.g. `A-1042`".
+- **Phase 9 §2:** `tenants` is id, name, status, settings. `users` is id,
+  tenant_id, name, role, pin_hash, password_hash, is_active.
+- **Phase 9 §5.1:** "REVOKE UPDATE/DELETE on event tables **for the app role**."
+- **Phase 4 §6:** one domain serves the product (`pharmacy.mehvar.app`) — there
+  are no per-tenant subdomains to carry tenant identity.
+
+### The gaps
+
+Four things ADR-7 and Phase 9 §3 require have no schema and no stated owner:
+
+1. **Tenant identity at login.** A device or an owner arriving at a single shared
+   domain must name which pharmacy they belong to. No column carries that;
+   `tenants` has a name but nothing unique and typeable.
+2. **The device itself.** ADR-7's "device login" and Phase 9 §3's "short device
+   prefix" both presuppose a device record. There is no `devices` table, so the
+   receipt prefix — which must be unique per tenant, or `A-1042` collides across
+   two counters — has nowhere to live and nothing enforcing its uniqueness.
+3. **Sessions.** Purely mechanical, but they need storage.
+4. **PIN lockout state.** Phase 12 §5 requires "rate-limited, lockout after
+   repeated failures with owner override". Attempt count and lockout expiry have
+   no columns.
+
+Separately, **§5.1's "app role" is never provisioned anywhere in the package.**
+Phase 12 §1 says configuration is environment variables in Railway and stops
+there. This matters more than it looks: a `REVOKE` against the role that owns the
+tables is silently inert in Postgres. If the application connects with the
+owner's credentials — the default on Railway — then ADR-1's physical
+immutability guarantee is decorative, and nothing anywhere would report that.
+The product's central promise would be unenforced and appear enforced.
+
+### Options
+
+**A. Add the four columns/tables; provision a non-owning app role.** Recommended.
+`tenants.slug`; a `devices` table (name, receipt_prefix, pairing_key_hash,
+is_active) with a unique index on (tenant_id, receipt_prefix); a `sessions`
+table; `users.failed_pin_attempts` and `users.pin_locked_until`. Two database
+URLs: `DATABASE_URL` (app role, INSERT-only on event tables) and
+`DATABASE_ADMIN_URL` (owner, migrations and grants only).
+
+**B. Put the device prefix in `tenants.settings` JSONB.** Avoids a table, but
+loses the unique constraint on (tenant_id, receipt_prefix) — and a duplicated
+prefix means duplicated receipt numbers across two counters, which is a data
+defect that surfaces as an angry customer holding two identical receipts. Phase 9
+§5.5 already requires (tenant_id, receipt_number) to be unique; enforcing that
+without a device registry means detecting collisions after the fact instead of
+preventing them.
+
+**C. Defer, and hard-code a single device per tenant.** Cheapest today. Breaks
+the moment a pharmacy adds a second counter, and Phase 9 §3's `A-1042` example
+exists precisely because more than one counter is anticipated.
+
+### Recommendation
+
+**A.** All four are the smallest additions that let ADR-7 be built as written,
+and three of the four (sessions, lockout state, slug) are mechanical in the sense
+Phase 9's preamble already sanctions. `devices` is the only genuinely new entity,
+and Phase 9 §3's receipt-number format already implies it — the plan describes
+its output without ever describing it.
+
+The app role is not optional in the same way. Without it, §5.1 is a comment.
+
+### What was implemented (and is reversible)
+
+Implemented per A, marked `[PCN-001]` in `src/db/schema.ts` at each column. If you
+prefer B or C, the changes are confined to that file, `src/auth/`, and
+`src/db/auth-queries.ts`.
+
+The app role is enforced but **not mandatory**: `db:grants` skips with a warning
+when `APP_DB_ROLE` is unset, and the immutability tests skip alongside it, so a
+developer without the role still gets a working checkout — they simply do not get
+the guarantee, and both the script and the test say so.
+
+### Decision
+
+_Awaiting review._
+
+### Suggested plan amendment if accepted
+
+Phase 9 §2 gains `tenants.slug`, the `devices` and `sessions` tables, and the two
+`users` lockout columns. Phase 12 §1 gains the two-role database configuration and
+a line stating that the application must not connect as the schema owner.
 
 ## Decided notes
 

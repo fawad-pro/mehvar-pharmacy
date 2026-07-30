@@ -7,10 +7,12 @@ pharmacies.
 
 ## Status
 
-Planning complete. **Session 0 (bootstrap) complete.** Feature implementation
-begins with Session 1 (Phase 13, Day 1): the Phase 9 schema, the tenant
-chokepoint, migrations and seed, the app shell, and device login with PIN
-switching.
+Planning complete. **Sessions 0–1 complete** — the foundation is in: the Phase 9
+schema, the tenant chokepoint, the demo pharmacy seed, the counter shell with its
+key bar, and ADR-7 device login with PIN switching. Session 2 (Day 2) builds the
+catalog and search.
+
+One plan-change note is open for review: **PCN-001** (`docs/PLAN_CHANGE_NOTES.md`).
 
 ## Specification
 
@@ -44,9 +46,11 @@ npm run hooks:install          # pre-push: typecheck + lint + tests
 cp .env.example .env           # then set SESSION_SECRET
 docker compose up -d postgres
 
-npm run db:reset && npm run db:migrate && npm run db:seed
+npm run db:reset && npm run db:migrate && npm run db:grants && npm run db:seed
 npm run dev
 ```
+
+`db:seed` prints the demo counter's setup key and the PINs it created.
 
 `db:reset && db:migrate && db:seed` must always produce a working demo pharmacy
 (Phase 11 §4) — the demo is a build artifact, always one command away. From
@@ -91,6 +95,16 @@ src/
   single home for token values (Phase 10 §6/§9).
 - TypeScript strict, `any` is an error, unused locals are errors.
 
+Two further guarantees are enforced by the database rather than by lint:
+
+- **Event tables accept INSERT only.** `db:grants` REVOKEs UPDATE and DELETE from
+  the application role, so ADR-1's immutability is a privilege, not a convention.
+  This requires the app to connect as a **non-owning** role — a REVOKE against
+  the table owner is silently inert. See `.env.example` and PCN-001.
+- **`tenants` cannot be reached through a tenant scope.** It has no `tenant_id`
+  column, so the chokepoint's type constraint rejects it at compile time;
+  provisioning has its own narrow door in `src/db/provisioning.ts`.
+
 Everything else is enforced by review against `CLAUDE.md` and the master plan.
 
 ## Tooling decisions
@@ -108,8 +122,17 @@ available "fix" is a major downgrade of the direct dependency, so none is
 applied. None sits in the money path. Re-checked at the monthly patch review
 (Phase 12 §5).
 
+## Testing
+
+`npm test` runs unit and invariant suites. Suites ending `.integration.test.ts`
+need Postgres and **skip themselves** when `DATABASE_URL` is absent, so a
+checkout without a database still runs green — the pre-deploy gate (Phase 12
+§2.3) runs them against a real database, which is where they count. The
+immutability assertions additionally skip without `APP_DB_ROLE`, and say so.
+
 ## Not yet built
 
-Everything with business behaviour. Session 0 delivered the scaffold, the
-tooling, the design tokens and the unit primitives — no schema, no domain logic,
-no screens. See the session table in `CLAUDE.md`.
+Everything from Day 2 onward: catalog and search, the sale commit, payment and
+receipts, offline capture, purchases, reports and the owner surface. The counter
+surfaces exist as routed placeholders naming the session that fills each one. See
+the session table in `CLAUDE.md`.
