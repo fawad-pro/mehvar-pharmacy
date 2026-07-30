@@ -118,7 +118,10 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   for (let press = 0; press < 40; press += 1) {
     await page.keyboard.press('+');
   }
-  await expect(cart(page)).toContainText('more than in stock');
+  // Either wording is the same D2 exposure: "not in stock" once earlier sales
+  // have already emptied it, "more than in stock" while some remains. The suite
+  // shares a database, so which one appears depends on what ran before.
+  await expect(cart(page)).toContainText(/more than in stock|not in stock/);
 
   await page.keyboard.press('F12');
 

@@ -8,6 +8,9 @@ import { expect, test, type Page } from '@playwright/test';
  * `catalog-index.test.ts`. What this file proves is the part unit tests cannot:
  * that the index reaches the browser, survives a reload from its IndexedDB
  * cache, and drives a keyboard-only interaction.
+ *
+ * Selections land in the cart, which Session 3 built — `e2e/sale.spec.ts` owns
+ * the cart's own behaviour; here it is only evidence that search reached it.
  */
 
 const DEMO = {
@@ -40,8 +43,7 @@ test('three characters return ranked results, by keyboard alone', async ({ page 
   // Enter takes the highlighted row — no mouse anywhere in this test (I1).
   await page.keyboard.press('Enter');
 
-  const selected = page.getByRole('region', { name: 'Selected product' });
-  await expect(selected).toContainText('Panadol');
+  await expect(page.getByRole('table')).toContainText('Panadol');
   // Focus returns to search for the next item (Phase 7 rule 1).
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('');
@@ -76,7 +78,7 @@ test('a scanned barcode resolves straight to one product', async ({ page }) => {
   await search.fill('8964000101018');
   await page.keyboard.press('Enter');
 
-  await expect(page.getByRole('region', { name: 'Selected product' })).toContainText('Panadol');
+  await expect(page.getByRole('table')).toContainText('Panadol');
 });
 
 test('the index is cached, so a reload does not re-download the catalog', async ({ page }) => {
