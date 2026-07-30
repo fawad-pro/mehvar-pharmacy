@@ -1,11 +1,127 @@
-import { SurfacePlaceholder } from '@/components/surface-placeholder';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
-export default function CustomersPage() {
+import { currentSession, scopeFor } from '@/auth/session';
+import { listCustomers } from '@/db/udhaar-queries';
+import { paisa } from '@/lib/branded';
+import { formatPaisa } from '@/lib/money';
+
+/**
+ * Customers — Phase 10 §2: "list with balances, largest first" (W11's phone
+ * view shares this same ordering). Balances are derived (Phase 5 invariant 3),
+ * never stored, so this page reads sales and payments fresh every time.
+ */
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}) {
+  const session = await currentSession();
+  if (!session) {
+    redirect('/login');
+  }
+
+  const params = await searchParams;
+  const page = await listCustomers(scopeFor(session), {
+    search: params.q,
+    page: Number(params.page ?? 1),
+  });
+
   return (
-    <SurfacePlaceholder
-      title="Customers"
-      workflow="Balances, largest first — and the customer detail view that expands a balance into the transactions behind it, which is how an udhaar dispute ends (T4)."
-      session="Session 4 (Day 4)"
-    />
+    <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
+      <header className="flex flex-wrap items-center gap-3">
+        <h1 className="text-green-900 text-2xl font-semibold">Customers</h1>
+        <span className="text-ink/50 text-sm">{page.total.toLocaleString()} on the book</span>
+      </header>
+
+      <form className="flex flex-wrap items-center gap-2" action="/customers">
+        <input
+          name="q"
+          defaultValue={params.q ?? ''}
+          placeholder="Search name or phone"
+          aria-label="Search customers"
+          className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
+        />
+        <button type="submit" className="border-line min-h-touch rounded border px-4">
+          Search
+        </button>
+      </form>
+
+      {page.items.length === 0 ? (
+        <p className="text-ink/50 p-8 text-center text-sm">
+          {params.q
+            ? 'Nothing matched that search.'
+            : 'No customers yet. They are added inline the first time udhaar is extended (F8, W2).'}
+        </p>
+      ) : (
+        <div className="border-line overflow-x-auto rounded border">
+          <table className="text-table w-full text-left">
+            <thead className="bg-green-100/50 text-ink/60 text-xs">
+              <tr>
+                <th className="px-3 py-2 font-medium">Name</th>
+                <th className="px-3 py-2 font-medium">Phone</th>
+                <th className="px-3 py-2 text-right font-medium">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {page.items.map((item) => (
+                <tr key={item.id} className="border-line border-t">
+                  <td className="px-3 py-2">
+                    <Link href={`/customers/${item.id}`} className="text-green-900 font-medium">
+                      {item.name}
+                    </Link>
+                  </td>
+                  <td className="text-ink/70 px-3 py-2">{item.phone ?? '—'}</td>
+                  <td
+                    className={`numeral px-3 py-2 font-medium ${item.balancePaisa > 0 ? 'text-amber' : 'text-ink/50'}`}
+                  >
+                    {formatPaisa(paisa(item.balancePaisa), { withSymbol: true })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {page.pageCount > 1 ? (
+        <nav className="flex items-center justify-between text-sm" aria-label="Pagination">
+          <PageLink params={params} page={page.page - 1} disabled={page.page <= 1}>
+            Previous
+          </PageLink>
+          <span className="text-ink/50">
+            Page {page.page} of {page.pageCount}
+          </span>
+          <PageLink params={params} page={page.page + 1} disabled={page.page >= page.pageCount}>
+            Next
+          </PageLink>
+        </nav>
+      ) : null}
+    </section>
+  );
+}
+
+function PageLink({
+  params,
+  page,
+  disabled,
+  children,
+}: {
+  params: { q?: string };
+  page: number;
+  disabled: boolean;
+  children: React.ReactNode;
+}) {
+  if (disabled) {
+    return <span className="text-ink/30">{children}</span>;
+  }
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  query.set('page', String(page));
+
+  return (
+    <Link href={`/customers?${query.toString()}`} className="text-green-600">
+      {children}
+    </Link>
   );
 }
