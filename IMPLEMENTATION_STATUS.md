@@ -22,6 +22,25 @@ Verified green: `typecheck`, `lint`, `test` (28), `build`, `e2e` (1).
 
 No business functionality implemented, by design. No plan-change notes raised.
 
+## Session 1 — Day 1, Foundation
+
+- [x] Drizzle schema verbatim from Phase 9 (22 tables, CHECKs, indexes)
+- [x] `scoped.ts` tenant chokepoint + `provisioning.ts` bootstrap door
+- [x] Phase 9 §5.1 grants: INSERT-only on event tables for the app role
+- [x] Migrations + demo pharmacy seed (53 products, 49 opening batches, customer
+      with an udhaar balance, opening float)
+- [x] App shell: top bar, key bar, F-key registry (Phase 10 §1/§3)
+- [x] ADR-7 auth: device login, PIN switch, Argon2id, rate limit and lockout
+- [x] Tests: chokepoint enforcement (unit + integration), PIN hash/lockout
+- [x] Done-when: `db:reset && db:migrate && db:grants && db:seed` yields a
+      logged-in shell with a switchable user, asserted by E2E
+
+Verified green: `typecheck`, `lint`, `test` (60), `build`, `e2e` (3).
+
+**Open for review: PCN-001** — ADR-7's login flow has no schema, and Phase 9
+§5.1's "app role" is never provisioned. Implemented under the recommendation;
+see `docs/PLAN_CHANGE_NOTES.md`.
+
 ## Pre-implementation track (Phase 13 §2 — owner-side, blocks Day 1 where noted)
 
 - [ ] **Catalog curation** — hand-verified head of ~1,500–3,000 fast movers with
@@ -38,7 +57,7 @@ No business functionality implemented, by design. No plan-change notes raised.
 
 ## Phase 13 — the build week
 
-- [ ] Day 1 — Foundation: schema, chokepoint, migrations + seed, app shell, auth
+- [x] Day 1 — Foundation: schema, chokepoint, migrations + seed, app shell, auth
 - [ ] Day 2 — Catalog & search
 - [ ] Day 3 — Sale core (**highest consequence**; the crown test suite lands here)
 - [ ] Day 4 — Payment, receipt, udhaar

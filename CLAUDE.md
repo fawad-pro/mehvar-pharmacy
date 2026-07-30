@@ -41,7 +41,8 @@ The master plan's terminology is the codebase's (Phase 11 §2).
    and nowhere else (ADR-8).
 2. **The tenant chokepoint** (ADR-2). Every query is constructed in
    `src/db/scoped.ts`, which cannot be constructed without tenant context.
-   Nothing outside `src/db` imports `drizzle-orm`, `pg`, or `db/client.ts`.
+   Nothing outside `src/db` imports `drizzle-orm`, `pg`, or `db/client.ts` — put
+   new queries in a module under `src/db`, as `auth-queries.ts` does.
 3. **Branded units** (Phase 11 §2). `Paisa` and `BaseQty`; raw `number` never
    crosses a domain boundary for money or stock. Pack-factor multiplication
    happens only in `src/lib/quantity.ts`. Money is integer paisa; stock is
@@ -85,7 +86,7 @@ their feature, never after — rebuild equivalence ships the same day as
 | Session | Day | Slice                                                                        |
 | ------- | --- | ---------------------------------------------------------------------------- |
 | 0       | —   | Bootstrap: scaffold, tooling, tokens, unit primitives ✅                     |
-| 1       | 1   | Schema verbatim, `scoped.ts`, migrations + seed, app shell, ADR-7 auth       |
+| 1       | 1   | Schema, `scoped.ts`, migrations + seed, app shell, ADR-7 auth ✅             |
 | 2       | 2   | Catalog & search: CRUD, client index, ranking ladder, barcodes               |
 | 3       | 3   | **Sale core** — `commitSale`, FEFO, pending layer, cart UI + the crown suite |
 | 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement             |
@@ -103,6 +104,25 @@ monthly report tabs → CSV import in W9 → returns without receipt → near-ex
 
 **Never cut:** rebuild-equivalence tests, offline capture, receipt printing,
 exception visibility.
+
+## Things Day 1 established that later sessions rely on
+
+- **The app connects as a non-owning database role.** Event tables are
+  INSERT-only for it (Phase 9 §5.1). If a writer needs to change an event row,
+  that is a design error, not a grant to widen — the only sanctioned mutations
+  are allocation resolution and `batches.qty_remaining`. Allocation resolution
+  will need a SECURITY DEFINER function when Day 6 builds it; `batches` is
+  already writable.
+- **Run `npm run db:grants` after any migration that adds a table.** A new table
+  starts with default privileges, so a new event table is mutable until granted.
+- **`TenantScope` stamps `tenant_id` and `created_by`.** Never pass them; they
+  are ignored if you do.
+- **`tenants` is not scopeable** — use `src/db/provisioning.ts`.
+- **The keyboard registry is one array** (`src/client/keyboard/registry.ts`). The
+  key bar renders it and the handler binds it. Add a key in one place.
+- **Integration suites skip without a database**, and immutability assertions
+  additionally skip without `APP_DB_ROLE`. Green locally is not proof; the
+  pre-deploy gate runs them for real.
 
 ## Commits
 

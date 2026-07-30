@@ -17,6 +17,7 @@ const serverSchema = z.object({
   /** Phase 12 §1 environments: local, staging, production. Three, no more. */
   APP_ENV: z.enum(['local', 'staging', 'production']).default('local'),
 
+  /** The NON-OWNING application role — see PCN-001 and .env.example. */
   DATABASE_URL: z.string().url(),
 
   /** Session signing key for ADR-7's own auth. Rotated per Phase 12 §1. */

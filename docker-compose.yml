@@ -10,6 +10,8 @@ services:
     container_name: mehvar-pharmacy-db
     restart: unless-stopped
     environment:
+      # The owner role. The application connects as `mehvar_app`, which
+      # `npm run db:grants` creates — see PCN-001.
       POSTGRES_USER: mehvar
       POSTGRES_PASSWORD: mehvar
       POSTGRES_DB: mehvar_pharmacy
