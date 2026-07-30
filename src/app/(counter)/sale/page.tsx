@@ -17,5 +17,5 @@ export default async function SalePage() {
   if (!session) {
     redirect('/login');
   }
-  return <SaleSurface tenantId={session.tenantId} />;
+  return <SaleSurface />;
 }

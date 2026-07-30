@@ -27,6 +27,8 @@ export interface CartTableProps {
   onChange: (lineId: string, patch: Partial<CartLine>) => void;
   onRemove: (lineId: string) => void;
   onLeaveCart: () => void;
+  /** Phase 10 §4: "Space or F12 from cart" opens the payment overlay. */
+  onPay?: () => void;
 }
 
 export function CartTable({
@@ -37,6 +39,7 @@ export function CartTable({
   onChange,
   onRemove,
   onLeaveCart,
+  onPay,
 }: CartTableProps) {
   const container = useRef<HTMLTableSectionElement>(null);
 
@@ -107,6 +110,11 @@ export function CartTable({
       case 'Backspace': {
         event.preventDefault();
         onRemove(line.lineId);
+        break;
+      }
+      case ' ': {
+        event.preventDefault();
+        onPay?.();
         break;
       }
       case 'Tab': {

@@ -26,6 +26,7 @@ export default async function CounterLayout({ children }: { children: React.Reac
     // (ADR-4), so moving between Sale and Products never rebuilds it.
     <CatalogProvider tenantId={session.tenantId}>
       <AppShell
+        tenantId={session.tenantId}
         tenantName={session.tenantName}
         deviceName={session.deviceName}
         userId={session.userId}

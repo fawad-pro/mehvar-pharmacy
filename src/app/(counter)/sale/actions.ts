@@ -16,7 +16,8 @@
 
 import { currentSession, scopeFor } from '@/auth/session';
 import { commitSale, type SaleCommand, type SaleRejection } from '@/domain/sales/commit-sale';
-import { highestReceiptCounter } from '@/db/sales-queries';
+import { highestReceiptCounterAcrossReceipts } from '@/db/udhaar-queries';
+import { tenantSettings } from '@/db/provisioning';
 
 export interface SaleLineInput {
   lineId: string;
@@ -31,9 +32,12 @@ export interface SaleLineInput {
 export interface CommitSaleInput {
   saleId: string;
   receiptNumber: string;
+  customerId: string | null;
   lines: SaleLineInput[];
   invoiceDiscountPaisa: number;
   cashPaisa: number;
+  creditPaisa: number;
+  tenderedPaisa: number;
   changePaisa: number;
   clientCommittedAt: string;
 }
@@ -46,6 +50,8 @@ export type CommitSaleOutcome =
       /** Base units sold that the system did not have (D2) — surfaced, not hidden. */
       pendingByProduct: Record<string, number>;
       alreadyCommitted: boolean;
+      /** Set only when credit was extended (Phase 10 §7's mini-statement). */
+      balanceBeforePaisa?: number;
     }
   | { ok: false; message: string; retryWithNewReceipt?: boolean };
 
@@ -84,11 +90,11 @@ export async function commitCashSale(input: CommitSaleInput): Promise<CommitSale
   const command: SaleCommand = {
     saleId: input.saleId,
     receiptNumber: input.receiptNumber,
-    customerId: null,
+    customerId: input.customerId,
     lines: input.lines,
     invoiceDiscountPaisa: input.invoiceDiscountPaisa,
     cashPaisa: input.cashPaisa,
-    creditPaisa: 0,
+    creditPaisa: input.creditPaisa,
     changePaisa: input.changePaisa,
     origin: 'online',
     clientSchemaVersion: CLIENT_SCHEMA_VERSION,
@@ -106,6 +112,9 @@ export async function commitCashSale(input: CommitSaleInput): Promise<CommitSale
       totalPaisa: result.value.totalPaisa,
       pendingByProduct: result.value.pendingByProduct,
       alreadyCommitted: result.value.alreadyCommitted,
+      ...(result.value.balanceBeforePaisa !== undefined
+        ? { balanceBeforePaisa: result.value.balanceBeforePaisa }
+        : {}),
     };
   } catch (error) {
     // A receipt number already taken means two devices share a prefix or a
@@ -121,15 +130,36 @@ export async function commitCashSale(input: CommitSaleInput): Promise<CommitSale
   }
 }
 
-/** The server's highest receipt counter for this device, to seed the client. */
-export async function receiptCounterHint(): Promise<{ prefix: string; highest: number } | null> {
+export interface SaleContext {
+  receiptPrefix: string;
+  highestReceiptCounter: number;
+  tenantHeaderLines: string[];
+  tenantFooterLine: string;
+  salesmanName: string;
+}
+
+/**
+ * Everything the client needs once, before the first sale: where the device's
+ * receipt counter should resume (PCN-002: shared with settlements), and the
+ * tenant's own receipt header/footer for printing (Phase 10 §7).
+ */
+export async function saleContext(): Promise<SaleContext | null> {
   const session = await currentSession();
   if (!session?.receiptPrefix) {
     return null;
   }
+
+  const [highest, settings] = await Promise.all([
+    highestReceiptCounterAcrossReceipts(scopeFor(session), session.receiptPrefix),
+    tenantSettings(session.tenantId),
+  ]);
+
   return {
-    prefix: session.receiptPrefix,
-    highest: await highestReceiptCounter(scopeFor(session), session.receiptPrefix),
+    receiptPrefix: session.receiptPrefix,
+    highestReceiptCounter: highest,
+    tenantHeaderLines: (settings?.receiptHeader ?? session.tenantName).split('\n'),
+    tenantFooterLine: settings?.receiptFooter ?? '',
+    salesmanName: session.userName,
   };
 }
 
