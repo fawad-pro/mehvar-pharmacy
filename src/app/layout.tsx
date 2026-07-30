@@ -13,6 +13,11 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Mehvar Pharmacy',
   description: 'Pharmacy counter operations — faster than the register, and it cannot lie.',
+  // ADR-3: the counter is a PWA. Installing it is what gives the shop a
+  // window with no address bar and its own icon (Phase 12 §6's kiosk setup).
+  manifest: '/manifest.webmanifest',
+  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  appleWebApp: { capable: true, title: 'Mehvar', statusBarStyle: 'black-translucent' },
 };
 
 export const viewport: Viewport = {
@@ -21,6 +26,9 @@ export const viewport: Viewport = {
   // The counter surface is a fixed keyboard-first workspace; the owner surface
   // (Phase 10 §2) is responsive within the same app.
   maximumScale: 5,
+  // `theme_color` lives in the manifest rather than here: the token lint rule
+  // (Phase 10 §9) rightly refuses a raw hex in app code, and the manifest is
+  // the same kind of legitimate exception `globals.css` is.
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -54,7 +54,7 @@ test('payment overlay: tendered above the total shows change (Phase 10 §4)', as
   await expect(overlay).toContainText('65.00');
 
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status')).toContainText('Saved');
+  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText('Saved');
   await expect(receipt(page)).toContainText('Change');
   await expect(receipt(page)).toContainText('65.00');
 });
@@ -90,7 +90,7 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(overlay).toContainText('udhaar');
 
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status')).toContainText('Saved');
+  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText('Saved');
 
   // The mini-statement is the dispute-ender (T4/T5): previous → this → new.
   await expect(receipt(page)).toContainText(name);

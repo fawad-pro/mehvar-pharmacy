@@ -90,7 +90,7 @@ their feature, never after — rebuild equivalence ships the same day as
 | 2       | 2   | Catalog & search: CRUD, client index, ranking ladder, barcodes ✅           |
 | 3       | 3   | **Sale core** — `commitSale`, FEFO, pending layer, cart UI + crown suite ✅ |
 | 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement ✅         |
-| 5       | 5   | Offline capture & sync                                                      |
+| 5       | 5   | Offline capture & sync ✅                                                   |
 | 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution          |
 | 7       | 7   | Day close, reports, owner surface, returns, settings, export                |
 | 8       | 8   | Buffer & hardening: E2E, token lint sweep, restore drill, verifier, deploy  |
@@ -161,6 +161,34 @@ exception visibility.
   now event kinds in `applyRandomEvent`, and Phase 5 invariant 3 (customer
   balance) is checked every 10 events alongside the stock invariants —
   purchases (Day 6) and returns (Day 7) add their own kinds the same way.
+
+## Things Day 5 established
+
+- **Every capture goes through the outbox, online or not.** `useSync().capture()`
+  is the only way a sale, settlement, quick item or customer is written. A new
+  offline-capturable event is a new kind in `client/sync/records.ts` plus a
+  branch in `domain/sync/ingest.ts` — and nothing else may be added to that
+  union without a plan change (ADR-3 scopes it to W1–W3 and W6).
+- **The receipt prints on the `capture()` resolve, never on a server response**
+  (Phase 7 rule 3). If a new receipt-producing event appears, it prints from
+  local state too.
+- **`domain/sync/ingest.ts` holds no business rules.** It routes to the writer
+  that already owns each record. A rule appearing there means an offline sale
+  has started meaning something different from an online one (ADR-5).
+- **Delivery is strictly FIFO and stops at the first failure**, because records
+  depend on each other — a quick item before the sale that references it, a
+  customer before the udhaar sale that owes against it.
+- **A client component must never import from a module that reaches the
+  database.** `commit-sale.ts` does; `sale-command.ts` is its pure half and is
+  what the counter imports. Typecheck and lint cannot see this — `server-only`
+  is the guard, and it only fires at build/run time, so a green
+  `typecheck && lint` is not evidence the browser bundle is clean.
+- **Backoff belongs to the pump, not the records.** `attempts` on a record is
+  its history (feeding `origin` and the stuck warning); the pump's own
+  consecutive-failure count drives the delay and clears on `online`.
+- **`npm run build && npm run start` is the only real test of the service
+  worker.** It registers in production only, and `e2e/pwa.spec.ts` skips
+  otherwise — green in dev is not proof, exactly as with the database suites.
 
 ## Commits
 

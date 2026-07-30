@@ -9,10 +9,10 @@
  * putting it through the reconciler buys nothing.
  */
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { CatalogIndex } from './catalog-index';
-import { loadCatalog } from './store';
+import { applyDelta, CatalogIndex, type CatalogPayload, type IndexedProduct } from './catalog-index';
+import { loadCatalog, writeCachedCatalog } from './store';
 
 export type IndexStatus = 'loading' | 'ready' | 'stale' | 'unavailable';
 
@@ -21,6 +21,17 @@ interface CatalogContextValue {
   readonly status: IndexStatus;
   readonly productCount: number;
   readonly refresh: () => void;
+  /**
+   * Adds a product the counter just invented — W6's quick item.
+   *
+   * The product exists locally before the server has heard of it, which is the
+   * whole point: the cart line has to render and the next search has to find it
+   * while the sale is still happening, disruption or not (ADR-3). The delta is
+   * merged into the cached payload with the same `applyDelta` a server refresh
+   * uses, so a later refresh reconciles it without special handling — the
+   * server will return the same product once its creation is delivered.
+   */
+  readonly addLocalProduct: (product: IndexedProduct) => void;
 }
 
 const CatalogContext = createContext<CatalogContextValue>({
@@ -28,6 +39,7 @@ const CatalogContext = createContext<CatalogContextValue>({
   status: 'loading',
   productCount: 0,
   refresh: () => {},
+  addLocalProduct: () => {},
 });
 
 export function CatalogProvider({
@@ -41,6 +53,9 @@ export function CatalogProvider({
   const [status, setStatus] = useState<IndexStatus>('loading');
   const [nonce, setNonce] = useState(0);
   const cancelled = useRef(false);
+  // The payload behind the current index, so a locally-created product can be
+  // merged without re-downloading anything.
+  const payloadRef = useRef<CatalogPayload | null>(null);
 
   useEffect(() => {
     cancelled.current = false;
@@ -51,6 +66,7 @@ export function CatalogProvider({
         return;
       }
 
+      payloadRef.current = payload;
       setIndex(CatalogIndex.build(payload));
       if (payload.products.length === 0 && !refreshed) {
         setStatus('unavailable');
@@ -66,6 +82,34 @@ export function CatalogProvider({
     };
   }, [tenantId, nonce]);
 
+  const addLocalProduct = useCallback(
+    (product: IndexedProduct) => {
+      const previous = payloadRef.current;
+      if (!previous) {
+        return;
+      }
+
+      const merged = applyDelta(previous, {
+        products: [product],
+        removedProductIds: [],
+        barcodes: [],
+        removedBarcodes: [],
+        // Carried forward unchanged: a new product has no stock, and this is
+        // not the moment to claim anything about anyone else's.
+        stock: previous.stock,
+        // The watermark does not move. The product has not been through the
+        // server yet, so pretending the counter is caught up to now would make
+        // the next incremental refresh skip whatever else changed meanwhile.
+        syncedAt: previous.syncedAt,
+      });
+
+      payloadRef.current = merged;
+      setIndex(CatalogIndex.build(merged));
+      void writeCachedCatalog(tenantId, merged);
+    },
+    [tenantId],
+  );
+
   const value = useMemo<CatalogContextValue>(
     () => ({
       index,
@@ -74,8 +118,9 @@ export function CatalogProvider({
       refresh: () => {
         setNonce((current) => current + 1);
       },
+      addLocalProduct,
     }),
-    [index, status],
+    [index, status, addLocalProduct],
   );
 
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>;

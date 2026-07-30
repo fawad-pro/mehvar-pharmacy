@@ -99,6 +99,34 @@ Verified green: `typecheck`, `lint`, `test` (243), `build`, `e2e` (18).
 never named. Implemented under the recommendation; see
 `docs/PLAN_CHANGE_NOTES.md`.
 
+## Session 5 — Day 5, Offline capture & sync
+
+- [x] Durable IndexedDB outbox; `enqueue` resolves on transaction *commit*, so
+      the receipt only ever prints for a sale that survives a power cut
+- [x] Queue-first capture for all four ADR-3 events, online or not — one path,
+      exercised every sale rather than only during outages
+- [x] Print-from-local (Phase 7 rule 3); mini-statement and D2 note from the
+      client's last-known figures, per ADR-5's posture
+- [x] `domain/sync/ingest.ts` — routes to the existing writers, no rules of its
+      own; strictly FIFO, stops at the first failure
+- [x] Background pump: flushes on mount, on `online`, after each capture, and
+      on a 15s safety tick, with backoff owned by the pump not the records
+- [x] W6 quick item (D3) from the empty search result, added to the local index
+      immediately and queued for delivery
+- [x] W2's inline customer create captured too (see the changelog's plan-reading note)
+- [x] PWA shell + service worker; never touches non-GET or `/api`
+- [x] Unsynced badge in the top bar (ADR-3's visible semantic state, I7)
+- [x] Tests: replay-N-times idempotency for all four kinds, ingestion
+      equivalence (offline-origin vs online), FIFO dependency ordering,
+      first-failure stop, receipt-collision re-mint, plus the pure flush
+      decisions
+- [x] Done-when: network disabled → sell, print, re-enable → everything
+      reconciles with no user action (`e2e/offline.spec.ts`), including a
+      mid-cart disruption, W2 and W6 offline, and an outbox that survives a reload
+
+Verified green: `typecheck`, `lint`, `test` (264), `build`, `e2e` (23 + 1
+production-only PWA spec), and `db:verify` clean after the full E2E run.
+
 ## Pre-implementation track (Phase 13 §2 — owner-side, blocks Day 1 where noted)
 
 - [ ] **Catalog curation** — hand-verified head of ~1,500–3,000 fast movers with
@@ -119,7 +147,7 @@ never named. Implemented under the recommendation; see
 - [x] Day 2 — Catalog & search
 - [x] Day 3 — Sale core (**highest consequence**; the crown test suite lands here)
 - [x] Day 4 — Payment, receipt, udhaar
-- [ ] Day 5 — Offline capture & sync
+- [x] Day 5 — Offline capture & sync (second-highest consequence)
 - [ ] Day 6 — Purchases, batches, stock operations
 - [ ] Day 7 — Day close, reports, owner surface, export
 - [ ] Day 8 — Buffer & hardening, restore drill, production deploy
@@ -128,7 +156,7 @@ never named. Implemented under the recommendation; see
 
 - [ ] W1–W12 operable by keyboard at the counter, on real hardware
 - [ ] Rebuild-equivalence suite green; production verifier scheduled and quiet
-- [ ] Selling survives a connectivity disruption with no user action, no data loss
+- [x] Selling survives a connectivity disruption with no user action, no data loss
 - [ ] Receipts print correctly for sales, udhaar, settlements and returns
 - [ ] Owner's three questions answered on a phone in one glance
 - [ ] Backup running, restore drill passed, export working

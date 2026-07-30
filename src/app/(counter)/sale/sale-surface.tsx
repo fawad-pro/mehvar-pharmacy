@@ -24,12 +24,17 @@ import {
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { useRegisterF8Handler } from '@/client/keyboard/f8-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
+import { useSync } from '@/client/sync/provider';
 import type { SearchHit } from '@/client/search/catalog-index';
 import { ProductSearch } from '@/components/product-search';
 import { CustomerPicker } from '@/components/customer-picker';
+import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import { ReceiptView } from '@/components/receipt-view';
 import type { CustomerHit } from '@/app/(counter)/customers/actions';
 import { miniStatement } from '@/domain/udhaar/settlement';
+// From the pure module, never from `commit-sale.ts`: that one reaches the
+// database, and importing it here would pull `server-only` into the browser.
+import { validateSaleCommand, type SaleRejection } from '@/domain/sales/sale-command';
 import {
   addToCart,
   cartTotals,
@@ -39,23 +44,41 @@ import {
   updateLine,
   type CartLine,
 } from '@/domain/sales/cart';
-import { paisa, ZERO_PAISA } from '@/lib/branded';
+import { baseQty, paisa, ZERO_PAISA } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 import { describeQuantity } from '@/lib/quantity';
 import { uuidv7 } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
 import { PaymentOverlay, type PaymentSplit } from './payment-overlay';
-import { commitCashSale } from './actions';
 
 interface Committed {
   receiptNumber: string;
   totalPaisa: number;
-  pendingByProduct: Record<string, number>;
+  /** Base units sold beyond what the index believed was there (D2, advisory). */
+  pendingUnits: number;
+}
+
+/** I5 — say the next action, plainly. The domain names the reason; this names the fix. */
+function messageForRejection(reason: SaleRejection): string {
+  switch (reason) {
+    case 'empty_cart':
+      return 'The cart is empty.';
+    case 'invalid_quantity':
+      return 'One of the lines has no quantity.';
+    case 'split_mismatch':
+      return 'The cash and credit split does not add up to the total.';
+    case 'credit_without_customer':
+      return 'Attach a customer before putting anything on udhaar.';
+    case 'negative_amount':
+      return 'Check the discounts — something came out negative.';
+    default:
+      return 'That did not save. Try again.';
+  }
 }
 
 export function SaleSurface() {
-  const { index, refresh } = useCatalog();
+  const { index, refresh, addLocalProduct } = useCatalog();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,10 +87,16 @@ export function SaleSurface() {
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
   const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
+  /** W6's pending mini-form: the typed name, plus the resolver the search awaits. */
+  const [quickAdd, setQuickAdd] = useState<{
+    name: string;
+    settle: (added: boolean) => void;
+  } | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const receiptContext = useReceiptContext();
   const { receipt, print } = usePrintReceipt();
+  const { capture } = useSync();
 
   // Defect C5: F8 belongs to Sale only while the cart has something to bill.
   // An empty cart leaves F8 unregistered, so AppShell's Settle Udhaar fallback
@@ -126,106 +155,189 @@ export function SaleSurface() {
     setError(null);
   }, []);
 
+  /**
+   * Commits the cart — ADR-3's local commit, Phase 7 rule 3.
+   *
+   * The sale is captured into the durable outbox and the receipt prints on that
+   * capture, not on a server response. Whether the network is there decides how
+   * long the badge in the top bar shows a number, and nothing else about this
+   * function: the counter's rhythm is identical online and offline, which is
+   * the entire promise of ADR-3.
+   *
+   * Two figures on the receipt are therefore the client's last-known values
+   * rather than the server's authoritative ones — the customer's balance for
+   * the mini-statement, and whether the sale outran stock. That is ADR-5's
+   * stated posture ("the client's last-known price at sale time; final
+   * allocation may adjust recorded margin, never the customer's charged
+   * price"), applied to the two other numbers a receipt shows. The authoritative
+   * pending layer is created server-side at ingestion, and the balance is
+   * re-derivable from records at any time (Phase 5 invariant 3).
+   */
   const commitWithSplit = useCallback(
     async (split: PaymentSplit) => {
       if (lines.length === 0 || busy || !receiptContext) {
         return;
       }
-      setBusy(true);
-      setError(null);
 
       const soldLines = lines;
       const soldTotals = totals;
       const soldCustomer = customer;
+      const receiptNumber = receiptContext.nextReceiptNumber();
 
-      // Two attempts: the second exists only for a receipt number that turned
-      // out to be taken (two devices sharing a prefix, or a restored backup).
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        const receiptNumber = receiptContext.nextReceiptNumber();
-        const outcome = await commitCashSale({
-          saleId: uuidv7(),
-          receiptNumber,
-          customerId: soldCustomer?.id ?? null,
-          lines: soldLines.map((line) => ({
-            lineId: line.lineId,
-            productId: line.productId,
-            qtyBase: line.qtyBase,
-            enteredUnitLevel: line.enteredUnitLevel,
-            unitPricePaisa: line.unitPricePaisa,
-            lineDiscountPaisa: line.lineDiscountPaisa,
-            priceOverridden: isPriceOverridden(line),
-          })),
-          invoiceDiscountPaisa: soldTotals.invoiceDiscountPaisa,
-          cashPaisa: split.cashPaisa,
-          creditPaisa: split.creditPaisa,
-          tenderedPaisa: split.tenderedPaisa,
-          changePaisa: split.changePaisa,
-          clientCommittedAt: new Date().toISOString(),
-        });
+      const command = {
+        saleId: uuidv7(),
+        receiptNumber,
+        customerId: soldCustomer?.id ?? null,
+        lines: soldLines.map((line) => ({
+          lineId: line.lineId,
+          productId: line.productId,
+          qtyBase: line.qtyBase,
+          enteredUnitLevel: line.enteredUnitLevel,
+          unitPricePaisa: line.unitPricePaisa,
+          lineDiscountPaisa: line.lineDiscountPaisa,
+          priceOverridden: isPriceOverridden(line),
+        })),
+        invoiceDiscountPaisa: soldTotals.invoiceDiscountPaisa,
+        cashPaisa: split.cashPaisa,
+        creditPaisa: split.creditPaisa,
+        changePaisa: split.changePaisa,
+        clientCommittedAt: new Date().toISOString(),
+      };
 
-        if (outcome.ok) {
-          setLines([]);
-          setCustomer(null);
-          setPaying(false);
-          setLastSale({
-            receiptNumber: outcome.receiptNumber,
-            totalPaisa: outcome.totalPaisa,
-            pendingByProduct: outcome.pendingByProduct,
-          });
-
-          const pendingUnits = Object.values(outcome.pendingByProduct).reduce(
-            (sum, qty) => sum + qty,
-            0,
-          );
-
-          print({
-            receiptNumber: outcome.receiptNumber,
-            dateTime: new Date(),
-            salesmanName: receiptContext.salesmanName,
-            tenantHeaderLines: receiptContext.tenantHeaderLines,
-            tenantFooterLine: receiptContext.tenantFooterLine,
-            lines: soldLines.map((line) => ({
-              name: line.name,
-              quantityLabel: describeQuantity(line.qtyBase, line.baseUnitName, [
-                ...line.packLevels,
-              ]),
-              amountPaisa: lineTotal(line),
-            })),
-            subtotalPaisa: soldTotals.subtotalPaisa,
-            discountPaisa: soldTotals.invoiceDiscountPaisa,
-            totalPaisa: soldTotals.totalPaisa,
-            cashPaisa: split.cashPaisa,
-            tenderedPaisa: split.tenderedPaisa,
-            changePaisa: split.changePaisa,
-            creditPaisa: split.creditPaisa,
-            ...(soldCustomer ? { customerName: soldCustomer.name } : {}),
-            ...(outcome.balanceBeforePaisa !== undefined
-              ? { miniStatement: miniStatement(outcome.balanceBeforePaisa, split.creditPaisa) }
-              : {}),
-            ...(pendingUnits > 0
-              ? { pendingNote: 'Sold more than the system had. It is on the owner’s exception list.' }
-              : {}),
-          });
-
-          // Stock moved, so the index's advisory snapshot is stale.
-          refresh();
-          setBusy(false);
-          focusSearch();
-          return;
-        }
-
-        if (!outcome.retryWithNewReceipt) {
-          setError(outcome.message);
-          setBusy(false);
-          return;
-        }
+      // The domain's own validator, run before the receipt prints — the reason
+      // it is pure and exported (see `commit-sale.ts`). Queue-first commits
+      // mean a server rejection would arrive after the paper, so the rules that
+      // can be checked locally are checked locally.
+      const validation = validateSaleCommand({
+        ...command,
+        origin: 'online',
+        clientSchemaVersion: 1,
+        clientCommittedAt: new Date(command.clientCommittedAt),
+      });
+      if (!validation.ok) {
         receiptContext.skipReceiptNumber(receiptNumber);
+        setError(messageForRejection(validation.reason));
+        return;
       }
 
-      setError('Could not save the sale. Try again.');
+      setBusy(true);
+      setError(null);
+
+      try {
+        await capture({ kind: 'sale', payload: command });
+      } catch {
+        // The outbox refused the record, so it is not durable, so no receipt
+        // may claim it happened. This is the one failure that stops a sale, and
+        // it is a broken machine rather than a broken network.
+        receiptContext.skipReceiptNumber(receiptNumber);
+        setError('This machine could not save the sale. Do not hand over the items — get help.');
+        setBusy(false);
+        return;
+      }
+
+      // Advisory, from the index's snapshot — the same figure the cart's amber
+      // chip already showed (D2).
+      const pendingUnits = soldLines.reduce((sum, line) => {
+        const stock = index?.stockOf(line.productId) ?? null;
+        return sum + (stock === null ? 0 : Math.max(0, line.qtyBase - stock));
+      }, 0);
+
+      setLines([]);
+      setCustomer(null);
+      setPaying(false);
+      setLastSale({ receiptNumber, totalPaisa: soldTotals.totalPaisa, pendingUnits });
+
+      print({
+        receiptNumber,
+        dateTime: new Date(),
+        salesmanName: receiptContext.salesmanName,
+        tenantHeaderLines: receiptContext.tenantHeaderLines,
+        tenantFooterLine: receiptContext.tenantFooterLine,
+        lines: soldLines.map((line) => ({
+          name: line.name,
+          quantityLabel: describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels]),
+          amountPaisa: lineTotal(line),
+        })),
+        subtotalPaisa: soldTotals.subtotalPaisa,
+        discountPaisa: soldTotals.invoiceDiscountPaisa,
+        totalPaisa: soldTotals.totalPaisa,
+        cashPaisa: split.cashPaisa,
+        tenderedPaisa: split.tenderedPaisa,
+        changePaisa: split.changePaisa,
+        creditPaisa: split.creditPaisa,
+        ...(soldCustomer ? { customerName: soldCustomer.name } : {}),
+        ...(split.creditPaisa > 0 && soldCustomer
+          ? { miniStatement: miniStatement(soldCustomer.balancePaisa, split.creditPaisa) }
+          : {}),
+        ...(pendingUnits > 0
+          ? { pendingNote: 'Sold more than the system had. It is on the owner’s exception list.' }
+          : {}),
+      });
+
+      // Stock moved, so the index's advisory snapshot is stale. Harmless to ask
+      // for while offline: the refresh fails and the cached catalog stands.
+      refresh();
       setBusy(false);
+      focusSearch();
     },
-    [lines, busy, receiptContext, totals, customer, refresh, focusSearch, print],
+    [lines, busy, receiptContext, totals, customer, index, capture, refresh, focusSearch, print],
+  );
+
+  /**
+   * W6 — the shelf item that is not in the catalog, with a customer waiting.
+   *
+   * The product is real from this moment (D3: "never an anonymous line"), and
+   * it is real *locally* first: added to the index so the cart line renders and
+   * the next search finds it, captured into the outbox so it becomes real on
+   * the server whenever the server is next reachable. FIFO delivery is what
+   * guarantees it arrives before the sale whose line points at it.
+   */
+  const createQuickItem = useCallback(
+    async (draft: QuickItemDraft): Promise<void> => {
+      const product = {
+        id: uuidv7(),
+        name: draft.name,
+        strength: null,
+        form: null,
+        manufacturer: null,
+        formulaText: null,
+        baseUnitName: draft.baseUnitName,
+        packLevels: [],
+        pricePaisa: draft.pricePaisa,
+        mrpPaisa: null,
+        needsCompletion: true,
+      };
+
+      await capture({
+        kind: 'quick_item',
+        payload: {
+          id: product.id,
+          name: product.name,
+          pricePaisa: product.pricePaisa,
+          baseUnitName: product.baseUnitName,
+        },
+      });
+
+      addLocalProduct(product);
+
+      setLines((current) =>
+        addToCart(current, {
+          lineId: uuidv7(),
+          productId: product.id,
+          name: product.name,
+          baseUnitName: product.baseUnitName,
+          packLevels: [],
+          qtyBase: baseQty(1),
+          enteredUnitLevel: product.baseUnitName,
+          unitPricePaisa: paisa(product.pricePaisa),
+          catalogPricePaisa: paisa(product.pricePaisa),
+          lineDiscountPaisa: ZERO_PAISA,
+        }),
+      );
+      setLastSale(null);
+      setError(null);
+    },
+    [capture, addLocalProduct],
   );
 
   const openPayment = useCallback(() => {
@@ -261,6 +373,11 @@ export function SaleSurface() {
               setSelectedLineId(last.lineId);
             }
           }}
+          onQuickAdd={(name) =>
+            new Promise<boolean>((settle) => {
+              setQuickAdd({ name, settle });
+            })
+          }
         />
       </div>
 
@@ -329,13 +446,17 @@ export function SaleSurface() {
           ) : null}
 
           {lastSale ? (
-            <div className="border-line bg-green-100/50 rounded border p-3 text-sm" role="status">
+            <div
+              className="border-line bg-green-100/50 rounded border p-3 text-sm"
+              role="status"
+              aria-label="Last sale"
+            >
               <p className="text-green-900 font-medium">Saved — {lastSale.receiptNumber}</p>
               <p className="numeral text-ink/70">
                 {formatPaisa(paisa(lastSale.totalPaisa), { withSymbol: true })}
               </p>
               {/* D2 made visible at the moment it happens, not only in the day view. */}
-              {Object.keys(lastSale.pendingByProduct).length > 0 ? (
+              {lastSale.pendingUnits > 0 ? (
                 <p className="text-amber mt-1">
                   Sold more than the system had. It is on the owner’s exception list.
                 </p>
@@ -379,6 +500,30 @@ export function SaleSurface() {
           }}
           onCancel={() => {
             setPickingCustomer(false);
+            focusSearch();
+          }}
+        />
+      ) : null}
+
+      {quickAdd ? (
+        <QuickItemForm
+          initialName={quickAdd.name}
+          onCreate={(draft) => {
+            void (async () => {
+              try {
+                await createQuickItem(draft);
+                quickAdd.settle(true);
+              } catch {
+                setError('Could not add that item. Try again.');
+                quickAdd.settle(false);
+              }
+              setQuickAdd(null);
+              focusSearch();
+            })();
+          }}
+          onCancel={() => {
+            quickAdd.settle(false);
+            setQuickAdd(null);
             focusSearch();
           }}
         />

@@ -31,6 +31,7 @@ export function ProductSearch({
   autoFocus = true,
   inputRef,
   onEnterCart,
+  onQuickAdd,
 }: {
   /** Receives the chosen hit and the raw query, so quantity grammar survives. */
   onSelect: (hit: SearchHit, rawQuery: string) => void;
@@ -39,6 +40,13 @@ export function ProductSearch({
   inputRef?: React.RefObject<HTMLInputElement | null>;
   /** ArrowUp on an empty query moves into the cart (Phase 10 §4). */
   onEnterCart?: () => void;
+  /**
+   * W6 — Enter on a search that found nothing opens the quick item. Resolves
+   * true once the item actually landed in the cart, which is when the box
+   * clears; a cancelled quick-add leaves the typing alone, because the operator
+   * is most likely about to correct a spelling.
+   */
+  onQuickAdd?: (name: string) => Promise<boolean>;
 }) {
   const { index, status, productCount } = useCatalog();
   const [query, setQuery] = useState('');
@@ -90,10 +98,31 @@ export function ProductSearch({
       setActive((current) => Math.max(current - 1, 0));
     } else if (event.key === 'Enter') {
       event.preventDefault();
+      if (hits.length === 0 && parsed.query !== '') {
+        // W6: "from an empty search result, one key". The key is Enter, because
+        // it is the one the operator's finger is already on and because P2 says
+        // a missing product is never a dead end.
+        void quickAdd();
+        return;
+      }
       // A scanner types its digits and presses Enter. When exactly one result
       // came back it is unambiguous, so Enter takes it whatever the cursor says
       // — that is the "scan anywhere adds the item" behaviour of I1.
       choose(hits[hits.length === 1 ? 0 : active]);
+    }
+  }
+
+  async function quickAdd(): Promise<void> {
+    if (!onQuickAdd || parsed.query === '') {
+      return;
+    }
+    const added = await onQuickAdd(parsed.query);
+    if (added) {
+      // Same reset choosing a hit performs: the item is in the cart, so the box
+      // is ready for the next one (Phase 7 rule 1).
+      setQuery('');
+      setActive(0);
+      field.current?.focus();
     }
   }
 
@@ -148,10 +177,27 @@ export function ProductSearch({
           className="border-line bg-paper absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded border shadow-lg"
         >
           {hits.length === 0 ? (
-            // P2: an empty result is never an error state. Day 3 puts the
-            // quick-add row here as the first-class result (W6).
-            <li className="text-ink/60 p-3 text-sm">
-              Nothing found. Check the spelling, or scan the pack.
+            // P2: an empty result is never an error state — it is W6's trigger,
+            // and the quick-add is the first-class result rather than a
+            // consolation message under one.
+            <li>
+              <button
+                type="button"
+                onClick={() => {
+                  onQuickAdd?.(parsed.query);
+                }}
+                className="hover:bg-green-100/50 flex w-full items-center gap-3 px-3 py-2 text-left"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="text-green-600 block truncate font-medium">
+                    Add “{parsed.query}” and keep selling
+                  </span>
+                  <span className="text-ink/50 block truncate text-xs">
+                    Name and price only — the owner completes it later
+                  </span>
+                </span>
+                <kbd className="text-ink/40 shrink-0 text-xs">Enter</kbd>
+              </button>
             </li>
           ) : (
             hits.map((hit, position) => (

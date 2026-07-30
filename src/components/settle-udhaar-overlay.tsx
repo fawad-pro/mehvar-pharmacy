@@ -15,12 +15,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { commitSettlementAction, type CustomerHit } from '@/app/(counter)/customers/actions';
+import type { CustomerHit } from '@/app/(counter)/customers/actions';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
+import { miniStatement } from '@/domain/udhaar/settlement';
 import { CustomerPicker } from '@/components/customer-picker';
 import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
+import { useSync } from '@/client/sync/provider';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
@@ -42,6 +44,7 @@ export function SettleUdhaarOverlay({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const receiptContext = useReceiptContext();
   const { receipt, print } = usePrintReceipt();
+  const { capture } = useSync();
   const amountField = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -50,6 +53,17 @@ export function SettleUdhaarOverlay({ onClose }: { onClose: () => void }) {
     }
   }, [step]);
 
+  /**
+   * Captures the settlement — ADR-3 lists settlements among the four events
+   * that keep working through a disruption, so this takes the same queue-first
+   * path a sale does.
+   *
+   * The mini-statement is computed from the balance the picker showed, which is
+   * the client's last-known figure rather than the server's. That is the same
+   * trade the sale receipt makes, and Phase 5 invariant 3 is what makes it
+   * safe: the balance is a derivation over records, so whatever this slip says,
+   * the customer's real balance is always recomputable and always right.
+   */
   async function commit(customer: CustomerHit): Promise<void> {
     const amountPaisa = paisaFromRupeeInput(amount);
     if (amountPaisa <= 0 || busy || !receiptContext) {
@@ -59,35 +73,37 @@ export function SettleUdhaarOverlay({ onClose }: { onClose: () => void }) {
     setError(null);
 
     const receiptNumber = receiptContext.nextReceiptNumber();
-    const outcome = await commitSettlementAction({
-      paymentId: uuidv7(),
-      receiptNumber,
-      customerId: customer.id,
-      amountPaisa,
-      clientCommittedAt: new Date().toISOString(),
-    });
+    const statement = miniStatement(customer.balancePaisa, -amountPaisa);
 
-    setBusy(false);
-    if (!outcome.ok) {
-      setError(outcome.message);
+    try {
+      await capture({
+        kind: 'settlement',
+        payload: {
+          paymentId: uuidv7(),
+          receiptNumber,
+          customerId: customer.id,
+          amountPaisa,
+          clientCommittedAt: new Date().toISOString(),
+        },
+      });
+    } catch {
+      receiptContext.skipReceiptNumber(receiptNumber);
+      setError('This machine could not save the payment. Do not mark it paid — get help.');
+      setBusy(false);
       return;
     }
 
-    setStep({
-      name: 'done',
-      customer,
-      receiptNumber: outcome.receiptNumber,
-      statement: outcome.statement,
-    });
+    setBusy(false);
+    setStep({ name: 'done', customer, receiptNumber, statement });
 
     print({
-      receiptNumber: outcome.receiptNumber,
+      receiptNumber,
       dateTime: new Date(),
       salesmanName: receiptContext.salesmanName,
       tenantHeaderLines: receiptContext.tenantHeaderLines,
       tenantFooterLine: receiptContext.tenantFooterLine,
       customerName: customer.name,
-      miniStatement: outcome.statement,
+      miniStatement: statement,
     });
   }
 
