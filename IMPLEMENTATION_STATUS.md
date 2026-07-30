@@ -72,6 +72,33 @@ Verified green: `typecheck`, `lint`, `test` (137), `build`, `e2e` (9).
 
 Verified green: `typecheck`, `lint`, `test` (219), `build`, `e2e` (14).
 
+## Session 4 — Day 4, Payment, receipt, udhaar
+
+- [x] Payment overlay: tendered/change, F12 or Space-from-cart, cash/credit
+      split when a customer is attached
+- [x] F8 contextual (defect C5): attaches a customer with items in the cart,
+      falls back to Settle Udhaar on an empty cart — via `f8-context.tsx`,
+      shared with no other screen state
+- [x] `commitSettlement` — idempotent standalone payment, mini-statement
+      computed inside the transaction (T4/T5)
+- [x] Inline customer create (name + phone only, W2), reused by both the
+      attach and settle pickers
+- [x] Printed receipt (ADR-6, Phase 10 §7): one shape for sale / udhaar sale /
+      settlement, print-CSS scoped to `#printable-receipt`
+- [x] Device-scoped receipt numbering extended to payments (PCN-002), sharing
+      one sequence with sales
+- [x] Customers screens: list (balances largest-first) and detail (T4 ledger)
+- [x] Rebuild-equivalence suite extended with udhaar sales and settlements;
+      Phase 5 invariant 3 (customer balance) checked continuously
+- [x] Done-when: W1, W2 and W3 complete end-to-end by keyboard with a printed
+      receipt in hand (asserted via `#printable-receipt`'s content)
+
+Verified green: `typecheck`, `lint`, `test` (243), `build`, `e2e` (18).
+
+**Open for review: PCN-002** — `payments` needed a receipt number Phase 9 §3
+never named. Implemented under the recommendation; see
+`docs/PLAN_CHANGE_NOTES.md`.
+
 ## Pre-implementation track (Phase 13 §2 — owner-side, blocks Day 1 where noted)
 
 - [ ] **Catalog curation** — hand-verified head of ~1,500–3,000 fast movers with
@@ -91,7 +118,7 @@ Verified green: `typecheck`, `lint`, `test` (219), `build`, `e2e` (14).
 - [x] Day 1 — Foundation: schema, chokepoint, migrations + seed, app shell, auth
 - [x] Day 2 — Catalog & search
 - [x] Day 3 — Sale core (**highest consequence**; the crown test suite lands here)
-- [ ] Day 4 — Payment, receipt, udhaar
+- [x] Day 4 — Payment, receipt, udhaar
 - [ ] Day 5 — Offline capture & sync
 - [ ] Day 6 — Purchases, batches, stock operations
 - [ ] Day 7 — Day close, reports, owner surface, export
