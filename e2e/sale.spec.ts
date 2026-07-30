@@ -64,7 +64,7 @@ test('W1: a cash sale, start to finish, without touching the mouse', async ({ pa
   await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
   await page.keyboard.press('Enter');
 
-  const receipt = page.getByRole('status');
+  const receipt = page.getByRole('status', { name: 'Last sale' });
   await expect(receipt).toContainText(/Saved — A-\d+/);
   await expect(receipt).toContainText('305.00');
 
@@ -130,7 +130,7 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   await page.keyboard.press('Enter');
 
   // The sale is not refused; the shortfall is surfaced (D2).
-  const receipt = page.getByRole('status');
+  const receipt = page.getByRole('status', { name: 'Last sale' });
   await expect(receipt).toContainText(/Saved — A-\d+/);
   await expect(receipt).toContainText('Sold more than the system had');
 });
@@ -145,7 +145,7 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     await page.keyboard.press('F12');
     await page.keyboard.press('Enter');
 
-    const text = (await page.getByRole('status').textContent()) ?? '';
+    const text = (await page.getByRole('status', { name: 'Last sale' }).textContent()) ?? '';
     const match = /A-(\d+)/.exec(text);
     expect(match, 'a receipt number was issued').not.toBeNull();
     numbers.push(match![1]!);
