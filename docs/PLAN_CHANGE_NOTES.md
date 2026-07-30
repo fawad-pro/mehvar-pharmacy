@@ -129,6 +129,84 @@ Phase 9 §2 gains `tenants.slug`, the `devices` and `sessions` tables, and the t
 `users` lockout columns. Phase 12 §1 gains the two-role database configuration and
 a line stating that the application must not connect as the schema owner.
 
+---
+
+## PCN-002 — every receipt needs a number, but `payments` doesn't have one
+
+Session: 4 (Day 4) · Raised: 2026-07-30 · Status: **open — implemented under the
+recommendation below, pending your decision**
+
+### Plan sections in tension
+
+- **Phase 10 §7 (receipt spec):** "80mm primary / 58mm variant… **udhaar receipts
+  and settlements print the mini-statement**… footer = **receipt number**
+  (device-scoped, Phase 9 §3 — identical online and offline), date/time,
+  salesman name, configurable thank-you line…" — stated once, for the receipt in
+  general, then explicitly extended to settlements in the same sentence.
+- **Phase 9 §3:** `payments` — "id (client-generated), tenant_id, customer_id,
+  amount_paisa, method, sale_id (nullable… standalone = settlement W3), origin,
+  client_schema_version, client_committed_at, created_by/at." No
+  `receipt_number` column. Only `sales` carries one.
+- **W3:** "…commit → receipt (mini-statement: previous balance, paid, new
+  balance). The receipt is the dispute-ender (T4, T5)."
+
+### The gap
+
+A settlement is a standalone `payments` row (`sale_id` null) — Phase 5 §3's own
+definition: "money received from a customer independent of a new sale." Phase
+10 §7 requires *that same row* to print a receipt with a footer showing "the
+receipt number." There is nowhere to put one: `payments` has no such column, and
+borrowing a `sales` row is not an option — a settlement is not a sale, and the
+schema's own CHECK constraints (`cash + credit = total`) would make a fabricated
+sale row nonsensical.
+
+This is the same shape as C1 (Phase 9 originally under-scoped which records need
+a device-scoped receipt number), discovered fresh in a different table.
+
+### Options
+
+**A. Add `payments.receipt_number`, same shape as `sales.receipt_number`.**
+Recommended. Client-generated, device-scoped, `unique(tenant_id,
+receipt_number)`. The device's local counter is shared across both tables —
+a sale and a settlement share one sequence, the way a single paper receipt
+book would number every slip it tears off regardless of what the slip records.
+Simplest, and it is what "the receipt" (Phase 10 §7 treats sale and settlement
+receipts as one template with different bodies) implies.
+
+**B. Give `payments` its own independent counter/prefix.** Rejected: two
+sequences per device means two places a collision can happen, and buys nothing
+— nothing in the plan distinguishes "sale receipts" from "settlement receipts"
+as separate print runs a shop would keep separate.
+
+**C. Settlements print without a receipt number.** Rejected outright: it
+contradicts Phase 10 §7's footer spec verbatim, and a printed slip with no
+number is not the dispute-ender T4/T5 promise the receipt exists to keep.
+
+### Recommendation
+
+**A.** One column, one shared device sequence, no new architectural surface —
+the same pattern C1 already established for `sales`, extended to the one other
+table that prints a receipt.
+
+### What was implemented (and is reversible)
+
+`payments.receiptNumber`, `NOT NULL`, `unique(tenant_id, receipt_number)`,
+marked `[PCN-002]` in `src/db/schema.ts`. The client's receipt-number sequence
+(`src/client/print/receipt-number.ts`, built Day 3) is reused unchanged — it was
+already device-scoped and table-agnostic, so nothing about it needed to change
+to serve both tables. Reversing to Option B would touch only the settlement
+commit writer and the client counter's key.
+
+### Decision
+
+_Awaiting review._
+
+### Suggested plan amendment if accepted
+
+Phase 9 §3's `payments` row gains `receipt_number` (client-generated,
+device-scoped, unique per tenant — identical in shape and derivation to
+`sales.receipt_number`), sharing its device counter with sales.
+
 ## Decided notes
 
 _None._

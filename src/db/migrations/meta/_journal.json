@@ -15,6 +15,13 @@
       "when": 1785399400811,
       "tag": "0001_cheerful_energizer",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785408687443,
+      "tag": "0002_fixed_silhouette",
+      "breakpoints": true
     }
   ]
 }
