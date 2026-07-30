@@ -1,0 +1,27 @@
+# Local development database only.
+#
+# Production and staging are Railway-managed Postgres (Phase 12 §1). This file
+# exists so `db:reset && db:migrate && db:seed` works on a fresh machine without
+# a hosted dependency — it is developer convenience, not deployment topology.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: mehvar-pharmacy-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mehvar
+      POSTGRES_PASSWORD: mehvar
+      POSTGRES_DB: mehvar_pharmacy
+    ports:
+      - '5432:5432'
+    volumes:
+      - mehvar-pharmacy-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U mehvar -d mehvar_pharmacy']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mehvar-pharmacy-pgdata:

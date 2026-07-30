@@ -1,0 +1,78 @@
+@import 'tailwindcss';
+
+/* =============================================================================
+   Design tokens — Phase 10 §6, finalizing the Phase 4 §5 direction.
+
+   This file is the single legitimate home for raw colour values in the entire
+   codebase; the token lint rule (eslint.config.mjs, Phase 10 §9) rejects hex
+   literals everywhere else.
+
+   Semantic colours appear ONLY with meaning (I7). The green family carries the
+   brand and never alarm; amber and red are reserved for caution and expiry so
+   the alarm colours keep meaning.
+   ========================================================================== */
+
+:root {
+  /* Palette — Phase 10 §6 */
+  --green-900: #0b3b2c; /* anchor: headers, key bar */
+  --green-600: #11704f; /* primary actions */
+  --green-100: #e4f1ea; /* selection / success tints */
+  --ink: #1b1f1d; /* text */
+  --paper: #fafaf7; /* surfaces */
+  --line: #e3e4df; /* rules */
+  --amber: #b7791f; /* caution: near-expiry, negative stock, unsynced */
+  --red: #b3372e; /* expiry / danger only */
+
+  /* Typography — numerals are the brand (Phase 4 §5) */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  /* Density — Phase 10 §6: compact where work happens, generous where decisions do */
+  --row-height: 36px; /* cart and table rows */
+  --touch-target: 44px; /* actionable controls */
+}
+
+@theme inline {
+  --color-green-900: var(--green-900);
+  --color-green-600: var(--green-600);
+  --color-green-100: var(--green-100);
+  --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-line: var(--line);
+  --color-amber: var(--amber);
+  --color-red: var(--red);
+
+  --font-sans: var(--font-sans);
+
+  /* Scale — 13px table base / 15px controls / totals at display sizes */
+  --text-table: 13px;
+  --text-control: 15px;
+  --text-total: 44px;
+  --text-change: 72px; /* payment overlay: change rendered enormous (Phase 10 §4) */
+
+  --spacing-row: var(--row-height);
+  --spacing-touch: var(--touch-target);
+}
+
+@layer base {
+  html {
+    /* Tabular numerals globally (Phase 10 §6). Prices, totals, balances and
+       stock levels must align in columns wherever they appear. */
+    font-feature-settings: 'tnum' 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  body {
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-control);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* I6 — glanceable numbers: money and quantity columns are right-aligned
+     and tabular wherever they are rendered. */
+  .numeral {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+}

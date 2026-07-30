@@ -1,0 +1,10 @@
+.next
+node_modules
+coverage
+dist
+playwright-report
+test-results
+src/db/migrations
+package-lock.json
+docs/MASTER_PLAN.md
+docs/planning
