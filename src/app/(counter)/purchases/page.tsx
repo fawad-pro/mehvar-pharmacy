@@ -1,11 +1,21 @@
-import { SurfacePlaceholder } from '@/components/surface-placeholder';
+import { redirect } from 'next/navigation';
 
-export default function PurchasesPage() {
-  return (
-    <SurfacePlaceholder
-      title="Purchases"
-      workflow="Distributor invoice entry with bonus quantities, expiry and price capture at receiving — resumable drafts, the only draft state in the product (W7)."
-      session="Session 6 (Day 6)"
-    />
-  );
+import { currentSession } from '@/auth/session';
+
+import { PurchaseEntry } from './purchase-entry';
+
+/**
+ * Purchases — W7, Phase 10 §2 surface 4.
+ *
+ * Entry is the surface, not a list: a distributor delivery is the reason
+ * anyone opens this screen, and the list of past invoices is reference
+ * material. Recent purchases move to the day view on Day 7, where the owner
+ * actually reviews them.
+ */
+export default async function PurchasesPage() {
+  const session = await currentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  return <PurchaseEntry tenantId={session.tenantId} />;
 }
