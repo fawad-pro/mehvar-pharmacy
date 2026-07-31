@@ -439,6 +439,17 @@ export function SaleSurface() {
             <p className="text-ink/40 text-xs">F8 — attach a customer for udhaar</p>
           )}
 
+          {/* A counter cannot number a receipt until it has heard from the
+              server once (Phase 9 §3), so until then Pay is disabled. Saying
+              so is I5: a disabled button with no explanation is the kind of
+              thing that gets a shop phoning the founder. The retry behind this
+              is in `receipt-context.tsx`. */}
+          {!receiptContext ? (
+            <p className="text-amber text-xs" role="status">
+              Getting this counter ready…
+            </p>
+          ) : null}
+
           {error ? (
             <p className="text-red text-sm" role="alert">
               {error}
