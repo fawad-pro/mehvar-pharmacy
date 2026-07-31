@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { cart, lastSale, openCounter, search, total } from './support/counter';
 
 /**
  * Day 3's "done when": "a keyboard-only cash sale commits, stock derives
@@ -9,26 +11,6 @@ import { expect, test, type Page } from '@playwright/test';
  * equivalence suite. What this file proves is the part only a browser can: that
  * W1's path works end to end with the hands never leaving the keyboard (I1).
  */
-
-const DEMO = {
-  tenantSlug: 'demo',
-  deviceName: 'Counter 1',
-  pairingKey: 'counter-one-demo',
-};
-
-async function openCounter(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByLabel('Pharmacy code').fill(DEMO.tenantSlug);
-  await page.getByLabel('Counter name').fill(DEMO.deviceName);
-  await page.getByLabel('Setup key').fill(DEMO.pairingKey);
-  await page.getByRole('button', { name: 'Set up counter' }).click();
-  await expect(page).toHaveURL(/\/sale$/);
-  await expect(page.getByText(/\d+ products/)).toBeVisible();
-}
-
-const search = (page: Page) => page.getByRole('combobox', { name: 'Search products' });
-const cart = (page: Page) => page.getByRole('table');
-const total = (page: Page) => page.locator('aside p.text-total');
 
 test('W1: a cash sale, start to finish, without touching the mouse', async ({ page }) => {
   await openCounter(page);
@@ -64,9 +46,8 @@ test('W1: a cash sale, start to finish, without touching the mouse', async ({ pa
   await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
   await page.keyboard.press('Enter');
 
-  const receipt = page.getByRole('status', { name: 'Last sale' });
-  await expect(receipt).toContainText(/Saved — A-\d+/);
-  await expect(receipt).toContainText('305.00');
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+  await expect(lastSale(page)).toContainText('305.00');
 
   // The cart clears and focus returns for the next customer (W1).
   await expect(total(page)).toHaveText('0.00');
@@ -130,9 +111,8 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   await page.keyboard.press('Enter');
 
   // The sale is not refused; the shortfall is surfaced (D2).
-  const receipt = page.getByRole('status', { name: 'Last sale' });
-  await expect(receipt).toContainText(/Saved — A-\d+/);
-  await expect(receipt).toContainText('Sold more than the system had');
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+  await expect(lastSale(page)).toContainText('Sold more than the system had');
 });
 
 test('receipt numbers advance per device and never repeat', async ({ page }) => {
@@ -145,7 +125,7 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     await page.keyboard.press('F12');
     await page.keyboard.press('Enter');
 
-    const text = (await page.getByRole('status', { name: 'Last sale' }).textContent()) ?? '';
+    const text = (await lastSale(page).textContent()) ?? '';
     const match = /A-(\d+)/.exec(text);
     expect(match, 'a receipt number was issued').not.toBeNull();
     numbers.push(match![1]!);

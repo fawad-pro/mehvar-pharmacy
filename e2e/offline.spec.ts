@@ -1,5 +1,15 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import {
+  cart,
+  lastSale,
+  openCounter,
+  printedReceipt as receipt,
+  search,
+  total,
+  unsynced,
+} from './support/counter';
+
 /**
  * Day 5's "done when": "network disabled → sell, print, re-enable →
  * everything reconciles with no user action" (Phase 13 §3).
@@ -15,28 +25,6 @@ import { expect, test, type Page } from '@playwright/test';
  * exactly the way a dead uplink does, which is the failure the outbox exists
  * for.
  */
-
-const DEMO = {
-  tenantSlug: 'demo',
-  deviceName: 'Counter 1',
-  pairingKey: 'counter-one-demo',
-};
-
-async function openCounter(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByLabel('Pharmacy code').fill(DEMO.tenantSlug);
-  await page.getByLabel('Counter name').fill(DEMO.deviceName);
-  await page.getByLabel('Setup key').fill(DEMO.pairingKey);
-  await page.getByRole('button', { name: 'Set up counter' }).click();
-  await expect(page).toHaveURL(/\/sale$/);
-  await expect(page.getByText(/\d+ products/)).toBeVisible();
-}
-
-const search = (page: Page) => page.getByRole('combobox', { name: 'Search products' });
-const cart = (page: Page) => page.getByRole('table');
-const total = (page: Page) => page.locator('aside p.text-total');
-const receipt = (page: Page) => page.locator('#printable-receipt');
-const unsynced = (page: Page) => page.getByRole('status', { name: /waiting to sync/ });
 
 /** Sells one Panadol strip through the payment overlay at the exact amount. */
 async function sellOne(page: Page, term = 'panadol'): Promise<void> {
@@ -60,7 +48,7 @@ test('W1 through a disruption: sell, print, reconnect, reconcile — no user act
 
   // The receipt printed from local state — ADR-3, Phase 7 rule 3. This is the
   // whole promise: the customer is served while the server is unreachable.
-  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText(/Saved — A-\d+/);
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
   await expect(receipt(page)).toContainText('Panadol');
   await expect(receipt(page)).toContainText(/Receipt A-\d+/);
 
@@ -104,7 +92,7 @@ test('a disruption mid-cart does not disturb the cart', async ({ page, context }
 
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText(/Saved — A-\d+/);
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
   await context.setOffline(false);
   await expect(unsynced(page)).toBeHidden({ timeout: 20_000 });
@@ -180,7 +168,7 @@ test('W6 offline: an unknown product becomes a real line without leaving the sal
 
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText(/Saved — A-\d+/);
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
   await context.setOffline(false);
   await expect(unsynced(page)).toBeHidden({ timeout: 20_000 });

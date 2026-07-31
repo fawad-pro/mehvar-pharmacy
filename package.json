@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
+    "e2e:reset": "npm run db:reset && npm run db:migrate && npm run db:grants && npm run db:seed && playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --conditions=react-server scripts/db/migrate.ts",
     "db:grants": "tsx --conditions=react-server scripts/db/grants.ts",

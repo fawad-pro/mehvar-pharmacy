@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { lastSale, openCounter, search } from './support/counter';
 
 /**
  * The PWA shell — ADR-3's other half.
@@ -17,24 +19,6 @@ import { expect, test, type Page } from '@playwright/test';
  *     E2E_BASE_URL=http://127.0.0.1:3000 npx playwright test e2e/pwa.spec.ts
  */
 
-const DEMO = {
-  tenantSlug: 'demo',
-  deviceName: 'Counter 1',
-  pairingKey: 'counter-one-demo',
-};
-
-async function openCounter(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByLabel('Pharmacy code').fill(DEMO.tenantSlug);
-  await page.getByLabel('Counter name').fill(DEMO.deviceName);
-  await page.getByLabel('Setup key').fill(DEMO.pairingKey);
-  await page.getByRole('button', { name: 'Set up counter' }).click();
-  await expect(page).toHaveURL(/\/sale$/);
-  await expect(page.getByText(/\d+ products/)).toBeVisible();
-}
-
-const search = (page: Page) => page.getByRole('combobox', { name: 'Search products' });
-
 test('a cold reload with no network still boots a sale screen', async ({ page, context }) => {
   await openCounter(page);
 
@@ -52,7 +36,7 @@ test('a cold reload with no network still boots a sale screen', async ({ page, c
   await page.keyboard.press('Enter');
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText(/Saved — A-\d+/);
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
   // The uplink dies and the machine is restarted mid-shift.
   await context.setOffline(true);

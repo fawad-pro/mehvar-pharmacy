@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { openCounter as setUpCounter } from './support/counter';
 
 /**
  * Day 2's "done when": "typing three characters returns correctly ranked results
@@ -12,23 +14,6 @@ import { expect, test, type Page } from '@playwright/test';
  * Selections land in the cart, which Session 3 built — `e2e/sale.spec.ts` owns
  * the cart's own behaviour; here it is only evidence that search reached it.
  */
-
-const DEMO = {
-  tenantSlug: 'demo',
-  deviceName: 'Counter 1',
-  pairingKey: 'counter-one-demo',
-};
-
-async function setUpCounter(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByLabel('Pharmacy code').fill(DEMO.tenantSlug);
-  await page.getByLabel('Counter name').fill(DEMO.deviceName);
-  await page.getByLabel('Setup key').fill(DEMO.pairingKey);
-  await page.getByRole('button', { name: 'Set up counter' }).click();
-  await expect(page).toHaveURL(/\/sale$/);
-  // The index loads from /api/catalog before the first keystroke can match.
-  await expect(page.getByText(/\d+ products/)).toBeVisible();
-}
 
 test('three characters return ranked results, by keyboard alone', async ({ page }) => {
   await setUpCounter(page);
@@ -104,7 +89,11 @@ test('the Products screen lists and edits the catalog', async ({ page }) => {
   await page.keyboard.press('F3');
   await expect(page).toHaveURL(/\/products$/);
   await expect(page.getByRole('heading', { name: 'Products' })).toBeVisible();
-  await expect(page.getByText('53 in catalog')).toBeVisible();
+  // Deliberately not an exact count. The suite shares one database, and W6's
+  // quick item (offline.spec.ts) creates real products by design — pinning the
+  // seed's 53 here made an unrelated spec's correct behaviour look like a
+  // catalog regression.
+  await expect(page.getByText(/\d+ in catalog/)).toBeVisible();
 
   await page.getByLabel('Search the catalog').fill('risek');
   await page.getByRole('button', { name: 'Search' }).click();
