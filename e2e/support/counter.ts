@@ -10,6 +10,15 @@ import { expect, type Page } from '@playwright/test';
  * the perfectly good sentence the login screen had already rendered.
  */
 
+/**
+ * How long the counter gets to become ready.
+ *
+ * Startup is a one-time cost — route compilation on a dev server, the catalog
+ * fetch, the receipt context — and it is not what any spec is measuring. Speed
+ * budgets belong to the interactions the specs actually assert (I2), not here.
+ */
+const STARTUP_TIMEOUT_MS = 45_000;
+
 export const DEMO = {
   tenantSlug: 'demo',
   deviceName: 'Counter 1',
@@ -68,8 +77,16 @@ export async function openCounter(page: Page): Promise<void> {
   // the catalog index (so a keystroke can match), and the receipt context (so a
   // sale can be numbered). The surface says while it is still getting ready, so
   // that notice going away is the honest signal for "ready to sell".
-  await expect(page.getByText(/\d+ products/)).toBeVisible();
-  await expect(page.getByText('Getting this counter ready…')).toBeHidden();
+  //
+  // Both get a deliberately long deadline. The default five seconds is the
+  // right question to ask of an interaction — "did the screen answer the
+  // keystroke?" — and the wrong one to ask of startup, where a dev server may
+  // still be compiling the route and its client bundle. Getting that wrong
+  // reported a perfectly healthy application as seventeen failures.
+  await expect(page.getByText(/\d+ products/)).toBeVisible({ timeout: STARTUP_TIMEOUT_MS });
+  await expect(page.getByText('Getting this counter ready…')).toBeHidden({
+    timeout: STARTUP_TIMEOUT_MS,
+  });
 }
 
 export const search = (page: Page) => page.getByRole('combobox', { name: 'Search products' });
