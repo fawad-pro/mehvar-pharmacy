@@ -94,6 +94,9 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   await openCounter(page);
 
   // Rocephin is seeded with a small quantity; ask for far more than exists.
+  // It is this spec's product: the suite shares one database, so a spec that
+  // *receives* stock must reach for something no selling spec depends on being
+  // short of (purchases.spec.ts uses Hydryllin for exactly that reason).
   await search(page).fill('rocephin');
   await expect(page.getByRole('option').first()).toContainText('Rocephin');
   await page.keyboard.press('Enter');

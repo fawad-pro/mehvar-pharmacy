@@ -1,11 +1,25 @@
-import { SurfacePlaceholder } from '@/components/surface-placeholder';
+import { redirect } from 'next/navigation';
 
-export default function AdjustPage() {
-  return (
-    <SurfacePlaceholder
-      title="Adjustment"
-      workflow="Stock change with a mandatory coded reason — damage, expiry write-off, distributor return, count correction. Attributed, and listed in the owner's daily view without exception (W8, T1)."
-      session="Session 6 (Day 6)"
-    />
-  );
+import { currentSession } from '@/auth/session';
+
+import { AdjustSurface } from './adjust-surface';
+
+/**
+ * Adjustment — W8 (F9), and W9's opening stock via `?opening=1`.
+ *
+ * One screen for both because the arithmetic that materializes a batch must not
+ * exist twice; the guided opening flow differs only in which direction and
+ * reason are pre-selected.
+ */
+export default async function AdjustPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ opening?: string }>;
+}) {
+  const session = await currentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  const params = await searchParams;
+  return <AdjustSurface openingStock={params.opening === '1'} />;
 }

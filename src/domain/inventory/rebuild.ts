@@ -50,10 +50,11 @@ export interface VerificationReport {
 
 /** The quantity the records say a batch should have. */
 export function rebuildQuantity(row: BatchLedgerRow): number {
-  // `adjustedBase` is a signed sum: negative adjustments reduce the batch,
-  // positive ones (a count correction upward) increase it. Phase 9 §4 words the
-  // contract as "− Σ negative batch adjustments", which is the same thing once
-  // the sign is carried through rather than stripped.
+  // `adjustedBase` carries *negative* adjustments only, so adding it subtracts
+  // — see `batchLedger` for why the word "negative" in Phase 9 §4's contract is
+  // load-bearing rather than incidental. In short: a positive adjustment
+  // materializes a batch rather than adding to one, so its quantity arrives as
+  // `qtyReceivedBase` and must not be counted a second time here.
   return row.qtyReceivedBase - row.allocatedBase + row.adjustedBase + row.restockedBase;
 }
 

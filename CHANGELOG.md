@@ -2,6 +2,109 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 6 — Day 6, Purchases, batches, stock operations
+
+Where stock starts arriving as well as leaving, and where D2's pending layer —
+the thing that lets Day 3 refuse to block a sale — finally gets its answer.
+
+**Receiving is one transaction, and it materializes batches (W7, D1)**
+
+- `commitPurchase` writes the purchase, its lines, one batch per line, and any
+  pending resolution inside a single transaction, idempotent on the client id
+  exactly as `commitSale` and `commitSettlement` are. It is the one writer for
+  purchases.
+- One batch per line, never per product: FEFO (D1) is only meaningful if the
+  expiry that arrived with this delivery is recorded against the units that
+  arrived with it. Merging two deliveries of the same product into one batch
+  would average away the fact the system exists to track.
+
+**Bonus schemes tell the truth about cost (`domain/purchases/costing.ts`)**
+
+- "10+1 free" is invoiced for ten and received as eleven. The batch carries the
+  *effective* unit cost — invoiced total over units received — so margin is
+  computed against what the stock actually cost.
+- The division floors, deliberately. Cost lands a paisa low rather than a paisa
+  high, so a reported margin is never better than the real one. The residual is
+  a named function rather than a rounding accident, and the entry screen shows
+  the blended figure at entry time rather than at month end.
+
+**The pending layer resolves (D2, ADR-8)**
+
+- Resolution is the second of ADR-8's two sanctioned mutations, and it is now
+  the only reason the app role can update an allocation row: migration 0003 adds
+  `resolve_sale_line_allocation`, a SECURITY DEFINER function with a pinned
+  `search_path`. The role holds EXECUTE on it and no UPDATE on the table.
+- The function is also the concurrency control. `SELECT … FOR UPDATE` is not
+  available to a role with no UPDATE privilege — the guard clause inside the
+  function (`batch_id IS NULL AND resolved_at IS NULL`) is what makes a lost
+  race a returned `false` instead of a double-count, and the caller skips
+  rather than decrementing what it did not win.
+- Oldest pending first, not FEFO: this is a question about chronology — who was
+  waiting longest — rather than about which stock to consume. And a pending row
+  resolves whole or not at all, because splitting one would mean either
+  mutating an event row or inventing an allocation nobody recorded.
+
+**Adjustments carry a coded reason (W8, W9)**
+
+- The direction is chosen first, because it decides everything after it: stock
+  leaving must name the batch it leaves from, stock arriving creates its own.
+  Two forms rather than one form that rejects half of what it accepts.
+- Not owner-gated, per W8: "visibility is the control, not permission
+  friction". Every adjustment is attributed and appears on the stock screen
+  without exception, which is a stronger control than a wall the salesman
+  routes around by asking someone else to click it.
+- W9's opening stock is the same screen with the direction and reason
+  pre-selected, so the arithmetic that materializes a batch exists once.
+
+**A real bug the verifier caught: double-counted materialization**
+
+- An adjustment that materializes its own batch counts as that batch's
+  `qty_received`. The rebuild was *also* summing it into the adjustment delta,
+  so every added unit was counted twice and `db:verify` failed. Phase 9 §4's
+  word "negative" turned out to be load-bearing; Day 3's generalization to a
+  signed sum was correct right up until a batch could be born from an
+  adjustment. `batchLedger` now sums only negative adjustments.
+
+**W7's rhythm, proven in a browser**
+
+- The done-when verbatim — a 20-line invoice at working rhythm, and a shortfall
+  the counter sold into being closed by the delivery that was missing.
+- The half-entered invoice survives being interrupted by a customer: the draft
+  is written on every keystroke, so there is no "save" to forget, and F1 to the
+  counter and back loses nothing.
+
+**Fixes made along the way**
+
+- **A `'use server'` file re-exported a type again.** `export type
+  { BatchOnHand }` threw `ReferenceError: BatchOnHand is not defined` at
+  runtime — the identical failure Day 4 hit with `CustomerListItem`, already
+  written down in CLAUDE.md and repeated anyway. The shape now lives in the
+  pure domain module, which satisfies both rules at once: a client component
+  must not name a module that reaches the database, and a server-actions file
+  must not re-export a type.
+- **The purchase entry fields had labels associated with nothing.** A `<label>`
+  with no `htmlFor` beside an input with no id is decoration; the fields were
+  unreachable by name to a screen reader and to the keyboard path the
+  definition of done requires. The inputs are nested inside their labels now,
+  which is also why they were untestable.
+- **Two specs contended for one product.** This suite's purchase test received
+  500 Rocephin, which pulled `sale.spec.ts`'s deliberate oversell back into
+  stock and made its correct behaviour look like a regression. A spec that
+  *receives* stock now reaches for something no selling spec depends on being
+  short of. Related: a product the seed has never stocked is absent from the
+  stock map, which the index reads as *unknown* rather than zero and therefore
+  does not warn about — right behaviour, and a trap for a test that wants a
+  guaranteed shortfall.
+
+**Known intermittent, carried into Day 8**
+
+- Two full-suite runs out of three saw a single offline spec fail at the point
+  where it stops waiting on the unsynced badge and asserts server-visible
+  state — a different spec each time, passing in isolation and on repeat. The
+  badge reading zero while a record is still queued would be an ADR-3 visible-
+  state defect rather than a test problem, so it is written down here rather
+  than retried away. Day 8 is the buffer day; this is the first thing on it.
+
 ## Session 5b — the E2E suite made reliable on a slower machine
 
 A second local run reported seventeen failures, all in the startup path
