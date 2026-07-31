@@ -37,7 +37,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { deliverRecords, type DeliverableRecord } from '@/app/(counter)/sync/actions';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 
-import { BATCH_SIZE, originFor, readyToFlush, withReceiptNumber } from './flush';
+import { backoffMs, BATCH_SIZE, originFor, readyToFlush, withReceiptNumber } from './flush';
 import {
   enqueue,
   markAttempted,
@@ -104,6 +104,22 @@ export function SyncProvider({
     mintReceiptNumber.current = receipt ? receipt.nextReceiptNumber : null;
   }, [receipt]);
 
+  /**
+   * A request from the pump to be run again once its backoff has elapsed.
+   *
+   * Without this, `backoffMs` was decorative: the only things that ever
+   * re-invoked a flush were `online`, a fresh capture, and the 15-second safety
+   * tick, so *every* transient failure — a re-mintable receipt collision, a
+   * single dropped request — waited up to fifteen seconds instead of the one
+   * second it had earned. The badge stayed lit long after the cause had passed,
+   * which is exactly the behaviour that teaches an owner not to trust it.
+   *
+   * Carried as state with a timestamp rather than a bare delay, so two
+   * consecutive requests for the same delay are still distinct and the effect
+   * below re-arms for each.
+   */
+  const [retryRequest, setRetryRequest] = useState<{ delayMs: number; at: number } | null>(null);
+
   const flush = useCallback(async (): Promise<void> => {
     if (running.current) {
       return;
@@ -166,6 +182,12 @@ export function SyncProvider({
             if (mint) {
               await replaceRecord(entry.sequence, withReceiptNumber(entry.record, mint()));
               progressed = true;
+            } else {
+              // The receipt context has not loaded yet, so there is no counter
+              // to draw the next number from. Counted as a failure so the
+              // retry is on the short backoff rather than falling through to
+              // the safety tick.
+              consecutiveFailures.current += 1;
             }
             await markAttempted(entry.sequence, 'receipt_taken');
             continue;
@@ -183,8 +205,30 @@ export function SyncProvider({
       }
     } finally {
       running.current = false;
+
+      // Anything still queued gets a retry at the delay it actually earned,
+      // rather than waiting for the next safety tick.
+      const remaining = await pendingRecords(tenantId);
+      setUnsyncedCount(remaining.length);
+      setRetryRequest(
+        remaining.length > 0
+          ? { delayMs: backoffMs(consecutiveFailures.current), at: Date.now() }
+          : null,
+      );
     }
   }, [tenantId]);
+
+  useEffect(() => {
+    if (!retryRequest) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void flush();
+    }, Math.max(250, retryRequest.delayMs));
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [retryRequest, flush]);
 
   const flushNow = useCallback(() => {
     void flush();
