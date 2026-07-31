@@ -2,6 +2,50 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 5a — fixes from local verification of Day 5
+
+A local run reported 17 of 24 E2E tests failing, most of them landing on
+`/login` instead of `/sale`. Chasing it turned up one environment problem and
+three genuine defects — two of them in the application, and the more serious of
+those was a way to lose a day's trading.
+
+**`receipt-context.tsx` had no retry, and nothing can be sold without it**
+(P2). A counter cannot number a receipt until it has heard from the server once
+(Phase 9 §3), so a single failed `saleContext()` at startup — the shop opening
+before the uplink is up, a blip while the shell mounts — left Pay disabled
+permanently, with no way back except a reload nobody would think to try. Worse
+than an outage, because the counter *looks* fine. It now retries until it
+lands, and says "Getting this counter ready…" while it does, because a disabled
+button with no explanation is the kind of thing that gets a shop phoning the
+founder (I5).
+
+**The sync pump's backoff was decorative.** `backoffMs` computed a delay that
+nothing ever acted on: the only things that re-invoked a flush were `online`, a
+fresh capture, and the 15-second safety tick. So every transient failure — a
+re-mintable receipt collision, one dropped request — waited up to fifteen
+seconds instead of the one it had earned, leaving the badge lit long after the
+cause had passed. The pump now schedules its own retry at the computed delay.
+
+**Test defects, all mine from Day 5:**
+
+- `offline.spec.ts` creates quick items by design (W6), which permanently raises
+  the catalog count; `catalog.spec.ts` asserted an exact "53 in catalog"
+  immediately before the Risek assertion the report mentioned. One spec's
+  correct behaviour was being read as another's regression. The count assertion
+  no longer pins a number.
+- `shell.spec.ts`'s wrong-PIN test left `failed_pin_attempts` incremented, so
+  five runs against one database locked Bilal out and broke the *successful*
+  switch test for reasons unrelated to the code. It now gets the PIN right
+  afterwards, which is what happens at a counter anyway and clears the counter.
+- The five copies of `openCounter` are now one, in `e2e/support/counter.ts`, and
+  a failed pairing reports the reason the app already rendered instead of a bare
+  "expected /sale, got /login". `npm run e2e:reset` reseeds and runs.
+
+**The reported symptom itself was environmental**: an unseeded database. Device
+pairing looks up the demo counter, does not find it, and redirects to
+`/login?error=unknown_device` — exactly "lands on /login". The helper now says
+so, and names the fix.
+
 ## Session 5 — Day 5, Offline capture & sync
 
 The second-highest-consequence day, and the one where "lost or duplicated

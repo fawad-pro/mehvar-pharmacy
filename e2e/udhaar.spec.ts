@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { lastSale, openCounter, printedReceipt as receipt, search, total } from './support/counter';
 
 /**
  * Day 4's "done when": "W1, W2, W3 complete end-to-end on real hardware with a
@@ -17,26 +19,6 @@ import { expect, test, type Page } from '@playwright/test';
  * receipt was assembled correctly.
  */
 
-const DEMO = {
-  tenantSlug: 'demo',
-  deviceName: 'Counter 1',
-  pairingKey: 'counter-one-demo',
-};
-
-async function openCounter(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByLabel('Pharmacy code').fill(DEMO.tenantSlug);
-  await page.getByLabel('Counter name').fill(DEMO.deviceName);
-  await page.getByLabel('Setup key').fill(DEMO.pairingKey);
-  await page.getByRole('button', { name: 'Set up counter' }).click();
-  await expect(page).toHaveURL(/\/sale$/);
-  await expect(page.getByText(/\d+ products/)).toBeVisible();
-}
-
-const search = (page: Page) => page.getByRole('combobox', { name: 'Search products' });
-const total = (page: Page) => page.locator('aside p.text-total');
-const receipt = (page: Page) => page.locator('#printable-receipt');
-
 test('payment overlay: tendered above the total shows change (Phase 10 §4)', async ({ page }) => {
   await openCounter(page);
 
@@ -54,7 +36,7 @@ test('payment overlay: tendered above the total shows change (Phase 10 §4)', as
   await expect(overlay).toContainText('65.00');
 
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText('Saved');
+  await expect(lastSale(page)).toContainText('Saved');
   await expect(receipt(page)).toContainText('Change');
   await expect(receipt(page)).toContainText('65.00');
 });
@@ -90,7 +72,7 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(overlay).toContainText('udhaar');
 
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText('Saved');
+  await expect(lastSale(page)).toContainText('Saved');
 
   // The mini-statement is the dispute-ender (T4/T5): previous → this → new.
   await expect(receipt(page)).toContainText(name);

@@ -1,4 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+
+import { DEMO, openCounter as setUpCounter } from './support/counter';
 
 /**
  * Day 1's "done when": `db:reset && db:migrate && db:seed` yields a logged-in
@@ -9,26 +11,6 @@ import { expect, test, type Page } from '@playwright/test';
  * login, the shell's furniture, and a PIN switch that actually changes who is
  * acting.
  */
-
-const DEMO = {
-  tenantSlug: 'demo',
-  deviceName: 'Counter 1',
-  pairingKey: 'counter-one-demo',
-  owner: 'Fawad',
-  salesman: { name: 'Bilal', pin: '2345' },
-};
-
-/** Pairs this browser context with the demo counter. */
-async function setUpCounter(page: Page): Promise<void> {
-  await page.goto('/');
-  await expect(page).toHaveURL(/\/login$/);
-
-  await page.getByLabel('Pharmacy code').fill(DEMO.tenantSlug);
-  await page.getByLabel('Counter name').fill(DEMO.deviceName);
-  await page.getByLabel('Setup key').fill(DEMO.pairingKey);
-  await page.getByRole('button', { name: 'Set up counter' }).click();
-  await expect(page).toHaveURL(/\/sale$/);
-}
 
 test('device login, shell furniture, and PIN switch', async ({ page }) => {
   await setUpCounter(page);
@@ -83,4 +65,13 @@ test('a wrong PIN says what to do next, without blame (I5)', async ({ page }) =>
   await overlay.getByRole('button', { name: 'Switch' }).click();
 
   await expect(overlay.getByRole('alert')).toHaveText('That PIN is not right. Try again.');
+
+  // Then get it right, which is what actually happens at a counter — and which
+  // clears the failed-attempt counter (Phase 12 §5). Without this the suite
+  // leaves a real lockout behind: five runs against one database and Bilal is
+  // locked out for five minutes, breaking the switch test above for reasons
+  // that have nothing to do with the code under test.
+  await overlay.getByLabel('PIN').fill(DEMO.salesman.pin);
+  await overlay.getByRole('button', { name: 'Switch' }).click();
+  await expect(overlay).toBeHidden();
 });

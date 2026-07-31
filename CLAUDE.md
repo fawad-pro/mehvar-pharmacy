@@ -189,6 +189,19 @@ exception visibility.
 - **`npm run build && npm run start` is the only real test of the service
   worker.** It registers in production only, and `e2e/pwa.spec.ts` skips
   otherwise — green in dev is not proof, exactly as with the database suites.
+- **The E2E suite needs a seeded database and shares one.** Run it with
+  `npm run e2e:reset`. It shares a device identity and a receipt sequence too,
+  so a spec must never assert an exact global count — W6's quick item creates
+  real products, and pinning the seed's 53 made one spec's correct behaviour
+  look like another's regression. A spec that leaves lockout or balance state
+  behind must clear it.
+- **Anything the counter needs before it can sell must retry forever.** The
+  receipt context is the example: no receipt number means no sale, so a single
+  failed fetch at startup would otherwise disable Pay until someone reloaded.
+  A wall the operator cannot see or clear is worse than an outage (P2).
+- **A backoff nothing schedules is decorative.** If a delay is computed,
+  something has to act on it; otherwise the real recovery time is whatever the
+  slowest poll happens to be.
 
 ## Commits
 
