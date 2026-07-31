@@ -98,7 +98,7 @@ their feature, never after — rebuild equivalence ships the same day as
 | 3       | 3   | **Sale core** — `commitSale`, FEFO, pending layer, cart UI + crown suite ✅ |
 | 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement ✅         |
 | 5       | 5   | Offline capture & sync ✅                                                   |
-| 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution          |
+| 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution ✅       |
 | 7       | 7   | Day close, reports, owner surface, returns, settings, export                |
 | 8       | 8   | Buffer & hardening: E2E, token lint sweep, restore drill, verifier, deploy  |
 
@@ -218,6 +218,43 @@ exception visibility.
 - **A backoff nothing schedules is decorative.** If a delay is computed,
   something has to act on it; otherwise the real recovery time is whatever the
   slowest poll happens to be.
+
+## Things Day 6 established
+
+- **`commitPurchase` is the one writer for purchases**, `commitAdjustment` the
+  one writer for adjustments — same shape as `commitSale`: own the transaction
+  whole, idempotent on client id from the first commit.
+- **One batch per purchase line, never per product.** FEFO (D1) only means
+  something if the expiry that arrived with a delivery stays attached to the
+  units that arrived with it.
+- **Allocation resolution is a database function, not application code.**
+  `resolve_sale_line_allocation` (migration 0003) is SECURITY DEFINER with a
+  pinned `search_path`; the app role holds EXECUTE on it and no UPDATE on
+  `sale_line_allocations`. Its guard clause is also the concurrency control —
+  `SELECT … FOR UPDATE` is not available to a role without UPDATE privilege, so
+  a lost race returns `false` and the caller skips rather than decrements.
+- **Pending rows resolve oldest-first and whole or not at all.** Chronology, not
+  FEFO; splitting one would mean mutating an event row or inventing an
+  allocation.
+- **Effective unit cost floors.** Bonus stock makes cost land a paisa low rather
+  than high, so a reported margin is never better than the real one.
+- **A batch born from an adjustment is counted once.** It is that batch's
+  `qty_received`; the adjustment sum in `batchLedger` takes only *negative*
+  deltas. Day 3's signed sum was right until materialization existed, and
+  `db:verify` is what caught it.
+- **A `'use server'` file must not re-export a type — this bit twice.** Day 4's
+  `CustomerListItem` and Day 6's `BatchOnHand` are the same `ReferenceError`.
+  When a client component needs a shape that a query returns, declare the shape
+  in the pure domain module and let `src/db` import it from there: that also
+  keeps the client out of a module reaching the database.
+- **A `<label>` with no `htmlFor` beside an input with no id labels nothing.**
+  Nest the input inside its label when the fields are generated per row. If a
+  spec cannot find a field by name, neither can a screen reader.
+- **A spec that receives stock must not use a product another spec oversells.**
+  The suite shares one database. Related: a product the seed never stocked is
+  *absent* from the stock map, which the index reads as unknown rather than zero
+  and does not warn about — correct behaviour, wrong choice for a test that
+  wants a guaranteed shortfall.
 
 ## Commits
 
