@@ -2,6 +2,38 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 5b — the E2E suite made reliable on a slower machine
+
+A second local run reported seventeen failures, all in the startup path
+("`\d+ products` not found", "Getting this counter ready…" still visible).
+Nothing was broken: the counter was becoming ready perfectly well, some way
+after a five-second deadline. Tests were taking 13–35 seconds each against
+1–3 here, which is the whole story.
+
+Three causes, and the first is correctness rather than pacing:
+
+- **The suite ran four workers against one database, one paired device, and
+  therefore one device-scoped receipt sequence** (Phase 9 §3). That is two
+  "counters" sharing a prefix and minting the same numbers — a condition the
+  system is built to survive and does, but a rare one, and hammering it makes
+  the suite nondeterministic while proving nothing `ingest.integration.test.ts`
+  does not already prove. A real shop's second counter has its own prefix. Now
+  `workers: 1`.
+- **Nothing compiled the routes before the first test needed them.** Playwright
+  waits for the dev server to answer once and calls it ready, but Next compiles
+  on demand, so the first test to open `/sale` paid for that page, its bundle
+  and `/api/catalog` — several times over, in parallel, on a cold machine. A
+  global setup now walks the routes once, sequentially.
+- **Startup assertions used the default five-second timeout.** Five seconds is
+  the right question to ask of an interaction ("did the screen answer the
+  keystroke?") and the wrong one to ask of a route still being compiled.
+  Startup is a one-time cost and no spec is measuring it; the interaction
+  assertions that carry the I2 speed budget are untouched.
+
+Verified by reproducing the conditions rather than assuming: a cold `.next`
+with three of four cores saturated, which put the run at 1.5 minutes — the same
+order as the report — green four times consecutively under that load.
+
 ## Session 5a — fixes from local verification of Day 5
 
 A local run reported 17 of 24 E2E tests failing, most of them landing on

@@ -26,6 +26,29 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
   reporter: process.env.CI ? 'list' : [['list'], ['html', { open: 'never' }]],
+
+  /**
+   * One worker, deliberately — this is correctness, not just pacing.
+   *
+   * The suite shares one database, one paired device, and therefore one
+   * device-scoped receipt sequence (Phase 9 §3). Two workers are two "counters"
+   * with the same prefix minting the same numbers, which is a real condition the
+   * system is designed to survive (it re-mints on collision) but a rare one, and
+   * hammering it constantly makes the suite nondeterministic while testing
+   * nothing the ingestion suite does not already prove. A real shop's second
+   * counter has its own prefix.
+   *
+   * It also removes several cold Turbopack compiles racing each other, which is
+   * what turned a slow first minute into seventeen startup timeouts on a
+   * four-worker machine.
+   */
+  workers: 1,
+
+  /** Generous: a cold dev-server compile can eat most of the default 30s. */
+  timeout: 60_000,
+
+  globalSetup: './e2e/support/warm-up.ts',
+
   use: {
     baseURL: BASE_URL,
     trace: 'retain-on-failure',

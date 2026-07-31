@@ -195,6 +195,15 @@ exception visibility.
   real products, and pinning the seed's 53 made one spec's correct behaviour
   look like another's regression. A spec that leaves lockout or balance state
   behind must clear it.
+- **The E2E suite runs on one worker, and that is correctness.** One database,
+  one paired device, one receipt sequence: parallel workers are counters
+  sharing a prefix, contending for numbers. Do not raise it to "speed the suite
+  up".
+- **Startup waits are not interaction waits.** The default five-second expect
+  timeout belongs to assertions about a keystroke being answered (I2). Route
+  compilation, the catalog fetch and the receipt context are one-time costs
+  that no spec measures — they get `STARTUP_TIMEOUT_MS`, and `warm-up.ts`
+  compiles the routes once before any test runs.
 - **Anything the counter needs before it can sell must retry forever.** The
   receipt context is the example: no receipt number means no sale, so a single
   failed fetch at startup would otherwise disable Pay until someone reloaded.
