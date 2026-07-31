@@ -8,7 +8,7 @@
 
 import 'server-only';
 
-import { and, asc, eq, inArray, isNotNull, isNull, sql, sum } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lt, sql, sum } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
 import {
@@ -225,10 +225,25 @@ export async function batchLedger(scope: TenantScope): Promise<BatchLedgerRow[]>
       .where(scope.scopeOf(saleLineAllocations, isNotNull(saleLineAllocations.batchId)))
       .groupBy(saleLineAllocations.batchId),
 
+    // Negative adjustments only — Phase 9 §4's contract says "− Σ *negative*
+    // batch adjustments", and on Day 6 that word turned out to be load-bearing.
+    //
+    // A positive adjustment does not add to a batch, it *materializes* one
+    // (Phase 9 §4, W9's opening stock and an upward count correction), and
+    // `validateAdjustment` refuses to let a positive delta name an existing
+    // batch at all. Its quantity is therefore already the new batch's
+    // `qty_received`; summing it here as well counted the same stock twice and
+    // made the verifier declare every opening-stock batch broken.
     scope.db
       .select({ batchId: adjustments.batchId, total: sum(adjustments.qtyBaseDelta).as('total') })
       .from(adjustments)
-      .where(scope.scopeOf(adjustments, isNotNull(adjustments.batchId)))
+      .where(
+        scope.scopeOf(
+          adjustments,
+          isNotNull(adjustments.batchId),
+          lt(adjustments.qtyBaseDelta, 0),
+        ),
+      )
       .groupBy(adjustments.batchId),
 
     scope.db

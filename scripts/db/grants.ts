@@ -36,6 +36,16 @@ const MUTABLE_TABLES = [
   'catalog_proposals',
 ] as const;
 
+/**
+ * Owner-defined routines the app role may execute — see migration 0003.
+ *
+ * Signatures are spelled out because Postgres overloads on them, and granting
+ * by bare name would silently miss a future overload.
+ */
+const SECURITY_DEFINER_ROUTINES = [
+  'resolve_sale_line_allocation(uuid, uuid, uuid, bigint, uuid, uuid)',
+] as const;
+
 function quoteIdent(name: string): string {
   return `"${name.replaceAll('"', '""')}"`;
 }
@@ -88,13 +98,24 @@ async function main(): Promise<void> {
       await pool.query(`REVOKE UPDATE, DELETE ON ${quoteIdent(table)} FROM ${app}`);
     }
 
+    // The one exception, and it is deliberately a *function* rather than a
+    // table privilege: allocation resolution (ADR-8, migration 0003). The role
+    // still cannot UPDATE `sale_line_allocations`; it can only ask the owner's
+    // SECURITY DEFINER function to move a pending row to resolved, under the
+    // guards written into the function itself. One capability, not one column
+    // of open season on an event table.
+    for (const routine of SECURITY_DEFINER_ROUTINES) {
+      await pool.query(`GRANT EXECUTE ON FUNCTION ${routine} TO ${app}`);
+    }
+
     // Drizzle's own bookkeeping.
     await pool.query(`GRANT USAGE ON SCHEMA drizzle TO ${app}`);
     await pool.query(`GRANT SELECT ON ALL TABLES IN SCHEMA drizzle TO ${app}`);
 
     console.log(
       `Grants applied to ${role}: INSERT-only on ${EVENT_TABLES.length} event tables, ` +
-        `full DML on ${MUTABLE_TABLES.length} reference tables.`,
+        `full DML on ${MUTABLE_TABLES.length} reference tables, ` +
+        `EXECUTE on ${SECURITY_DEFINER_ROUTINES.length} sanctioned routine(s).`,
     );
   } finally {
     await pool.end();

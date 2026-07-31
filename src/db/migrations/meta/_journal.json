@@ -22,6 +22,13 @@
       "when": 1785408687443,
       "tag": "0002_fixed_silhouette",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785535440432,
+      "tag": "0003_allocation_resolution",
+      "breakpoints": true
     }
   ]
 }

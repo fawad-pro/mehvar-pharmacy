@@ -1,0 +1,228 @@
+/**
+ * Purchase, supplier and batch-materialization queries.
+ *
+ * Inside `src/db` because ADR-2 puts every query here.
+ */
+
+import 'server-only';
+
+import { asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+
+import type { TenantScope } from './scoped';
+import { batches, purchaseLines, purchases, saleLineAllocations, saleLines, suppliers } from './schema';
+
+import type { Uuid } from '@/lib/uuid';
+
+/* -------------------------------------------------------------------------- */
+/* Suppliers                                                                   */
+/* -------------------------------------------------------------------------- */
+
+export async function searchSuppliers(
+  scope: TenantScope,
+  term: string,
+  limit = 8,
+): Promise<Array<{ id: string; name: string; phone: string | null }>> {
+  const trimmed = term.trim();
+  const where =
+    trimmed === ''
+      ? scope.scopeOf(suppliers, eq(suppliers.isActive, true))
+      : scope.scopeOf(
+          suppliers,
+          eq(suppliers.isActive, true),
+          or(ilike(suppliers.name, `%${trimmed}%`), ilike(suppliers.phone, `%${trimmed}%`)),
+        );
+
+  const rows = await scope.db
+    .select({ id: suppliers.id, name: suppliers.name, phone: suppliers.phone })
+    .from(suppliers)
+    .where(where)
+    .orderBy(asc(suppliers.name))
+    .limit(limit);
+
+  return rows;
+}
+
+export async function insertSupplier(
+  scope: TenantScope,
+  row: { id: Uuid; name: string; phone: string | null },
+): Promise<void> {
+  await scope.insert(suppliers, row);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Purchases                                                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Idempotency: a purchase already received is not received twice. */
+export async function findPurchaseById(
+  scope: TenantScope,
+  purchaseId: Uuid,
+): Promise<{ id: string } | undefined> {
+  const row = await scope.selectOne(purchases, eq(purchases.id, purchaseId));
+  return row ? { id: row.id } : undefined;
+}
+
+export async function insertPurchase(
+  scope: TenantScope,
+  row: Omit<typeof purchases.$inferInsert, 'tenantId' | 'createdBy'>,
+): Promise<void> {
+  await scope.insert(purchases, row as never);
+}
+
+export async function insertPurchaseLines(
+  scope: TenantScope,
+  rows: ReadonlyArray<Omit<typeof purchaseLines.$inferInsert, 'tenantId'>>,
+): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
+  await scope.insert(purchaseLines, rows as never);
+}
+
+export async function insertBatches(
+  scope: TenantScope,
+  rows: ReadonlyArray<Omit<typeof batches.$inferInsert, 'tenantId'>>,
+): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
+  await scope.insert(batches, rows as never);
+}
+
+export interface PurchaseListItem {
+  id: string;
+  supplierName: string | null;
+  invoiceRef: string | null;
+  invoiceDate: string | null;
+  createdAt: Date;
+  lineCount: number;
+  totalCostPaisa: number;
+}
+
+/** Recent purchases for the Purchases list (Phase 10 §2 surface 4). */
+export async function listPurchases(
+  scope: TenantScope,
+  limit = 50,
+): Promise<PurchaseListItem[]> {
+  const rows = await scope.db
+    .select({
+      id: purchases.id,
+      supplierName: suppliers.name,
+      invoiceRef: purchases.invoiceRef,
+      invoiceDate: purchases.invoiceDate,
+      createdAt: purchases.createdAt,
+      lineCount: sql<number>`count(${purchaseLines.id})`,
+      // Invoiced cost, not effective: this is what the shop paid the
+      // distributor, which is the figure that reconciles against the invoice
+      // in the operator's hand. Bonus units are free and change per-unit cost,
+      // never the total paid (see domain/purchases/costing.ts).
+      totalCostPaisa: sql<number>`coalesce(sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa}), 0)`,
+    })
+    .from(purchases)
+    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
+    .leftJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
+    .where(scope.scopeOf(purchases))
+    .groupBy(purchases.id, suppliers.name)
+    .orderBy(desc(purchases.createdAt))
+    .limit(limit);
+
+  return rows.map((row) => ({
+    ...row,
+    lineCount: Number(row.lineCount ?? 0),
+    totalCostPaisa: Number(row.totalCostPaisa ?? 0),
+  }));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Pending-layer resolution (D2)                                               */
+/* -------------------------------------------------------------------------- */
+
+export interface PendingAllocationRow {
+  allocationId: string;
+  saleLineId: string;
+  productId: string;
+  qtyBase: number;
+  createdAt: Date;
+}
+
+/**
+ * Unresolved pending allocations for the given products, oldest first.
+ *
+ * **Deliberately not `FOR UPDATE`.** Row locking would require UPDATE privilege
+ * on `sale_line_allocations`, and the application role does not have it — that
+ * is ADR-1 enforced as a database privilege, and the right response is to work
+ * within it rather than widen it.
+ *
+ * The concurrency story is therefore optimistic, with the SECURITY DEFINER
+ * function as the single serialization point: two deliveries of the same
+ * product may both plan against the same shortfall, but only one of them can
+ * move a given row, because the function refuses anything that is no longer
+ * pending. The loser is told so (it returns false) and skips that allocation
+ * without decrementing its batch. Nothing is over-resolved and nothing is
+ * over-consumed; see `commitPurchase`.
+ */
+export async function pendingAllocationsForProducts(
+  scope: TenantScope,
+  productIds: readonly Uuid[],
+): Promise<PendingAllocationRow[]> {
+  if (productIds.length === 0) {
+    return [];
+  }
+
+  const rows = await scope.db
+    .select({
+      allocationId: saleLineAllocations.id,
+      saleLineId: saleLineAllocations.saleLineId,
+      productId: saleLines.productId,
+      qtyBase: saleLineAllocations.qtyBase,
+      createdAt: saleLineAllocations.createdAt,
+    })
+    .from(saleLineAllocations)
+    .innerJoin(saleLines, eq(saleLines.id, saleLineAllocations.saleLineId))
+    .where(
+      scope.scopeOf(
+        saleLineAllocations,
+        isNull(saleLineAllocations.batchId),
+        isNull(saleLineAllocations.resolvedAt),
+        inArray(saleLines.productId, [...productIds]),
+      ),
+    )
+    .orderBy(asc(saleLineAllocations.createdAt));
+
+  return rows;
+}
+
+/**
+ * Moves one pending allocation to resolved — ADR-8's first sanctioned mutation.
+ *
+ * Routed through the owner's `resolve_sale_line_allocation` function (migration
+ * 0003) because the application role has no UPDATE privilege on event tables
+ * and must not be given one. The function enforces tenant scope and refuses any
+ * row that is not still pending, so a lost race returns false rather than
+ * overwriting a settled allocation.
+ */
+export async function resolveAllocation(
+  scope: TenantScope,
+  input: {
+    allocationId: Uuid;
+    batchId: Uuid;
+    unitCostPaisa: number;
+    purchaseLineId: Uuid | null;
+    adjustmentId: Uuid | null;
+  },
+): Promise<boolean> {
+  const result = await scope.db.execute<{ resolve_sale_line_allocation: boolean }>(
+    sql`SELECT resolve_sale_line_allocation(
+          ${scope.tenantId}::uuid,
+          ${input.allocationId}::uuid,
+          ${input.batchId}::uuid,
+          ${input.unitCostPaisa}::bigint,
+          ${input.purchaseLineId}::uuid,
+          ${input.adjustmentId}::uuid
+        )`,
+  );
+
+  const row = (result as unknown as { rows: Array<{ resolve_sale_line_allocation: boolean }> })
+    .rows[0];
+  return row?.resolve_sale_line_allocation === true;
+}

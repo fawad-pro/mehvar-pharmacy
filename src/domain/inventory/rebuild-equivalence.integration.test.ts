@@ -24,13 +24,15 @@
  *
  * ## Scope today, and what extends it
  *
- * Day 3 has sales (online and offline-origin, including replays), opening-stock
- * adjustments, and stock adjustments. Day 4 adds udhaar sales and standalone
- * settlements — the same event kinds any counter now writes — and checks Phase
- * 5 invariant 3 (customer balance) alongside the stock invariants. Purchases
- * arrive on Day 6 and returns on Day 7; each must add its event kind to
- * `applyRandomEvent` below rather than get its own separate suite — the whole
- * point is that one history mixes everything.
+ * Day 3 has sales (online and offline-origin, including replays). Day 4 adds
+ * udhaar sales and standalone settlements, and checks Phase 5 invariant 3
+ * (customer balance) alongside the stock invariants. Day 6 replaces the
+ * hand-rolled stock stand-ins with the real writers — `commitPurchase` and
+ * `commitAdjustment` — so scheme purchases, batch materialization and
+ * pending-layer resolution are now mixed into every history rather than tested
+ * only in isolation. Returns arrive on Day 7 and must add their event kind to
+ * `applyRandomEvent` below rather than get a separate suite: the whole point is
+ * that one history mixes everything.
  */
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -38,9 +40,10 @@ import { eq } from 'drizzle-orm';
 
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
 import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
+import { commitPurchase } from '@/domain/purchases/commit-purchase';
+import { commitAdjustment } from '@/domain/inventory/commit-adjustment';
 import { customerBalance } from '@/db/udhaar-queries';
 import {
-  adjustments,
   batches,
   customers,
   payments,
@@ -93,6 +96,17 @@ interface World {
 }
 
 /**
+ * Evidence, accumulated across every history, that the generator actually
+ * reached the states it claims to cover.
+ *
+ * A randomized suite that never happens to produce a shortfall would pass
+ * forever while proving nothing about D2 — the failure mode Phase 11 §3 calls
+ * "unit-test theater" in another guise. The final assertion in this file spends
+ * these counters.
+ */
+const observed = { resolvedPendingBase: 0, schemeLines: 0, batchesMaterialized: 0 };
+
+/**
  * One random event against the world.
  *
  * The mix is chosen so the interesting states actually occur: shortfalls that
@@ -104,43 +118,90 @@ async function applyRandomEvent(world: World): Promise<void> {
   const { random, tenant } = world;
   const roll = random();
 
-  if (roll < 0.14) {
-    // New stock arrives as an opening/count batch. (Day 6 replaces this with a
-    // real purchase; the ledger arithmetic is the same shape.)
-    const product = pick(random, world.products);
-    await addOpeningStock(tenant.scope, product.id, between(random, 5, 200), {
-      expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
-      unitCostPaisa: between(random, 100, 500),
-      pricePaisa: product.pricePaisa,
+  if (roll < 0.10) {
+    // A real purchase (W7), through the real writer — often a multi-line
+    // invoice, often with scheme bonus units, and always with the chance of
+    // resolving whatever the pending layer is currently holding.
+    const lineCount = between(random, 1, 3);
+    const lines = Array.from({ length: lineCount }, () => {
+      const product = pick(random, world.products);
+      return {
+        lineId: uuidv7(),
+        productId: product.id,
+        qtyBase: between(random, 5, 200),
+        // Scheme purchases are the norm in this market, not an edge case, so
+        // the blended-cost path gets exercised constantly rather than rarely.
+        bonusQtyBase: random() < 0.3 ? between(random, 1, 5) : 0,
+        unitCostPaisa: between(random, 100, 500),
+        expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
+        batchNumber: random() < 0.5 ? `B-${between(random, 1, 9999)}` : null,
+        mrpAtReceivingPaisa: null,
+        priceAtReceivingPaisa: product.pricePaisa,
+      };
     });
+    observed.schemeLines += lines.filter((line) => line.bonusQtyBase > 0).length;
+
+    const received = await commitPurchase(tenant.scope, {
+      purchaseId: uuidv7(),
+      supplierId: null,
+      invoiceRef: `INV-${world.receiptCounter}`,
+      invoiceDate: null,
+      note: null,
+      lines,
+    });
+    if (received.ok) {
+      observed.resolvedPendingBase += received.value.resolvedPendingBase;
+      observed.batchesMaterialized += received.value.batchIds.length;
+    }
+    return;
+  }
+
+  if (roll < 0.14) {
+    // Opening stock or an upward count correction (W9, W8) — the other way
+    // stock comes into existence, and the one that materializes a batch from
+    // an adjustment rather than a purchase line.
+    const product = pick(random, world.products);
+    const corrected = await commitAdjustment(tenant.scope, {
+      adjustmentId: uuidv7(),
+      productId: product.id,
+      qtyBaseDelta: between(random, 5, 200),
+      reason: pick(random, ['opening_stock', 'count_correction'] as const),
+      batchId: null,
+      note: null,
+      unitCostPaisa: between(random, 100, 500),
+      pricePerBaseUnitPaisa: product.pricePaisa,
+      expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
+      batchNumber: null,
+    });
+    if (corrected.ok) {
+      observed.resolvedPendingBase += corrected.value.resolvedPendingBase;
+      observed.batchesMaterialized += corrected.value.batchId ? 1 : 0;
+    }
     return;
   }
 
   if (roll < 0.24) {
-    // A negative adjustment against a specific batch: damage or a write-off.
+    // Stock leaving for a reason that is not a sale (W8), through the real
+    // writer — damage, an expiry write-off, a return to the distributor, or a
+    // downward count correction.
     const stocked = await tenant.scope.select(batches);
     const withStock = stocked.filter((batch) => batch.qtyRemainingBase > 0);
     if (withStock.length === 0) {
       return;
     }
     const batch = pick(random, withStock);
-    const delta = -between(random, 1, Math.min(batch.qtyRemainingBase, 20));
 
-    await tenant.scope.insert(adjustments, {
-      id: uuidv7(),
+    await commitAdjustment(tenant.scope, {
+      adjustmentId: uuidv7(),
       productId: batch.productId,
       batchId: batch.id,
-      qtyBaseDelta: delta,
-      reason: pick(random, ['damage', 'expiry_writeoff', 'distributor_return'] as const),
+      qtyBaseDelta: -between(random, 1, Math.min(batch.qtyRemainingBase, 20)),
+      reason: pick(
+        random,
+        ['damage', 'expiry_writeoff', 'distributor_return', 'count_correction'] as const,
+      ),
       note: null,
     });
-    // The adjustment is the record; the cache must follow it in the same breath,
-    // exactly as a real adjustment writer will on Day 6.
-    await tenant.scope.update(
-      batches,
-      { qtyRemainingBase: batch.qtyRemainingBase + delta },
-      eq(batches.id, batch.id),
-    );
     return;
   }
 
@@ -359,7 +420,29 @@ async function assertInvariants(world: World, label: string): Promise<void> {
   for (const allocation of allocations) {
     if (allocation.batchId === null) {
       expect(allocation.unitCostPaisa, `${label}: pending row carries a cost`).toBeNull();
+      expect(allocation.resolvedAt, `${label}: unbatched row claims to be resolved`).toBeNull();
     }
+  }
+
+  /* D2 resolution integrity — a resolved allocation is fully resolved.
+     Half a resolution (pointing at a batch with no cost, or claiming a
+     resolver that does not exist) would make margin silently wrong for that
+     sale, which is exactly the class of quiet error ADR-8 exists to catch. */
+  for (const allocation of allocations) {
+    if (allocation.resolvedAt === null) {
+      continue;
+    }
+    expect(allocation.batchId, `${label}: resolved row has no batch`).not.toBeNull();
+    expect(allocation.unitCostPaisa, `${label}: resolved row has no cost`).not.toBeNull();
+
+    const resolvers = [
+      allocation.resolvedByPurchaseLineId,
+      allocation.resolvedByAdjustmentId,
+    ].filter((id) => id !== null);
+    // Phase 9 §3 renders `resolved_by` as two nullable FKs precisely so
+    // referential integrity survives; at most one may be set, and a resolved
+    // row must name exactly which arrival answered it.
+    expect(resolvers, `${label}: resolved row names ${resolvers.length} resolvers`).toHaveLength(1);
   }
 
   /* Invariant 3 — a customer's balance is Σ credit extended − Σ payments,
@@ -510,5 +593,24 @@ suite('rebuild equivalence — randomized histories', () => {
     const [fixed] = await tenant.scope.select(batches, eq(batches.id, batchId));
     expect(fixed?.qtyRemainingBase).toBe(80);
     expect((await verifyBatches(tenant.scope)).ok).toBe(true);
+  });
+
+  /**
+   * The generator has to have reached the interesting states, or every
+   * assertion above passed over a history that never tested anything.
+   *
+   * Runs last so it can spend what the histories accumulated. If a future
+   * change to the event mix quietly stops producing shortfalls or scheme
+   * purchases, this fails loudly rather than the suite going quietly green.
+   */
+  it('actually exercised scheme purchases, materialization and pending resolution', () => {
+    expect(observed.schemeLines, 'no bonus-quantity purchase lines were generated').toBeGreaterThan(
+      0,
+    );
+    expect(observed.batchesMaterialized, 'no batches were materialized').toBeGreaterThan(0);
+    expect(
+      observed.resolvedPendingBase,
+      'no pending allocation was ever resolved — D2’s second half went untested',
+    ).toBeGreaterThan(0);
   });
 });
