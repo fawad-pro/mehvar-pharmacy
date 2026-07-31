@@ -16,6 +16,13 @@ Phase 5 (domain) → Phase 9 (schema) → Phase 8 (ADRs) → Phase 7 (workflows)
 Phase 10 (screens) → Phase 11 (standards) → Phase 13 (day plan). Phases 1–4, 6
 and 12 are context and constraints; consult as referenced.
 
+## Open research threads (not yet ADRs)
+
+`docs/research/fbr-compliance.md` — FBR/tax-authority compliance readiness
+vs. integration. Deliberately deferred past Day 8; read it in full before
+touching anything tax- or compliance-adjacent, and before writing the ADR it
+sets up.
+
 ## Identifier system — cite these by number
 
 - **P1–P8** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)
