@@ -1,11 +1,14 @@
-import { SurfacePlaceholder } from '@/components/surface-placeholder';
+import { redirect } from 'next/navigation';
 
-export default function ReturnsPage() {
-  return (
-    <SurfacePlaceholder
-      title="Returns"
-      workflow="Find the sale, pick the lines, confirm. Stock restores to its source batch and a compensating record is written — never an edit (W4, T2)."
-      session="Session 7 (Day 7)"
-    />
-  );
+import { currentSession } from '@/auth/session';
+
+import { ReturnsSurface } from './returns-surface';
+
+/** Returns — W4, Phase 10 §2 surface 3, F7. */
+export default async function ReturnsPage() {
+  const session = await currentSession();
+  if (!session) {
+    redirect('/login');
+  }
+  return <ReturnsSurface />;
 }

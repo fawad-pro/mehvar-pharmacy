@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 import { useSync } from '@/client/sync/provider';
 
@@ -73,6 +74,14 @@ export function TopBar({
             Offline — selling keeps working
           </span>
         )}
+
+        {/* No key bar entry (F1–F10 are spoken for) — Phase 10 §2 lists
+            Settings without a shortcut, reachable from the owner chip. */}
+        {userRole === 'owner' ? (
+          <Link href="/settings" className="text-ink/60 hover:text-green-900 text-sm">
+            Settings
+          </Link>
+        ) : null}
 
         <button
           type="button"
