@@ -30,9 +30,9 @@
  * hand-rolled stock stand-ins with the real writers — `commitPurchase` and
  * `commitAdjustment` — so scheme purchases, batch materialization and
  * pending-layer resolution are now mixed into every history rather than tested
- * only in isolation. Returns arrive on Day 7 and must add their event kind to
- * `applyRandomEvent` below rather than get a separate suite: the whole point is
- * that one history mixes everything.
+ * only in isolation. Day 7 adds returns and cash movements as event kinds
+ * here, the same way rather than a separate suite: the whole point is that one
+ * history mixes everything.
  */
 
 import { afterAll, describe, expect, it } from 'vitest';
@@ -42,13 +42,18 @@ import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
 import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
 import { commitPurchase } from '@/domain/purchases/commit-purchase';
 import { commitAdjustment } from '@/domain/inventory/commit-adjustment';
+import { commitReturn } from '@/domain/sales/commit-return';
+import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
+import { CASH_REASONS, directionFor } from '@/domain/cash/cash-command';
 import { customerBalance } from '@/db/udhaar-queries';
+import { returnableLinesForSale } from '@/db/returns-queries';
 import {
   batches,
   customers,
   payments,
   saleLineAllocations,
   saleLines,
+  saleReturns,
   sales,
 } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
@@ -104,7 +109,13 @@ interface World {
  * "unit-test theater" in another guise. The final assertion in this file spends
  * these counters.
  */
-const observed = { resolvedPendingBase: 0, schemeLines: 0, batchesMaterialized: 0 };
+const observed = {
+  resolvedPendingBase: 0,
+  schemeLines: 0,
+  batchesMaterialized: 0,
+  returnsCommitted: 0,
+  cashMovementsCommitted: 0,
+};
 
 /**
  * One random event against the world.
@@ -283,6 +294,58 @@ async function applyRandomEvent(world: World): Promise<void> {
     return;
   }
 
+  if (roll < 0.52 && world.issued.length > 0) {
+    // W4: a return against a sale this history already made, through the real
+    // writer — restocking a named batch or writing off, cash back or credit
+    // reduced, exercising `batchLedger`'s `restockedBase` term.
+    const chosen = pick(random, world.issued);
+    const lines = await returnableLinesForSale(tenant.scope, chosen.saleId);
+    const returnable = lines.filter((line) => line.qtyBase - line.alreadyReturnedBase > 0);
+    if (returnable.length === 0) {
+      return;
+    }
+    const line = pick(random, returnable);
+    const remaining = line.qtyBase - line.alreadyReturnedBase;
+    const qtyBase = between(random, 1, remaining);
+    // Sometimes a write-off (no source batch known, or the operator chooses
+    // not to restock), sometimes back onto the shelf.
+    const restockBatchId = random() < 0.7 ? (line.sourceBatches[0]?.batchId ?? null) : null;
+    const refundMethod = chosen.customerId && random() < 0.4 ? 'credit' : 'cash';
+
+    const result = await commitReturn(tenant.scope, {
+      returnId: uuidv7(),
+      saleId: chosen.saleId,
+      receiptNumber: `A-${(world.receiptCounter += 1)}`,
+      lines: [{ saleLineId: line.saleLineId, qtyBase, restockBatchId }],
+      refundMethod,
+      reasonNote: null,
+    });
+    if (result.ok) {
+      observed.returnsCommitted += 1;
+    }
+    return;
+  }
+
+  if (roll < 0.56) {
+    // W10: a cash movement — opening float, a withdrawal, an expense, or an
+    // over/short entry from a drawer count. Isolated from every other
+    // invariant here (it touches no stock, no customer balance), so it needs
+    // only to commit cleanly and stay out of the way.
+    const reason = pick(random, CASH_REASONS);
+    const direction = directionFor(reason) ?? pick(random, ['in', 'out'] as const);
+    const committed = await commitCashMovement(tenant.scope, {
+      movementId: uuidv7(),
+      direction,
+      amountPaisa: between(random, 100, 5000),
+      reason,
+      note: null,
+    });
+    if (committed.ok) {
+      observed.cashMovementsCommitted += 1;
+    }
+    return;
+  }
+
   // A cash sale. Quantities deliberately overshoot available stock sometimes,
   // so the pending layer is exercised rather than assumed.
   const lineCount = between(random, 1, 3);
@@ -445,12 +508,15 @@ async function assertInvariants(world: World, label: string): Promise<void> {
     expect(resolvers, `${label}: resolved row names ${resolvers.length} resolvers`).toHaveLength(1);
   }
 
-  /* Invariant 3 — a customer's balance is Σ credit extended − Σ payments,
-     always derived, never stored. Checked two ways: independently recomputed
-     from the raw rows here, and through `customerBalance` itself, so the query
-     the product actually calls is what gets proven right. */
+  /* Invariant 3 — a customer's balance is Σ credit extended − Σ payments −
+     Σ credit reversed (Day 7's return term), always derived, never stored.
+     Checked two ways: independently recomputed from the raw rows here, and
+     through `customerBalance` itself, so the query the product actually calls
+     is what gets proven right. */
   const allCustomers = await tenant.scope.select(customers);
   const allPayments = await tenant.scope.select(payments);
+  const allReturns = await tenant.scope.select(saleReturns);
+  const saleById = new Map(allSales.map((sale) => [sale.id, sale]));
   for (const customer of allCustomers) {
     const extended = allSales
       .filter((sale) => sale.customerId === customer.id)
@@ -458,7 +524,10 @@ async function assertInvariants(world: World, label: string): Promise<void> {
     const paid = allPayments
       .filter((payment) => payment.customerId === customer.id)
       .reduce((sum, payment) => sum + payment.amountPaisa, 0);
-    const expectedBalance = extended - paid;
+    const reversed = allReturns
+      .filter((row) => saleById.get(row.saleId)?.customerId === customer.id)
+      .reduce((sum, row) => sum + row.creditReducedPaisa, 0);
+    const expectedBalance = extended - paid - reversed;
 
     const actualBalance = await customerBalance(tenant.scope, customer.id);
     expect(actualBalance, `${label}: balance for customer ${customer.id}`).toBe(expectedBalance);
@@ -471,13 +540,20 @@ async function assertInvariants(world: World, label: string): Promise<void> {
     );
   }
 
-  /* PCN-002 — sales and payments share one receipt sequence: no number may
-     appear on both sides of the split. */
+  /* PCN-002/PCN-003 — sales, payments and returns share one receipt sequence:
+     no number may appear on more than one of the three. */
   const saleReceipts = new Set(allSales.map((sale) => sale.receiptNumber));
+  const paymentReceipts = new Set(allPayments.map((payment) => payment.receiptNumber));
   for (const payment of allPayments) {
     expect(
       saleReceipts.has(payment.receiptNumber),
       `${label}: receipt ${payment.receiptNumber} used by both a sale and a payment`,
+    ).toBe(false);
+  }
+  for (const row of allReturns) {
+    expect(
+      saleReceipts.has(row.receiptNumber) || paymentReceipts.has(row.receiptNumber),
+      `${label}: receipt ${row.receiptNumber} used by both a return and a sale/payment`,
     ).toBe(false);
   }
 }
@@ -612,5 +688,9 @@ suite('rebuild equivalence — randomized histories', () => {
       observed.resolvedPendingBase,
       'no pending allocation was ever resolved — D2’s second half went untested',
     ).toBeGreaterThan(0);
+    expect(observed.returnsCommitted, 'no return was ever committed').toBeGreaterThan(0);
+    expect(observed.cashMovementsCommitted, 'no cash movement was ever committed').toBeGreaterThan(
+      0,
+    );
   });
 });
