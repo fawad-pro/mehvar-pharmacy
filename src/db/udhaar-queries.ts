@@ -9,7 +9,7 @@ import 'server-only';
 import { asc, eq, ilike, inArray, or, sql, sum } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
-import { customers, payments, sales } from './schema';
+import { customers, payments, saleReturns, sales } from './schema';
 
 import type { Uuid } from '@/lib/uuid';
 
@@ -18,9 +18,10 @@ import type { Uuid } from '@/lib/uuid';
  *
  *   balance = Σ credit extended (from sales) − Σ payments − Σ credit reversals
  *
- * Credit reversals come from sale returns (Day 7); `sale_returns` carries no
- * rows yet, so the term is a no-op today and becomes real the day returns
- * exist, with no change needed here.
+ * Credit reversals are `sale_returns.credit_reduced_paisa` (Day 7), joined
+ * through the sale to reach the customer it was extended to — a return row
+ * carries no `customer_id` of its own, deliberately, since it is always the
+ * sale's.
  */
 export async function customerBalance(scope: TenantScope, customerId: Uuid): Promise<number> {
   const [extended] = await scope.db
@@ -33,7 +34,15 @@ export async function customerBalance(scope: TenantScope, customerId: Uuid): Pro
     .from(payments)
     .where(scope.scopeOf(payments, eq(payments.customerId, customerId)));
 
-  return Number(extended?.total ?? 0) - Number(paid?.total ?? 0);
+  const [reversed] = await scope.db
+    .select({ total: sum(saleReturns.creditReducedPaisa).as('total') })
+    .from(saleReturns)
+    .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+    .where(scope.scopeOf(saleReturns, eq(sales.customerId, customerId)));
+
+  return (
+    Number(extended?.total ?? 0) - Number(paid?.total ?? 0) - Number(reversed?.total ?? 0)
+  );
 }
 
 /** Every customer's balance in one query, keyed by id — avoids N+1 on the list screen. */
@@ -45,7 +54,7 @@ export async function balancesByCustomer(
     return {};
   }
 
-  const [extended, paid] = await Promise.all([
+  const [extended, paid, reversed] = await Promise.all([
     scope.db
       .select({ customerId: sales.customerId, total: sum(sales.creditPaisa).as('total') })
       .from(sales)
@@ -56,6 +65,12 @@ export async function balancesByCustomer(
       .from(payments)
       .where(scope.scopeOf(payments, inArray(payments.customerId, [...customerIds])))
       .groupBy(payments.customerId),
+    scope.db
+      .select({ customerId: sales.customerId, total: sum(saleReturns.creditReducedPaisa).as('total') })
+      .from(saleReturns)
+      .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+      .where(scope.scopeOf(saleReturns, inArray(sales.customerId, [...customerIds])))
+      .groupBy(sales.customerId),
   ]);
 
   const balances: Record<string, number> = Object.fromEntries(
@@ -65,6 +80,9 @@ export async function balancesByCustomer(
     if (row.customerId) balances[row.customerId] = (balances[row.customerId] ?? 0) + Number(row.total ?? 0);
   }
   for (const row of paid) {
+    if (row.customerId) balances[row.customerId] = (balances[row.customerId] ?? 0) - Number(row.total ?? 0);
+  }
+  for (const row of reversed) {
     if (row.customerId) balances[row.customerId] = (balances[row.customerId] ?? 0) - Number(row.total ?? 0);
   }
   return balances;
@@ -276,7 +294,10 @@ export async function insertPayment(
   await scope.insert(payments, row as never);
 }
 
-/** The highest receipt counter across sales AND payments — they share one sequence (PCN-002). */
+/**
+ * The highest receipt counter across sales, payments AND returns — one
+ * receipt book, one sequence (PCN-002, extended by PCN-003).
+ */
 export async function highestReceiptCounterAcrossReceipts(
   scope: TenantScope,
   devicePrefix: string,
@@ -296,11 +317,22 @@ export async function highestReceiptCounterAcrossReceipts(
     .orderBy(sql`length(${payments.receiptNumber}) desc, ${payments.receiptNumber} desc`)
     .limit(1);
 
+  const [returnsRow] = await scope.db
+    .select({ receiptNumber: saleReturns.receiptNumber })
+    .from(saleReturns)
+    .where(scope.scopeOf(saleReturns, sql`${saleReturns.receiptNumber} LIKE ${pattern}`))
+    .orderBy(sql`length(${saleReturns.receiptNumber}) desc, ${saleReturns.receiptNumber} desc`)
+    .limit(1);
+
   const counterOf = (value: string | undefined): number => {
     if (!value) return 0;
     const n = Number(value.slice(devicePrefix.length + 1));
     return Number.isSafeInteger(n) ? n : 0;
   };
 
-  return Math.max(counterOf(salesRow?.receiptNumber), counterOf(paymentsRow?.receiptNumber));
+  return Math.max(
+    counterOf(salesRow?.receiptNumber),
+    counterOf(paymentsRow?.receiptNumber),
+    counterOf(returnsRow?.receiptNumber),
+  );
 }
