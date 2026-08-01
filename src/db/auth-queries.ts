@@ -101,6 +101,38 @@ export async function findDeviceForLogin(
   return rows[0];
 }
 
+export interface OwnerLoginRow {
+  tenantId: Uuid;
+  tenantStatus: 'active' | 'suspended';
+  userId: Uuid;
+  userName: string;
+  passwordHash: string | null;
+  userActive: boolean;
+}
+
+/**
+ * Pre-tenant-context by necessity, same reason `findDeviceForLogin` is: the
+ * slug is how the owner names their tenant, logging in "normally from any
+ * device" (ADR-7) rather than by pairing.
+ */
+export async function findOwnerForLogin(tenantSlug: string): Promise<OwnerLoginRow | undefined> {
+  const rows = await globalCatalog()
+    .select({
+      tenantId: tenants.id,
+      tenantStatus: tenants.status,
+      userId: users.id,
+      userName: users.name,
+      passwordHash: users.passwordHash,
+      userActive: users.isActive,
+    })
+    .from(users)
+    .innerJoin(tenants, eq(users.tenantId, tenants.id))
+    .where(and(eq(tenants.slug, tenantSlug), eq(users.role, 'owner')))
+    .limit(1);
+
+  return rows[0];
+}
+
 /** The default acting user a freshly paired device starts as: the tenant's owner. */
 export async function findOwnerUserId(tenantId: Uuid): Promise<Uuid | undefined> {
   const rows = await globalCatalog()
@@ -164,6 +196,46 @@ export async function recordPinAttempt(
   state: { failedPinAttempts: number; pinLockedUntil: Date | null },
 ): Promise<void> {
   await scope.update(users, state, eq(users.id, userId));
+}
+
+export interface UserListItem {
+  id: Uuid;
+  name: string;
+  role: 'owner' | 'salesman';
+  isActive: boolean;
+}
+
+/** Settings screen's "users & PINs" list — every user, active or not. */
+export async function listUsers(scope: TenantScope): Promise<UserListItem[]> {
+  const rows = await scope.select(users);
+  return rows
+    .map((row) => ({ id: row.id, name: row.name, role: row.role, isActive: row.isActive }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Adds a salesman (W8's "salesman may adjust" already assumes this role exists). */
+export async function insertSalesman(
+  scope: TenantScope,
+  row: { id: Uuid; name: string; pinHash: string },
+): Promise<void> {
+  await scope.insert(users, { ...row, role: 'salesman' });
+}
+
+export async function setUserActive(
+  scope: TenantScope,
+  userId: Uuid,
+  isActive: boolean,
+): Promise<void> {
+  await scope.update(users, { isActive }, eq(users.id, userId));
+}
+
+/** Owner override (Phase 12 §5) — a new PIN, and lockout cleared with it. */
+export async function resetUserPin(scope: TenantScope, userId: Uuid, pinHash: string): Promise<void> {
+  await scope.update(
+    users,
+    { pinHash, failedPinAttempts: 0, pinLockedUntil: null },
+    eq(users.id, userId),
+  );
 }
 
 export async function insertSession(
