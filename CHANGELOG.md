@@ -2,6 +2,116 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 7 — Day 7, Day close, reports, owner surface, returns, settings, export
+
+The day the owner's three questions get an answer, and the day the last of
+the counter's money paths — a refund — gets its own writer.
+
+**Returns (W4) and the third receipt-numbered table**
+
+- `commitReturn` joins `commitSale`, `commitPurchase` and `commitAdjustment`
+  as a transaction-owning, idempotent writer. It restores stock to a named
+  batch (`restockToBatch`, ADR-8's second sanctioned mutation's mirror image)
+  or writes off when no batch is named, and records the refund as cash-out or
+  credit-reduced — a compensating record against the sale, never an edit to
+  it (T2, ADR-1).
+- **PCN-003**, filed and applied the moment it was found: `sale_returns` had
+  the identical gap PCN-002 found in `payments` — Phase 10 §7 requires a
+  receipt for every money event, and Phase 9 §3 named no `receipt_number`
+  column for this table either. Same fix, same shared device sequence, and
+  the pattern is now established a third time rather than re-litigated:
+  `sales`, `payments` and `sale_returns` all draw from one receipt book.
+- The refund owed per line is computed from what that line actually
+  charged — unit price net of its own line discount — not the catalog price,
+  and floors the same way `costing.ts`'s bonus-unit blend does: never in the
+  customer's favour beyond what they paid.
+- Online only, like purchases and adjustments: a return needs to know how
+  much of a sale remains returnable, which a disconnected counter cannot
+  answer honestly.
+
+**Cash movements and the drawer-count ritual (W10)**
+
+- `commitCashMovement` is the one writer for the four reason codes — opening
+  float, owner withdrawal, expense, and the drawer count's over/short entry.
+  Three imply their own direction; over/short is the one exception, since the
+  count can land either side of expected.
+- The Day & Reports screen's ritual is exactly what W10 describes: count the
+  drawer, see the difference against the expected figure, record it, done —
+  "nothing locks" (D5) is not a caveat, it is the whole design: a late entry
+  simply lands in the day it was recorded, and no screen anywhere checks
+  whether "today" has been closed.
+
+**The three numbers, honestly derived**
+
+- `expectedCashPaisa` counts only what actually crossed the drawer: cash sale
+  portions, cash settlements, cash movements — and nothing credit touched.
+  `udhaarTotalPaisa` extends Phase 5 invariant 3 with the term Day 5's own
+  comment predicted it would need: `− Σ credit reversed`, now real rather
+  than a no-op, because a credit-refund return is exactly that reversal.
+- The exception list is Phase 9 §7's list verbatim — overrides, discounts,
+  adjustments, returns, quick items, cash movements, records ADR-3's offline
+  path delivered late — computed on read, nothing cached (ADR-8).
+- Weekly and monthly report tabs are Phase 13 §3's first cut-order item and
+  were cut deliberately rather than built thin: daily and overall (all-time)
+  answer the done-when — "the owner's three questions answer in one glance on
+  a phone" — without them, and the cut is recorded here per Phase 4 §7 rather
+  than absorbed silently.
+
+**The owner phone view (W11)**
+
+- A short-lived `owner_remote` session (`/owner/login`, password auth —
+  ADR-7's "owner logs in normally from any device") separate from the
+  counter's long-lived `device` session. The schema and session-kind
+  plumbing for this were already built on Day 1; Day 7 is the first session
+  to actually use them.
+- Three bottom tabs — Today, Stock, Udhaar — one page, client-side tab state
+  rather than three routes, since a phone checking in has no keyboard path to
+  protect and no reason to hold a live connection open. Udhaar is sorted
+  balance-first, reusing `listCustomers`' existing "largest first" ordering
+  unchanged.
+
+**Settings (Phase 10 §2 surface 9)**
+
+- Receipt header/footer, users & PINs (add a salesman, reset a PIN — which
+  doubles as Phase 12 §5's "owner override" by clearing lockout state in the
+  same write — deactivate/reactivate), a printer setup guide, and the export
+  link. Owner-gated by permission rather than only by visibility, unlike W8's
+  adjustments: a salesman minting their own PIN account is not something
+  visibility alone should allow.
+- No key-bar entry — F1–F10 were already spoken for — reachable instead from
+  a new "Settings" link beside the owner chip in the top bar, owner-only.
+
+**Export (Phase 9 §8, Phase 3 §5.2)**
+
+- `GET /api/export`: every §2–§4 table (reference, event, batches) filtered to
+  the tenant, one CSV per table, zipped with `jszip` (added this session —
+  the only new dependency), generated on demand. `users` is exported minus
+  its two credential-hash columns: the data is the customer's, but a leaked
+  password hash is a security incident, not a deliverable.
+- Reachable regardless of tenant suspension, per Phase 3 §5.3 — the route
+  never checks tenant status, on purpose.
+
+**Crown suite extended, not forked**
+
+- Returns and cash movements are new event kinds in `applyRandomEvent`,
+  exactly as Day 6 extended it for purchases and adjustments rather than
+  forking a parallel suite. The customer-balance invariant now nets out
+  return credit-reversals, and the receipt-sequence invariant (PCN-002) now
+  covers all three receipt-numbered tables, not two.
+
+**Fixes made along the way**
+
+- **`customerBalance` and `balancesByCustomer` had a documented no-op
+  waiting to become real.** Day 5's comment said credit reversals from
+  returns were "a no-op today" pending Day 7 — this session is where that
+  term stopped being theoretical and started subtracting.
+- Two test-authoring bugs, not application bugs, caught before they reached
+  CI: a `textContent()` read across adjacent sibling `<p>` elements with no
+  DOM whitespace between them swallowed a receipt total into the receipt
+  number capture; and a figure-tile label ("Sales", meaning sale *count*)
+  collided with the three-number card of the same name (meaning revenue) —
+  renamed to "Sale count" rather than left for the next reader to trip on.
+
 ## Session 6 — Day 6, Purchases, batches, stock operations
 
 Where stock starts arriving as well as leaving, and where D2's pending layer —

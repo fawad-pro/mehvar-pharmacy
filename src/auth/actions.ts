@@ -12,6 +12,7 @@ import { redirect } from 'next/navigation';
 
 import {
   findDeviceForLogin,
+  findOwnerForLogin,
   findOwnerUserId,
   findUser,
   listSwitchableUsers,
@@ -42,7 +43,9 @@ export type AuthResult =
         | 'unknown_user'
         | 'bad_pin'
         | 'locked_out'
-        | 'no_session';
+        | 'no_session'
+        | 'bad_password'
+        | 'no_password_set';
       /** Present on `locked_out` so the UI can say when to try again. */
       retryAfterMs?: number;
     };
@@ -84,6 +87,35 @@ export async function loginDevice(input: {
     kind: 'device',
     deviceId: device.deviceId,
   });
+  return { ok: true };
+}
+
+/**
+ * Owner remote login (W11) — "owner logs in normally from any device" (ADR-7),
+ * a short-lived `owner_remote` session rather than the counter's long-lived
+ * `device` one. No PIN-style lockout: this is a password, checked against
+ * Argon2id like every credential here, and Phase 12 §5's lockout policy is
+ * scoped to the PIN switch a shared counter needs, not this.
+ */
+export async function loginOwner(input: {
+  tenantSlug: string;
+  password: string;
+}): Promise<AuthResult> {
+  const owner = await findOwnerForLogin(input.tenantSlug.trim());
+  if (!owner || !owner.userActive) {
+    return { ok: false, reason: 'no_owner' };
+  }
+  if (owner.tenantStatus === 'suspended') {
+    return { ok: false, reason: 'tenant_suspended' };
+  }
+  if (!owner.passwordHash) {
+    return { ok: false, reason: 'no_password_set' };
+  }
+  if (!(await verifyPassword(owner.passwordHash, input.password))) {
+    return { ok: false, reason: 'bad_password' };
+  }
+
+  await issueSession({ tenantId: owner.tenantId, userId: owner.userId, kind: 'owner_remote' });
   return { ok: true };
 }
 
@@ -142,4 +174,13 @@ export async function loginDeviceAction(formData: FormData): Promise<void> {
   });
 
   redirect(result.ok ? '/sale' : `/login?error=${result.reason}`);
+}
+
+export async function loginOwnerAction(formData: FormData): Promise<void> {
+  const result = await loginOwner({
+    tenantSlug: String(formData.get('tenantSlug') ?? ''),
+    password: String(formData.get('password') ?? ''),
+  });
+
+  redirect(result.ok ? '/owner' : `/owner/login?error=${result.reason}`);
 }

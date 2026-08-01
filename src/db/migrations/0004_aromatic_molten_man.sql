@@ -1,0 +1,2 @@
+ALTER TABLE "sale_returns" ADD COLUMN "receipt_number" text NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "sale_returns_tenant_receipt_key" ON "sale_returns" USING btree ("tenant_id","receipt_number");

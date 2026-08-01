@@ -109,10 +109,18 @@ export async function consumeFromBatch(
 export async function findSaleById(
   scope: TenantScope,
   saleId: Uuid,
-): Promise<{ id: string; receiptNumber: string; totalPaisa: number } | undefined> {
+): Promise<
+  | { id: string; receiptNumber: string; totalPaisa: number; customerId: string | null }
+  | undefined
+> {
   const row = await scope.selectOne(sales, eq(sales.id, saleId));
   return row
-    ? { id: row.id, receiptNumber: row.receiptNumber, totalPaisa: row.totalPaisa }
+    ? {
+        id: row.id,
+        receiptNumber: row.receiptNumber,
+        totalPaisa: row.totalPaisa,
+        customerId: row.customerId,
+      }
     : undefined;
 }
 

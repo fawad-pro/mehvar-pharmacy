@@ -99,7 +99,7 @@ their feature, never after — rebuild equivalence ships the same day as
 | 4       | 4   | Payment, receipt numbering, kiosk print, udhaar sale, settlement ✅         |
 | 5       | 5   | Offline capture & sync ✅                                                   |
 | 6       | 6   | Purchases, batches, adjustments, opening stock, pending resolution ✅       |
-| 7       | 7   | Day close, reports, owner surface, returns, settings, export                |
+| 7       | 7   | Day close, reports, owner surface, returns, settings, export ✅             |
 | 8       | 8   | Buffer & hardening: E2E, token lint sweep, restore drill, verifier, deploy  |
 
 Day 3 is the highest-consequence day. **If anything slips, it slips _into_ that
@@ -255,6 +255,40 @@ exception visibility.
   *absent* from the stock map, which the index reads as unknown rather than zero
   and does not warn about — correct behaviour, wrong choice for a test that
   wants a guaranteed shortfall.
+
+## Things Day 7 established
+
+- **`commitReturn` and `commitCashMovement` are the one writers for their
+  events**, same shape as every other transactional writer: own the
+  transaction whole, idempotent on client id from the first commit.
+- **A repeated gap gets the same fix, not a fresh debate.** PCN-003
+  (`sale_returns` needed a `receipt_number`) is PCN-002's exact shape found
+  again; the fix was applying the decided pattern, not re-litigating it.
+- **`restockToBatch` is ADR-8's second sanctioned mutation's mirror image** —
+  symmetric to `consumeFromBatch`, unguarded on the way up since there is no
+  upper bound a return could violate the way a sale could violate a lower
+  one.
+- **A documented "no-op today" is a promise to keep, not a comment to
+  outlive its own accuracy.** Day 5 left `− Σ credit reversed` in
+  `customerBalance` as dead code with a note explaining why; Day 7 is where
+  that note either becomes true or gets deleted as wrong. It became true.
+- **`ThreeNumbers`/`ReportFigures`/every exception-row type gets redeclared
+  in each client component that needs it**, never imported from
+  `src/db/reporting-queries.ts`. The type-erasure argument ("it's erased at
+  compile time, so it's safe") is exactly the argument the rule exists to
+  refuse — nothing in the toolchain can verify erasure by reading the file,
+  so the rule is "don't name the module," not "imports are fine if
+  type-only."
+- **`textContent()` across sibling elements has no whitespace between
+  them.** A regex capturing "everything non-whitespace" after a label will
+  swallow the next sibling's text if the DOM has no space node separating
+  them. Bound the capture to the actual format instead of trusting
+  whitespace that was never there.
+- **Cutting a plan item is a recorded decision, not a silent gap.** Weekly
+  and monthly report tabs are Phase 13 §3's own named cut-order item; cutting
+  them the moment the day's scope was clear (rather than after running out of
+  time) and writing down why (Phase 4 §7) is the same posture as a PCN,
+  applied to scope instead of a schema gap.
 
 ## Commits
 
