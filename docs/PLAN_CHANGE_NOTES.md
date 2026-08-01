@@ -207,6 +207,64 @@ Phase 9 §3's `payments` row gains `receipt_number` (client-generated,
 device-scoped, unique per tenant — identical in shape and derivation to
 `sales.receipt_number`), sharing its device counter with sales.
 
+---
+
+## PCN-003 — the same gap, found again: `sale_returns` has no receipt number
+
+Session: 7 (Day 7) · Raised: 2026-07-31 · Status: **open — implemented under
+the recommendation below, pending your decision**
+
+### Plan sections in tension
+
+- **Phase 7, cross-cutting rule 4 / Phase 10 §7:** receipts print for every
+  money event — "sale, return, settlement" — footer carries the device-scoped
+  receipt number.
+- **Phase 9 §3 (`sale_returns`):** "id, tenant_id, sale_id, cash_out_paisa,
+  credit_reduced_paisa, reason_note, created_by/at." No `receipt_number`
+  column.
+- **W4:** "…confirm → stock restores to source batch, cash-out recorded or
+  credit reduced (compensating record, T2)." No receipt is mentioned in the
+  workflow text itself, but Phase 10 §7's footer spec is unconditional across
+  all three money events.
+
+### The gap
+
+Identical shape to PCN-002, in the one other table Phase 10 §7 names and Phase
+9 §3 under-scoped. A return that reduces credit or pays cash out is a money
+event exactly as a settlement is, and the customer walking away with a slip
+that has no number is the same dispute-ender failure PCN-002 already
+reasoned through for payments.
+
+### Options
+
+**A. Add `sale_returns.receipt_number`, same shape and shared device counter
+as `sales` and `payments`.** Recommended — the pattern is now established
+twice; extending it a third time is not a new decision, it is applying the
+decided one.
+
+**B. Returns print without a receipt number.** Rejected for the same reason
+PCN-002 rejected it for settlements: it contradicts Phase 10 §7 verbatim.
+
+### Recommendation
+
+**A.**
+
+### What was implemented (and is reversible)
+
+`saleReturns.receiptNumber`, `NOT NULL`, `unique(tenant_id, receipt_number)`,
+marked `[PCN-003]` in `src/db/schema.ts`. Same client-side counter as `sales`
+and `payments` — no new architectural surface.
+
+### Decision
+
+_Awaiting review._
+
+### Suggested plan amendment if accepted
+
+Phase 9 §3's `sale_returns` row gains `receipt_number` (client-generated,
+device-scoped, unique per tenant), sharing its device counter with sales and
+payments.
+
 ## Decided notes
 
 _None._

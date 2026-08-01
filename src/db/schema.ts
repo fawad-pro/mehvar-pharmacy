@@ -575,6 +575,14 @@ export const saleReturns = pgTable(
     saleId: uuid('sale_id')
       .notNull()
       .references(() => sales.id),
+    /**
+     * [PCN-003] Same gap as PCN-002, found again: Phase 10 §7 requires a
+     * receipt for every money event — "sale, return, settlement" — and Phase 9
+     * §3 named no column for this table either. Client-generated, device-scoped,
+     * identical in shape and derivation to `sales.receipt_number`, sharing the
+     * same device counter — one receipt book, one sequence.
+     */
+    receiptNumber: text('receipt_number').notNull(),
     cashOutPaisa: bigint('cash_out_paisa', { mode: 'number' }).notNull().default(0),
     creditReducedPaisa: bigint('credit_reduced_paisa', { mode: 'number' }).notNull().default(0),
     reasonNote: text('reason_note'),
@@ -583,7 +591,10 @@ export const saleReturns = pgTable(
       .references(() => users.id),
     createdAt: createdAt(),
   },
-  (table) => [index('sale_returns_tenant_created_idx').on(table.tenantId, table.createdAt)],
+  (table) => [
+    index('sale_returns_tenant_created_idx').on(table.tenantId, table.createdAt),
+    uniqueIndex('sale_returns_tenant_receipt_key').on(table.tenantId, table.receiptNumber),
+  ],
 );
 
 export const saleReturnLines = pgTable(
