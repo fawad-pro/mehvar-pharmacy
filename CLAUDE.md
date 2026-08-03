@@ -23,6 +23,13 @@ vs. integration. Deliberately deferred past Day 8; read it in full before
 touching anything tax- or compliance-adjacent, and before writing the ADR it
 sets up.
 
+`docs/research/commercialization.md` — packaging, local installation, updates,
+licensing, product identity and the Mehvar ecosystem. **Gated on PCN-004**,
+which proposes reversing Phase 3 §3's cloud deployment decision in favour of
+Option E (local-first with optional cloud). Read it in full — and check PCN-004's
+status — before touching anything installer-, update-, licensing- or
+Hospital-integration-adjacent. Nothing in it is decided.
+
 ## Identifier system — cite these by number
 
 - **P1–P8** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)

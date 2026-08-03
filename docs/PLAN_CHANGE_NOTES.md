@@ -265,6 +265,130 @@ Phase 9 §3's `sale_returns` row gains `receipt_number` (client-generated,
 device-scoped, unique per tenant), sharing its device counter with sales and
 payments.
 
+---
+
+## PCN-004 — the product is to be installed in the shop, but Phase 3 decided cloud
+
+Session: 9 · Raised: 2026-08-03 · Status: **open — nothing implemented,
+awaiting your decision**
+
+Unlike PCN-001–003, this note implements nothing. Those were gaps found while
+building something the plan had already decided. This is a reversal of a
+decision the plan made deliberately, with options weighed and rejections
+recorded — so it stops rather than proceeding under a recommendation. The
+supporting analysis is `docs/research/commercialization.md`.
+
+### Plan sections in tension
+
+- **Phase 3 §2, Option C:** "**On-premise, perpetual license.** Rejected.
+  One-time revenue with perpetual support obligation; piracy is rampant and
+  unpoliceable for a solo founder; every install is a support liability on
+  aging Windows machines; updates never reach the field; the owner's remote
+  phone visibility — a core charter promise — disappears."
+- **Phase 3 §2, Option E:** "**Hybrid: cloud product with an optional local
+  install.** Deferred, not rejected. One codebase can support it later
+  (containerized local deployment) if a segment demands it… Goes to Future
+  Considerations."
+- **Phase 3 §3:** "**Deployment: cloud, single multi-tenant service,
+  browser-based, one codebase.**"
+- **Phase 3 §5.1:** "Multi-tenant service from day one (architecture phase) —
+  single-tenant-now would contradict this document."
+- **Phase 12 §1:** "**Production:** Railway — one Next.js service, one
+  PostgreSQL instance, one region."
+
+### The contradiction
+
+The founder now requires Mehvar to run as locally installed software in the
+pharmacy. Phase 3 §3 decided the opposite, and Phase 12 §1 built on it. This
+cannot be absorbed as an implementation detail: it changes what is deployed,
+how it is updated, where backups live, and how the product is licensed.
+
+It is not, however, unanticipated. Option E describes this exact deployment and
+was **deferred rather than rejected** — the stated reason being that it "doubles
+operational surface for a customer who hasn't asked yet." A customer has now
+asked. So the change available is narrower than overturning Phase 3: it is
+promoting E from deferred to primary, and inverting which deployment leads.
+
+Two things survive the change unchanged and are worth naming, because they are
+what makes it affordable:
+
+- **The commercial model.** Option C's fatal flaw was perpetual *licensing*.
+  Nothing here proposes that; billing stays a subscription exactly as Phase 3 §3
+  decided.
+- **The tenant chokepoint.** Phase 3 §5.1's intent is preserved by keeping
+  `scoped.ts` in every install regardless of tenant count. It costs nothing at
+  runtime and is the only thing preventing a fork into "local edition" and
+  "cloud edition."
+
+Phase 3's remaining objections are answered at a cost, and one is not fully
+answered at all — the Windows support burden is accepted, not eliminated
+(`commercialization.md` §2.1, §8.1).
+
+### Options
+
+**A. Promote Option E; local-first with optional cloud.** Recommended. Local
+Node deployment leads; cloud services are additive and never on the sale path;
+cloud-hosted tenants remain available in the same image for customers who prefer
+them. Phase 3 §3's *commercial* decisions are untouched. Cost: an installer, an
+auto-updater, local backups, and a permanent Windows support surface. The owner's
+remote visibility (Phase 3 §5.5) is lost until roadmap Phase 3 restores it —
+a real, time-boxed regression against a charter promise.
+
+**B. Keep Phase 3 as written; remain cloud-only.** Zero engineering cost and no
+regression. Rejected only if the founder's requirement is firm — which it
+appears to be. Worth stating plainly that this option is not unreasonable: every
+Phase 3 objection was correct when written and four of the five remain at least
+partly true.
+
+**C. Build both as first-class from the start.** Rejected. It is the
+"doubles operational surface" outcome Option E was deferred to avoid, incurred
+before a single local install has been survived. Option A reaches the same place
+by Phase 4 with the evidence collected first.
+
+**D. Local install as a one-off for this customer, cloud for everyone else.**
+Rejected. A deployment that exists for one customer is a fork with no owner, and
+it decays the moment the mainline moves.
+
+### Recommendation
+
+**A**, contingent on the founder accepting §8.1's standing liability with open
+eyes. The architecture supports this change unusually cheaply — ADR-3's offline
+outbox already provides the "what happens during the upgrade" story that
+on-premise products normally have to invent, and UUIDv7 ids already make
+independent installations mergeable. Neither was designed for this and both work.
+
+The decision that would be wrong is C: reversing Phase 3 by doing more, rather
+than by doing the deferred thing that was already scoped.
+
+### Nothing implemented
+
+By design. Phase 0 of the roadmap is this note.
+
+### Decision
+
+_Awaiting review._
+
+### Suggested plan amendment if accepted
+
+- **Phase 3 §2** — Option E moves from "Deferred" to the decided option; Options
+  C and D keep their rejections, with a line noting which objections Option A
+  answers and which it accepts (§2.1's table).
+- **Phase 3 §3** — deployment becomes "local-first: a single-tenant Node
+  installed per pharmacy, with optional cloud services and optional cloud
+  hosting, one codebase." Pricing, collection, hardware and channel unchanged.
+- **Phase 3 §5.1** — reworded: the tenant chokepoint ships from day one in every
+  install; multi-*tenancy* becomes a deployment option rather than a deployment
+  fact.
+- **Phase 3 §6** — Option E leaves Future Considerations.
+- **Phase 12 §1** — topology gains the local Node; Railway is retained for
+  staging, the demo environment, and the Phase 3 cloud services.
+- **Phase 12 §2** — the release procedure gains the updater's empty-outbox
+  precondition; §2.1's deep-night window becomes per-installation.
+- **Phase 12 §3** — backups gain the local nightly dump; the offsite requirement
+  is explicitly time-boxed to roadmap Phase 3.
+
+---
+
 ## Decided notes
 
 _None._
