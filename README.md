@@ -71,6 +71,14 @@ customer with a balance, opening batches, and an open purchase draft.
 | `npm run db:generate`                         | Generate a migration from the Drizzle schema         |
 | `npm run db:migrate` / `db:reset` / `db:seed` | Database lifecycle                                   |
 
+## Troubleshooting
+
+- **`tsc` reports syntax errors inside `.next/dev/types/...`.** That directory
+  is Next.js's generated route typing, not application code. Delete `.next`
+  and rerun `typecheck`/`build` before investigating further — a stale or
+  half-written generated file is a far more likely cause than a real error.
+  Treat everything under `.next/` as disposable.
+
 ## Repository layout (Phase 11 §1)
 
 Structured by domain, not by technical layer. Each directory carries a
