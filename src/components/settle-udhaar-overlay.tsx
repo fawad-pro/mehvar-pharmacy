@@ -37,8 +37,21 @@ type Step =
       statement: { previousBalancePaisa: number; amountPaisa: number; newBalancePaisa: number };
     };
 
-export function SettleUdhaarOverlay({ onClose }: { onClose: () => void }) {
-  const [step, setStep] = useState<Step>({ name: 'pick' });
+export function SettleUdhaarOverlay({
+  initialCustomer,
+  onClose,
+}: {
+  /**
+   * Skips the picker when the customer is already known — opening this from a
+   * customer's own page, where their name and balance are on screen, should
+   * not ask who is paying.
+   */
+  initialCustomer?: CustomerHit;
+  onClose: () => void;
+}) {
+  const [step, setStep] = useState<Step>(
+    initialCustomer ? { name: 'amount', customer: initialCustomer } : { name: 'pick' },
+  );
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +143,23 @@ export function SettleUdhaarOverlay({ onClose }: { onClose: () => void }) {
 
             {step.name === 'amount' ? (
               <>
+                {/* Partial payment is the norm (W3), so the amount is free
+                    entry — which makes "half of what?" a question the screen
+                    has to answer at the moment the figure is typed, not one
+                    the cashier carries in their head from the picker. */}
+                <div className="border-line mb-3 flex items-baseline justify-between rounded border px-3 py-2">
+                  <span className="text-ink/60 text-xs tracking-[0.1em] uppercase">
+                    Currently owes
+                  </span>
+                  <span
+                    className={`numeral font-semibold ${
+                      step.customer.balancePaisa > 0 ? 'text-amber' : 'text-green-900'
+                    }`}
+                  >
+                    {formatPaisa(paisa(step.customer.balancePaisa), { withSymbol: true })}
+                  </span>
+                </div>
+
                 <label className="text-ink/60 mb-1 block text-xs" htmlFor="settle-amount">
                   Amount paid
                 </label>

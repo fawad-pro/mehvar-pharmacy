@@ -24,6 +24,7 @@ import {
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { useRegisterF8Handler } from '@/client/keyboard/f8-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
+import type { ReceiptData } from '@/client/print/receipt';
 import { useSync } from '@/client/sync/provider';
 import type { SearchHit } from '@/client/search/catalog-index';
 import { ProductSearch } from '@/components/product-search';
@@ -57,6 +58,8 @@ interface Committed {
   totalPaisa: number;
   /** Base units sold beyond what the index believed was there (D2, advisory). */
   pendingUnits: number;
+  /** Kept so the operator can put this one on paper after the fact. */
+  receipt: ReceiptData;
 }
 
 /** I5 — say the next action, plainly. The domain names the reason; this names the fix. */
@@ -242,12 +245,7 @@ export function SaleSurface() {
         return sum + (stock === null ? 0 : Math.max(0, line.qtyBase - stock));
       }, 0);
 
-      setLines([]);
-      setCustomer(null);
-      setPaying(false);
-      setLastSale({ receiptNumber, totalPaisa: soldTotals.totalPaisa, pendingUnits });
-
-      print({
+      const receiptData: ReceiptData = {
         receiptNumber,
         dateTime: new Date(),
         salesmanName: receiptContext.salesmanName,
@@ -272,7 +270,25 @@ export function SaleSurface() {
         ...(pendingUnits > 0
           ? { pendingNote: 'Sold more than the system had. It is on the owner’s exception list.' }
           : {}),
+      };
+
+      setLines([]);
+      setCustomer(null);
+      setPaying(false);
+      setLastSale({
+        receiptNumber,
+        totalPaisa: soldTotals.totalPaisa,
+        pendingUnits,
+        receipt: receiptData,
       });
+
+      // The sale is already committed and the receipt already built; whether
+      // paper comes out is a shop's preference, not a step in the workflow.
+      // A shop that prints on request rather than by default still has the
+      // receipt one key away, from local state, exactly as before.
+      if (receiptContext.autoPrintReceipt) {
+        print(receiptData);
+      }
 
       // Stock moved, so the index's advisory snapshot is stale. Harmless to ask
       // for while offline: the refresh fails and the cached catalog stands.
@@ -472,6 +488,27 @@ export function SaleSurface() {
                   Sold more than the system had. It is on the owner’s exception list.
                 </p>
               ) : null}
+              {/* The two questions that follow a completed sale — "can I see
+                  it?" and "can I have a receipt?" — answered where they are
+                  asked. Reprinting is from the same local receipt the commit
+                  built, so it needs nothing from the network either. */}
+              <p className="mt-2 flex gap-4 text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    print(lastSale.receipt);
+                  }}
+                  className="text-green-600 font-medium underline-offset-2 hover:underline"
+                >
+                  Print receipt
+                </button>
+                <a
+                  href="/returns"
+                  className="text-green-600 font-medium underline-offset-2 hover:underline"
+                >
+                  View sale
+                </a>
+              </p>
             </div>
           ) : null}
 

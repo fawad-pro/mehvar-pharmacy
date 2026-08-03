@@ -21,6 +21,7 @@ import { validateCustomerDraft } from '@/domain/udhaar/customer';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 
 export function CustomerPicker({
   title = 'Customer',
@@ -140,12 +141,7 @@ export function CustomerPicker({
   }
 
   return (
-    <div
-      className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-    >
+    <OverlayBackdrop label={title} onDismiss={onCancel}>
       <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
         <h2 className="text-green-900 mb-4 text-lg font-semibold">{title}</h2>
 
@@ -182,7 +178,9 @@ export function CustomerPicker({
                   {hit.phone ? <span className="text-ink/50 ml-2 text-xs">{hit.phone}</span> : null}
                 </span>
                 {/* T4 — the balance is shown before more credit gets extended. */}
-                <span className={`numeral text-sm ${hit.balancePaisa > 0 ? 'text-amber' : 'text-ink/50'}`}>
+                <span
+                  className={`numeral text-sm ${hit.balancePaisa > 0 ? 'text-amber' : 'text-ink/50'}`}
+                >
                   {formatPaisa(paisa(hit.balancePaisa))}
                 </span>
               </button>
@@ -217,6 +215,6 @@ export function CustomerPicker({
           </button>
         </div>
       </div>
-    </div>
+    </OverlayBackdrop>
   );
 }

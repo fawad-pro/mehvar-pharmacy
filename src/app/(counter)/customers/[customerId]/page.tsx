@@ -6,6 +6,8 @@ import { customerBalance, customerLedger, findCustomer } from '@/db/udhaar-queri
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 
+import { SettleButton } from './settle-button';
+
 /**
  * A customer's ledger — T4: "any derived figure can be expanded into the
  * transactions that produced it. Udhaar disputes end by showing the screen."
@@ -55,13 +57,23 @@ export default async function CustomerDetailPage({
         {customer.phone ? <p className="text-ink/50 text-sm">{customer.phone}</p> : null}
       </header>
 
-      <div className="border-line bg-green-100/50 rounded border p-4">
-        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Balance</p>
-        <p
-          className={`numeral text-total leading-none font-semibold ${balancePaisa > 0 ? 'text-amber' : 'text-green-900'}`}
-        >
-          {formatPaisa(paisa(balancePaisa), { withSymbol: true })}
-        </p>
+      <div className="border-line bg-green-100/50 flex flex-wrap items-end justify-between gap-4 rounded border p-4">
+        <div>
+          <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Balance</p>
+          <p
+            className={`numeral text-total leading-none font-semibold ${balancePaisa > 0 ? 'text-amber' : 'text-green-900'}`}
+          >
+            {formatPaisa(paisa(balancePaisa), { withSymbol: true })}
+          </p>
+        </div>
+        {/* The udhaar loop closes here: the screen that shows the debt is the
+            screen that takes the payment against it. */}
+        <SettleButton
+          customerId={customer.id}
+          name={customer.name}
+          phone={customer.phone}
+          balancePaisa={balancePaisa}
+        />
       </div>
 
       {rows.length === 0 ? (
@@ -85,8 +97,17 @@ export default async function CustomerDetailPage({
                     {row.createdAt.toLocaleDateString('en-PK')}
                   </td>
                   <td className="text-ink/70 px-3 py-2">{row.receiptNumber}</td>
-                  <td className="px-3 py-2 capitalize">
-                    {row.kind === 'sale' ? 'Udhaar sale' : 'Payment'}
+                  <td className="px-3 py-2">
+                    {row.kind === 'sale' ? 'Udhaar sale' : null}
+                    {row.kind === 'payment' ? 'Payment' : null}
+                    {row.kind === 'return' ? (
+                      <>
+                        Return
+                        <span className="text-ink/50 ml-1 text-xs">
+                          against {row.againstReceiptNumber}
+                        </span>
+                      </>
+                    ) : null}
                   </td>
                   <td
                     className={`numeral px-3 py-2 ${row.amountPaisa > 0 ? 'text-amber' : 'text-green-900'}`}

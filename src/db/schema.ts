@@ -101,6 +101,16 @@ export interface TenantSettings {
   timeZone: string;
   /** Near-expiry horizons in days — Phase 10 §2 renders these as 30/60/90 tabs. */
   expiryHorizonDays: number[];
+  /**
+   * Whether a committed sale prints paper without being asked.
+   *
+   * The *transaction* has never depended on printing (ADR-3: the receipt
+   * prints from local state, never from a server response) — but the paper
+   * was unconditional, and plenty of shops hand a receipt over only when it
+   * is asked for. Optional so an existing tenant row keeps today's behaviour;
+   * absent reads as on.
+   */
+  autoPrintReceipt?: boolean;
 }
 
 /* ========================================================================== */

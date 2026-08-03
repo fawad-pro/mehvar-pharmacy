@@ -22,8 +22,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { ProductSearch } from '@/components/product-search';
+import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import type { SearchHit } from '@/client/search/catalog-index';
 import { useCatalog } from '@/client/search/provider';
+import { useSync } from '@/client/sync/provider';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import {
   ADJUSTMENT_REASONS,
@@ -48,15 +50,19 @@ interface Chosen {
 }
 
 export function AdjustSurface({ openingStock = false }: { openingStock?: boolean }) {
-  const { refresh } = useCatalog();
+  const { refresh, addLocalProduct } = useCatalog();
+  const { capture } = useSync();
+  /** W6's mini-form, reused: the typed name plus the resolver search awaits. */
+  const [quickAdd, setQuickAdd] = useState<{
+    name: string;
+    settle: (added: boolean) => void;
+  } | null>(null);
   const [direction, setDirection] = useState<Direction>(openingStock ? 'add' : 'remove');
   const [chosen, setChosen] = useState<Chosen | null>(null);
   const [batches, setBatches] = useState<BatchOnHand[]>([]);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [qty, setQty] = useState('');
-  const [reason, setReason] = useState<AdjustmentReason>(
-    openingStock ? 'opening_stock' : 'damage',
-  );
+  const [reason, setReason] = useState<AdjustmentReason>(openingStock ? 'opening_stock' : 'damage');
   const [note, setNote] = useState('');
   const [cost, setCost] = useState('');
   const [price, setPrice] = useState('');
@@ -104,6 +110,57 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     setDone(null);
     qtyRef.current?.focus();
   }, []);
+
+  /**
+   * Creating a product from here is what makes W9 usable at all.
+   *
+   * Opening stock is walked on the day the catalog is emptiest — "search/create
+   * products" is W9's own wording — so a shelf item that is not yet known must
+   * become known without leaving the screen. Same outbox path and same
+   * completion queue as the counter's quick item (W6): named and priced now,
+   * enriched later.
+   */
+  const createQuickItem = useCallback(
+    async (draft: QuickItemDraft): Promise<void> => {
+      const product = {
+        id: uuidv7(),
+        name: draft.name,
+        strength: null,
+        form: null,
+        manufacturer: null,
+        formulaText: null,
+        baseUnitName: draft.baseUnitName,
+        packLevels: [],
+        pricePaisa: draft.pricePaisa,
+        mrpPaisa: null,
+        needsCompletion: true,
+      };
+
+      await capture({
+        kind: 'quick_item',
+        payload: {
+          id: product.id,
+          name: product.name,
+          pricePaisa: product.pricePaisa,
+          baseUnitName: product.baseUnitName,
+        },
+      });
+
+      addLocalProduct(product);
+
+      setChosen({
+        productId: product.id,
+        productName: product.name,
+        baseUnitName: product.baseUnitName,
+        pricePaisa: product.pricePaisa,
+      });
+      setPrice((product.pricePaisa / 100).toFixed(2));
+      setQty('');
+      setError(null);
+      setDone(null);
+    },
+    [capture, addLocalProduct],
+  );
 
   // Derived, not synchronised. Which reasons are legal follows from the
   // direction, and the chosen reason is only honoured while it remains one of
@@ -205,7 +262,21 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
         </div>
       )}
 
-      <ProductSearch onSelect={onSelect} inputRef={searchRef} />
+      <ProductSearch
+        onSelect={onSelect}
+        inputRef={searchRef}
+        // Only where stock is arriving: you cannot remove units of something
+        // that has never existed, so offering to invent it there would be
+        // offering a wrong answer.
+        {...(direction === 'add'
+          ? {
+              onQuickAdd: (name: string) =>
+                new Promise<boolean>((settle) => {
+                  setQuickAdd({ name, settle });
+                }),
+            }
+          : {})}
+      />
 
       {chosen ? (
         <div
@@ -379,6 +450,30 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
           {formatPaisa(paisa(chosen.pricePaisa))} is the catalog price — change “sells for” if this
           batch differs.
         </p>
+      ) : null}
+
+      {quickAdd ? (
+        <QuickItemForm
+          initialName={quickAdd.name}
+          onCreate={(draft) => {
+            void (async () => {
+              try {
+                await createQuickItem(draft);
+                quickAdd.settle(true);
+              } catch {
+                setError('Could not add that item. Try again.');
+                quickAdd.settle(false);
+              }
+              setQuickAdd(null);
+              qtyRef.current?.focus();
+            })();
+          }}
+          onCancel={() => {
+            quickAdd.settle(false);
+            setQuickAdd(null);
+            searchRef.current?.focus();
+          }}
+        />
       ) : null}
     </section>
   );

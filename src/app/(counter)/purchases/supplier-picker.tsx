@@ -14,6 +14,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { createSupplierAction, searchSuppliersAction, type SupplierHit } from './actions';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 
 export function SupplierPicker({
   onPick,
@@ -72,12 +73,7 @@ export function SupplierPicker({
   }
 
   return (
-    <div
-      className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Supplier"
-    >
+    <OverlayBackdrop label="Supplier" onDismiss={onCancel}>
       <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
         <h2 className="text-green-900 mb-4 text-lg font-semibold">Supplier</h2>
 
@@ -162,6 +158,6 @@ export function SupplierPicker({
           </button>
         </div>
       </div>
-    </div>
+    </OverlayBackdrop>
   );
 }

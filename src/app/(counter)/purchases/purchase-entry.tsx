@@ -34,6 +34,7 @@ import { formatPaisa } from '@/lib/money';
 import { uuidv7 } from '@/lib/uuid';
 
 import { receivePurchaseAction } from './actions';
+import { RecentPurchases } from './recent-purchases';
 import { SupplierPicker } from './supplier-picker';
 
 interface Received {
@@ -61,6 +62,8 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [received, setReceived] = useState<Received | null>(null);
+  /** Bumped on a successful receive so the history below reloads. */
+  const [receivedCount, setReceivedCount] = useState(0);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   // The line being typed, before it joins the draft.
@@ -227,6 +230,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       batchCount: outcome.batchCount,
       resolvedPendingBase: outcome.resolvedPendingBase,
     });
+    setReceivedCount((current) => current + 1);
     clearDraft(tenantId);
     setDraft(emptyDraft());
     setResumed(false);
@@ -240,7 +244,10 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-green-900 text-2xl font-semibold">Receive stock</h1>
         {resumed ? (
-          <span className="border-line text-ink/60 rounded border px-2 py-0.5 text-xs" role="status">
+          <span
+            className="border-line text-ink/60 rounded border px-2 py-0.5 text-xs"
+            role="status"
+          >
             Resumed — this invoice was saved as you typed
           </span>
         ) : null}
@@ -411,7 +418,14 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
           aria-label="Received"
         >
           <p className="text-green-900 font-medium">
-            Received — {received.batchCount} batch{received.batchCount === 1 ? '' : 'es'} on the shelf
+            Received — {received.batchCount} batch{received.batchCount === 1 ? '' : 'es'} on the
+            shelf
+            <a
+              href="/stock"
+              className="text-green-600 ml-3 text-xs font-normal underline-offset-2 hover:underline"
+            >
+              See it in stock →
+            </a>
           </p>
           {received.resolvedPendingBase > 0 ? (
             // D2 closing its loop, said plainly: the shortfall the counter sold
@@ -508,6 +522,8 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
           {busy ? 'Receiving…' : 'Receive stock'}
         </button>
       </div>
+
+      <RecentPurchases reloadKey={receivedCount} />
 
       {picking ? (
         <SupplierPicker

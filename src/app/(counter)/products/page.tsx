@@ -4,8 +4,9 @@ import { redirect } from 'next/navigation';
 import { currentSession, scopeFor } from '@/auth/session';
 import { countNeedingCompletion, listProducts } from '@/db/catalog-queries';
 import { formatPackLevels } from '@/domain/catalog/product';
-import { paisa } from '@/lib/branded';
+import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
+import { describeQuantity } from '@/lib/quantity';
 
 /**
  * The catalog list — Phase 10 §2 surface 5.
@@ -91,6 +92,7 @@ export default async function ProductsPage({
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Salt</th>
                 <th className="px-3 py-2 font-medium">Sold as</th>
+                <th className="px-3 py-2 text-right font-medium">On hand</th>
                 <th className="px-3 py-2 text-right font-medium">Price</th>
                 <th className="px-3 py-2 text-right font-medium">Codes</th>
               </tr>
@@ -120,6 +122,22 @@ export default async function ProductsPage({
                     {[item.baseUnitName, formatPackLevels(item.packLevels)]
                       .filter(Boolean)
                       .join(', ')}
+                  </td>
+                  {/* The most-asked question about a medicine, on the screen
+                      where it is already being looked up. Never stocked reads
+                      as "—", which is not the same as none left. */}
+                  <td className="numeral px-3 py-2">
+                    {item.stockBase === null ? (
+                      <span className="text-ink/30">—</span>
+                    ) : (
+                      <span className={item.stockBase <= 0 ? 'text-amber' : ''}>
+                        {describeQuantity(
+                          baseQty(item.stockBase),
+                          item.baseUnitName,
+                          item.packLevels,
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td className="numeral px-3 py-2">
                     {formatPaisa(paisa(item.pricePaisa), { withSymbol: true })}

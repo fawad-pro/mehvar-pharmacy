@@ -2,6 +2,84 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 8 — Day 8, hardening: the pre-launch product review and its fixes
+
+The day the product got read as a product rather than a codebase. The full
+review is `docs/DAY_8_REVIEW.md`; this records what changed because of it.
+
+**The sev-1: a drawer count against a lifetime figure**
+
+- The Overall range computes the three numbers from epoch to 2999, but
+  **Count the drawer rendered in both ranges** — the `view === 'daily'` guard
+  covered only the date picker. An owner counting the till on the Overall tab
+  would have recorded an over/short against every rupee since installation:
+  an append-only row, uneditable by ADR-1, poisoning every later cash figure.
+- The count and the cash-movement form are now bound to _today's_ drawer, and
+  "expected cash in drawer" no longer appears in a range where it means
+  nothing. `e2e/day.spec.ts` guards both directions.
+
+**The three numbers now carry their own scope**
+
+- Sales and expected cash are range-scoped; the udhaar total is a position and
+  is always all-time (`threeNumbers` was always right about this). Two cards
+  meaning "today" and one meaning "ever" under one heading is not something an
+  owner can infer, so each label says which it is.
+- `opening_stock` leaves the exception list. It is the setup ritual, not an
+  exception, and one row per shelf line buries the two that mean something.
+- Nothing prompted the opening float, without which expected cash is silently
+  wrong on the first morning. It does now, once, where the number already is.
+
+**The udhaar ledger disagreed with its own balance**
+
+- `customerBalance` subtracts credit reversed by returns; `customerLedger` did
+  not read them. On any customer with a credit-refunded return, the headline
+  balance and the running total below it disagreed — on the screen T4
+  designates for ending udhaar disputes.
+- Fixed, and the agreement is now asserted in the crown suite.
+- **The new invariant was vacuous when first written** and passed with the bug
+  reintroduced: the generator reached a credit-reducing return roughly once in
+  ten histories. The return generator now prefers a credit sale, and
+  `creditReducingReturns` joined the suite's "this history was interesting"
+  guard. Reverting the fix now fails the suite; before this change it did not.
+
+**Workflows that existed but had no door**
+
+- W9's opening stock (`?opening=1`) was linked from nowhere, and could not
+  create a product — `ProductSearch` was mounted without `onQuickAdd`, on the
+  one screen whose whole job is filling an empty catalog. Both fixed.
+- `listPurchases`/`recentPurchasesAction` were written, correct and called by
+  nothing: "Received — 1 batch on the shelf" was the only record of a delivery
+  an owner ever saw. Purchases now lists what was received.
+- Recent sales already existed on Returns; Day's sale count and the counter's
+  "Saved — A-32" now lead there rather than describing it.
+- Stock's shortfall rows carry the two fixes the prose named, and the Products
+  list carries on-hand quantity — the most-asked question about a medicine, on
+  the screen where it is already looked up.
+
+**Affordances, without adding noise**
+
+- Tailwind v4's preflight gives buttons `cursor: default` and the tree had zero
+  `cursor-pointer`: every control in the product read as inert under the
+  pointer. One base rule in `globals.css`.
+- The key bar was a row of `<span>`s — the only persistent navigation, inert to
+  the mouse. Now navigable, with the shortcut and active state unchanged. F8
+  and F10 stay non-interactive: they are dispatched, not routed.
+- Backdrop dismissal on the pickers (supplier, customer, PIN switch, quick
+  item) and deliberately **not** on the payment overlay, which sits
+  mid-transaction where a stray click would cost a re-key.
+
+**Receipts became optional without becoming unavailable**
+
+- A sale printed unconditionally. The transaction never depended on it, but the
+  paper did, and shops that print on request had no way to stop it.
+  `autoPrintReceipt` is a tenant setting; the last sale keeps a Print receipt
+  action, still from local state, so nothing waits on the network.
+
+**Copy**
+
+- Three user-visible strings cited the planning package — `(D5)`, `T2 —`,
+  `(F8, W2)`. The ideas stayed; the identifiers went.
+
 ## Session 7 — Day 7, Day close, reports, owner surface, returns, settings, export
 
 The day the owner's three questions get an answer, and the day the last of
@@ -108,7 +186,7 @@ the counter's money paths — a refund — gets its own writer.
 - Two test-authoring bugs, not application bugs, caught before they reached
   CI: a `textContent()` read across adjacent sibling `<p>` elements with no
   DOM whitespace between them swallowed a receipt total into the receipt
-  number capture; and a figure-tile label ("Sales", meaning sale *count*)
+  number capture; and a figure-tile label ("Sales", meaning sale _count_)
   collided with the three-number card of the same name (meaning revenue) —
   renamed to "Sale count" rather than left for the next reader to trip on.
 
@@ -131,7 +209,7 @@ the thing that lets Day 3 refuse to block a sale — finally gets its answer.
 **Bonus schemes tell the truth about cost (`domain/purchases/costing.ts`)**
 
 - "10+1 free" is invoiced for ten and received as eleven. The batch carries the
-  *effective* unit cost — invoiced total over units received — so margin is
+  _effective_ unit cost — invoiced total over units received — so margin is
   computed against what the stock actually cost.
 - The division floors, deliberately. Cost lands a paisa low rather than a paisa
   high, so a reported margin is never better than the real one. The residual is
@@ -169,7 +247,7 @@ the thing that lets Day 3 refuse to block a sale — finally gets its answer.
 **A real bug the verifier caught: double-counted materialization**
 
 - An adjustment that materializes its own batch counts as that batch's
-  `qty_received`. The rebuild was *also* summing it into the adjustment delta,
+  `qty_received`. The rebuild was _also_ summing it into the adjustment delta,
   so every added unit was counted twice and `db:verify` failed. Phase 9 §4's
   word "negative" turned out to be load-bearing; Day 3's generalization to a
   signed sum was correct right up until a batch could be born from an
@@ -186,7 +264,7 @@ the thing that lets Day 3 refuse to block a sale — finally gets its answer.
 **Fixes made along the way**
 
 - **A `'use server'` file re-exported a type again.** `export type
-  { BatchOnHand }` threw `ReferenceError: BatchOnHand is not defined` at
+{ BatchOnHand }` threw `ReferenceError: BatchOnHand is not defined` at
   runtime — the identical failure Day 4 hit with `CustomerListItem`, already
   written down in CLAUDE.md and repeated anyway. The shape now lives in the
   pure domain module, which satisfies both rules at once: a client component
@@ -200,9 +278,9 @@ the thing that lets Day 3 refuse to block a sale — finally gets its answer.
 - **Two specs contended for one product.** This suite's purchase test received
   500 Rocephin, which pulled `sale.spec.ts`'s deliberate oversell back into
   stock and made its correct behaviour look like a regression. A spec that
-  *receives* stock now reaches for something no selling spec depends on being
+  _receives_ stock now reaches for something no selling spec depends on being
   short of. Related: a product the seed has never stocked is absent from the
-  stock map, which the index reads as *unknown* rather than zero and therefore
+  stock map, which the index reads as _unknown_ rather than zero and therefore
   does not warn about — right behaviour, and a trap for a test that wants a
   guaranteed shortfall.
 
@@ -259,7 +337,7 @@ those was a way to lose a day's trading.
 (Phase 9 §3), so a single failed `saleContext()` at startup — the shop opening
 before the uplink is up, a blip while the shell mounts — left Pay disabled
 permanently, with no way back except a reload nobody would think to try. Worse
-than an outage, because the counter *looks* fine. It now retries until it
+than an outage, because the counter _looks_ fine. It now retries until it
 lands, and says "Getting this counter ready…" while it does, because a disabled
 button with no explanation is the kind of thing that gets a shop phoning the
 founder (I5).
@@ -279,7 +357,7 @@ cause had passed. The pump now schedules its own retry at the computed delay.
   correct behaviour was being read as another's regression. The count assertion
   no longer pins a number.
 - `shell.spec.ts`'s wrong-PIN test left `failed_pin_attempts` incremented, so
-  five runs against one database locked Bilal out and broke the *successful*
+  five runs against one database locked Bilal out and broke the _successful_
   switch test for reasons unrelated to the code. It now gets the PIN right
   afterwards, which is what happens at a counter anyway and clears the counter.
 - The five copies of `openCounter` are now one, in `e2e/support/counter.ts`, and
@@ -309,7 +387,7 @@ and becomes tested behaviour.
   captures through one queue means the disruption path is exercised a few
   hundred times a day and a reconnect is not a special mode, just the normal
   loop finding the network already there.
-- `enqueue` waits for the IndexedDB *transaction to complete*, not for the
+- `enqueue` waits for the IndexedDB _transaction to complete_, not for the
   request to succeed. The difference is invisible in every test and decisive in
   a power cut, and it is what lets the receipt print immediately afterwards.
 - Two receipt figures are consequently the client's last-known values — the
@@ -340,7 +418,7 @@ and becomes tested behaviour.
   what was typed. The product is real from that moment — added to the local
   index so the cart line renders and the next search finds it, queued so it
   becomes real on the server whenever the server is next reachable.
-- What the form does *not* ask for is the design: pack structure guessed wrong
+- What the form does _not_ ask for is the design: pack structure guessed wrong
   under time pressure corrupts stock silently, so it belongs to the completion
   queue where there is time to be right.
 

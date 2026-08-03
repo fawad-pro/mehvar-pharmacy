@@ -22,6 +22,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 
 export interface QuickItemDraft {
   name: string;
@@ -77,12 +78,7 @@ export function QuickItemForm({
   }
 
   return (
-    <div
-      className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Quick item"
-    >
+    <OverlayBackdrop label="Quick item" onDismiss={onCancel}>
       <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl" onKeyDown={onKeyDown}>
         <h2 className="text-green-900 mb-1 text-lg font-semibold">Add it now</h2>
         <p className="text-ink/60 mb-4 text-sm">
@@ -149,6 +145,6 @@ export function QuickItemForm({
           </button>
         </div>
       </div>
-    </div>
+    </OverlayBackdrop>
   );
 }

@@ -40,9 +40,7 @@ export async function customerBalance(scope: TenantScope, customerId: Uuid): Pro
     .innerJoin(sales, eq(saleReturns.saleId, sales.id))
     .where(scope.scopeOf(saleReturns, eq(sales.customerId, customerId)));
 
-  return (
-    Number(extended?.total ?? 0) - Number(paid?.total ?? 0) - Number(reversed?.total ?? 0)
-  );
+  return Number(extended?.total ?? 0) - Number(paid?.total ?? 0) - Number(reversed?.total ?? 0);
 }
 
 /** Every customer's balance in one query, keyed by id — avoids N+1 on the list screen. */
@@ -66,24 +64,28 @@ export async function balancesByCustomer(
       .where(scope.scopeOf(payments, inArray(payments.customerId, [...customerIds])))
       .groupBy(payments.customerId),
     scope.db
-      .select({ customerId: sales.customerId, total: sum(saleReturns.creditReducedPaisa).as('total') })
+      .select({
+        customerId: sales.customerId,
+        total: sum(saleReturns.creditReducedPaisa).as('total'),
+      })
       .from(saleReturns)
       .innerJoin(sales, eq(saleReturns.saleId, sales.id))
       .where(scope.scopeOf(saleReturns, inArray(sales.customerId, [...customerIds])))
       .groupBy(sales.customerId),
   ]);
 
-  const balances: Record<string, number> = Object.fromEntries(
-    customerIds.map((id) => [id, 0]),
-  );
+  const balances: Record<string, number> = Object.fromEntries(customerIds.map((id) => [id, 0]));
   for (const row of extended) {
-    if (row.customerId) balances[row.customerId] = (balances[row.customerId] ?? 0) + Number(row.total ?? 0);
+    if (row.customerId)
+      balances[row.customerId] = (balances[row.customerId] ?? 0) + Number(row.total ?? 0);
   }
   for (const row of paid) {
-    if (row.customerId) balances[row.customerId] = (balances[row.customerId] ?? 0) - Number(row.total ?? 0);
+    if (row.customerId)
+      balances[row.customerId] = (balances[row.customerId] ?? 0) - Number(row.total ?? 0);
   }
   for (const row of reversed) {
-    if (row.customerId) balances[row.customerId] = (balances[row.customerId] ?? 0) - Number(row.total ?? 0);
+    if (row.customerId)
+      balances[row.customerId] = (balances[row.customerId] ?? 0) - Number(row.total ?? 0);
   }
   return balances;
 }
@@ -107,6 +109,8 @@ export interface CustomerPage {
   page: number;
   pageSize: number;
   pageCount: number;
+  /** Sum of positive balances across every matching customer, not just this page. */
+  outstandingPaisa: number;
 }
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -134,7 +138,10 @@ export async function listCustomers(
       )
     : scope.scopeOf(customers, eq(customers.isActive, true));
 
-  const [totals] = await scope.db.select({ value: sql<number>`count(*)` }).from(customers).where(where);
+  const [totals] = await scope.db
+    .select({ value: sql<number>`count(*)` })
+    .from(customers)
+    .where(where);
   const total = Number(totals?.value ?? 0);
 
   // All matching customers are fetched to sort by derived balance, then sliced
@@ -156,6 +163,14 @@ export async function listCustomers(
     }))
     .sort((a, b) => b.balancePaisa - a.balancePaisa);
 
+  // Only debts count toward "owed to you" — a customer in credit (an overpaid
+  // settlement, a return larger than the balance) does not offset someone
+  // else's debt, and netting them would understate the book.
+  const outstandingPaisa = sorted.reduce(
+    (running, row) => running + Math.max(0, row.balancePaisa),
+    0,
+  );
+
   const start = (page - 1) * pageSize;
   return {
     items: sorted.slice(start, start + pageSize),
@@ -163,23 +178,32 @@ export async function listCustomers(
     page,
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    outstandingPaisa,
   };
 }
 
 export interface CustomerLedgerRow {
   id: string;
-  kind: 'sale' | 'payment';
+  kind: 'sale' | 'payment' | 'return';
   createdAt: Date;
-  /** Positive = credit extended; negative = paid in. Signed for a running total. */
+  /** Positive = credit extended; negative = paid in or reversed. Signed for a running total. */
   amountPaisa: number;
-  /** For a sale row, the receipt to look up; for a payment, its own. */
+  /** For a sale row, the receipt to look up; for a payment or return, its own. */
   receiptNumber: string;
+  /** The sale a return was written against, so the row can name what it reverses. */
+  againstReceiptNumber?: string;
 }
 
 /**
  * The transactions behind a balance — T4: "any derived figure can be expanded
  * into the transactions that produced it. Udhaar disputes end by showing the
  * screen." This is that screen's data.
+ *
+ * All three terms of `customerBalance` must appear here, including credit
+ * reversed by returns. They are the same derivation read two ways — as one
+ * number and as the rows that produce it — and a ledger whose running total
+ * cannot reach the balance printed above it is worse than no ledger at all:
+ * it is the screen an udhaar dispute is supposed to end at.
  */
 export async function customerLedger(
   scope: TenantScope,
@@ -205,6 +229,22 @@ export async function customerLedger(
     .from(payments)
     .where(scope.scopeOf(payments, eq(payments.customerId, customerId)));
 
+  // The third term of the balance: credit given back by a return (Day 7).
+  // A return row carries no `customer_id` of its own — it is always the
+  // sale's — so it is reached through the sale, exactly as `customerBalance`
+  // reaches it.
+  const returnRows = await scope.db
+    .select({
+      id: saleReturns.id,
+      createdAt: saleReturns.createdAt,
+      creditReducedPaisa: saleReturns.creditReducedPaisa,
+      receiptNumber: saleReturns.receiptNumber,
+      againstReceiptNumber: sales.receiptNumber,
+    })
+    .from(saleReturns)
+    .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+    .where(scope.scopeOf(saleReturns, eq(sales.customerId, customerId)));
+
   const ledger: CustomerLedgerRow[] = [
     ...saleRows
       .filter((row) => row.creditPaisa > 0)
@@ -222,6 +262,16 @@ export async function customerLedger(
       amountPaisa: -row.amountPaisa,
       receiptNumber: row.receiptNumber,
     })),
+    ...returnRows
+      .filter((row) => row.creditReducedPaisa > 0)
+      .map((row) => ({
+        id: row.id,
+        kind: 'return' as const,
+        createdAt: row.createdAt,
+        amountPaisa: -row.creditReducedPaisa,
+        receiptNumber: row.receiptNumber,
+        againstReceiptNumber: row.againstReceiptNumber,
+      })),
   ];
 
   return ledger.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
@@ -284,7 +334,9 @@ export async function findPaymentById(
   paymentId: Uuid,
 ): Promise<{ id: string; receiptNumber: string; amountPaisa: number } | undefined> {
   const row = await scope.selectOne(payments, eq(payments.id, paymentId));
-  return row ? { id: row.id, receiptNumber: row.receiptNumber, amountPaisa: row.amountPaisa } : undefined;
+  return row
+    ? { id: row.id, receiptNumber: row.receiptNumber, amountPaisa: row.amountPaisa }
+    : undefined;
 }
 
 export async function insertPayment(

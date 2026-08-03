@@ -239,7 +239,7 @@ exception visibility.
 - **Effective unit cost floors.** Bonus stock makes cost land a paisa low rather
   than high, so a reported margin is never better than the real one.
 - **A batch born from an adjustment is counted once.** It is that batch's
-  `qty_received`; the adjustment sum in `batchLedger` takes only *negative*
+  `qty_received`; the adjustment sum in `batchLedger` takes only _negative_
   deltas. Day 3's signed sum was right until materialization existed, and
   `db:verify` is what caught it.
 - **A `'use server'` file must not re-export a type — this bit twice.** Day 4's
@@ -252,7 +252,7 @@ exception visibility.
   spec cannot find a field by name, neither can a screen reader.
 - **A spec that receives stock must not use a product another spec oversells.**
   The suite shares one database. Related: a product the seed never stocked is
-  *absent* from the stock map, which the index reads as unknown rather than zero
+  _absent_ from the stock map, which the index reads as unknown rather than zero
   and does not warn about — correct behaviour, wrong choice for a test that
   wants a guaranteed shortfall.
 
@@ -289,6 +289,40 @@ exception visibility.
   them the moment the day's scope was clear (rather than after running out of
   time) and writing down why (Phase 4 §7) is the same posture as a PCN,
   applied to scope instead of a schema gap.
+
+## Things Day 8 established
+
+- **A range-scoped figure must never be offered as something to act on.** The
+  drawer count rendered against the Overall range's all-time expected cash; the
+  number was merely confusing, but the _form beneath it_ would have written an
+  uneditable over/short off it. When a screen shows a figure for a range, check
+  what it invites the owner to do with it.
+- **A label carries its own time scope, or the owner cannot read the screen.**
+  "Sales" and "Expected cash" are the range's; the udhaar total is a position
+  and always all-time. Three numbers with two different scopes and one heading
+  is a screen nobody can explain out loud.
+- **A derived figure and its expansion are one thing, and must be tested as
+  one.** `customerBalance` had three terms and `customerLedger` had two for a
+  whole session. Anywhere a number is shown big and also broken into rows,
+  assert that the rows sum to the number.
+- **A new invariant is not evidence until it has been seen to fail.** The
+  ledger/balance assertion passed with the bug reintroduced, because the crown
+  suite reached a credit-reducing return about once in ten histories. Revert
+  the fix and watch the suite go red _before_ believing it. When an invariant
+  depends on a rare generated event, add a counter to the suite's
+  "actually exercised" guard so it cannot silently stop covering the case.
+- **A built, correct, unreachable workflow is not built.** W9's opening stock
+  was a query-string away from nowhere; `listPurchases` was called by nothing.
+  Both had passed their own tests. Grep for the entry point, not the function.
+- **Setup events are not exceptions.** `opening_stock` in the exception list
+  meant one row per shelf line burying the ones that mean something. The same
+  discipline as I7's colours: a channel that fires routinely stops being read.
+- **Tailwind v4 gives `<button>` `cursor: default`.** Not a v3 default. The base
+  rule in `globals.css` is deliberate, not decoration — without it every control
+  in the product reads as inert text under the pointer.
+- **Keyboard-first is a claim about speed, not a licence to ignore the mouse.**
+  The key bar is navigable now. Dismissal is per-overlay and deliberate:
+  pickers dismiss on backdrop click, the payment overlay does not.
 
 ## Commits
 

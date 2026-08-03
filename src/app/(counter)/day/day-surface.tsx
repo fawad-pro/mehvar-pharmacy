@@ -108,6 +108,7 @@ export function DaySurface({
   adjustments,
   cashMovements,
   lateSynced,
+  hasOpeningFloat,
 }: {
   day: BusinessDay;
   today: BusinessDay;
@@ -120,7 +121,13 @@ export function DaySurface({
   adjustments: AdjustmentExceptionRow[];
   cashMovements: CashMovementExceptionRow[];
   lateSynced: LateSyncedRow[];
+  hasOpeningFloat: boolean;
 }) {
+  const isToday = day === today;
+  /** Counting and recording cash is something you do to *this* drawer, now. */
+  const isDrawerDay = view === 'daily' && isToday;
+  const needsOpeningFloat = isDrawerDay && !hasOpeningFloat;
+
   const exceptionCount =
     overrides.length +
     returns.length +
@@ -178,21 +185,59 @@ export function DaySurface({
       ) : null}
 
       {/* The three numbers, first — I6's huge-numerals treatment, the same
-          promise the owner phone view (W11) makes. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <NumberCard label="Sales" amountPaisa={numbers.salesPaisa} />
-        <NumberCard label="Expected cash in drawer" amountPaisa={numbers.expectedCashPaisa} />
-        <NumberCard label="Running udhaar total" amountPaisa={numbers.udhaarTotalPaisa} amber />
+          promise the owner phone view (W11) makes.
+
+          Each label carries its own time scope, because they do not share one:
+          sales and cash are scoped to the range, while the udhaar total is a
+          position and is always all-time (see `threeNumbers`). Two cards
+          meaning "today" and one meaning "ever" under one heading is not
+          something an owner can be expected to infer. */}
+      <div
+        className={`grid grid-cols-1 gap-3 ${isDrawerDay ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
+      >
+        <NumberCard
+          label={
+            view === 'overall' ? 'Sales, all time' : isToday ? 'Sales today' : 'Sales that day'
+          }
+          amountPaisa={numbers.salesPaisa}
+        />
+        {/* Only ever a daily figure. Summed over all time it is every rupee
+            that has crossed the drawer since installation — a number with no
+            meaning, printed where the owner expects one they can count. */}
+        {view === 'daily' ? (
+          <NumberCard
+            label={isToday ? 'Cash expected in drawer' : 'Cash expected at close'}
+            amountPaisa={numbers.expectedCashPaisa}
+          />
+        ) : null}
+        <NumberCard label="Total owed to you" amountPaisa={numbers.udhaarTotalPaisa} amber />
       </div>
 
-      <DrawerCount expectedCashPaisa={numbers.expectedCashPaisa} />
-
-      <CashMovementForm />
+      {/* The count and the movements belong to today's drawer. Rendering them
+          against a range figure invites an over/short entry off an all-time
+          expected cash — an append-only row that cannot be edited and would
+          poison every later cash figure. */}
+      {isDrawerDay ? (
+        <>
+          <DrawerCount expectedCashPaisa={numbers.expectedCashPaisa} />
+          <CashMovementForm needsOpeningFloat={needsOpeningFloat} />
+        </>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <FigureCard label="Revenue" amountPaisa={figures.revenuePaisa} />
         <FigureCard label="Margin" amountPaisa={figures.marginPaisa} />
-        <FigureCard label="Sale count" value={figures.saleCount} />
+        {/* The one figure with somewhere to go: the sale list already exists on
+            the Returns surface, and "how many sales" is exactly the moment an
+            owner wants to see which ones. */}
+        <a
+          href="/returns"
+          className="border-line hover:border-green-600 hover:bg-green-100/40 rounded border p-3 transition-colors"
+        >
+          <p className="text-ink/60 text-xs tracking-[0.08em] uppercase">Sale count</p>
+          <p className="numeral text-green-900 mt-1 text-xl font-semibold">{figures.saleCount}</p>
+          <p className="text-green-600 mt-0.5 text-xs">See the sales →</p>
+        </a>
         <FigureCard label="Units sold" value={figures.unitsSold} />
       </div>
 
@@ -263,7 +308,9 @@ export function DaySurface({
             <ExceptionGroup title="Cash movements" rows={cashMovements} empty={false}>
               {cashMovements.map((row) => (
                 <Row key={row.id}>
-                  <span className="font-medium">{CASH_REASON_LABELS[row.reason as CashReason]}</span>
+                  <span className="font-medium">
+                    {CASH_REASON_LABELS[row.reason as CashReason]}
+                  </span>
                   <span
                     className={`numeral ml-2 ${row.direction === 'out' ? 'text-amber' : 'text-green-900'}`}
                   >
@@ -392,7 +439,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
       setError(outcome.message);
       return;
     }
-    setDone('Recorded. The ritual is closed — nothing else locks (D5).');
+    setDone('Recorded. Nothing is locked — the day stays open.');
     setCounted('');
   }
 
@@ -445,8 +492,15 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
   );
 }
 
-/** Opening float, a withdrawal, or an expense — the other three cash reasons. */
-function CashMovementForm() {
+/**
+ * Opening float, a withdrawal, or an expense — the other three cash reasons.
+ *
+ * `needsOpeningFloat` is the one nudge here: expected-cash-in-drawer is only
+ * right if the day's float was recorded, and nothing else in the product would
+ * ever ask. A wrong number the owner cannot explain is the fastest way to lose
+ * their trust in every other number.
+ */
+function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean }) {
   const [reason, setReason] = useState<CashReason>('opening_float');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -486,6 +540,12 @@ function CashMovementForm() {
   return (
     <div className="border-line rounded border p-4">
       <h2 className="text-green-900 mb-2 font-medium">Record a cash movement</h2>
+      {needsOpeningFloat ? (
+        <p className="text-amber mb-3 text-sm">
+          No opening float recorded today — the expected cash figure above assumes the drawer
+          started empty.
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-40">
           <label className="text-ink/60 mb-1 block text-xs" htmlFor="movement-reason">

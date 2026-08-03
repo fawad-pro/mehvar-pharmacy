@@ -48,6 +48,7 @@ export async function currentTenantSettingsAction(): Promise<TenantSettings | nu
 export async function updateReceiptSettingsAction(input: {
   receiptHeader: string;
   receiptFooter: string;
+  autoPrintReceipt: boolean;
 }): Promise<SettingsOutcome> {
   const session = await currentSession();
   if (!requireOwner(session)) {
@@ -61,6 +62,7 @@ export async function updateReceiptSettingsAction(input: {
     ...current,
     receiptHeader: input.receiptHeader,
     receiptFooter: input.receiptFooter,
+    autoPrintReceipt: input.autoPrintReceipt,
   });
   return { ok: true };
 }
