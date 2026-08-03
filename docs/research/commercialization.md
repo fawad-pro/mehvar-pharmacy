@@ -6,7 +6,7 @@ Roadmap Phase 1 is in progress.
 
 The roadmap is frozen in the sense that matters: phase boundaries and ordering
 are settled and are not re-litigated mid-phase. What a phase learns from real
-hardware still feeds the *next* phase's design — that is the point of sequencing
+hardware still feeds the _next_ phase's design — that is the point of sequencing
 it this way, not a loophole in the freeze.
 
 **Read this before anything packaging-, installer-, licensing-, update- or
@@ -33,9 +33,9 @@ yet." A customer has now asked. So the change is narrower than overturning
 Phase 3: **promote E from deferred to primary, and invert which deployment
 leads.**
 
-`CLAUDE.md`'s one rule applies without exception: *a discovered flaw is raised
+`CLAUDE.md`'s one rule applies without exception: _a discovered flaw is raised
 as a plan-change note, decided, then implemented — never silently patched
-around.* PCN-004 was filed and nothing was built until it was decided. Writing
+around._ PCN-004 was filed and nothing was built until it was decided. Writing
 an installer first would have been exactly the silent re-litigation the project
 forbids, on the largest question in the package.
 
@@ -48,13 +48,13 @@ a live gate.
 
 An approved decision is not reversed by preferring a different one.
 
-| Phase 3 objection | Answer |
-| --- | --- |
-| One-time revenue, perpetual support obligation | **Fully answered.** Billing stays a subscription. Only *deployment* changes. Option C's flaw was perpetual *licensing*, which nothing here proposes. |
-| Piracy rampant and unpoliceable | **Largely answered**, by declining the frame — Part 1 §6. |
-| Support liability on aging Windows machines | **Only partly answered.** The real cost, accepted rather than eliminated. Part 3 §1. |
-| Updates never reach the field | **Answered**, and it is the roadmap's largest engineering item. Without the updater this objection stands and the plan fails. |
-| Owner's remote phone visibility disappears | **Answered with a delay.** LAN at launch; cloud relay in roadmap Phase 3. A real, time-boxed regression against a charter promise. |
+| Phase 3 objection                              | Answer                                                                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One-time revenue, perpetual support obligation | **Fully answered.** Billing stays a subscription. Only _deployment_ changes. Option C's flaw was perpetual _licensing_, which nothing here proposes. |
+| Piracy rampant and unpoliceable                | **Largely answered**, by declining the frame — Part 1 §6.                                                                                            |
+| Support liability on aging Windows machines    | **Only partly answered.** The real cost, accepted rather than eliminated. Part 3 §1.                                                                 |
+| Updates never reach the field                  | **Answered**, and it is the roadmap's largest engineering item. Without the updater this objection stands and the plan fails.                        |
+| Owner's remote phone visibility disappears     | **Answered with a delay.** LAN at launch; cloud relay in roadmap Phase 3. A real, time-boxed regression against a charter promise.                   |
 
 Two fully answered, two answered at a cost, one accepted as a standing
 liability. That is the honest ledger.
@@ -64,7 +64,7 @@ liability. That is the honest ledger.
 - **The trust objection inverts.** Phase 3 §2 conceded cloud is "weakest on the
   'where is my data' objection." Local answers it completely, in a market where
   it is a real objection.
-- **P8 gets stronger.** *"The shop opens tomorrow"* is currently answered by the
+- **P8 gets stronger.** _"The shop opens tomorrow"_ is currently answered by the
   offline layer compensating for our downtime. Locally there is no our-downtime.
   The dependency disappears rather than being mitigated.
 - **I2 stops depending on Pakistani consumer internet.** Sale-path latency
@@ -124,7 +124,7 @@ The single most important design rule:
 is the only thing preventing a fork into a "local edition" and a "cloud
 edition." One image, two deployment targets, forever. Phase 3 §5.1's
 "multi-tenant from day one" survives intact in the form that mattered: the
-*isolation mechanism* ships everywhere; multi-*tenancy* becomes a deployment
+_isolation mechanism_ ships everywhere; multi-_tenancy_ becomes a deployment
 option rather than a deployment fact.
 
 ### The insight that makes local updates safe
@@ -138,7 +138,7 @@ local state, drains the outbox when the server returns. The resilience layer
 built for one problem solves a second one it was never designed for, at zero
 cost.
 
-Most products going on-premise must *invent* a story for "what happens during
+Most products going on-premise must _invent_ a story for "what happens during
 the upgrade." Mehvar shipped one on Day 5. This is the strongest single piece of
 evidence that local deployment is an evolution of this architecture rather than
 a departure from it.
@@ -168,17 +168,17 @@ trades normally and nobody notices.
 
 ## 3. Deployment: local-only vs cloud vs hybrid
 
-| | Local-only | Cloud | **Hybrid (recommended)** |
-| --- | --- | --- | --- |
-| Sells during internet outage | Yes | Yes (ADR-3 outbox) | Yes |
-| Sells during our outage | Yes | Degraded, then yes | Yes |
-| Owner remote view | No | Yes | Yes, from roadmap Phase 3 |
-| Offsite backup | No | Yes | Yes, from roadmap Phase 3 |
-| "Where is my data" objection | Strongest | Weakest | Strongest |
-| Update reach | Manual | Instant | Automatic |
-| Marginal hosting cost | Zero | Per tenant | Near zero |
-| Support surface | Highest | Lowest | High |
-| Sale-path latency | localhost | Internet | localhost |
+|                              | Local-only | Cloud              | **Hybrid (recommended)**  |
+| ---------------------------- | ---------- | ------------------ | ------------------------- |
+| Sells during internet outage | Yes        | Yes (ADR-3 outbox) | Yes                       |
+| Sells during our outage      | Yes        | Degraded, then yes | Yes                       |
+| Owner remote view            | No         | Yes                | Yes, from roadmap Phase 3 |
+| Offsite backup               | No         | Yes                | Yes, from roadmap Phase 3 |
+| "Where is my data" objection | Strongest  | Weakest            | Strongest                 |
+| Update reach                 | Manual     | Instant            | Automatic                 |
+| Marginal hosting cost        | Zero       | Per tenant         | Near zero                 |
+| Support surface              | Highest    | Lowest             | High                      |
+| Sale-path latency            | localhost  | Internet           | localhost                 |
 
 **Recommendation: hybrid, arrived at incrementally, local leading.**
 
@@ -191,7 +191,7 @@ Roadmap Phase 4   optionally cloud-hosted tenants, same image, customer's choice
 
 Internet is never required to sell, at any stage. Cloud is always additive.
 Roadmap Phase 4 closes the loop: the cloud deployment Phase 3 §3 originally
-decided becomes a *customer-selectable option* — which is what Option E always
+decided becomes a _customer-selectable option_ — which is what Option E always
 described, in both directions.
 
 ## 4. The complete lifecycle
@@ -199,7 +199,7 @@ described, in both directions.
 ### 4.1 Development — unchanged
 
 Next.js, Postgres, Drizzle, Docker, GitHub, exactly as today. Docker stays a
-*developer* tool and never reaches a customer. This is deliberate: the
+_developer_ tool and never reaches a customer. This is deliberate: the
 development loop is working, and changing it would be cost with no customer
 benefit.
 
@@ -237,7 +237,7 @@ creates the kiosk shortcut, and opens the browser at the first-run wizard.
 
 `db:grants` is called out because PCN-001 established that a `REVOKE` against
 the table owner is silently inert in Postgres. An installer that skips it leaves
-ADR-1's immutability guarantee decorative *and appearing enforced* — the exact
+ADR-1's immutability guarantee decorative _and appearing enforced_ — the exact
 failure PCN-001 was filed to prevent, reintroduced at a new layer. It belongs in
 the installer's automated verification, not its documentation.
 
@@ -245,7 +245,7 @@ the installer's automated verification, not its documentation.
 
 Shop name → receipt header/footer → owner PIN → printer test print → optional
 opening stock. This replaces the pairing-key login for local installs by
-*pre-provisioning* it, not by forking the auth: the installer calls
+_pre-provisioning_ it, not by forking the auth: the installer calls
 `src/db/provisioning.ts` (already the sanctioned path for the non-scopeable
 `tenants` table) and writes the device pairing locally.
 
@@ -324,8 +324,8 @@ re-point it at "customer" to serve billing; billing is cloud-side and can
 reference tenants without becoming one.
 
 **`installation_id` is new and distinct from tenant.** UUIDv7, minted at install,
-stored in local config *and* the database. Tenant is *business* identity
-("Al-Shifa Medical Store"); installation is *machine* identity ("the PC this
+stored in local config _and_ the database. Tenant is _business_ identity
+("Al-Shifa Medical Store"); installation is _machine_ identity ("the PC this
 runs on"). Licensing, updates, support and telemetry key off installation.
 Conflating the two makes "the customer replaced their PC" an unanswerable
 support ticket.
@@ -367,18 +367,18 @@ licensing system a P2 violation.
 
 ### When each capability becomes worth introducing
 
-| Capability | Introduce when | Why not earlier |
-| --- | --- | --- |
-| Universal installer (no per-customer build) | Phase 2 | Trivially cheap and prevents a build-per-customer habit that never gets undone |
-| Nothing at all — trust | Phases 1–2, pharmacies 1–3 | Founder-installed, personally known. Licensing code protects against nobody here |
-| Signed offline licence file (Ed25519, expiry, grace) | Phase 3, ~pharmacy 4 | The first install the founder does not personally attend |
-| Branch licensing | With the first multi-branch customer | A count in the licence file; meaningless until a chain exists |
-| Online activation | ~20+ installs | Manual issuing is fine below that and requires no service to operate |
-| Activation limits | With online activation | Needs a server to count |
-| Licence transfer (self-service) | With activation limits | Only becomes necessary once limits can block someone |
-| Hardware fingerprinting | **Defer as long as possible** | Generates a support ticket the day a customer replaces a disk — precisely when they are already unhappy. When forced, use a soft fingerprint with self-service transfer |
+| Capability                                           | Introduce when                       | Why not earlier                                                                                                                                                         |
+| ---------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Universal installer (no per-customer build)          | Phase 2                              | Trivially cheap and prevents a build-per-customer habit that never gets undone                                                                                          |
+| Nothing at all — trust                               | Phases 1–2, pharmacies 1–3           | Founder-installed, personally known. Licensing code protects against nobody here                                                                                        |
+| Signed offline licence file (Ed25519, expiry, grace) | Phase 3, ~pharmacy 4                 | The first install the founder does not personally attend                                                                                                                |
+| Branch licensing                                     | With the first multi-branch customer | A count in the licence file; meaningless until a chain exists                                                                                                           |
+| Online activation                                    | ~20+ installs                        | Manual issuing is fine below that and requires no service to operate                                                                                                    |
+| Activation limits                                    | With online activation               | Needs a server to count                                                                                                                                                 |
+| Licence transfer (self-service)                      | With activation limits               | Only becomes necessary once limits can block someone                                                                                                                    |
+| Hardware fingerprinting                              | **Defer as long as possible**        | Generates a support ticket the day a customer replaces a disk — precisely when they are already unhappy. When forced, use a soft fingerprint with self-service transfer |
 
-The pattern: each capability arrives the release *after* the problem it solves
+The pattern: each capability arrives the release _after_ the problem it solves
 becomes real, never before.
 
 ## 7. The Mehvar ecosystem
@@ -404,8 +404,8 @@ holding no business rules of its own, routing to the writer that already owns
 each record. Pharmacy emits dispensed/charged back the same way. Two products,
 two databases, one LAN, one idempotent contract.
 
-Day 5's rule carries over verbatim: *"a rule appearing in ingest means an
-offline sale has started meaning something different from an online one."*
+Day 5's rule carries over verbatim: _"a rule appearing in ingest means an
+offline sale has started meaning something different from an online one."_
 Substitute "hospital-originated" for "offline" and it is the same guarantee.
 
 **4. Independent deployability preserved.** Each installs and runs standalone.
@@ -459,8 +459,8 @@ Git — one `.exe`, then selling.
 That sentence is the whole phase. Anything not required by it is excluded, and
 anything required by it is in scope no matter how unglamorous.
 
-**Rationale.** *"This is exactly what needs to happen before the first pharmacy
-can start using Mehvar."* The runtime work (services, bundled Postgres) and the
+**Rationale.** _"This is exactly what needs to happen before the first pharmacy
+can start using Mehvar."_ The runtime work (services, bundled Postgres) and the
 packaging work (installer, backups, setup) were originally two phases; they are
 one, because neither delivers a trading pharmacy on its own and the boundary
 between them was an engineering convenience, not a customer milestone. A phase
@@ -662,6 +662,6 @@ PCN-004 is decided and the master plan is amended, so the gate is behind us.
    something a customer can use; if a change does not serve this phase's
    objective, it belongs to a later one.
 3. Treat the phase boundaries as frozen. What real hardware teaches feeds the
-   *next* phase's design — it is not licence to widen the current one.
+   _next_ phase's design — it is not licence to widen the current one.
 4. If something genuinely cannot be built as written, that is a new PCN, not an
    assumption. The same rule that produced PCN-004 still applies.

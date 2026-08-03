@@ -1,0 +1,81 @@
+# Windows packaging — **UNVERIFIED**
+
+> **Read this first.** Every file in this directory was written on Linux and has
+> **never been executed on Windows**. Nothing here has compiled, installed,
+> registered a service, or printed a receipt. Treat it as a careful first draft
+> to be debugged on real hardware, not as working software.
+>
+> The cross-platform half of roadmap Phase 1 — `output: 'standalone'`, the
+> installation identity, `mehvar init`, the ops scripts, the packaging
+> assembler — _is_ verified: it typechecks, lints, builds and has unit tests.
+> The line between the two is exactly here.
+
+Roadmap Phase 1's own risk section named this: _"real shop hardware is the
+unknown, and it is deliberately met here with the founder physically present."_
+This directory is where that gets discovered.
+
+## Build order
+
+Everything runs from the repository root, on **Windows**.
+
+```powershell
+# 1. Windows-native dependencies. The packager refuses without them, because a
+#    Linux argon2 binary fails at the first PIN hash — i.e. at the login screen.
+npm install --os=win32 --cpu=x64 --include=optional
+
+# 2. Assemble the application payload into dist\package
+npm run package:build
+
+# 3. Fetch the Node runtime and PostgreSQL binaries (large, cached, yearly)
+powershell -ExecutionPolicy Bypass -File packaging\windows\fetch-runtimes.ps1
+
+# 4. Compile the installer  (Inno Setup 6 must be installed)
+&"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows\mehvar.iss
+```
+
+Output: `dist\MehvarSetup-<version>.exe`.
+
+## What the installer does
+
+1. Copies the payload to `C:\Program Files\Mehvar`.
+2. Creates `C:\ProgramData\Mehvar` for the database, backups, logs and the
+   installation record.
+3. `initdb`, then registers **PostgreSQL** as an automatic service.
+4. Creates the two database roles — owner and non-owning app role — per
+   PCN-001, and writes `.env`.
+5. Runs `migrate`, then **`grants`**.
+6. Runs `init` with the shop details collected on the installer's own wizard
+   page, then shows the pairing key.
+7. Registers **Mehvar Node** as an automatic service with restart-on-failure.
+8. Creates the counter shortcut (dedicated Chrome profile, `--kiosk-printing`).
+9. Registers the nightly backup as a scheduled task.
+10. Opens a firewall rule so a second counter on the LAN can reach the Node.
+
+## Why `db:grants` is step 5 and not documentation
+
+PCN-001 established that a `REVOKE` against the role that owns the tables is
+**silently inert** in PostgreSQL. An installer that skips grants produces a shop
+where ADR-1's immutability guarantee is decorative _and appears enforced_ — the
+exact failure PCN-001 was filed to prevent, reintroduced at a new layer.
+
+`verify-install.ps1` asserts it afterwards by attempting an `UPDATE` on an event
+table and requiring it to fail. If that check ever passes, the install is bad
+regardless of how well everything else went.
+
+## Known unknowns
+
+These are the things most likely to break first, listed so the first Windows
+session knows where to look:
+
+- **Service registration for a Node process.** Windows has no native supervisor
+  for a plain executable. `install-services.ps1` uses `sc.exe` with a wrapper;
+  NSSM is the fallback if restart-on-failure misbehaves.
+- **PostgreSQL data-directory ACLs** on a locked-down profile. `initdb` refuses
+  to run as an administrator with a writable-by-others data directory.
+- **Antivirus and SmartScreen** against an unsigned installer that registers two
+  services and schedules a task. Open question 7 in the research note; expect
+  friction until the code-signing certificate exists.
+- **Chrome's path.** The shortcut assumes a standard install location and falls
+  back to Edge; a shop with neither needs a manual step.
+- **Static IP for LAN counters.** Name resolution on a shop LAN is unreliable,
+  so the second-counter shortcut is written against an IP, not a hostname.

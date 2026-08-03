@@ -27,7 +27,12 @@
     "db:seed": "tsx --conditions=react-server scripts/db/seed.ts",
     "db:studio": "drizzle-kit studio",
     "verify": "npm run typecheck && npm run lint && npm run test",
-    "hooks:install": "git config core.hooksPath .githooks"
+    "hooks:install": "git config core.hooksPath .githooks",
+    "init": "tsx --conditions=react-server scripts/db/init.ts",
+    "ops:backup": "tsx --conditions=react-server scripts/ops/backup.ts",
+    "ops:restore-drill": "tsx --conditions=react-server scripts/ops/restore-drill.ts",
+    "ops:support-bundle": "tsx --conditions=react-server scripts/ops/support-bundle.ts",
+    "package:build": "node scripts/package/build.mjs"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
@@ -50,6 +55,7 @@
     "@vitejs/plugin-react": "^6.0.4",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.28.1",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.2.12",
     "eslint-config-prettier": "^10.1.8",

@@ -1,0 +1,182 @@
+# Operations — installing and running Mehvar in a pharmacy
+
+Roadmap Phase 1 of `docs/research/commercialization.md`, made procedural. This
+is Phase 12 §6's counter setup guide, updated for local deployment (PCN-004).
+
+The milestone this document serves: **a non-technical pharmacy can install
+Mehvar and begin trading without developer tools.** If any step below requires
+the shop to open a terminal, that is a bug in the product, not a gap in the
+guide.
+
+> **Status: the Windows half is unverified.** Nothing in `packaging/windows/`
+> has ever run on Windows. See `packaging/windows/README.md`. The first install
+> is a debugging session with the founder present, and roadmap Phase 1's risk
+> section says so on purpose.
+
+---
+
+## 1. Before you go (founder, at home)
+
+|          |                                                                                                                                                                |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hardware | 4 GB RAM minimum, 64-bit Windows 10/11, SSD. A dedicated machine, not the shop's household PC.                                                                 |
+| Printer  | 80 mm thermal (58 mm supported). Install its driver and print a Windows test page **first** — a printer that does not work in Notepad will not work in Mehvar. |
+| Scanner  | USB, configured to send Enter after the code.                                                                                                                  |
+| UPS      | Strongly recommended. A power cut mid-write is the one hardware failure the append-only design cannot fully absorb.                                            |
+| Network  | Not required to sell. Required only if the owner wants a second counter.                                                                                       |
+
+Build the installer (on Windows):
+
+```powershell
+npm install --os=win32 --cpu=x64 --include=optional
+npm run package:build
+powershell -ExecutionPolicy Bypass -File packaging\windows\fetch-runtimes.ps1
+&"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=0.1.0 packaging\windows\mehvar.iss
+```
+
+Carry `dist\MehvarSetup.exe` on a USB stick. It needs no internet to install.
+
+## 2. Installing (at the shop, ~30 minutes)
+
+1. Run `MehvarSetup.exe` as administrator.
+2. Answer the two wizard pages: pharmacy name, address, phone, owner name; then
+   a 4-digit owner PIN. **The owner chooses the PIN, not you.**
+3. Wait. The installer creates the database, provisions both roles, migrates,
+   grants, provisions the pharmacy, registers both services, schedules the
+   nightly backup, and runs the post-install checks.
+4. The pairing key appears in Notepad at the end. **Keep this window open.**
+5. Double-click **Mehvar Counter** on the desktop. Enter the shop slug and the
+   pairing key once.
+6. Print a test receipt. If it prints without a dialog appearing, ADR-6's kiosk
+   printing is working.
+
+If the post-install checks fail, **do not hand the machine over.** Run
+`ops:support-bundle` from the Start Menu and diagnose before trading starts.
+
+## 3. Opening stock (W9) — the adoption gate
+
+Assisted, and the longest part of the visit. Phase 12 §6 puts it at step 6 for a
+reason: a pharmacy with no stock in the system cannot sell from it, and this is
+where an install either becomes a working shop or quietly stalls.
+
+Products → Opening stock. Batch, expiry and quantity per shelf line.
+
+## 4. Daily operation
+
+The shop's morning is: **turn the PC on.** Both services start automatically and
+the counter shortcut is in Startup.
+
+Nothing else is required — no terminal, no Docker, no npm, no commands.
+
+### If the counter looks stuck
+
+1. Is the Mehvar Node service running? (Services → Mehvar Node)
+2. Restart it. **Selling continues during the restart** — ADR-3's outbox holds
+   captured sales in the browser and drains them when the server returns.
+3. Still stuck: Start Menu → **Support bundle**, and send the file over
+   WhatsApp.
+
+### What "the counter keeps selling" actually means
+
+Sales, settlements, quick items and customers captured while the server is down
+are held in the browser and delivered afterwards, strictly in order. Receipts
+print from local state, not from a server response (Phase 7 rule 3). This is the
+same machinery that handles an internet outage; it is why a local restart is
+safe, and it is why updates need no maintenance window.
+
+## 5. Backups
+
+|           |                                                             |
+| --------- | ----------------------------------------------------------- |
+| When      | Nightly, 02:30, as a Windows scheduled task                 |
+| Where     | `C:\ProgramData\Mehvar\backups`                             |
+| Retention | 30 days                                                     |
+| Format    | `pg_dump` custom format, restorable into a scratch database |
+
+**Point `MEHVAR_BACKUP_DIR` at a USB drive or a second physical disk.** A backup
+on the same disk as the database survives a mistake; it does not survive the
+disk. Set it in `C:\ProgramData\Mehvar\.env` and restart the Mehvar Node service.
+
+> **Known gap, and it is deliberate.** Phase 12 §3 requires an offsite copy —
+> "one provider failure must not take the backups with the database." Roadmap
+> Phase 1 does not deliver one. Until roadmap Phase 3, **a fire or a theft takes
+> the records with the machine.** Say this to the customer plainly rather than
+> letting them assume otherwise; a USB drive kept off-site narrows the gap.
+
+### The restore drill — the only thing that makes a backup real
+
+```
+npm run ops:restore-drill
+```
+
+Restores the newest dump into a scratch database, runs the ADR-8 verifier,
+confirms Phase 5 §5 invariants, drops the scratch database. Never touches the
+live one.
+
+Phase 12 §3: **once before the first paying customer, then quarterly.** An
+untested backup is not a backup, and a drill you have not run is a claim, not a
+fact.
+
+## 6. Adding a second counter
+
+The second machine installs nothing.
+
+1. Give the server machine a **static IP** (name resolution on a shop LAN is
+   unreliable — a counter that cannot resolve the server cannot sell).
+2. On the second machine:
+   ```powershell
+   powershell -File counter-shortcut.ps1 -CounterHost 192.168.1.50 -Autostart
+   ```
+3. Add the device in Settings so it gets its own receipt prefix. `B-1`, `B-2`
+   cannot collide with `A-1` — `unique(tenant_id, receipt_prefix)` has enforced
+   that since Day 1 (PCN-001).
+
+## 7. Support
+
+WhatsApp-first (Phase 12 §7). Every contact starts the same way:
+
+**Start Menu → Support bundle**, then send the file.
+
+It contains machine details, the installation id, backup age, verifier status
+and recent logs. It contains **no sales, customer, price or stock data** — the
+owner can send it without thinking about what is in it.
+
+The most useful line in it is backup age. A shop whose backups stopped two
+months ago looks perfectly healthy until somebody asks.
+
+## 8. Incidents
+
+Phase 12 §8 unchanged. Severity 1 is: selling is blocked, or `db:verify`
+reports a mismatch.
+
+- **Selling blocked** — restart the Mehvar Node service. The counter has been
+  capturing offline throughout; say so, it is reassurance backed by
+  architecture.
+- **Verifier mismatch** — sev-1. A derived number disagrees with the records,
+  which is precisely the promise the product sells. Investigate before anything
+  else ships.
+- **Corrections are always compensating records**, never edits, even during an
+  incident (ADR-1 / T2).
+
+## 9. Uninstalling
+
+Uninstall from Add/Remove Programs. It stops and removes both services, the
+scheduled task, the firewall rule and the shortcuts.
+
+**It does not delete `C:\ProgramData\Mehvar`** — the database and every backup
+stay. Removing a pharmacy's records is a separate, deliberate, manual act.
+
+---
+
+## Command reference (founder, not customer)
+
+| Command                      | Purpose                                                    |
+| ---------------------------- | ---------------------------------------------------------- |
+| `npm run init`               | Provision a pharmacy. Idempotent; refuses if one exists.   |
+| `npm run db:migrate`         | Apply migrations. Forward-only, additive-safe.             |
+| `npm run db:grants`          | **Required after any migration adding a table** (PCN-001). |
+| `npm run db:verify`          | ADR-8 verifier. Non-zero exit on mismatch.                 |
+| `npm run ops:backup`         | Take a dump now.                                           |
+| `npm run ops:restore-drill`  | Prove the newest dump restores and verifies.               |
+| `npm run ops:support-bundle` | Collect diagnostics.                                       |
+| `npm run package:build`      | Assemble the installer payload.                            |

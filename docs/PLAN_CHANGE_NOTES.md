@@ -154,7 +154,7 @@ recommendation below, pending your decision**
 
 A settlement is a standalone `payments` row (`sale_id` null) — Phase 5 §3's own
 definition: "money received from a customer independent of a new sale." Phase
-10 §7 requires *that same row* to print a receipt with a footer showing "the
+10 §7 requires _that same row_ to print a receipt with a footer showing "the
 receipt number." There is nowhere to put one: `payments` has no such column, and
 borrowing a `sales` row is not an option — a settlement is not a sale, and the
 schema's own CHECK constraints (`cash + credit = total`) would make a fabricated
@@ -313,7 +313,7 @@ promoting E from deferred to primary, and inverting which deployment leads.
 Two things survive the change unchanged and are worth naming, because they are
 what makes it affordable:
 
-- **The commercial model.** Option C's fatal flaw was perpetual *licensing*.
+- **The commercial model.** Option C's fatal flaw was perpetual _licensing_.
   Nothing here proposes that; billing stays a subscription exactly as Phase 3 §3
   decided.
 - **The tenant chokepoint.** Phase 3 §5.1's intent is preserved by keeping
@@ -330,7 +330,7 @@ answered at all — the Windows support burden is accepted, not eliminated
 **A. Promote Option E; local-first with optional cloud.** Recommended. Local
 Node deployment leads; cloud services are additive and never on the sale path;
 cloud-hosted tenants remain available in the same image for customers who prefer
-them. Phase 3 §3's *commercial* decisions are untouched. Cost: an installer, an
+them. Phase 3 §3's _commercial_ decisions are untouched. Cost: an installer, an
 auto-updater, local backups, and a permanent Windows support surface. The owner's
 remote visibility (Phase 3 §5.5) is lost until roadmap Phase 3 restores it —
 a real, time-boxed regression against a charter promise.
@@ -402,7 +402,7 @@ without an architectural rewrite.
   installed per pharmacy, with optional cloud services and optional cloud
   hosting, one codebase." Pricing, collection, hardware and channel unchanged.
 - **Phase 3 §5.1** — reworded: the tenant chokepoint ships from day one in every
-  install; multi-*tenancy* becomes a deployment option rather than a deployment
+  install; multi-_tenancy_ becomes a deployment option rather than a deployment
   fact.
 - **Phase 3 §6** — Option E leaves Future Considerations.
 - **Phase 12 §1** — topology gains the local Node; Railway is retained for
