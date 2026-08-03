@@ -1,8 +1,13 @@
 # Research note — commercialization architecture & roadmap
 
-**Status: an implementation-ready roadmap, gated on one decision.** Part 2 is
-meant to be executed phase by phase. It cannot begin until **PCN-004** is
-decided, because the roadmap contradicts an approved phase (§0 below).
+**Status: frozen, and in implementation.** **PCN-004 was approved on 2026-08-03**,
+so the gate in §0 is cleared and Part 2 is being executed phase by phase.
+Roadmap Phase 1 is in progress.
+
+The roadmap is frozen in the sense that matters: phase boundaries and ordering
+are settled and are not re-litigated mid-phase. What a phase learns from real
+hardware still feeds the *next* phase's design — that is the point of sequencing
+it this way, not a loophole in the freeze.
 
 **Read this before anything packaging-, installer-, licensing-, update- or
 ecosystem-adjacent.** It preserves the reasoning, not just the conclusions, in
@@ -30,9 +35,14 @@ leads.**
 
 `CLAUDE.md`'s one rule applies without exception: *a discovered flaw is raised
 as a plan-change note, decided, then implemented — never silently patched
-around.* **PCN-004 is filed and nothing is built until it is decided.** Writing
-an installer first would be exactly the silent re-litigation the project
+around.* PCN-004 was filed and nothing was built until it was decided. Writing
+an installer first would have been exactly the silent re-litigation the project
 forbids, on the largest question in the package.
+
+**PCN-004 was approved on 2026-08-03.** The master-plan amendments it lists
+(Phase 3 §2/§3/§5.1/§6, Phase 12 §1/§2/§3) are applied in the source phases,
+following the C1–C5 precedent. This section is kept as the record of why, not as
+a live gate.
 
 ### Phase 3's objections, answered on the record
 
@@ -44,7 +54,7 @@ An approved decision is not reversed by preferring a different one.
 | Piracy rampant and unpoliceable | **Largely answered**, by declining the frame — Part 1 §6. |
 | Support liability on aging Windows machines | **Only partly answered.** The real cost, accepted rather than eliminated. Part 3 §1. |
 | Updates never reach the field | **Answered**, and it is the roadmap's largest engineering item. Without the updater this objection stands and the plan fails. |
-| Owner's remote phone visibility disappears | **Answered with a delay.** LAN at launch; cloud relay in Phase 4. A real, time-boxed regression against a charter promise. |
+| Owner's remote phone visibility disappears | **Answered with a delay.** LAN at launch; cloud relay in roadmap Phase 3. A real, time-boxed regression against a charter promise. |
 
 Two fully answered, two answered at a cost, one accepted as a standing
 liability. That is the honest ledger.
@@ -61,6 +71,39 @@ liability. That is the honest ledger.
   becomes localhost.
 - **Marginal hosting cost goes to zero**, which changes Phase 3 §4's revenue
   arithmetic at low tenant counts.
+
+---
+
+## §0.1 — The design principle this roadmap is built on
+
+> **The roadmap optimizes for the first paying pharmacy, and every decision in
+> it must survive to the hundredth without an architectural rewrite.** Where the
+> two pull apart, build the simple thing now and check that the harder thing is
+> still reachable from it — not the reverse. Nothing is built speculatively for
+> scale; nothing is built in a way that scale would have to undo.
+
+This is a description of decisions already taken, not an aspiration. Three
+places it binds, each a case where the cheap thing and the durable thing turned
+out to be the same thing:
+
+- **The tenant chokepoint stays in single-tenant installs** (Part 1 §1). Keeping
+  it costs nothing today; removing it would mean re-scoping every query in the
+  system the day a chain or a cloud tenant appears.
+- **UUIDv7 ids keep installations mergeable** (Part 1 §5). No work is being done
+  now to enable chain consolidation — but nothing is being done that would
+  prevent it either, and that is the whole discipline.
+- **Licensing is staged by when each capability's problem becomes real**
+  (Part 1 §6). Pharmacy #1 gets no licensing code at all; the design still has a
+  place for activation limits when install #40 needs them.
+
+The counter-example the principle exists to refuse: building fleet management,
+an organization hierarchy, or online activation now, for customers who do not
+exist. Every one of those is in the roadmap — in the phase where its problem
+first appears, and not before.
+
+Note on reading phase numbers in this document: **master-plan phases are written
+"Phase 3 §2"; this document's own roadmap phases are always written "roadmap
+Phase 2".** The two numbering systems are unrelated and both appear throughout.
 
 ---
 
@@ -129,8 +172,8 @@ trades normally and nobody notices.
 | --- | --- | --- | --- |
 | Sells during internet outage | Yes | Yes (ADR-3 outbox) | Yes |
 | Sells during our outage | Yes | Degraded, then yes | Yes |
-| Owner remote view | No | Yes | Yes, from roadmap Phase 4 |
-| Offsite backup | No | Yes | Yes, from roadmap Phase 4 |
+| Owner remote view | No | Yes | Yes, from roadmap Phase 3 |
+| Offsite backup | No | Yes | Yes, from roadmap Phase 3 |
 | "Where is my data" objection | Strongest | Weakest | Strongest |
 | Update reach | Manual | Instant | Automatic |
 | Marginal hosting cost | Zero | Per tenant | Near zero |
@@ -142,14 +185,14 @@ trades normally and nobody notices.
 ```
 Roadmap Phase 1   local only
 Roadmap Phase 2   local + cloud update & licence services
-Roadmap Phase 4   local + cloud backup and owner remote view
-Roadmap Phase 5   optionally cloud-hosted tenants, same image, customer's choice
+Roadmap Phase 3   local + cloud backup and owner remote view
+Roadmap Phase 4   optionally cloud-hosted tenants, same image, customer's choice
 ```
 
 Internet is never required to sell, at any stage. Cloud is always additive.
-Phase 5 closes the loop: the cloud deployment Phase 3 originally decided becomes
-a *customer-selectable option* — which is what Option E always described, in
-both directions.
+Roadmap Phase 4 closes the loop: the cloud deployment Phase 3 §3 originally
+decided becomes a *customer-selectable option* — which is what Option E always
+described, in both directions.
 
 ## 4. The complete lifecycle
 
@@ -237,8 +280,8 @@ shortcut should use a **static IP**, set during install.
 - **Rollback:** retain the previous installer plus the pre-update dump. Roll the
   application back, never the data — ADR-1 makes forward correction the only
   honest repair.
-- **Backups:** nightly `pg_dump` locally from Phase 1; encrypted offsite from
-  Phase 4.
+- **Backups:** nightly `pg_dump` locally from roadmap Phase 1; encrypted offsite
+  from roadmap Phase 3.
 - **Catalogue updates:** signed data packs, versioned, applied like migrations.
   This is where Phase 6's "catalogue as strategic asset" finally becomes
   distributable.
@@ -257,7 +300,7 @@ support call — the highest-leverage support investment in the whole plan.
 
 The fleet is the new operational surface. Phase 12 §4's business-health glance
 becomes cross-installation: versions in the field, backup success, verifier
-status, unsynced ages. Deferred to roadmap Phase 5 because with fewer than ~20
+status, unsynced ages. Deferred to roadmap Phase 4 because with fewer than ~20
 installations a spreadsheet genuinely is enough, and building fleet tooling
 before there is a fleet is the archetypal solo-founder mistake.
 
@@ -266,14 +309,14 @@ before there is a fleet is the archetypal solo-founder mistake.
 Extend; do not redesign. Most of it already exists in `src/db/schema.ts`.
 
 ```
-Mehvar Account (the paying customer)      NEW — cloud-side, roadmap Phase 4
-  └─ Organization (a chain)               NEW — only when the first chain appears
+Mehvar Account (the paying customer)      NEW — cloud-side, roadmap Phase 3
+  └─ Organization (a chain)               NEW — roadmap Phase 4, first chain only
        └─ Branch  = tenants               EXISTS  (slug, status, settings)
             ├─ Counter = devices          EXISTS  (receipt_prefix, pairing_key_hash)
             └─ User    = users            EXISTS  (role, pin_hash, password_hash)
 
-Installation                              NEW — roadmap Phase 3
-Licence                                   NEW — roadmap Phase 3
+Installation                              NEW — roadmap Phase 1 (file only)
+Licence                                   NEW — roadmap Phase 2
 ```
 
 **Tenant stays the branch.** Every query in the system is scoped by it. Do not
@@ -407,125 +450,118 @@ the failure mode the plan-change process exists to prevent.
 
 ---
 
-## Phase 1 — It runs as a service on one Windows machine · ~1 day
+## Phase 1 — First Paying Pharmacy · ~2–3 days
 
-**Objective.** Mehvar running from a boot, with no terminal open, on a Windows
-box, against a bundled Postgres. Not yet installable by anyone else.
+**Objective.** **A non-technical pharmacy can install Mehvar and begin trading
+without developer tools.** No Docker, no npm, no PowerShell, no migrations, no
+Git — one `.exe`, then selling.
 
-**Rationale.** This is the load-bearing technical unknown. Everything after it is
-packaging and polish; if Postgres-as-a-service or the standalone build fights
-back, it must surface now, not inside an installer script.
-
-**Steps.**
-1. `output: 'standalone'` in `next.config.ts`; verify the traced bundle boots
-   with no `node_modules` install.
-2. Pin the Node runtime alongside it.
-3. PostgreSQL from the official zip: `initdb`, data dir under `ProgramData`,
-   `pg_ctl register` as an automatic service.
-4. Provision both roles per PCN-001 — owner for migrations, non-owning app role
-   for `DATABASE_URL` — and run `db:migrate` then **`db:grants`**.
-5. Register the Node as a Windows service with restart-on-failure.
-6. Reboot the machine. Confirm both services come up unattended.
-7. `npm run db:verify` clean; one test sale; one printed receipt.
-
-**Success criteria.** Cold boot → sale → printed receipt, with no console
-window at any point. Immutability assertions pass against the app role (proving
-`db:grants` ran — per PCN-001 they silently skip without it).
-
-**Dependencies.** Phase 0.
-
-**Risks.** Windows service registration for a Node process is fiddly; budget for
-NSSM or a small wrapper. Postgres on a locked-down Windows profile may need
-explicit data-directory ACLs.
-
-**Why here.** It is the only genuinely unknown piece. Discovering it inside
-Phase 2's installer would make an installer bug and a runtime bug
-indistinguishable.
-
----
-
-## Phase 2 — The first pharmacy can use it · ~1–2 days
-
-**Objective.** A founder-installed pharmacy trading on a local install. Single
-counter, no licensing, no cloud.
+That sentence is the whole phase. Anything not required by it is excluded, and
+anything required by it is in scope no matter how unglamorous.
 
 **Rationale.** *"This is exactly what needs to happen before the first pharmacy
-can start using Mehvar."* Everything not required for that sentence is excluded.
+can start using Mehvar."* The runtime work (services, bundled Postgres) and the
+packaging work (installer, backups, setup) were originally two phases; they are
+one, because neither delivers a trading pharmacy on its own and the boundary
+between them was an engineering convenience, not a customer milestone. A phase
+should end at something a customer can use.
 
-**Steps.**
-1. Inno Setup script wrapping the Phase 1 artifacts into one `.exe`; silent
-   service registration; `ProgramData` layout.
-2. `mehvar init` provisioning command wrapping `src/db/provisioning.ts` —
-   tenant, owner, first device, `installation_id`.
-3. First-run wizard: shop name, receipt header/footer, owner PIN, printer test.
-4. Kiosk shortcut: dedicated Chrome profile, `--kiosk-printing` (ADR-6), static
+**Steps**, in dependency order:
+
+1. `output: 'standalone'` in `next.config.ts` — Next traces the real dependency
+   graph, so **no `npm install` ever runs on a customer machine.** The single
+   most important packaging property.
+2. Pin the Node runtime; PostgreSQL 17 from the official zip (`initdb`, data
+   directory under `ProgramData`, `pg_ctl register` as an automatic service).
+3. Provision both roles per PCN-001 — owner for migrations, non-owning app role
+   for `DATABASE_URL` — then `db:migrate` and **`db:grants`**.
+4. Register the Node as a Windows service, restart-on-failure, automatic start.
+5. `mehvar init` — the one provisioning door for a real shop: tenant, owner,
+   first device, installation id. Wraps `src/db/provisioning.ts`.
+6. Kiosk shortcut: dedicated Chrome profile, `--kiosk-printing` (ADR-6), static
    IP, autostart.
-5. **Nightly `pg_dump` to a second local location, plus a scripted restore, plus
-   one rehearsed restore drill.**
-6. Support-bundle export (logs, version, `installation_id`, verifier output).
+7. **Nightly `pg_dump`, a scripted restore, and one rehearsed restore drill.**
+8. Support-bundle export (logs, version, installation id, verifier output).
+9. Inno Setup script wrapping all of it into one `.exe`.
 
-**Success criteria.** The founder installs on shop hardware in under 30 minutes
-without a terminal. One pharmacy trades for a week. A restore drill passes into
-a scratch database with Phase 5 §5 invariants intact. `db:verify` clean.
+**No first-run wizard.** The Settings screen already edits receipt header and
+footer (`updateTenantSettings`); `mehvar init` covers the rest. A guided wizard
+is worth building at roadmap Phase 2, when installs outrun the founder's
+presence — building it now would be new UI added before a single real install
+has been survived, which §0.1 exists to refuse.
 
-**Dependencies.** Phase 1.
+**Success criteria.** Cold boot → services up unattended, no console window →
+sale → printed receipt. The founder installs on shop hardware in under 30
+minutes without opening a terminal. One pharmacy trades for a week. A restore
+drill passes into a scratch database with Phase 5 §5 invariants intact.
+`db:verify` clean. Immutability assertions pass against the app role — which is
+what proves `db:grants` actually ran, since per PCN-001 they silently skip
+without it.
 
-**Risks.** Real shop hardware is the unknown — old Windows, no admin rights,
-antivirus blocking service registration, printers that only work through their
-own driver. This is Phase 3's "aging Windows machines" objection meeting
-reality, and it is deliberately met at pharmacy #1, with the founder present.
+**Dependencies.** Phase 0 (PCN-004 decided). Nothing else.
+
+**Risks.** Real shop hardware is the unknown, and it is deliberately met here
+with the founder physically present: old Windows, no admin rights, antivirus
+blocking service registration, printers that only work through their own driver.
+This is Phase 3 §2's "aging Windows machines" objection meeting reality for the
+first time. Secondary: Windows service registration for a Node process is
+fiddly — budget for NSSM or a small wrapper — and Postgres on a locked-down
+profile may need explicit data-directory ACLs.
 
 **Deliberately excluded.** Licensing, auto-update, cloud, multi-counter,
-self-service install. Each is cheaper after real hardware has been survived
-once, and none is needed for a founder-installed first customer.
+self-service install, first-run wizard. Each is cheaper to build after real
+hardware has been survived once, and none is needed for a founder-installed
+first customer.
 
 **Why here rather than later.** Backups are in this phase, not a later one,
 because going local moves backup risk from Railway's platform to a shop with one
 disk. Phase 12 §3 already ruled that "an untested backup is not a backup" — and
 the first pharmacy's data is exactly as irreplaceable as the hundredth's.
 
-**Why here rather than earlier.** The wizard and the installer are only worth
-building against a runtime already proven to boot unattended.
+**Why here rather than earlier.** Nothing precedes it but the decision. It is
+the first phase, and its own internal ordering (runtime proven before packaging
+wraps it) is what the merged step list preserves.
 
 ---
 
-## Phase 3 — Pharmacies 2–10 without you on site · ~3–5 days
+## Phase 2 — Pharmacies 2–10 without you on site · ~3–5 days
 
 **Objective.** A pharmacy the founder has never visited runs current software
 under a valid licence.
 
 **Rationale.** The moment installs outrun the founder's physical presence, two
 things that were optional become mandatory: updates that arrive by themselves,
-and a licence that expresses the commercial relationship.
+and a licence that expresses the commercial relationship. Both are also the
+first things §0.1 permits to be built — their problem is now real.
 
 **Steps.** Auto-updater (signed manifest on GitHub Releases; **wait for empty
 outbox**; back up before migrating; retain previous installer for rollback);
 offline-verifiable Ed25519 licence file (expiry, generous grace, banner only,
-export always available per Phase 3 §5.3); LAN multi-counter; code-signed
-installer.
+export always available per Phase 3 §5.3); guided first-run wizard; LAN
+multi-counter; code-signed installer.
 
 **Success criteria.** A remote install updates itself across a release without
 contact. A rollback is rehearsed successfully. An expired licence shows a banner
 and **does not stop a sale**.
 
-**Dependencies.** Phase 2. **Code-signing certificate procured** — start this
-during Phase 1; the lead time is the schedule risk, not the code.
+**Dependencies.** Roadmap Phase 1. **Code-signing certificate procured** — start
+this during roadmap Phase 1; the lead time is the schedule risk, not the code.
 
 **Risks.** The updater is the highest-consequence component in the plan: it can
 break every installation simultaneously. It needs the same posture as
 `commitSale` — staged rollout, and a rehearsed rollback before first use.
 
-**Why here.** Phase 3's "updates never reach the field" objection stands until
-this ships. But building it before Phase 2 would mean shipping updates to
-nobody.
+**Why here.** Phase 3 §2's "updates never reach the field" objection stands
+until this ships. But building it before roadmap Phase 1 would mean shipping
+updates to nobody, against hardware assumptions not yet tested.
 
 ---
 
-## Phase 4 — Cloud services · ~5–7 days
+## Phase 3 — Cloud services · ~5–7 days
 
 **Objective.** Restore what local deployment gave up, as additive services.
 
-**Rationale.** Two Phase 3 charter promises are in deficit after Phase 2:
+**Rationale.** Two charter promises are in deficit once roadmap Phase 1 ships:
 offsite backup (Phase 12 §3's "one provider failure must not take the backups
 with the database") and the owner's remote phone visibility (Phase 3 §5.5). This
 phase closes both.
@@ -536,7 +572,8 @@ push; signed catalogue data packs; online activation.
 **Success criteria.** A shop losing its PC entirely is restored from offsite
 backup. An owner sees the three numbers from outside the shop.
 
-**Dependencies.** Phase 3 (licence identity and the manifest infrastructure).
+**Dependencies.** Roadmap Phase 2 (licence identity and the manifest
+infrastructure).
 
 **Risks.** Scope creep into "cloud as a dependency." The rule holds: cloud is
 never on the sale path.
@@ -546,7 +583,7 @@ earlier phase is.
 
 ---
 
-## Phase 5 — Scale and ecosystem · ongoing
+## Phase 4 — Scale and ecosystem · ongoing
 
 **Objective.** Support hundreds of installations; make the ecosystem real.
 
@@ -558,8 +595,8 @@ contract; optionally cloud-hosted tenants on the same image.
 backup, or reporting a verifier mismatch" in one screen. A hospital's pharmacy
 runs both products as one experience.
 
-**Dependencies.** Phase 4; a real chain customer; Mehvar Hospital reaching
-equivalent maturity.
+**Dependencies.** Roadmap Phase 3; a real chain customer; Mehvar Hospital
+reaching equivalent maturity.
 
 **Risks.** Building fleet tooling before a fleet exists. Below ~20 installations
 a spreadsheet genuinely is enough.
@@ -586,18 +623,19 @@ commercial and contractual answer is unwritten.
 
 **3. Pricing under a local model.** Phase 3's Rs 2,000/month assumed cloud
 economics and cloud value framing. Local removes a hosting cost, adds a support
-cost, and removes the "your data survives your PC dying" pitch until Phase 4.
-The figures were always an opening position — Phase 3 §3 said so — but for a
+cost, and removes the "your data survives your PC dying" pitch until roadmap
+Phase 3. The figures were always an opening position — Phase 3 §3 said so — but for a
 different product shape.
 
 **4. Whether the owner remote view justifies cloud complexity at all**, or
 whether LAN access from the owner's phone while in the shop is enough for V1.
-This determines whether Phase 4 is essential or optional.
+This determines whether roadmap Phase 3 is essential or optional.
 
 **5. Code-signing procurement** for a Pakistani sole proprietor — cost, lead
 time, and whether an EV certificate is needed to clear SmartScreen. Unsigned
 installers produce a warning a non-technical owner reads as "this software is
-dangerous." A Phase 3 blocker with a long lead time.
+dangerous." A roadmap Phase 2 blocker with a long lead time, which is why it
+is named as a dependency there and should be started during roadmap Phase 1.
 
 **6. Update timing with no reliable low-traffic window.** Phase 12 §2.1's
 deep-night rule assumes a fleet with a shared quiet hour. §1's outbox property
@@ -616,9 +654,14 @@ genuinely open.
 
 ## What a future session should do with this note
 
-1. Read PCN-004. If undecided, **stop** — that is the gate.
-2. If decided in favour, amend the master plan phases first, per the C1–C5
-   precedent.
-3. Only then start Phase 1.
-4. If decided against, this note stays as the record of why, and Option E
-   returns to Future Considerations with the analysis attached.
+PCN-004 is decided and the master plan is amended, so the gate is behind us.
+
+1. **Read §0.1 first.** It is the test every decision in a phase has to pass,
+   and the reason things are excluded from phases they could technically fit in.
+2. Find the current roadmap phase and work only inside it. A phase ends at
+   something a customer can use; if a change does not serve this phase's
+   objective, it belongs to a later one.
+3. Treat the phase boundaries as frozen. What real hardware teaches feeds the
+   *next* phase's design — it is not licence to widen the current one.
+4. If something genuinely cannot be built as written, that is a new PCN, not an
+   assumption. The same rule that produced PCN-004 still applies.

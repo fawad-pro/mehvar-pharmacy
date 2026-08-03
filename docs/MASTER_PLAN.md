@@ -300,13 +300,19 @@ How the product is deployed, how it is priced, how money is collected, and how h
 
 **D. On-premise, annual support fee (the MARS model).** MARS proves the *billing* model works, but MARS carries an installed base and support infrastructure built over years. For us it inherits every liability of C except revenue durability. The correct lesson from MARS is its fee framing, not its deployment. Rejected as deployment; adopted as pricing psychology.
 
-**E. Hybrid: cloud product with an optional local install.** Deferred, not rejected. One codebase can support it later (containerized local deployment) if a segment demands it — likely chains with compliance concerns, not V1 independents. Offering it in V1 doubles operational surface for a customer who hasn't asked yet. Goes to Future Considerations.
+**E. Hybrid: cloud product with an optional local install.** **Adopted — see the amendment note below.** Originally deferred, not rejected: one codebase can support it later (containerized local deployment) if a segment demands it. Offering it in V1 doubles operational surface for a customer who hasn't asked yet.
+
+> **Amended 2026-08-03 by PCN-004 (accepted).** A customer asked. Option E is promoted from deferred to primary and the deployment decision in §3 is inverted: local-first, with cloud services additive and cloud hosting optional. Options C and D keep their rejections — the flaw in C was perpetual *licensing*, and the subscription model in §3 is unchanged. Of C's five objections, PCN-004 answers "one-time revenue", "updates never reach the field" and (with a delay) "owner's remote visibility"; it answers "piracy" by declining the frame; and it **accepts "support liability on aging Windows machines" as a standing liability rather than claiming to solve it.** Full analysis: `docs/research/commercialization.md`.
 
 **F. Freemium.** Rejected for V1. Moneypex markets "free" aggressively; competing there races to the bottom with a funded competitor. Our channel (personal network, demo-led) doesn't need a free tier to generate leads. A time-limited trial delivers the same risk reversal without training the market that the product is free.
 
 ## 3. Decision
 
-**Deployment: cloud, single multi-tenant service, browser-based, one codebase.** This is the only deployment a solo founder can operate at near-zero marginal support cost, and it is the only one that delivers the owner's-phone visibility and the survives-a-dead-PC data guarantee. The cloud trust objection is met head-on in sales posture: the pitch leads with what cloud gives the *owner* (check your shop from anywhere; your records outlive any machine; disputes settled by showing the screen) and the product backs it with owner-controlled data export from day one — the data is theirs, demonstrably.
+**Deployment (amended 2026-08-03, PCN-004): local-first — a single-tenant Node installed per pharmacy, with optional cloud services and optional cloud hosting, one codebase.** Internet is never required to sell. Cloud is always additive and never on the path of a sale.
+
+The trust argument inverts with the deployment: the pitch now leads with "your data never leaves your shop", and owner-controlled export from day one still backs it — the data is theirs, demonstrably. The owner's-phone visibility and the survives-a-dead-PC guarantee are **restored by cloud services in roadmap Phase 3**, and are in deficit until then; that regression is accepted and time-boxed, not waved away.
+
+_Superseded text (retained for the record):_ "Deployment: cloud, single multi-tenant service, browser-based, one codebase. This is the only deployment a solo founder can operate at near-zero marginal support cost, and it is the only one that delivers the owner's-phone visibility and the survives-a-dead-PC data guarantee."
 
 **Pricing: one plan, two cadences, annual-led — set as an initial V1 target, not a permanent decision.**
 - Target: **Rs 2,000/month**, or **Rs 20,000/year** (two months free — the closer in every demo)
@@ -329,7 +335,7 @@ At Rs 20,000/year: 10 pharmacies ≈ Rs 200k/yr, 25 ≈ Rs 500k/yr, 50 ≈ Rs 1M
 
 ## 5. Requirements this decision exports to later phases
 
-1. Multi-tenant service from day one (architecture phase) — single-tenant-now would contradict this document.
+1. **The tenant chokepoint ships from day one in every install** (architecture phase). Amended 2026-08-03 by PCN-004: the *isolation mechanism* is universal; multi-*tenancy* is a deployment option rather than a deployment fact. `src/db/scoped.ts` costs nothing at runtime in a single-tenant install and is what keeps one codebase serving both homes — a single-tenant build that dropped it would contradict this document.
 2. Owner data export as a V1 feature (workflows, IA phases).
 3. The service must support restricting a tenant's access on non-payment without ever compromising that tenant's ability to export their data (architecture phase); the enforcement policy itself is operational and post-launch.
 4. Trial-to-paid needs no data migration — trial data becomes production data (architecture phase).
@@ -338,7 +344,7 @@ At Rs 20,000/year: 10 pharmacies ≈ Rs 200k/yr, 25 ≈ Rs 500k/yr, 50 ≈ Rs 1M
 
 ## 6. Future Considerations
 
-- Local/containerized deployment for chains or compliance-driven customers (Option E)
+- ~~Local/containerized deployment for chains or compliance-driven customers (Option E)~~ — **adopted 2026-08-03 by PCN-004**; no longer a future consideration. See §2 Option E and §3.
 - FBR digital invoicing as a paid add-on when customers cross Tier-1 thresholds
 - Multi-branch tier; multi-terminal pricing
 - Hardware bundle partnership if channel volume justifies it
@@ -1059,7 +1065,11 @@ This document answers P8's test directly: *describe the worst thing that can hap
 
 ## 1. Topology & environments
 
-**Production:** Railway — one Next.js service, one PostgreSQL instance, one region. Custom domain under the parent brand (Phase 4 §6). TLS terminated at the platform; HTTPS only, HSTS on.
+**Production (amended 2026-08-03, PCN-004): the Mehvar Node — one Windows machine per pharmacy**, bundling the Next.js standalone build, a pinned Node runtime, PostgreSQL as a Windows service, the updater and the backup job. Both services start automatically and restart on failure. Counters are Chrome in kiosk mode against the Node: `localhost` on the server machine, a LAN address elsewhere.
+
+**Railway is retained** for staging, the sales demo environment, and the additive cloud services introduced in roadmap Phase 3 (licence issuing, update manifests, offsite backup, owner remote view). Custom domain under the parent brand (Phase 4 §6). TLS terminated at the platform for anything cloud-hosted; a local Node serves the shop LAN.
+
+_Superseded text (retained for the record):_ "Production: Railway — one Next.js service, one PostgreSQL instance, one region."
 
 **Environments:** `local` (developer machine), `staging` (Railway, own database, seeded demo pharmacy — doubles as the sales demo environment per Phase 11 §5), `production`. Three, no more; each additional environment is maintenance a solo founder pays for weekly.
 
@@ -1067,7 +1077,7 @@ This document answers P8's test directly: *describe the worst thing that can hap
 
 ## 2. Release procedure (P8 made operational)
 
-1. **Release window:** deploys happen in the tenant base's lowest-traffic window (currently deep night, after midnight PKT — many pharmacies trade past 11pm) — never during rush hours. Revisit the window if 24-hour pharmacies onboard; ADR-3's offline capture means even a mistimed deploy cannot stop selling, but the rule stands anyway. This is a rule, not a preference.
+1. **Release window (amended 2026-08-03, PCN-004): per installation, and gated on an empty outbox.** The updater must not restart the Node while that counter holds unsynced records; when the outbox is empty, ADR-3's offline capture means the browser keeps selling from IndexedDB across the restart and drains afterwards. That property — not a clock — is what makes a local update safe, and it is an acceptance criterion for the updater, not an implementation detail. The deep-night preference survives as a default for fleet-wide rollouts; it is no longer load-bearing, which is what resolves it for a shop with no quiet hour.
 2. **Forward-only migrations, committed with their feature** (Phase 11 §4). Every migration must be additive-safe: new columns nullable or defaulted, no destructive column drops in the same release that stops using them (drop in a later release, once verified). Deploys therefore never require a maintenance window.
 3. **Pre-deploy gate:** typecheck + full test suite green, `db:reset && db:migrate && db:seed` clean from zero, W1 E2E passing (Phase 11 §3.5).
 4. **Post-deploy verification:** run the ADR-8 rebuild verifier against production immediately after migration; confirm the sale path with one test transaction on the demo tenant; confirm receipt renders.
@@ -1080,8 +1090,9 @@ This document answers P8's test directly: *describe the worst thing that can hap
 
 The pharmacy's entire business lives in one database; backup is a trust feature (T3), not an IT chore.
 
-- **Platform backups:** Railway automated daily snapshots, retained per plan.
-- **Independent nightly dump:** `pg_dump` to separate object storage outside the hosting provider, 30-day retention. One provider failure must not take the backups with the database — this is the single most important line in this document.
+- **Local nightly dump (amended 2026-08-03, PCN-004):** `pg_dump` on the Node to a second local location, timestamped, with retention. Ships in roadmap Phase 1 — going local moves backup risk from the platform to a shop with one disk, so this is not deferrable.
+- **Encrypted offsite copy:** to object storage outside the shop, 30-day retention. One failure must not take the backups with the database — still the single most important line in this document, and **explicitly in deficit until roadmap Phase 3 delivers it.** Local-only backup is the accepted, time-boxed cost of shipping to the first pharmacy sooner.
+- **Platform backups:** Railway automated daily snapshots for anything cloud-hosted (staging, demo, and any cloud-hosted tenant).
 - **Targets:** RPO ≤ 24 hours for catastrophic loss (realistically minutes, since counter clients retain unsynced local records and the loss window is server-side only); RTO ≤ 4 hours to a restored, verified service.
 - **Restore drill:** performed once before first paying customer and quarterly thereafter — restore latest dump into a scratch database, run the ADR-8 verifier, confirm invariants (Phase 5 §5) hold. An untested backup is not a backup.
 - **Tenant self-service export** (Phase 3 §5.2, Phase 9 §8) is always available, in every payment state. It is simultaneously the trust argument, the retention ethic, and a customer-side backup we don't have to operate.
