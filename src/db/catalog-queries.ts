@@ -154,6 +154,8 @@ export interface ProductListItem {
   needsCompletion: boolean;
   isActive: boolean;
   barcodeCount: number;
+  /** Base units across every batch, or null when the product has never been stocked. */
+  stockBase: number | null;
 }
 
 export interface ProductListQuery {
@@ -225,11 +227,12 @@ export async function listProducts(
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  // One extra query for the whole page's barcode counts, not one per row.
-  const counts = await barcodeCounts(
-    scope,
-    rows.map((row) => row.id),
-  );
+  // Two extra queries for the whole page, never one per row.
+  const ids = rows.map((row) => row.id);
+  const [counts, stock] = await Promise.all([
+    barcodeCounts(scope, ids),
+    stockForProducts(scope, ids),
+  ]);
 
   return {
     items: rows.map((row) => ({
@@ -247,12 +250,40 @@ export async function listProducts(
       needsCompletion: row.needsCompletion,
       isActive: row.isActive,
       barcodeCount: counts[row.id] ?? 0,
+      // Absent means never stocked, which is not the same as zero on hand —
+      // the difference is exactly what the counter needs to know before it
+      // treats a shortfall as news.
+      stockBase: stock[row.id] ?? null,
     })),
     total,
     page,
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
   };
+}
+
+/** On-hand base units for one page of products — one grouped aggregate, not N. */
+async function stockForProducts(
+  scope: TenantScope,
+  productIds: string[],
+): Promise<Record<string, number>> {
+  if (productIds.length === 0) {
+    return {};
+  }
+  const rows = await scope.db
+    .select({
+      productId: batches.productId,
+      total: sql<string>`sum(${batches.qtyRemainingBase})`,
+    })
+    .from(batches)
+    .where(scope.scopeOf(batches, inArray(batches.productId, productIds)))
+    .groupBy(batches.productId);
+
+  const stock: Record<string, number> = {};
+  for (const row of rows) {
+    stock[row.productId] = Number(row.total);
+  }
+  return stock;
 }
 
 async function barcodeCounts(

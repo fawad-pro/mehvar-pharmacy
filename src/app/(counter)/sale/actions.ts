@@ -24,6 +24,8 @@ export interface SaleContext {
   tenantHeaderLines: string[];
   tenantFooterLine: string;
   salesmanName: string;
+  /** Whether a committed sale prints without being asked (Settings). */
+  autoPrintReceipt: boolean;
 }
 
 /**
@@ -48,5 +50,7 @@ export async function saleContext(): Promise<SaleContext | null> {
     tenantHeaderLines: (settings?.receiptHeader ?? session.tenantName).split('\n'),
     tenantFooterLine: settings?.receiptFooter ?? '',
     salesmanName: session.userName,
+    // Absent means on: an existing tenant keeps the behaviour it had.
+    autoPrintReceipt: settings?.autoPrintReceipt ?? true,
   };
 }

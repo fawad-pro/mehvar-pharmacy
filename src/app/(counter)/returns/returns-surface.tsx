@@ -294,7 +294,8 @@ export function ReturnsSurface() {
                               ...current,
                               [line.saleLineId]: {
                                 ...current[line.saleLineId]!,
-                                restockBatchId: event.target.value === '' ? null : event.target.value,
+                                restockBatchId:
+                                  event.target.value === '' ? null : event.target.value,
                               },
                             }));
                           }}
@@ -369,8 +370,9 @@ export function ReturnsSurface() {
           ) : null}
 
           <div className="flex items-center justify-between">
+            {/* The idea is worth saying on this screen; the identifier is not. */}
             <p className="text-ink/50 text-xs">
-              T2 — a compensating record, never an edit to the original sale.
+              The original sale is never changed — this is recorded against it.
             </p>
             <div className="flex items-center gap-3">
               <span className="numeral text-green-900 text-lg font-semibold">

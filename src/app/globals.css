@@ -75,6 +75,28 @@
     font-variant-numeric: tabular-nums;
     text-align: right;
   }
+
+  /* Tailwind v4's preflight gives buttons `cursor: default`, so without this
+     every control in the product — Pay, Commit, Receive stock, Record
+     over/short — reads as inert text under the pointer.
+
+     Mehvar is keyboard-first, which is a statement about how fast the work
+     can be done, not a licence to leave the mouse guessing. A shopkeeper
+     being shown the product for the first time uses the mouse, and something
+     that does not answer the pointer is indistinguishable from something
+     broken. This is the whole affordance budget: no shadows, no outlines,
+     nothing that would add visual noise to a calm screen. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  summary,
+  label:has(> input[type='checkbox']),
+  label:has(> input[type='radio']) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
 }
 
 /* =============================================================================
@@ -117,4 +139,3 @@
     margin: 0;
   }
 }
-

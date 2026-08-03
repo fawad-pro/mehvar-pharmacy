@@ -29,9 +29,17 @@ export default async function CustomersPage({
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <header className="flex flex-wrap items-center gap-3">
+      <header className="flex flex-wrap items-baseline gap-3">
         <h1 className="text-green-900 text-2xl font-semibold">Customers</h1>
         <span className="text-ink/50 text-sm">{page.total.toLocaleString()} on the book</span>
+        {/* The owner's question on this screen is the same one Day & Reports
+            answers with "Total owed to you" — showing it in both places, from
+            the same derivation, is how they learn the two agree. */}
+        {page.outstandingPaisa > 0 ? (
+          <span className="text-amber numeral ml-auto text-sm font-medium">
+            {formatPaisa(paisa(page.outstandingPaisa), { withSymbol: true })} owed in total
+          </span>
+        ) : null}
       </header>
 
       <form className="flex flex-wrap items-center gap-2" action="/customers">
@@ -51,7 +59,7 @@ export default async function CustomersPage({
         <p className="text-ink/50 p-8 text-center text-sm">
           {params.q
             ? 'Nothing matched that search.'
-            : 'No customers yet. They are added inline the first time udhaar is extended (F8, W2).'}
+            : 'No customers yet. A customer is added the first time you put a sale on udhaar.'}
         </p>
       ) : (
         <div className="border-line overflow-x-auto rounded border">

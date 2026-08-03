@@ -98,7 +98,17 @@ test('the Products screen lists and edits the catalog', async ({ page }) => {
   await page.getByLabel('Search the catalog').fill('risek');
   await page.getByRole('button', { name: 'Search' }).click();
 
+  // Wait for the filtered page to actually be the current document before
+  // clicking anything on it. Risek is row 41 of the seed's 54 products and the
+  // page size is 50, so it is already on the *unfiltered* list — which means
+  // the click can land on the pre-search document and then be discarded by the
+  // search navigation still in flight, leaving the run on the list page with
+  // the detail heading never arriving. Whether that happens is a matter of
+  // timing, so it passes on one machine and fails on another.
+  await expect(page).toHaveURL(/\/products\?q=risek/);
+
   await page.getByRole('link', { name: /Risek/ }).click();
+  await expect(page).toHaveURL(/\/products\/[0-9a-f-]+$/);
   await expect(page.getByRole('heading', { name: /Risek/ })).toBeVisible();
 
   // Pack structure is shown in plain words before it can be saved wrong.

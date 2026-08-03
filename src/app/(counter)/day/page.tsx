@@ -4,6 +4,7 @@ import { currentSession, scopeFor } from '@/auth/session';
 import {
   adjustmentsInRange,
   cashMovementsExceptionInRange,
+  hasOpeningFloat,
   lateSyncedInRange,
   overridesAndDiscountsInRange,
   reportFigures,
@@ -54,17 +55,29 @@ export default async function DayPage({
   const range =
     view === 'overall' ? { start: new Date(0), end: new Date('2999-01-01') } : { start, end };
 
-  const [numbers, overrides, returns, quickItems, adjustments, cashMovements, lateSynced, figures] =
-    await Promise.all([
-      threeNumbers(scope, range.start, range.end),
-      overridesAndDiscountsInRange(scope, range.start, range.end),
-      returnsInRange(scope, range.start, range.end),
-      quickItemsInRange(scope, range.start, range.end),
-      adjustmentsInRange(scope, range.start, range.end),
-      cashMovementsExceptionInRange(scope, range.start, range.end),
-      lateSyncedInRange(scope, range.start, range.end),
-      reportFigures(scope, range.start, range.end),
-    ]);
+  const [
+    numbers,
+    overrides,
+    returns,
+    quickItems,
+    adjustments,
+    cashMovements,
+    lateSynced,
+    figures,
+    openingFloat,
+  ] = await Promise.all([
+    threeNumbers(scope, range.start, range.end),
+    overridesAndDiscountsInRange(scope, range.start, range.end),
+    returnsInRange(scope, range.start, range.end),
+    quickItemsInRange(scope, range.start, range.end),
+    adjustmentsInRange(scope, range.start, range.end),
+    cashMovementsExceptionInRange(scope, range.start, range.end),
+    lateSyncedInRange(scope, range.start, range.end),
+    reportFigures(scope, range.start, range.end),
+    // Always today's bounds, never the range: the prompt is about the drawer
+    // in front of the owner right now.
+    hasOpeningFloat(scope, start, end),
+  ]);
 
   return (
     <DaySurface
@@ -79,6 +92,7 @@ export default async function DayPage({
       adjustments={adjustments}
       cashMovements={cashMovements}
       lateSynced={lateSynced}
+      hasOpeningFloat={openingFloat}
     />
   );
 }

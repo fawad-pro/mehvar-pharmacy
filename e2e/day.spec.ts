@@ -50,12 +50,12 @@ test('W10: the three numbers, a cash movement, and the drawer count', async ({ p
   await page.keyboard.press('F5');
   await expect(page).toHaveURL(/\/day$/);
 
-  // "Sales" labels both the three-number card and the daily-report figure
-  // tile below it — scoped to the first (the three numbers, first on the
-  // page per W10's ordering).
-  await expect(page.getByText('Sales').first()).toBeVisible();
-  await expect(page.getByText('Expected cash in drawer')).toBeVisible();
-  await expect(page.getByText('Running udhaar total')).toBeVisible();
+  // Each label carries its own time scope, because the three numbers do not
+  // share one: sales and cash are the selected day's, the udhaar total is a
+  // position and is always all-time.
+  await expect(page.getByText('Sales today')).toBeVisible();
+  await expect(page.getByText('Cash expected in drawer')).toBeVisible();
+  await expect(page.getByText('Total owed to you')).toBeVisible();
 
   // Record a cash movement — an owner withdrawal.
   await page.getByLabel('Reason').selectOption('owner_withdrawal');
@@ -69,6 +69,32 @@ test('W10: the three numbers, a cash movement, and the drawer count', async ({ p
   await expect(page.getByText(/Over by|Short by/)).toBeVisible();
   await page.getByRole('button', { name: 'Record over/short' }).click();
   await expect(page.getByText(/Recorded/)).toBeVisible();
+});
+
+/**
+ * The Overall tab sums every rupee since installation, so an "expected cash in
+ * drawer" there is not a figure anyone can count against. Leaving the counting
+ * form on that tab let an owner record an over/short of the entire lifetime
+ * takings — an append-only row that cannot be edited and would corrupt every
+ * later cash figure. The guard is that neither the figure nor the form exists
+ * outside the day they belong to.
+ */
+test('the Overall range offers no drawer count to record against a lifetime figure', async ({
+  page,
+}) => {
+  await openCounter(page);
+  await page.goto('/day?view=overall');
+
+  await expect(page.getByText('Sales, all time')).toBeVisible();
+  await expect(page.getByText('Total owed to you')).toBeVisible();
+
+  await expect(page.getByText('Cash expected in drawer')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Record over/short' })).toBeHidden();
+  await expect(page.getByText('Record a cash movement')).toBeHidden();
+
+  // Still reachable where it does mean something.
+  await page.goto('/day?view=daily');
+  await expect(page.getByRole('button', { name: 'Record over/short' })).toBeVisible();
 });
 
 test('a salesman cannot reach Day & Reports or Settings', async ({ page }) => {

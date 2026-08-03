@@ -53,12 +53,22 @@ export default async function StockPage({
     <section className="mx-auto flex max-w-4xl flex-col gap-6 p-4">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-green-900 text-2xl font-semibold">Stock</h1>
-        <Link
-          href="/stock/adjust"
-          className="border-line hover:bg-green-100 min-h-touch ml-auto flex items-center rounded border px-4 text-sm"
-        >
-          Adjust stock — F9
-        </Link>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {/* W9's guided flow was reachable only by typing `?opening=1`. It is
+              the first thing a new pharmacy does and it had no door. */}
+          <Link
+            href="/stock/adjust?opening=1"
+            className="border-line hover:bg-green-100 min-h-touch flex items-center rounded border px-4 text-sm"
+          >
+            Enter opening stock
+          </Link>
+          <Link
+            href="/stock/adjust"
+            className="border-line hover:bg-green-100 min-h-touch flex items-center rounded border px-4 text-sm"
+          >
+            Adjust stock — F9
+          </Link>
+        </div>
       </header>
 
       {/* D2 first: a shortfall is the only thing here that means the numbers
@@ -71,18 +81,35 @@ export default async function StockPage({
         >
           <h2 className="text-amber mb-2 font-medium">Sold more than the system had</h2>
           <p className="text-ink/70 mb-3 text-sm">
-            These went out before the stock was entered. Receiving the purchase (F2) or correcting
-            the count clears them.
+            These went out before the stock was entered. Receiving the delivery or correcting the
+            count clears them.
           </p>
+          {/* The two fixes named above, as the two things you can press. The
+              sentence described a workflow that lived on two other screens;
+              this makes it one step from the row that reports the problem. */}
           <ul className="flex flex-col gap-1 text-sm">
             {incidents.map((incident) => (
-              <li key={incident.productId} className="flex items-baseline justify-between">
+              <li key={incident.productId} className="flex flex-wrap items-baseline gap-x-3">
                 <span className="font-medium">{incident.productName}</span>
                 <span className="numeral text-amber">
                   {incident.pendingBase} {incident.baseUnitName}
-                  <span className="text-ink/50 ml-2 text-xs">
-                    since {incident.oldestAt.toLocaleDateString('en-PK')}
-                  </span>
+                </span>
+                <span className="text-ink/50 text-xs">
+                  since {incident.oldestAt.toLocaleDateString('en-PK')}
+                </span>
+                <span className="ml-auto flex gap-3">
+                  <Link
+                    href="/purchases"
+                    className="text-green-600 text-xs underline-offset-2 hover:underline"
+                  >
+                    Receive delivery
+                  </Link>
+                  <Link
+                    href="/stock/adjust"
+                    className="text-green-600 text-xs underline-offset-2 hover:underline"
+                  >
+                    Correct the count
+                  </Link>
                 </span>
               </li>
             ))}
@@ -132,7 +159,9 @@ export default async function StockPage({
                     <tr key={row.batchId} className="border-line border-t">
                       <td className="px-3 py-2 font-medium">{row.productName}</td>
                       <td className="text-ink/60 px-3 py-2">{row.batchNumber ?? '—'}</td>
-                      <td className={`px-3 py-2 ${expired ? 'text-red font-medium' : 'text-amber'}`}>
+                      <td
+                        className={`px-3 py-2 ${expired ? 'text-red font-medium' : 'text-amber'}`}
+                      >
                         {row.expiryDate}
                         {expired ? ' — expired' : ''}
                       </td>

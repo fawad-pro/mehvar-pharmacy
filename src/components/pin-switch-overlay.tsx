@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { switchUser, type AuthResult } from '@/auth/actions';
 import { PIN_LENGTH } from '@/auth/pin-policy';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 
 export interface SwitchableUser {
   id: string;
@@ -83,12 +84,7 @@ export function PinSwitchOverlay({
   }
 
   return (
-    <div
-      className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Switch user"
-    >
+    <OverlayBackdrop label="Switch user" onDismiss={onClose}>
       <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
         <h2 className="text-green-900 mb-4 text-lg font-semibold">Who is at the counter?</h2>
 
@@ -158,6 +154,6 @@ export function PinSwitchOverlay({
           </button>
         </div>
       </div>
-    </div>
+    </OverlayBackdrop>
   );
 }

@@ -45,7 +45,7 @@ import { commitAdjustment } from '@/domain/inventory/commit-adjustment';
 import { commitReturn } from '@/domain/sales/commit-return';
 import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
 import { CASH_REASONS, directionFor } from '@/domain/cash/cash-command';
-import { customerBalance } from '@/db/udhaar-queries';
+import { customerBalance, customerLedger } from '@/db/udhaar-queries';
 import { returnableLinesForSale } from '@/db/returns-queries';
 import {
   batches,
@@ -114,6 +114,8 @@ const observed = {
   schemeLines: 0,
   batchesMaterialized: 0,
   returnsCommitted: 0,
+  /** Returns that actually gave credit back — the ledger's third term. */
+  creditReducingReturns: 0,
   cashMovementsCommitted: 0,
 };
 
@@ -129,7 +131,7 @@ async function applyRandomEvent(world: World): Promise<void> {
   const { random, tenant } = world;
   const roll = random();
 
-  if (roll < 0.10) {
+  if (roll < 0.1) {
     // A real purchase (W7), through the real writer — often a multi-line
     // invoice, often with scheme bonus units, and always with the chance of
     // resolving whatever the pending layer is currently holding.
@@ -207,10 +209,12 @@ async function applyRandomEvent(world: World): Promise<void> {
       productId: batch.productId,
       batchId: batch.id,
       qtyBaseDelta: -between(random, 1, Math.min(batch.qtyRemainingBase, 20)),
-      reason: pick(
-        random,
-        ['damage', 'expiry_writeoff', 'distributor_return', 'count_correction'] as const,
-      ),
+      reason: pick(random, [
+        'damage',
+        'expiry_writeoff',
+        'distributor_return',
+        'count_correction',
+      ] as const),
       note: null,
     });
     return;
@@ -298,7 +302,17 @@ async function applyRandomEvent(world: World): Promise<void> {
     // W4: a return against a sale this history already made, through the real
     // writer — restocking a named batch or writing off, cash back or credit
     // reduced, exercising `batchLedger`'s `restockedBase` term.
-    const chosen = pick(random, world.issued);
+    // Prefer a sale that actually put something on udhaar when one exists.
+    // Picking uniformly leaves the credit-reducing return — the ledger's third
+    // term — at roughly a one-in-ten chance per history, which is how it went
+    // unexercised: udhaar sales are a narrow band of the roll and cash sales
+    // are the fallback, so `issued` is overwhelmingly cash. Randomness is
+    // worth keeping; leaving a whole refund path to chance is not.
+    const creditSales = world.issued.filter((sale) => sale.customerId !== null);
+    const chosen =
+      creditSales.length > 0 && random() < 0.5
+        ? pick(random, creditSales)
+        : pick(random, world.issued);
     const lines = await returnableLinesForSale(tenant.scope, chosen.saleId);
     const returnable = lines.filter((line) => line.qtyBase - line.alreadyReturnedBase > 0);
     if (returnable.length === 0) {
@@ -322,6 +336,9 @@ async function applyRandomEvent(world: World): Promise<void> {
     });
     if (result.ok) {
       observed.returnsCommitted += 1;
+      if (result.value.creditReducedPaisa > 0) {
+        observed.creditReducingReturns += 1;
+      }
     }
     return;
   }
@@ -531,6 +548,17 @@ async function assertInvariants(world: World, label: string): Promise<void> {
 
     const actualBalance = await customerBalance(tenant.scope, customer.id);
     expect(actualBalance, `${label}: balance for customer ${customer.id}`).toBe(expectedBalance);
+
+    /* T4 — the ledger is the balance expanded into the rows that produced it,
+       so its running total must arrive at exactly that balance. This is the
+       screen an udhaar dispute is settled on: a running total that cannot
+       reach the headline figure is worse than showing nothing, because it
+       looks authoritative while disagreeing with itself. It caught a real
+       omission — the ledger read sales and payments but not the returns term
+       that `customerBalance` had subtracted since Day 7. */
+    const ledger = await customerLedger(tenant.scope, customer.id);
+    const ledgerTotal = ledger.reduce((sum, row) => sum + row.amountPaisa, 0);
+    expect(ledgerTotal, `${label}: ledger total for customer ${customer.id}`).toBe(actualBalance);
   }
 
   /* Every payment is attributed, same as invariant 5 for sales. */
@@ -689,6 +717,14 @@ suite('rebuild equivalence — randomized histories', () => {
       'no pending allocation was ever resolved — D2’s second half went untested',
     ).toBeGreaterThan(0);
     expect(observed.returnsCommitted, 'no return was ever committed').toBeGreaterThan(0);
+    /* Without this the ledger-vs-balance invariant above is vacuous: it can
+       only catch a missing returns term if some return actually reduced
+       credit. A green suite that never exercised the case it exists to guard
+       is worse than no suite, because it reads as proof. */
+    expect(
+      observed.creditReducingReturns,
+      'no return ever reduced credit — the ledger/balance invariant proved nothing',
+    ).toBeGreaterThan(0);
     expect(observed.cashMovementsCommitted, 'no cash movement was ever committed').toBeGreaterThan(
       0,
     );

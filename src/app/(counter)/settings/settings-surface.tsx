@@ -23,6 +23,7 @@ import {
 interface ReceiptSettings {
   receiptHeader: string;
   receiptFooter: string;
+  autoPrintReceipt: boolean;
 }
 
 export function SettingsSurface() {
@@ -45,7 +46,11 @@ function ReceiptSettingsForm() {
   useEffect(() => {
     void currentTenantSettingsAction().then((current) => {
       if (current) {
-        setSettings({ receiptHeader: current.receiptHeader, receiptFooter: current.receiptFooter });
+        setSettings({
+          receiptHeader: current.receiptHeader,
+          receiptFooter: current.receiptFooter,
+          autoPrintReceipt: current.autoPrintReceipt ?? true,
+        });
       }
     });
   }, []);
@@ -97,6 +102,28 @@ function ReceiptSettingsForm() {
               className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
             />
           </div>
+          {/* Some shops hand a receipt over only when it is asked for. The
+              sale never depended on printing; this makes the paper optional
+              too, without taking it away — it stays one key from the last
+              sale on the counter screen. */}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={settings.autoPrintReceipt}
+              onChange={(event) => {
+                setSettings({ ...settings, autoPrintReceipt: event.target.checked });
+                setDone(null);
+              }}
+              className="mt-1"
+            />
+            <span>
+              Print a receipt for every sale
+              <span className="text-ink/50 block text-xs">
+                Off: nothing prints unless you press Print receipt.
+              </span>
+            </span>
+          </label>
+
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -178,7 +205,11 @@ function UsersAndPins() {
             </span>
             {user.role === 'salesman' ? (
               <span className="flex gap-3">
-                <button type="button" onClick={() => void resetPin(user)} className="text-ink/60 text-xs">
+                <button
+                  type="button"
+                  onClick={() => void resetPin(user)}
+                  className="text-ink/60 text-xs"
+                >
                   Reset PIN
                 </button>
                 <button

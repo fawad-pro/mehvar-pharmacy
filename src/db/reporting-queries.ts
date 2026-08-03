@@ -13,7 +13,7 @@
 
 import 'server-only';
 
-import { desc, eq, gte, lt, sql, sum } from 'drizzle-orm';
+import { desc, eq, gte, lt, ne, sql, sum } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
 import {
@@ -199,7 +199,9 @@ export async function returnsInRange(
     .from(saleReturns)
     .innerJoin(sales, eq(saleReturns.saleId, sales.id))
     .innerJoin(users, eq(saleReturns.createdBy, users.id))
-    .where(scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)))
+    .where(
+      scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
+    )
     .orderBy(desc(saleReturns.createdAt));
 }
 
@@ -239,6 +241,17 @@ export interface AdjustmentExceptionRow {
   readonly createdAt: Date;
 }
 
+/**
+ * Adjustments worth the owner's attention — which is not all of them.
+ *
+ * `opening_stock` is excluded: it is the setup ritual (W9), not an exception.
+ * Onboarding a real pharmacy writes one such row per shelf line, so including
+ * them buries the two or three rows that genuinely mean something — a damage
+ * write-off, a count correction — under hundreds that mean "we installed the
+ * software". An exception list the owner learns to scroll past has stopped
+ * being an exception list (I7's discipline, applied to the list rather than
+ * the colour).
+ */
 export async function adjustmentsInRange(
   scope: TenantScope,
   from: Date,
@@ -258,9 +271,33 @@ export async function adjustmentsInRange(
     .innerJoin(products, eq(adjustments.productId, products.id))
     .innerJoin(users, eq(adjustments.createdBy, users.id))
     .where(
-      scope.scopeOf(adjustments, gte(adjustments.createdAt, from), lt(adjustments.createdAt, to)),
+      scope.scopeOf(
+        adjustments,
+        gte(adjustments.createdAt, from),
+        lt(adjustments.createdAt, to),
+        ne(adjustments.reason, 'opening_stock'),
+      ),
     )
     .orderBy(desc(adjustments.createdAt));
+}
+
+/**
+ * Whether today's opening float has been recorded — the assumption behind
+ * every expected-cash figure, and the one input nothing else would ask for.
+ */
+export async function hasOpeningFloat(scope: TenantScope, from: Date, to: Date): Promise<boolean> {
+  const [row] = await scope.db
+    .select({ count: sql<string>`count(*)` })
+    .from(cashMovements)
+    .where(
+      scope.scopeOf(
+        cashMovements,
+        eq(cashMovements.reason, 'opening_float'),
+        gte(cashMovements.createdAt, from),
+        lt(cashMovements.createdAt, to),
+      ),
+    );
+  return Number(row?.count ?? 0) > 0;
 }
 
 export interface CashMovementExceptionRow {
@@ -408,7 +445,9 @@ export async function reportFigures(
   const [returnsRow] = await scope.db
     .select({ count: sql<string>`count(*)` })
     .from(saleReturns)
-    .where(scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)));
+    .where(
+      scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
+    );
 
   const revenuePaisa = Number(salesRow?.total ?? 0);
   const costPaisa = Number(costRow?.total ?? 0);
