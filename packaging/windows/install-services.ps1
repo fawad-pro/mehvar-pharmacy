@@ -31,7 +31,8 @@ $ErrorActionPreference = 'Stop'
 $PgBin      = Join-Path $InstallDir 'pgsql\bin'
 $NodeExe    = Join-Path $InstallDir 'runtime\node.exe'
 $AppDir     = Join-Path $InstallDir 'app'
-$BinDir     = Join-Path $InstallDir 'bin'
+# Inside app\ so the bundled scripts resolve app\node_modules at runtime.
+$BinDir     = Join-Path $InstallDir 'app\bin'
 $PgData     = Join-Path $DataDir 'pgdata'
 $LogDir     = Join-Path $DataDir 'logs'
 $EnvFile    = Join-Path $DataDir '.env'
@@ -188,6 +189,7 @@ SESSION_SECRET=$sessionSecret
 TENANT_TIME_ZONE=Asia/Karachi
 MEHVAR_DATA_DIR=$DataDir
 MEHVAR_LOG_DIR=$LogDir
+MEHVAR_PG_BIN=$PgBin
 "@ | Set-Content -Path $EnvFile -Encoding ascii
 
 # The config holds database credentials. Administrators and SYSTEM only.
@@ -245,14 +247,24 @@ Invoke-Tool -FilePath $NodeExe -Arguments @((Join-Path $BinDir 'db\init.js')) -E
 Write-Step 'Registering the Mehvar Node service'
 
 if (-not (Get-Service -Name $AppService -ErrorAction SilentlyContinue)) {
-    # `sc.exe` supervises any executable; the wrapper exists only to load the
-    # .env file and point Node at server.js with the right working directory.
+    <#
+        `sc.exe` supervises any executable; the wrapper exists only to load the
+        configuration and point Node at server.js from the right directory.
+
+        The .env file is parsed by cmd rather than by `node -r dotenv/config`.
+        Next's standalone server does not load dotenv itself, and dotenv is a
+        devDependency that Next never traces into the standalone tree — so the
+        preload would fail to resolve and the service would not start at all.
+        The `for /f` loop needs nothing but cmd. `eol=#` skips comments and
+        `tokens=1,* delims==` keeps values containing `=` intact, which matters
+        because connection URLs and base64 secrets both can.
+    #>
     $wrapper = Join-Path $InstallDir 'mehvar-node.cmd'
     @"
 @echo off
 cd /d "$AppDir"
-set "DOTENV_CONFIG_PATH=$EnvFile"
-"$NodeExe" -r dotenv/config "$AppDir\server.js" >> "$LogDir\node.log" 2>&1
+for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
+"$NodeExe" "$AppDir\server.js" >> "$LogDir\node.log" 2>&1
 "@ | Set-Content -Path $wrapper -Encoding ascii
 
     & sc.exe create $AppService binPath= "cmd.exe /c `"$wrapper`"" start= auto DisplayName= "Mehvar Node" | Out-Null
@@ -272,8 +284,25 @@ Set-Service  -Name $AppService -StartupType Automatic
 # 8. Nightly backup, and the LAN
 # ---------------------------------------------------------------------------
 Write-Step 'Scheduling the nightly backup'
-$backupCmd = "`"$NodeExe`" `"$(Join-Path $BinDir 'ops\backup.js')`""
-& schtasks.exe /Create /F /TN 'Mehvar\NightlyBackup' /TR $backupCmd /SC DAILY /ST 02:30 /RU SYSTEM | Out-Null
+
+<#
+    The task runs as SYSTEM, whose environment carries none of the settings
+    written above. Pointing schtasks straight at node.exe would give the backup
+    no DATABASE_URL and no MEHVAR_PG_BIN, so it would fail every night —
+    silently, until somebody read a support bundle and noticed the backup-age
+    warning. The wrapper supplies the configuration, mirroring mehvar-node.cmd.
+#>
+$backupWrapper = Join-Path $InstallDir 'mehvar-backup.cmd'
+@"
+@echo off
+cd /d "$AppDir"
+set "DOTENV_CONFIG_PATH=$EnvFile"
+for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
+"$NodeExe" "$BinDir\ops\backup.js" >> "$LogDir\backup.log" 2>&1
+"@ | Set-Content -Path $backupWrapper -Encoding ascii
+
+& schtasks.exe /Create /F /TN 'Mehvar\NightlyBackup' /TR "`"$backupWrapper`"" /SC DAILY /ST 02:30 /RU SYSTEM | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "Could not schedule the nightly backup (schtasks exit $LASTEXITCODE)." }
 
 Write-Step 'Opening the LAN port for additional counters'
 if (-not (Get-NetFirewallRule -DisplayName 'Mehvar Node' -ErrorAction SilentlyContinue)) {

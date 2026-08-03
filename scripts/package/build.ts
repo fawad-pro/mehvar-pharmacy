@@ -13,8 +13,9 @@
  *     app/            the standalone server (server.js, node_modules, .next)
  *     app/public/     copied — standalone does NOT include it
  *     app/.next/static/  copied — standalone does NOT include it either
- *     bin/db/         compiled migrate, grants, init, verify
- *     bin/ops/        compiled backup, restore-drill, support-bundle
+ *     app/bin/db/     compiled migrate, grants, init, verify
+ *     app/bin/ops/    compiled backup, restore-drill, support-bundle
+ *                     (inside app/ so they resolve app/node_modules)
  *     migrations/     drizzle SQL, applied at install and at every update
  *     runtime/        the pinned Node runtime (fetched separately)
  *     pgsql/          PostgreSQL binaries (fetched separately)
@@ -23,6 +24,11 @@
  * rather than here: they are large, platform-specific, and change about once a
  * year, so re-downloading them on every application build would be the slowest
  * possible way to get the same bytes.
+ *
+ * TypeScript, run through `tsx` like every other script in `package.json`. It
+ * was `.mjs` until a Windows run found a cross-platform bug in it that
+ * `tsc --noEmit` never saw, because `allowJs` is false and a `.mjs` file is
+ * therefore checked by nothing at all.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -31,6 +37,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
+
+import { npmInvocation } from './npm-command';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const out = join(root, 'dist', 'package');
@@ -51,15 +59,25 @@ const OPS_ENTRYPOINTS = [
 ];
 
 /**
- * Left for Node to resolve at runtime from the standalone tree.
+ * Left for Node to resolve at runtime from `app/node_modules`.
  *
- * `@node-rs/argon2` is a native module and cannot be bundled at all; `pg` and
- * `drizzle-orm` pull in optional native paths that esbuild would resolve
- * incorrectly.
+ * The list is exactly what the standalone tree actually ships, and no more.
+ * Next traces the *application's* imports: `pg` and `@node-rs/argon2` survive
+ * into `node_modules`, but `drizzle-orm` gets inlined into the server chunks
+ * and `dotenv` is a devDependency that is never traced at all. Marking either
+ * of those external produced ops scripts that died with MODULE_NOT_FOUND on
+ * every installed machine while working perfectly in a dev checkout.
+ *
+ * The rule this encodes: external means "provably present in `app/`", not
+ * "feels like a dependency". `assertExternalsArePresent` checks it rather than
+ * trusting this comment to stay true.
  */
-const EXTERNAL = ['@node-rs/argon2', 'pg', 'pg-native', 'drizzle-orm', 'dotenv'];
+const EXTERNAL = ['@node-rs/argon2', 'pg', 'pg-native'];
 
-function step(message) {
+/** Externals that must exist in the standalone tree. `pg-native` is optional. */
+const REQUIRED_EXTERNALS = ['@node-rs/argon2', 'pg'];
+
+function step(message: string): void {
   console.log(`\n  ${message}`);
 }
 
@@ -72,7 +90,7 @@ function step(message) {
  * the login screen, which is the first thing anybody does. That is the worst
  * possible place to discover a packaging mistake, so it is checked here.
  */
-function assertWindowsNativeModules() {
+function assertWindowsNativeModules(): void {
   const candidates = [
     'node_modules/@node-rs/argon2-win32-x64-msvc',
     'node_modules/@node-rs/argon2-win32-arm64-msvc',
@@ -93,11 +111,56 @@ function assertWindowsNativeModules() {
   );
 }
 
-function run(command, args) {
-  execFileSync(command, args, { cwd: root, stdio: 'inherit' });
+/**
+ * Every external must actually be in the payload we just assembled.
+ *
+ * `external` is a promise that Node will find the module at runtime. Nothing
+ * checks that promise — a wrong entry produces a package that builds cleanly,
+ * installs cleanly, and then fails with MODULE_NOT_FOUND the first time the
+ * pharmacy's nightly backup runs. This is that check.
+ */
+function assertExternalsArePresent(): void {
+  const missing = REQUIRED_EXTERNALS.filter(
+    (name) => !existsSync(join(out, 'app', 'node_modules', name)),
+  );
+  if (missing.length === 0) return;
+
+  throw new Error(
+    [
+      `These are marked external but are not in the standalone tree: ${missing.join(', ')}.`,
+      '',
+      'The ops scripts would fail with MODULE_NOT_FOUND on an installed',
+      'machine. Either bundle them (drop from EXTERNAL in this file) or work',
+      'out why Next stopped tracing them into app/node_modules.',
+    ].join('\n'),
+  );
 }
 
-async function main() {
+/** Run an npm script. See `npm-command.ts` for why this is not one line. */
+function runNpm(args: string[]): void {
+  const {
+    command,
+    args: resolved,
+    shell,
+  } = npmInvocation(args, {
+    platform: process.platform,
+    env: process.env,
+    nodePath: process.execPath,
+  });
+
+  execFileSync(command, resolved, { cwd: root, stdio: 'inherit', shell });
+}
+
+function packageVersion(): string {
+  const parsed: unknown = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+  if (typeof parsed === 'object' && parsed !== null && 'version' in parsed) {
+    const { version } = parsed as { version: unknown };
+    if (typeof version === 'string') return version;
+  }
+  throw new Error('package.json has no string "version" — the payload could not be stamped.');
+}
+
+async function main(): Promise<void> {
   assertWindowsNativeModules();
 
   step('Cleaning dist/package');
@@ -105,7 +168,7 @@ async function main() {
   mkdirSync(out, { recursive: true });
 
   step('Building the Next.js standalone server');
-  run('npm', ['run', 'build']);
+  runNpm(['run', 'build']);
 
   const standalone = join(root, '.next', 'standalone');
   if (!existsSync(standalone)) {
@@ -132,9 +195,17 @@ async function main() {
   step('Bundling ops scripts to plain JavaScript');
   await build({
     entryPoints: OPS_ENTRYPOINTS.map((entry) => join(root, entry)),
-    outdir: join(out, 'bin'),
-    // Keeps the `db/` and `ops/` split from the source tree: bin/db/migrate.js,
-    // bin/ops/backup.js. mehvar.iss and OPERATIONS.md both name these paths.
+    /*
+     * INSIDE app/, deliberately. Node resolves a bare import from the importing
+     * file's directory upward, so `app/bin/ops/backup.js` finds
+     * `app/node_modules` — the only place the externals exist. Hoisting these
+     * to a sibling `bin/` breaks every one of them at runtime, silently, on a
+     * machine nobody can attach a debugger to.
+     */
+    outdir: join(out, 'app', 'bin'),
+    // Keeps the `db/` and `ops/` split from the source tree:
+    // app/bin/db/migrate.js, app/bin/ops/backup.js. mehvar.iss,
+    // install-services.ps1 and OPERATIONS.md all name these paths.
     outbase: join(root, 'scripts'),
     bundle: true,
     platform: 'node',
@@ -147,13 +218,14 @@ async function main() {
     logLevel: 'warning',
   });
 
+  assertExternalsArePresent();
+
   step('Copying migrations');
   cpSync(join(root, 'src', 'db', 'migrations'), join(out, 'migrations'), { recursive: true });
 
-  const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
   writeFileSync(
     join(out, 'VERSION'),
-    `${JSON.stringify({ version, builtAt: new Date().toISOString() }, null, 2)}\n`,
+    `${JSON.stringify({ version: packageVersion(), builtAt: new Date().toISOString() }, null, 2)}\n`,
     'utf8',
   );
 
@@ -161,7 +233,7 @@ async function main() {
   console.log('  Next: packaging/windows/fetch-runtimes.ps1, then compile mehvar.iss.\n');
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   console.error(`\n  Packaging failed:\n\n${error instanceof Error ? error.message : error}\n`);
   process.exit(1);
 });

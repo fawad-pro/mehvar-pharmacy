@@ -32,7 +32,7 @@
     "ops:backup": "tsx --conditions=react-server scripts/ops/backup.ts",
     "ops:restore-drill": "tsx --conditions=react-server scripts/ops/restore-drill.ts",
     "ops:support-bundle": "tsx --conditions=react-server scripts/ops/support-bundle.ts",
-    "package:build": "node scripts/package/build.mjs"
+    "package:build": "tsx scripts/package/build.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

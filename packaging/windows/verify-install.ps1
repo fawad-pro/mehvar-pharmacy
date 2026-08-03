@@ -26,7 +26,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $NodeExe = Join-Path $InstallDir 'runtime\node.exe'
-$BinDir  = Join-Path $InstallDir 'bin'
+$BinDir  = Join-Path $InstallDir 'app\bin'
 $PgBin   = Join-Path $InstallDir 'pgsql\bin'
 $EnvFile = Join-Path $DataDir '.env'
 

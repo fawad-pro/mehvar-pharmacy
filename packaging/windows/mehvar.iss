@@ -50,7 +50,6 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
 Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "{#PayloadDir}\bin\*";        DestDir: "{app}\bin";        Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\migrations\*"; DestDir: "{app}\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\runtime\*";    DestDir: "{app}\runtime";    Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignoreversion recursesubdirs createallsubdirs
@@ -68,7 +67,7 @@ Name: "{commonappdata}\Mehvar\backups"
 [Icons]
 ; The counter shortcut itself is created by counter-shortcut.ps1, which is the
 ; only thing that knows where Chrome landed on this machine.
-Name: "{group}\Support bundle";   Filename: "{app}\runtime\node.exe"; Parameters: """{app}\bin\ops\support-bundle.js"""; Comment: "Collect diagnostics to send to Mehvar support"
+Name: "{group}\Support bundle";   Filename: "{app}\runtime\node.exe"; Parameters: """{app}\app\bin\ops\support-bundle.js"""; Comment: "Collect diagnostics to send to Mehvar support"
 Name: "{group}\Uninstall Mehvar"; Filename: "{uninstallexe}"
 
 [Code]
