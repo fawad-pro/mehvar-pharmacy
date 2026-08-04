@@ -21,11 +21,46 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $OutputRoot = (Join-Path $PSScriptRoot '..\..\dist\package'),
+    <#
+        Deliberately NOT defaulted to a $PSScriptRoot expression.
+
+        Parameter defaults are evaluated during binding, and $PSScriptRoot can
+        be empty there — which is how this script died on a real Windows box
+        before running a single line of its own logic. `Join-Path` refuses an
+        empty -Path, so the only error anyone saw named Join-Path and said
+        nothing about $PSScriptRoot or even which script had failed.
+
+        The rule: never dereference $PSScriptRoot in a parameter default. Bind
+        it empty and resolve in the body, where it is reliable.
+    #>
+    [string] $OutputRoot,
     [switch] $Force
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Resolved after binding, with fallbacks: $MyInvocation carries the path in
+# some hosts where $PSScriptRoot does not, and the current directory is a
+# last resort that beats throwing from inside a helper.
+$scriptRoot =
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) { $PSScriptRoot }
+    elseif (-not [string]::IsNullOrWhiteSpace($MyInvocation.MyCommand.Path)) {
+        Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    else { (Get-Location).Path }
+
+if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    $OutputRoot = Join-Path $scriptRoot '..\..\dist\package'
+}
+
+# Relative paths resolve against the session's location, not .NET's current
+# directory — those disagree whenever the session has changed location.
+# Normalising also means errors name `C:\Mehvar\dist\package` rather than
+# `C:\Mehvar\packaging\windows\..\..\dist\package`.
+if (-not [System.IO.Path]::IsPathRooted($OutputRoot)) {
+    $OutputRoot = Join-Path (Get-Location).Path $OutputRoot
+}
+$OutputRoot = [System.IO.Path]::GetFullPath($OutputRoot)
 
 # Pinned deliberately. Bump both together, and re-run the restore drill after.
 $NodeVersion     = '22.11.0'
@@ -34,7 +69,14 @@ $PostgresVersion = '17.2-1'
 $NodeUrl     = "https://nodejs.org/dist/v$NodeVersion/node-v$NodeVersion-win-x64.zip"
 $PostgresUrl = "https://get.enterprisedb.com/postgresql/postgresql-$PostgresVersion-windows-x64-binaries.zip"
 
-$cacheDir = Join-Path $env:LOCALAPPDATA 'Mehvar\build-cache'
+# Same class of bug as the parameter default, one line further down: an unset
+# environment variable makes Join-Path throw before any of this script's own
+# logic runs. LOCALAPPDATA is absent under some service accounts and on any
+# non-Windows host, so it gets a fallback rather than being assumed.
+$cacheRoot =
+    if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { $env:LOCALAPPDATA }
+    else { [System.IO.Path]::GetTempPath() }
+$cacheDir = Join-Path $cacheRoot 'Mehvar\build-cache'
 
 function Get-Cached {
     param([string] $Url, [string] $FileName)

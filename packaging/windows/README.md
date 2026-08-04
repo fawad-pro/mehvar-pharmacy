@@ -1,18 +1,31 @@
-# Windows packaging — **UNVERIFIED**
+# Windows packaging — **partly verified**
 
-> **Read this first.** Every file in this directory was written on Linux and has
-> **never been executed on Windows**. Nothing here has compiled, installed,
-> registered a service, or printed a receipt. Treat it as a careful first draft
-> to be debugged on real hardware, not as working software.
->
-> The cross-platform half of roadmap Phase 1 — `output: 'standalone'`, the
-> installation identity, `mehvar init`, the ops scripts, the packaging
-> assembler — _is_ verified: it typechecks, lints, builds and has unit tests.
-> The line between the two is exactly here.
+> **Read this first.** Know exactly how much of this has been run, because the
+> honest answer is "some of it, and none of it on Windows."
+
+|                                                                      | Status                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| All five `.ps1` files                                                | **Parsed** by PowerShell — `npm run lint:ps`                                                                                                                                                                                                      |
+| `$PSScriptRoot`-in-`param()`                                         | **Statically checked**, and the check has been seen to fail                                                                                                                                                                                       |
+| `fetch-runtimes.ps1`                                                 | **Run for real** on PowerShell 7 (Linux): argument binding, download, cache hit, archive extraction, top-level strip, and `runtime/node.exe` in place. Only the PostgreSQL download is unexercised, and only because the host was network-blocked |
+| `uninstall-services.ps1`                                             | Binds and enters its body; stops at `Get-Service`, which does not exist off Windows                                                                                                                                                               |
+| `install-services.ps1`, `verify-install.ps1`, `counter-shortcut.ps1` | **Parse only.** Their logic is almost entirely Windows-specific cmdlets and has never executed                                                                                                                                                    |
+| `mehvar.iss`                                                         | **Never compiled.** Inno Setup is Windows-only                                                                                                                                                                                                    |
+
+So: syntax and argument handling are real evidence now. Service registration,
+`initdb`, the kiosk shortcut and the installer itself are still first drafts.
 
 Roadmap Phase 1's own risk section named this: _"real shop hardware is the
 unknown, and it is deliberately met here with the founder physically present."_
 This directory is where that gets discovered.
+
+## The rule that cost a round-trip
+
+**Never dereference `$PSScriptRoot` in a parameter default.** Defaults are
+evaluated during binding, where it can be empty; `Join-Path` then throws before
+the script's first line, reporting only `Join-Path` — not the variable, not even
+which script. Bind the parameter empty and resolve it in the body.
+`npm run lint:ps` enforces this.
 
 ## Build order
 

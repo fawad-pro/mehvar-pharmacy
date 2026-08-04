@@ -21,11 +21,31 @@
 #>
 [CmdletBinding()]
 param(
-    [string] $InstallDir = (Join-Path $PSScriptRoot '..')
+    # Not a $PSScriptRoot expression — see fetch-runtimes.ps1 for what that
+    # costs. It matters more here: this runs during uninstall, and a script
+    # that throws during parameter binding leaves both services registered
+    # against files the uninstaller is about to delete.
+    [string] $InstallDir
 )
 
 # Best-effort: keep going and report, rather than aborting half-done.
 $ErrorActionPreference = 'Continue'
+
+$scriptRoot =
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) { $PSScriptRoot }
+    elseif (-not [string]::IsNullOrWhiteSpace($MyInvocation.MyCommand.Path)) {
+        Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    else { (Get-Location).Path }
+
+if ([string]::IsNullOrWhiteSpace($InstallDir)) {
+    # packaging\ sits directly under the install root.
+    $InstallDir = Join-Path $scriptRoot '..'
+}
+if (-not [System.IO.Path]::IsPathRooted($InstallDir)) {
+    $InstallDir = Join-Path (Get-Location).Path $InstallDir
+}
+$InstallDir = [System.IO.Path]::GetFullPath($InstallDir)
 
 $PgService  = 'MehvarPostgres'
 $AppService = 'MehvarNode'

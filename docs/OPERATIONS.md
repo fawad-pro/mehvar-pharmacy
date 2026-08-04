@@ -8,10 +8,12 @@ Mehvar and begin trading without developer tools.** If any step below requires
 the shop to open a terminal, that is a bug in the product, not a gap in the
 guide.
 
-> **Status: the Windows half is unverified.** Nothing in `packaging/windows/`
-> has ever run on Windows. See `packaging/windows/README.md`. The first install
-> is a debugging session with the founder present, and roadmap Phase 1's risk
-> section says so on purpose.
+> **Status: the Windows half is partly verified.** Every `.ps1` now parses and
+> is checked by `npm run lint:ps`, and `fetch-runtimes.ps1` has been run end to
+> end. Service registration, `initdb`, the kiosk shortcut and the installer
+> itself have still never executed. `packaging/windows/README.md` has the
+> line-by-line status. The first install is a debugging session with the founder
+> present, and roadmap Phase 1's risk section says so on purpose.
 
 ---
 
