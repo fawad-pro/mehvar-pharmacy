@@ -92,6 +92,41 @@ function checkScriptRootInParamBlock(file: string, source: string): Finding[] {
 }
 
 /**
+ * `Join-Path $env:SOMETHING` without a null guard.
+ *
+ * `Join-Path` throws on a null or empty `-Path`, and environment variables are
+ * not guaranteed: `LOCALAPPDATA` and `TEMP` are unset for some service
+ * accounts, and none of them exist off Windows. This class has now bitten
+ * three times — `$env:LOCALAPPDATA` in `fetch-runtimes.ps1`, `$env:TEMP` in
+ * `install-services.ps1`, and `$env:LOCALAPPDATA` in a `counter-shortcut.ps1`
+ * parameter default — each time as an exception thrown before the script did
+ * any of its own work.
+ *
+ * Guard the variable, or use an API that cannot return null
+ * (`[System.IO.Path]::GetTempPath()`, `[Environment]::GetFolderPath(...)`).
+ */
+function checkUnguardedEnvPaths(file: string, source: string): Finding[] {
+  const findings: Finding[] = [];
+
+  stripComments(source)
+    .split('\n')
+    .forEach((line, index) => {
+      const match = /Join-Path\s+\$env:(\w+)/i.exec(line);
+      if (match === null) return;
+
+      findings.push({
+        file,
+        line: index + 1,
+        message:
+          `Join-Path over $env:${match[1] ?? ''} — Join-Path throws when the variable ` +
+          'is unset. Guard it, or use an API that cannot return null.',
+      });
+    });
+
+  return findings;
+}
+
+/**
  * Block comments must be closed.
  *
  * An unterminated `<#` swallows the rest of the file, and PowerShell reports it
@@ -228,6 +263,7 @@ function main(): void {
   for (const name of files) {
     const source = readFileSync(join(scriptDir, name), 'utf8');
     findings.push(...checkScriptRootInParamBlock(name, source));
+    findings.push(...checkUnguardedEnvPaths(name, source));
     findings.push(...checkBlockComments(name, source));
   }
 

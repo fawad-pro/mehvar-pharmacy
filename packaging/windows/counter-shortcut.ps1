@@ -23,11 +23,22 @@
 param(
     [string] $CounterHost = 'localhost',
     [int]    $Port = 3000,
-    [string] $ProfileDir = (Join-Path $env:LOCALAPPDATA 'Mehvar\counter-profile'),
+    # Not defaulted to a Join-Path over $env:LOCALAPPDATA: parameter defaults
+    # are evaluated during binding, the variable is unset for some service
+    # accounts, and Join-Path throws on null -- the same shape as the
+    # $PSScriptRoot bug. Resolved in the body.
+    [string] $ProfileDir,
     [switch] $Autostart
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($ProfileDir)) {
+    $profileRoot =
+        if (-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)) { $env:LOCALAPPDATA }
+        else { [System.IO.Path]::GetTempPath() }
+    $ProfileDir = Join-Path $profileRoot 'Mehvar\counter-profile'
+}
 
 $url = "http://${CounterHost}:${Port}/sale"
 

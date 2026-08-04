@@ -8,12 +8,14 @@ Mehvar and begin trading without developer tools.** If any step below requires
 the shop to open a terminal, that is a bug in the product, not a gap in the
 guide.
 
-> **Status: the Windows half is partly verified.** Every `.ps1` now parses and
-> is checked by `npm run lint:ps`, and `fetch-runtimes.ps1` has been run end to
-> end. Service registration, `initdb`, the kiosk shortcut and the installer
-> itself have still never executed. `packaging/windows/README.md` has the
-> line-by-line status. The first install is a debugging session with the founder
-> present, and roadmap Phase 1's risk section says so on purpose.
+> **Status: the Windows half is partly verified.** Every `.ps1` parses and is
+> checked by `npm run lint:ps`; `fetch-runtimes.ps1` and the whole provisioning
+> chain (migrate → grants → init → verify) have been run end to end against a
+> real PostgreSQL cluster. Service registration, the kiosk shortcut and the
+> installer UI have still never executed — they are Windows-only.
+> `packaging/windows/README.md` has the line-by-line status. The first install
+> is a debugging session with the founder present, and roadmap Phase 1's risk
+> section says so on purpose.
 
 ---
 
@@ -52,8 +54,13 @@ Carry `dist\MehvarSetup-<version>.exe` on a USB stick. It needs no internet to i
 6. Print a test receipt. If it prints without a dialog appearing, ADR-6's kiosk
    printing is working.
 
-If the post-install checks fail, **do not hand the machine over.** Run
-`ops:support-bundle` from the Start Menu and diagnose before trading starts.
+If anything fails, Setup names the step that failed and points at the log. **Do
+not hand the machine over.** Send `C:\ProgramData\Mehvar\logs\install-*.log`
+to support; `install-status.txt` beside it carries the one-line summary.
+
+The pairing-key option on the Finish page only appears when provisioning
+actually produced the file — if it is absent, the install did not complete, no
+matter what else the page says.
 
 ## 3. Opening stock (W9) — the adoption gate
 

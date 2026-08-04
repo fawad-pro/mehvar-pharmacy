@@ -100,7 +100,9 @@ foreach ($shortcut in @(
     Remove-Item -Path $shortcut -Force -ErrorAction SilentlyContinue
 }
 
-$dataDir = Join-Path $env:ProgramData 'Mehvar'
+$programData = if (-not [string]::IsNullOrWhiteSpace($env:ProgramData)) { $env:ProgramData }
+              else { 'C:\ProgramData' }
+$dataDir = Join-Path $programData 'Mehvar'
 Write-Host "`n  Mehvar's services are removed."
 Write-Host "  Your records and backups have been KEPT in:"
 Write-Host "    $dataDir"

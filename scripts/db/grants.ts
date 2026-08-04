@@ -83,6 +83,29 @@ async function main(): Promise<void> {
       console.log(`Created role ${role}.`);
     }
 
+    /*
+     * Grants presuppose tables. Without this, an unmigrated database produces
+     * `relation "tenants" does not exist` from deep inside a GRANT loop — which
+     * is what the first Windows install actually reported, as a bare "code 1",
+     * while the real fault was two steps earlier in `migrate`.
+     *
+     * The migration itself is fixed; this stays because "grants ran before
+     * migrate" is a wiring mistake that will happen again, and it should name
+     * itself when it does.
+     */
+    const { rows: tableCheck } = await pool.query<{ present: number }>(
+      `SELECT count(*)::int AS present FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = ANY($1)`,
+      [[...EVENT_TABLES, ...MUTABLE_TABLES]],
+    );
+    if ((tableCheck[0]?.present ?? 0) === 0) {
+      throw new Error(
+        'The database has no Mehvar tables, so there is nothing to grant on.\n' +
+          'Run db:migrate first — and if it reported success, check that it\n' +
+          'actually found a migrations folder.',
+      );
+    }
+
     await pool.query(`GRANT USAGE ON SCHEMA public TO ${app}`);
 
     // Reference entities and ADR-8's single transactional cache are mutable.

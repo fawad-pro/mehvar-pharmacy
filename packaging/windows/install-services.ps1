@@ -44,7 +44,81 @@ $DbOwner     = 'mehvar'
 $AppRole     = 'mehvar_app'
 $PgPort      = 5433   # Not 5432: a shop machine may already have Postgres.
 
-function Write-Step { param([string] $Message) Write-Host "`n  == $Message" }
+$StatusFile = Join-Path $DataDir 'install-status.txt'
+
+foreach ($dir in @($DataDir, $LogDir)) {
+    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+}
+
+$script:LogFile = Join-Path $LogDir ("install-{0:yyyy-MM-dd-HHmmss}.log" -f (Get-Date))
+$script:CurrentStep = 'starting up'
+
+<#
+    Everything this script does goes to one file, in order, with timestamps.
+
+    The first real install failed with nothing but "code 1" and an empty log
+    directory, because nothing here wrote a log and the only thing that did —
+    the service wrappers — is created at the very last step. So the log is
+    opened before any work, and every step and every child process writes to it
+    whether it succeeds or not. Diagnosing a machine you cannot see is the whole
+    job (Phase 12 §7); a silent installer makes that impossible.
+#>
+function Write-Log {
+    param([string] $Message, [string] $Level = 'INFO')
+
+    $line = "{0:HH:mm:ss} [{1,-5}] {2}" -f (Get-Date), $Level, $Message
+    Add-Content -Path $script:LogFile -Value $line -Encoding utf8
+    Write-Host $line
+}
+
+function Write-Status {
+    param([string] $State, [string] $Step = '', [string] $Detail = '')
+
+    # Read by mehvar.iss so the installer can name the failing step instead of
+    # showing an exit code the operator cannot act on.
+    @(
+        "STATE=$State"
+        "STEP=$Step"
+        "DETAIL=$($Detail -replace '\r?\n', ' ')"
+        "LOG=$($script:LogFile)"
+        "WHEN=$(Get-Date -Format 's')"
+    ) | Set-Content -Path $StatusFile -Encoding utf8
+}
+
+<#
+    Step boundaries: each call closes out the previous step with its duration
+    and opens the next. So the log shows both "-> Applying migrations" and
+    "<- Applying migrations (0.8s)", and a step that never closed is exactly
+    the one that failed.
+#>
+$script:StepStarted = $null
+function Write-Step {
+    param([string] $Message)
+
+    if ($null -ne $script:StepStarted) {
+        Write-Log ("<- {0} ({1:N1}s)" -f $script:CurrentStep, ((Get-Date) - $script:StepStarted).TotalSeconds)
+    }
+    $script:CurrentStep = $Message
+    $script:StepStarted = Get-Date
+    Write-Log "-> $Message"
+}
+
+<#
+    Any terminating error, anywhere below, lands here.
+
+    A script-scope trap rather than one big try/catch: the provisioning steps
+    stay flat and readable, and nothing can fail *outside* the handler. The
+    status file is what mehvar.iss reads to name the failing step, which is the
+    whole difference between this and "code 1".
+#>
+trap {
+    Write-Log "!! FAILED during: $script:CurrentStep" 'ERROR'
+    Write-Log "   $($_.Exception.Message)" 'ERROR'
+    if ($_.ScriptStackTrace) { Write-Log "   $($_.ScriptStackTrace)" 'DEBUG' }
+    Write-Status -State 'FAILED' -Step $script:CurrentStep -Detail $_.Exception.Message
+    Write-Log "Log written to $script:LogFile"
+    exit 1
+}
 
 function New-Secret {
     # 32 bytes of CSPRNG, base64, symbol-free so it survives a connection URL.
@@ -53,21 +127,42 @@ function New-Secret {
     return ([Convert]::ToBase64String($bytes) -replace '[+/=]', '')
 }
 
+<#
+    Run a child process, capturing BOTH streams into the log.
+
+    `2>&1` merges native stderr into the pipeline, so a failure carries the
+    tool's own explanation rather than just an exit code — `migrate` saying
+    which folders it searched is the difference between a fix and another
+    round-trip.
+#>
 function Invoke-Tool {
     param([string] $FilePath, [string[]] $Arguments, [hashtable] $Environment = @{})
 
     foreach ($key in $Environment.Keys) {
         Set-Item -Path "env:$key" -Value $Environment[$key]
     }
-    & $FilePath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$([System.IO.Path]::GetFileName($FilePath)) $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+
+    $name = [System.IO.Path]::GetFileName($FilePath)
+    Write-Log "   run: $name $($Arguments -join ' ')" 'DEBUG'
+
+    $output = & $FilePath @Arguments 2>&1
+    $exit = $LASTEXITCODE
+
+    foreach ($line in $output) {
+        Write-Log "   | $line" 'DEBUG'
+    }
+
+    if ($exit -ne 0) {
+        $tail = ($output | Select-Object -Last 8) -join ' / '
+        throw "$name exited with code $exit. Output: $tail"
     }
 }
 
-foreach ($dir in @($DataDir, $LogDir)) {
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-}
+Write-Log "Mehvar install starting"
+Write-Log "  InstallDir $InstallDir"
+Write-Log "  DataDir    $DataDir"
+Write-Log "  Shop       $ShopName"
+Write-Status -State 'RUNNING' -Step 'starting up'
 
 # ---------------------------------------------------------------------------
 # 1. The database cluster
@@ -76,7 +171,9 @@ if (-not (Test-Path (Join-Path $PgData 'PG_VERSION'))) {
     Write-Step 'Creating the database cluster'
 
     $ownerPassword = New-Secret
-    $passwordFile  = Join-Path $env:TEMP 'mehvar-initdb.txt'
+    # GetTempPath() always returns something; $env:TEMP is not guaranteed to
+    # be set for a service account, and Join-Path throws on a null -Path.
+    $passwordFile  = Join-Path ([System.IO.Path]::GetTempPath()) 'mehvar-initdb.txt'
     Set-Content -Path $passwordFile -Value $ownerPassword -NoNewline -Encoding ascii
 
     try {
@@ -205,10 +302,27 @@ Set-Acl -Path $EnvFile -AclObject $acl
 # 5. Migrate, then GRANT — never one without the other
 # ---------------------------------------------------------------------------
 Write-Step 'Applying migrations'
+<#
+    MEHVAR_MIGRATIONS_DIR is not optional decoration.
+
+    `migrate` used to derive its folder from the working directory, which under
+    Setup is wherever it launched PowerShell. It found nothing, treated that as
+    "no migrations yet", and exited ZERO against an empty database — so grants
+    failed on the first missing table and the operator saw only "code 1". The
+    script now refuses rather than no-ops, and this tells it exactly where the
+    files are rather than leaving it to infer.
+#>
+$MigrationsDir = Join-Path $InstallDir 'migrations'
+if (-not (Test-Path $MigrationsDir)) {
+    throw "No migrations folder at $MigrationsDir — the payload is incomplete."
+}
+Write-Log "   migrations: $MigrationsDir"
+
 Invoke-Tool -FilePath $NodeExe -Arguments @((Join-Path $BinDir 'db\migrate.js')) -Environment @{
-    DOTENV_CONFIG_PATH = $EnvFile
-    DATABASE_URL       = $appUrl
-    DATABASE_ADMIN_URL = $adminUrl
+    DOTENV_CONFIG_PATH     = $EnvFile
+    DATABASE_URL           = $appUrl
+    DATABASE_ADMIN_URL     = $adminUrl
+    MEHVAR_MIGRATIONS_DIR  = $MigrationsDir
 }
 
 <#
@@ -330,5 +444,34 @@ if (-not (Get-NetFirewallRule -DisplayName 'Mehvar Node' -ErrorAction SilentlyCo
     New-NetFirewallRule -DisplayName 'Mehvar Node' -Direction Inbound -Action Allow `
         -Protocol TCP -LocalPort $Port -Profile Private | Out-Null
 }
+
+# ---------------------------------------------------------------------------
+# 9. Prove the outcome before claiming it
+# ---------------------------------------------------------------------------
+<#
+    The last install reported failure while leaving a Finish page offering a
+    pairing key that was never written. Nothing checked; the two halves simply
+    disagreed. These assertions are what let mehvar.iss tell the truth: STATE
+    is only OK when the things a working install must have are actually there.
+#>
+Write-Step 'Confirming the install'
+
+$firstRun = Join-Path $DataDir 'first-run.txt'
+if (-not (Test-Path $firstRun)) {
+    throw "Provisioning did not produce $firstRun — the pharmacy was not created."
+}
+
+$appSvc = Get-Service -Name $AppService -ErrorAction SilentlyContinue
+if (-not $appSvc) { throw "The $AppService service was not registered." }
+if ($appSvc.Status -ne 'Running') { throw "The $AppService service is $($appSvc.Status), not Running." }
+
+$pgSvc = Get-Service -Name $PgService -ErrorAction SilentlyContinue
+if (-not $pgSvc -or $pgSvc.Status -ne 'Running') { throw "The $PgService service is not running." }
+
+Write-Log ("<- {0} ({1:N1}s)" -f $script:CurrentStep, ((Get-Date) - $script:StepStarted).TotalSeconds)
+$script:StepStarted = $null
+
+Write-Status -State 'OK' -Step 'complete'
+Write-Log "Mehvar install completed successfully."
 
 Write-Host "`n  Mehvar is installed and running on port $Port.`n"

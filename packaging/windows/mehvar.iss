@@ -81,6 +81,10 @@ Name: "{group}\Uninstall Mehvar"; Filename: "{uninstallexe}"
 var
   ShopPage: TInputQueryWizardPage;
   PinPage: TInputQueryWizardPage;
+  { False until install-services.ps1 reports STATE=OK *and* its own assertions
+    pass. Everything the Finish page offers is gated on it. }
+  ProvisioningOk: Boolean;
+  FailureSummary: String;
 
 procedure InitializeWizard;
 begin
@@ -151,16 +155,48 @@ begin
   Result := '"' + Value + '"';
 end;
 
+{ One line of install-status.txt, which install-services.ps1 writes. }
+function StatusValue(Key: String): String;
+var
+  Lines: TArrayOfString;
+  Index: Integer;
+  Prefix: String;
+begin
+  Result := '';
+  if not LoadStringsFromFile(ExpandConstant('{commonappdata}\Mehvar\install-status.txt'), Lines) then
+    Exit;
+
+  Prefix := Key + '=';
+  for Index := 0 to GetArrayLength(Lines) - 1 do
+    if Pos(Prefix, Lines[Index]) = 1 then
+    begin
+      Result := Copy(Lines[Index], Length(Prefix) + 1, Length(Lines[Index]));
+      Exit;
+    end;
+end;
+
+{ Only true when provisioning wrote the file the shortcut would open. The last
+  install offered a pairing key that did not exist, which is how a failed
+  install still managed to look finished. }
+function PairingKeyAvailable(): Boolean;
+begin
+  Result := ProvisioningOk and FileExists(ExpandConstant('{commonappdata}\Mehvar\first-run.txt'));
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
   Args: String;
   DataDir: String;
+  Step: String;
+  Detail: String;
+  LogPath: String;
 begin
   if CurStep <> ssPostInstall then
     Exit;
 
   DataDir := ExpandConstant('{commonappdata}\Mehvar');
+  ProvisioningOk := False;
 
   Args := PowerShellArgs('install-services.ps1',
       '-InstallDir '  + ShellQuote(ExpandConstant('{app}')) +
@@ -171,11 +207,31 @@ begin
       ' -OwnerName '  + ShellQuote(ShopPage.Values[3]) +
       ' -OwnerPin '   + ShellQuote(PinPage.Values[0]));
 
-  if not Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+  Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+
+  { The status file, not the exit code, is the source of truth: it names the
+    step. An exit code alone is what produced "code 1" and a wasted round-trip. }
+  Step    := StatusValue('STEP');
+  Detail  := StatusValue('DETAIL');
+  LogPath := StatusValue('LOG');
+  if LogPath = '' then
+    LogPath := DataDir + '\logs';
+
+  ProvisioningOk := (StatusValue('STATE') = 'OK') and (ResultCode = 0);
+
+  if not ProvisioningOk then
   begin
-    MsgBox('Mehvar could not finish setting up (code ' + IntToStr(ResultCode) + ').' + #13#10 +
-           'Nothing has been lost. Send the logs in ' + DataDir + '\logs to Mehvar support.',
-           mbCriticalError, MB_OK);
+    if Step = '' then
+      Step := 'starting up (the installer did not get far enough to say)';
+
+    FailureSummary :=
+      'Setup could not finish configuring Mehvar.' + #13#10 + #13#10 +
+      'Failed at:  ' + Step + #13#10 +
+      'Reason:     ' + Detail + #13#10 + #13#10 +
+      'Nothing has been lost, and no pharmacy data was created.' + #13#10 +
+      'Send this file to Mehvar support:' + #13#10 + LogPath;
+
+    MsgBox(FailureSummary, mbCriticalError, MB_OK);
     Exit;
   end;
 
@@ -191,16 +247,32 @@ begin
           ' -DataDir '   + ShellQuote(DataDir)),
         '', SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
   begin
-    MsgBox('Mehvar installed, but the post-install checks did not all pass.' + #13#10 +
-           'Do not hand this machine over yet. Contact Mehvar support.',
-           mbError, MB_OK);
+    ProvisioningOk := False;
+    FailureSummary :=
+      'Mehvar installed, but the post-install checks did not all pass.' + #13#10 + #13#10 +
+      'Do not hand this machine over yet.' + #13#10 +
+      'Send this file to Mehvar support:' + #13#10 + LogPath;
+    MsgBox(FailureSummary, mbError, MB_OK);
+  end;
+end;
+
+{ Setup always shows a final page, so the honest thing is to make that page say
+  what actually happened rather than "finished installing" over a failure. }
+procedure CurPageChanged(CurPageID: Integer);
+begin
+  if (CurPageID = wpFinished) and (not ProvisioningOk) then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'Mehvar Setup did not finish';
+    WizardForm.FinishedLabel.Caption := FailureSummary;
   end;
 end;
 
 [Run]
 ; Doubled quotes are Inno's escape, so notepad receives a quoted path.
+; Check: only offered when provisioning actually wrote the file.
 Filename: "notepad.exe"; Parameters: """{commonappdata}\Mehvar\first-run.txt"""; \
-  Description: "Show the counter pairing key"; Flags: postinstall skipifsilent
+  Description: "Show the counter pairing key"; Flags: postinstall skipifsilent; \
+  Check: PairingKeyAvailable
 
 [UninstallRun]
 ; Services must be removed before the files they run from.
