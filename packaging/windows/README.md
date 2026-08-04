@@ -56,7 +56,14 @@ Each of these shipped, failed on a real machine, and is now enforced by
    Under Setup the working directory is wherever it launched PowerShell. This
    is what made the first real install create an empty database and report
    success.
-4. **Never put a non-ASCII character in a `.ps1`.** Windows PowerShell 5.1
+4. **Never register a service with `sc.exe create ... binPath=`.** Windows has
+   no argv: PowerShell serialises the argument array back into one command-line
+   string for sc.exe to re-parse, and a value holding both spaces and quotes
+   acquires backslash-escaped quotes sc.exe cannot parse (exit 1639,
+   ERROR_INVALID_COMMAND_LINE). Use `New-Service -BinaryPathName`, which reaches
+   `CreateService` with no command line in between. `service-image-path.tests.ps1`
+   pins the built string.
+5. **Never put a non-ASCII character in a `.ps1`.** Windows PowerShell 5.1
    reads a no-BOM `.ps1` using the system ANSI code page, not UTF-8. An em dash
    (`E2 80 94`) then arrives as three characters ending in U+201D — and
    PowerShell accepts curly quotes as string delimiters, so a dash inside a
@@ -141,9 +148,17 @@ regardless of how well everything else went.
 These are the things most likely to break first, listed so the first Windows
 session knows where to look:
 
-- **Service registration for a Node process.** Windows has no native supervisor
-  for a plain executable. `install-services.ps1` uses `sc.exe` with a wrapper;
-  NSSM is the fallback if restart-on-failure misbehaves.
+- **Starting the Node service will probably fail with 1053, and that is
+  structural.** A Windows service image must call `StartServiceCtrlDispatcher`
+  and answer the Service Control Manager within ~30 seconds. `node.exe` does
+  not, so a service wrapping it can be _registered_ (that part is now fixed)
+  but not _started_. No command line fixes this. The options are a supervisor
+  (NSSM, WinSW -- both small and permissively licensed, but a new bundled
+  binary), or dropping the service and running the counter from a Task
+  Scheduler entry at startup, which is built in and supports restart-on-failure
+  but does not appear in `services.msc`. `install-services.ps1` detects 1053
+  and says exactly this rather than leaving another code to decode. **This is a
+  decision, not a bug fix.**
 - **PostgreSQL data-directory ACLs** on a locked-down profile. `initdb` refuses
   to run as an administrator with a writable-by-others data directory.
 - **Antivirus and SmartScreen** against an unsigned installer that registers two

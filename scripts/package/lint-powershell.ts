@@ -174,6 +174,44 @@ function checkAsciiOnly(file: string, source: string): Finding[] {
 }
 
 /**
+ * `sc.exe create` / `sc.exe config` with a `binPath=`.
+ *
+ * This failed on a real machine with exit 1639, ERROR_INVALID_COMMAND_LINE.
+ * The argument array PowerShell builds is right; the corruption is that Windows
+ * has no argv, so PowerShell must serialise those arguments back into one
+ * command-line string for `sc.exe` to re-parse — and a `binPath=` value holding
+ * both spaces and quotes acquires backslash-escaped quotes that sc.exe's parser
+ * does not implement.
+ *
+ * `New-Service -BinaryPathName` hands the string to the Win32 CreateService API
+ * with no command line in between. Other `sc.exe` verbs (`failure`, `delete`)
+ * stay allowed: their arguments are literals with no spaces, quotes or paths,
+ * which is the only shape that cannot be mangled.
+ */
+function checkScCreate(file: string, source: string): Finding[] {
+  const findings: Finding[] = [];
+
+  stripComments(source)
+    .split('\n')
+    .forEach((line, index) => {
+      if (!/\bsc(?:\.exe)?\b/i.test(line)) return;
+      if (!/\b(create|config)\b/i.test(line)) return;
+      if (!/binPath\s*=/i.test(line)) return;
+
+      findings.push({
+        file,
+        line: index + 1,
+        message:
+          'sc.exe create/config with binPath= — PowerShell re-serialises the ' +
+          'value into a command line that sc.exe cannot parse (exit 1639). Use ' +
+          'New-Service -BinaryPathName, built by New-ServiceImagePath.',
+      });
+    });
+
+  return findings;
+}
+
+/**
  * Block comments must be closed.
  *
  * An unterminated `<#` swallows the rest of the file, and PowerShell reports it
@@ -312,6 +350,7 @@ function main(): void {
     findings.push(...checkAsciiOnly(name, source));
     findings.push(...checkScriptRootInParamBlock(name, source));
     findings.push(...checkUnguardedEnvPaths(name, source));
+    findings.push(...checkScCreate(name, source));
     findings.push(...checkBlockComments(name, source));
   }
 
@@ -325,6 +364,25 @@ function main(): void {
   }
 
   const shell = findPowerShell();
+
+  if (shell !== undefined) {
+    // The service-argument regression suite. Run rather than merely parsed:
+    // sc.exe exit 1639 was a malformed argument string, and only an assertion
+    // on the built string can stop that recurring.
+    const suite = join(scriptDir, 'service-image-path.tests.ps1');
+    if (existsSync(suite)) {
+      try {
+        execFileSync(shell, ['-NoProfile', '-File', suite], { stdio: 'inherit' });
+      } catch {
+        findings.push({
+          file: 'service-image-path.tests.ps1',
+          line: 1,
+          message: 'service-argument assertions FAILED (output above).',
+        });
+      }
+    }
+  }
+
   if (shell === undefined) {
     console.log(
       'PowerShell is not installed — syntax parsing SKIPPED.\n' +

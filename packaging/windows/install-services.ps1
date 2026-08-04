@@ -28,6 +28,21 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+<#
+    Resolved before use, never in a parameter default -- see fetch-runtimes.ps1.
+    A failure here is captured: mehvar.iss redirects both PowerShell streams to
+    a file before this script is reached, so even a dot-source that throws is
+    logged.
+#>
+$MyRoot =
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) { $PSScriptRoot }
+    elseif (-not [string]::IsNullOrWhiteSpace($MyInvocation.MyCommand.Path)) {
+        Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    else { (Get-Location).Path }
+
+. (Join-Path $MyRoot 'lib-service.ps1')
+
 $PgBin      = Join-Path $InstallDir 'pgsql\bin'
 $NodeExe    = Join-Path $InstallDir 'runtime\node.exe'
 $AppDir     = Join-Path $InstallDir 'app'
@@ -381,17 +396,80 @@ for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
 "$NodeExe" "$AppDir\server.js" >> "$LogDir\node.log" 2>&1
 "@ | Set-Content -Path $wrapper -Encoding ascii
 
-    & sc.exe create $AppService binPath= "cmd.exe /c `"$wrapper`"" start= auto DisplayName= "Mehvar Node" | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "Could not create the $AppService service (sc.exe exit $LASTEXITCODE)." }
+    <#
+        Registered with New-Service, NOT `sc.exe create`.
 
-    & sc.exe description $AppService "Runs the Mehvar Pharmacy counter server." | Out-Null
+        The sc.exe form failed on a real machine with exit 1639,
+        ERROR_INVALID_COMMAND_LINE. The argument array PowerShell builds is
+        correct -- verified by echoing raw argv -- but Windows has no argv:
+        those arguments are serialised back into one command-line STRING that
+        sc.exe re-parses, and a value holding both spaces and quotes acquires
+        backslash-escaped quotes that sc.exe's parser does not implement.
 
-    # Restart on failure, three times, then leave it for someone to look at.
-    # A counter that silently stops restarting is worse than one that is down.
-    & sc.exe failure $AppService reset= 86400 actions= restart/5000/restart/10000/restart/30000 | Out-Null
+        New-Service passes -BinaryPathName to the Win32 CreateService API
+        directly. There is no command line, so there is nothing to escape and
+        nothing to re-parse. That is why this is a fix rather than a different
+        guess about quoting.
+
+        See lib-service.ps1 and service-image-path.tests.ps1.
+    #>
+    $imagePath = New-ServiceImagePath -Interpreter (Get-CmdExePath) -ScriptPath $wrapper
+    Write-Log "   service ImagePath: $imagePath"
+    Write-Log "   New-Service -Name $AppService -DisplayName 'Mehvar Node' -StartupType Automatic"
+
+    New-Service -Name $AppService `
+                -BinaryPathName $imagePath `
+                -DisplayName 'Mehvar Node' `
+                -Description 'Runs the Mehvar Pharmacy counter server.' `
+                -StartupType Automatic | Out-Null
+
+    <#
+        Failure actions have no API on New-Service, so sc.exe is still needed
+        here -- but every argument is a literal with no spaces, no quotes and no
+        paths, which is the only shape of sc.exe call that cannot be mangled.
+
+        Restart three times, then stop and leave it for someone to look at: a
+        counter that silently restarts forever hides the fault it is papering
+        over.
+    #>
+    Invoke-Tool -FilePath 'sc.exe' -Arguments @(
+        'failure', $AppService, 'reset=', '86400',
+        'actions=', 'restart/5000/restart/10000/restart/30000'
+    )
 }
 
-Start-Service -Name $AppService
+<#
+    Starting it is a separate concern from registering it, and the likely
+    failure here is structural rather than a typo.
+
+    A Windows service image is expected to call StartServiceCtrlDispatcher and
+    report back to the Service Control Manager within about 30 seconds. Neither
+    cmd.exe nor node.exe does: they are ordinary programs. The SCM therefore
+    times out and reports 1053, "the service did not respond to the start
+    request in a timely fashion" -- even though the process itself started fine
+    and may still be running.
+
+    This is the gap README.md already listed under Known unknowns ("Windows has
+    no native supervisor for a plain executable; NSSM is the fallback"). It is
+    named explicitly here so that if it happens, the log says what it is and
+    what the options are, instead of leaving another exit code to decode.
+#>
+try {
+    Start-Service -Name $AppService
+} catch {
+    $message = $_.Exception.Message
+    Write-Log "   Start-Service failed: $message" 'ERROR'
+
+    if ($message -match '1053|timely fashion') {
+        throw ("The $AppService service was registered, but Windows could not start it (1053). " +
+               'A Windows service image must talk to the Service Control Manager, and node.exe ' +
+               'does not -- so a service wrapping it can be created but never started. This needs ' +
+               'a service supervisor (NSSM or WinSW) or a scheduled task at startup, not a ' +
+               'different command line. See packaging/windows/README.md.')
+    }
+    throw
+}
+
 Set-Service  -Name $AppService -StartupType Automatic
 
 # ---------------------------------------------------------------------------

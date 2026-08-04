@@ -58,6 +58,7 @@ Source: "{#PayloadDir}\migrations\*"; DestDir: "{app}\migrations"; Flags: ignore
 Source: "{#PayloadDir}\runtime\*";    DestDir: "{app}\runtime";    Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\VERSION";      DestDir: "{app}";            Flags: ignoreversion
+Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}install-services.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}verify-install.ps1";    DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}counter-shortcut.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
