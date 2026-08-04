@@ -174,19 +174,23 @@ function checkAsciiOnly(file: string, source: string): Finding[] {
 }
 
 /**
- * `sc.exe create` / `sc.exe config` with a `binPath=`.
+ * Registering the counter service without WinSW.
  *
- * This failed on a real machine with exit 1639, ERROR_INVALID_COMMAND_LINE.
- * The argument array PowerShell builds is right; the corruption is that Windows
- * has no argv, so PowerShell must serialise those arguments back into one
- * command-line string for `sc.exe` to re-parse — and a `binPath=` value holding
- * both spaces and quotes acquires backslash-escaped quotes that sc.exe's parser
- * does not implement.
+ * Two failures live here, and only the second is fatal to the approach.
  *
- * `New-Service -BinaryPathName` hands the string to the Win32 CreateService API
- * with no command line in between. Other `sc.exe` verbs (`failure`, `delete`)
- * stay allowed: their arguments are literals with no spaces, quotes or paths,
- * which is the only shape that cannot be mangled.
+ * `sc.exe create ... binPath=` failed with exit 1639: Windows has no argv, so
+ * PowerShell serialises the argument array back into one command-line string
+ * for sc.exe to re-parse, and a value holding both spaces and quotes acquires
+ * backslash-escaped quotes sc.exe's parser does not implement.
+ *
+ * `New-Service` fixes that — and still produces a service that cannot start. A
+ * Windows service image must call `StartServiceCtrlDispatcher` and answer the
+ * Service Control Manager within about thirty seconds; `node.exe` never does,
+ * so the SCM kills it with 1053 however it was registered.
+ *
+ * WinSW is service-aware and runs node as a supervised child. Other `sc.exe`
+ * verbs (`delete`) stay allowed: their arguments are literals with no spaces,
+ * quotes or paths, the only shape that cannot be mangled.
  */
 function checkScCreate(file: string, source: string): Finding[] {
   const findings: Finding[] = [];
@@ -194,17 +198,25 @@ function checkScCreate(file: string, source: string): Finding[] {
   stripComments(source)
     .split('\n')
     .forEach((line, index) => {
-      if (!/\bsc(?:\.exe)?\b/i.test(line)) return;
-      if (!/\b(create|config)\b/i.test(line)) return;
-      if (!/binPath\s*=/i.test(line)) return;
+      const scCreate =
+        /\bsc(?:\.exe)?\b/i.test(line) &&
+        /\b(create|config)\b/i.test(line) &&
+        /binPath\s*=/i.test(line);
+      const newService = /\bNew-Service\b/i.test(line);
+
+      if (!scCreate && !newService) return;
 
       findings.push({
         file,
         line: index + 1,
-        message:
-          'sc.exe create/config with binPath= — PowerShell re-serialises the ' +
-          'value into a command line that sc.exe cannot parse (exit 1639). Use ' +
-          'New-Service -BinaryPathName, built by New-ServiceImagePath.',
+        message: scCreate
+          ? 'sc.exe create/config with binPath= — PowerShell re-serialises the ' +
+            'value into a command line sc.exe cannot parse (exit 1639), and the ' +
+            'resulting service could not start anyway (1053). WinSW registers ' +
+            'the service: MehvarNode.exe install.'
+          : 'New-Service registers node.exe as a service directly, which cannot ' +
+            'start: a service image must answer the SCM within ~30s and node ' +
+            'never does (1053). WinSW hosts it instead: MehvarNode.exe install.',
       });
     });
 
@@ -369,13 +381,13 @@ function main(): void {
     // The service-argument regression suite. Run rather than merely parsed:
     // sc.exe exit 1639 was a malformed argument string, and only an assertion
     // on the built string can stop that recurring.
-    const suite = join(scriptDir, 'service-image-path.tests.ps1');
+    const suite = join(scriptDir, 'service-descriptor.tests.ps1');
     if (existsSync(suite)) {
       try {
         execFileSync(shell, ['-NoProfile', '-File', suite], { stdio: 'inherit' });
       } catch {
         findings.push({
-          file: 'service-image-path.tests.ps1',
+          file: 'service-descriptor.tests.ps1',
           line: 1,
           message: 'service-argument assertions FAILED (output above).',
         });

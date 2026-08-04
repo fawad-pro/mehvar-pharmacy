@@ -73,7 +73,30 @@ function Remove-ServiceSafely {
 
 Write-Host "`n  Removing Mehvar services`n"
 
-# Application first: it holds the database connections.
+<#
+    Application first: it holds the database connections.
+
+    WinSW owns this service, so WinSW removes it. `MehvarNode.exe uninstall`
+    stops the child process, deregisters with the SCM and cleans up its own
+    state -- `sc delete` would deregister the service while leaving node
+    running, which is how an uninstall ends with a port still bound and a file
+    lock on the directory being deleted.
+#>
+$serviceHost = Join-Path $InstallDir "$AppService.exe"
+if (Test-Path $serviceHost) {
+    Write-Host "  Stopping $AppService via WinSW"
+    & $serviceHost stop 2>&1 | Out-Null
+    & $serviceHost uninstall 2>&1 | Out-Null
+
+    # The SCM keeps a service "marked for deletion" until every handle closes.
+    foreach ($attempt in 1..15) {
+        if (-not (Get-Service -Name $AppService -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Seconds 1
+    }
+}
+
+# Falls through to sc.exe if WinSW is already gone -- an uninstall must finish
+# even when the install it is undoing was incomplete.
 Remove-ServiceSafely -Name $AppService
 
 # pg_ctl unregister is the clean path; sc.exe delete is the fallback.

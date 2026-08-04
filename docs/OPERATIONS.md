@@ -85,6 +85,11 @@ Nothing else is required — no terminal, no Docker, no npm, no commands.
 3. Still stuck: Start Menu → **Support bundle**, and send the file over
    WhatsApp.
 
+The service is hosted by WinSW, which restarts the counter automatically three
+times (after 5s, 10s and 30s) before giving up and leaving it stopped for
+someone to look at. If it stopped itself, something is wrong that restarting
+will not fix — send the bundle rather than restarting it a fourth time.
+
 ### What "the counter keeps selling" actually means
 
 Sales, settlements, quick items and customers captured while the server is down

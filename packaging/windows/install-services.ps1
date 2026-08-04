@@ -375,102 +375,94 @@ Invoke-Tool -FilePath $NodeExe -Arguments @((Join-Path $BinDir 'db\init.js')) -E
 # ---------------------------------------------------------------------------
 Write-Step 'Registering the Mehvar Node service'
 
-if (-not (Get-Service -Name $AppService -ErrorAction SilentlyContinue)) {
-    <#
-        `sc.exe` supervises any executable; the wrapper exists only to load the
-        configuration and point Node at server.js from the right directory.
+<#
+    Hosted by WinSW, not registered directly.
 
-        The .env file is parsed by cmd rather than by `node -r dotenv/config`.
-        Next's standalone server does not load dotenv itself, and dotenv is a
-        devDependency that Next never traces into the standalone tree -- so the
-        preload would fail to resolve and the service would not start at all.
-        The `for /f` loop needs nothing but cmd. `eol=#` skips comments and
-        `tokens=1,* delims==` keeps values containing `=` intact, which matters
-        because connection URLs and base64 secrets both can.
-    #>
-    $wrapper = Join-Path $InstallDir 'mehvar-node.cmd'
-    @"
-@echo off
-cd /d "$AppDir"
-for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
-"$NodeExe" "$AppDir\server.js" >> "$LogDir\node.log" 2>&1
-"@ | Set-Content -Path $wrapper -Encoding ascii
+    node.exe cannot be a Windows service. A service image must call
+    StartServiceCtrlDispatcher and answer the Service Control Manager within
+    about thirty seconds; node never does, so the SCM kills it with 1053
+    however the service was registered. Two rounds went into the registration
+    command line (sc.exe exit 1639) before that became visible -- the command
+    line was genuinely broken, but fixing it only moved the failure.
 
-    <#
-        Registered with New-Service, NOT `sc.exe create`.
+    WinSW is service-aware: the SCM talks to WinSW, WinSW runs node as a child
+    and supervises it. It also owns the restart policy and log rotation, which
+    were otherwise `sc.exe failure` plus a log roller nobody had written.
 
-        The sc.exe form failed on a real machine with exit 1639,
-        ERROR_INVALID_COMMAND_LINE. The argument array PowerShell builds is
-        correct -- verified by echoing raw argv -- but Windows has no argv:
-        those arguments are serialised back into one command-line STRING that
-        sc.exe re-parses, and a value holding both spaces and quotes acquires
-        backslash-escaped quotes that sc.exe's parser does not implement.
+    The descriptor is built by New-WinSwDescriptor in lib-service.ps1 and
+    pinned by service-descriptor.tests.ps1.
+#>
+$WinSwSource  = Join-Path $InstallDir 'winsw\WinSW.exe'
+$ServiceHost  = Join-Path $InstallDir "$AppService.exe"
+$ServiceXml   = Join-Path $InstallDir "$AppService.xml"
+$ServeScript  = Join-Path $BinDir 'ops\serve.js'
 
-        New-Service passes -BinaryPathName to the Win32 CreateService API
-        directly. There is no command line, so there is nothing to escape and
-        nothing to re-parse. That is why this is a fix rather than a different
-        guess about quoting.
-
-        See lib-service.ps1 and service-image-path.tests.ps1.
-    #>
-    $imagePath = New-ServiceImagePath -Interpreter (Get-CmdExePath) -ScriptPath $wrapper
-    Write-Log "   service ImagePath: $imagePath"
-    Write-Log "   New-Service -Name $AppService -DisplayName 'Mehvar Node' -StartupType Automatic"
-
-    New-Service -Name $AppService `
-                -BinaryPathName $imagePath `
-                -DisplayName 'Mehvar Node' `
-                -Description 'Runs the Mehvar Pharmacy counter server.' `
-                -StartupType Automatic | Out-Null
-
-    <#
-        Failure actions have no API on New-Service, so sc.exe is still needed
-        here -- but every argument is a literal with no spaces, no quotes and no
-        paths, which is the only shape of sc.exe call that cannot be mangled.
-
-        Restart three times, then stop and leave it for someone to look at: a
-        counter that silently restarts forever hides the fault it is papering
-        over.
-    #>
-    Invoke-Tool -FilePath 'sc.exe' -Arguments @(
-        'failure', $AppService, 'reset=', '86400',
-        'actions=', 'restart/5000/restart/10000/restart/30000'
-    )
+if (-not (Test-Path $WinSwSource)) {
+    throw "WinSW is missing at $WinSwSource -- the payload is incomplete. Run fetch-runtimes.ps1."
+}
+if (-not (Test-Path $ServeScript)) {
+    throw "The service entry point is missing at $ServeScript -- the payload is incomplete."
 }
 
 <#
-    Starting it is a separate concern from registering it, and the likely
-    failure here is structural rather than a typo.
-
-    A Windows service image is expected to call StartServiceCtrlDispatcher and
-    report back to the Service Control Manager within about 30 seconds. Neither
-    cmd.exe nor node.exe does: they are ordinary programs. The SCM therefore
-    times out and reports 1053, "the service did not respond to the start
-    request in a timely fashion" -- even though the process itself started fine
-    and may still be running.
-
-    This is the gap README.md already listed under Known unknowns ("Windows has
-    no native supervisor for a plain executable; NSSM is the fallback"). It is
-    named explicitly here so that if it happens, the log says what it is and
-    what the options are, instead of leaving another exit code to decode.
+    WinSW takes its identity from its own filename: MehvarNode.exe reads
+    MehvarNode.xml. Copying rather than renaming keeps winsw\WinSW.exe intact
+    for a repair install.
 #>
-try {
-    Start-Service -Name $AppService
-} catch {
-    $message = $_.Exception.Message
-    Write-Log "   Start-Service failed: $message" 'ERROR'
+Copy-Item -Path $WinSwSource -Destination $ServiceHost -Force
+Write-Log "   service host: $ServiceHost"
 
-    if ($message -match '1053|timely fashion') {
-        throw ("The $AppService service was registered, but Windows could not start it (1053). " +
-               'A Windows service image must talk to the Service Control Manager, and node.exe ' +
-               'does not -- so a service wrapping it can be created but never started. This needs ' +
-               'a service supervisor (NSSM or WinSW) or a scheduled task at startup, not a ' +
-               'different command line. See packaging/windows/README.md.')
+$descriptor = New-WinSwDescriptor `
+    -ServiceId        $AppService `
+    -DisplayName      'Mehvar Node' `
+    -Description      'Runs the Mehvar Pharmacy counter server.' `
+    -NodeExe          $NodeExe `
+    -ServerScript     $ServeScript `
+    -WorkingDirectory $AppDir `
+    -LogDirectory     $LogDir `
+    -EnvFile          $EnvFile
+
+# ASCII: WinSW reads the descriptor as XML, and a BOM confuses some parsers.
+Set-Content -Path $ServiceXml -Value $descriptor -Encoding ascii
+Write-Log "   descriptor:   $ServiceXml"
+
+<#
+    Idempotent: `install` on an existing service fails, and a repair install
+    must converge rather than break. Uninstall first if it is already there.
+#>
+if (Get-Service -Name $AppService -ErrorAction SilentlyContinue) {
+    Write-Log '   service already present -- stopping and removing it first'
+    & $ServiceHost stop   2>&1 | ForEach-Object { Write-Log "   | $_" 'DEBUG' }
+    & $ServiceHost uninstall 2>&1 | ForEach-Object { Write-Log "   | $_" 'DEBUG' }
+
+    # The SCM marks a service for deletion until every handle closes; installing
+    # again too soon fails with "marked for deletion".
+    foreach ($attempt in 1..15) {
+        if (-not (Get-Service -Name $AppService -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Seconds 1
     }
-    throw
 }
 
-Set-Service  -Name $AppService -StartupType Automatic
+Invoke-Tool -FilePath $ServiceHost -Arguments @('install')
+
+Write-Step 'Starting the Mehvar Node service'
+Invoke-Tool -FilePath $ServiceHost -Arguments @('start')
+
+<#
+    WinSW's `start` returns once the SCM reports the service running, which
+    means WinSW is up -- not that Next has finished booting. The counter is only
+    really up when it answers, and verify-install.ps1 checks that. Confirming
+    the service did not immediately die is still worth doing here, because a bad
+    descriptor shows up as a service that starts and stops within a second.
+#>
+Start-Sleep -Seconds 3
+$svc = Get-Service -Name $AppService -ErrorAction SilentlyContinue
+if (-not $svc) { throw "The $AppService service disappeared immediately after starting." }
+if ($svc.Status -ne 'Running') {
+    throw ("The $AppService service is $($svc.Status) seconds after start. " +
+           "Check $LogDir for WinSW's own log and node's output.")
+}
+Write-Log "   $AppService is Running"
 
 # ---------------------------------------------------------------------------
 # 8. Nightly backup, and the LAN
@@ -482,7 +474,7 @@ Write-Step 'Scheduling the nightly backup'
     written above. Pointing schtasks straight at node.exe would give the backup
     no DATABASE_URL and no MEHVAR_PG_BIN, so it would fail every night --
     silently, until somebody read a support bundle and noticed the backup-age
-    warning. The wrapper supplies the configuration, mirroring mehvar-node.cmd.
+    warning. The wrapper supplies the configuration.
 #>
 $backupWrapper = Join-Path $InstallDir 'mehvar-backup.cmd'
 @"

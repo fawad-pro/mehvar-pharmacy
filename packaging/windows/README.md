@@ -3,19 +3,22 @@
 > **Read this first.** Know exactly how much of this has been run, because the
 > honest answer is "some of it, and none of it on Windows."
 
-| Piece                                                  | Status                                                                                                                                                                                                       |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| All five `.ps1` files                                  | **Parsed** by PowerShell — `npm run lint:ps`                                                                                                                                                                 |
-| `install-services.ps1`                                 | **Run** on PowerShell 7 against a real PostgreSQL cluster: logging, step boundaries, the failure trap, the status file, and `initdb` all exercised. Stops at `Get-Service`, which does not exist off Windows |
-| The provisioning chain                                 | **Run end to end** with the _bundled_ scripts against a real database from a deliberately wrong working directory: migrate → grants → init → `first-run.txt` → verify                                        |
-| `fetch-runtimes.ps1`                                   | **Run for real**: binding, download, cache hit, extraction, top-level strip, `runtime/node.exe` in place. Only the PostgreSQL download is unexercised, and only because that host is network-blocked         |
-| `uninstall-services.ps1`                               | Binds and enters its body; stops at `Get-Service`                                                                                                                                                            |
-| `verify-install.ps1`, `counter-shortcut.ps1`           | **Parse only.** Almost entirely Windows-specific cmdlets                                                                                                                                                     |
-| `mehvar.iss`                                           | **Never compiled.** Inno Setup is Windows-only and jrsoftware.org is unreachable from the dev container. Reviewed, and cross-checked against `install-services.ps1` by `npm run lint:ps`                     |
-| Service registration, kiosk shortcut, the installer UI | **Never executed.** `sc.exe`, `schtasks`, firewall rules and Inno's own `[Code]` are Windows-only                                                                                                            |
+| Piece                                                                 | Status                                                                                                                                                                                                       |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| All five `.ps1` files                                                 | **Parsed** by PowerShell — `npm run lint:ps`                                                                                                                                                                 |
+| `install-services.ps1`                                                | **Run** on PowerShell 7 against a real PostgreSQL cluster: logging, step boundaries, the failure trap, the status file, and `initdb` all exercised. Stops at `Get-Service`, which does not exist off Windows |
+| The provisioning chain                                                | **Run end to end** with the _bundled_ scripts against a real database from a deliberately wrong working directory: migrate → grants → init → `first-run.txt` → verify                                        |
+| `fetch-runtimes.ps1`                                                  | **Run for real**: binding, download, cache hit, extraction, top-level strip, `runtime/node.exe` in place. Only the PostgreSQL download is unexercised, and only because that host is network-blocked         |
+| `uninstall-services.ps1`                                              | Binds and enters its body; stops at `Get-Service`                                                                                                                                                            |
+| `verify-install.ps1`, `counter-shortcut.ps1`                          | **Parse only.** Almost entirely Windows-specific cmdlets                                                                                                                                                     |
+| `mehvar.iss`                                                          | **Never compiled.** Inno Setup is Windows-only and jrsoftware.org is unreachable from the dev container. Reviewed, and cross-checked against `install-services.ps1` by `npm run lint:ps`                     |
+| `serve.js` (what WinSW supervises)                                    | **Run for real**: bundled, then started with an empty environment and the wrong working directory -- loaded `.env`, booted Next, answered HTTP 200 on `/login`                                               |
+| WinSW fetch + SHA-256 pin                                             | **Run for real**, including refusing a tampered binary                                                                                                                                                       |
+| WinSW `install` / `start` / `uninstall`, kiosk shortcut, installer UI | **Never executed.** WinSW service control, `schtasks`, firewall rules and Inno's own `[Code]` are Windows-only                                                                                               |
 
-So: syntax and argument handling are real evidence now. Service registration,
-`initdb`, the kiosk shortcut and the installer itself are still first drafts.
+So: syntax, argument handling, the provisioning chain and the served
+application are real evidence now. Registering the service with the SCM, the
+kiosk shortcut and the installer UI are still first drafts.
 
 Roadmap Phase 1's own risk section named this: _"real shop hardware is the
 unknown, and it is deliberately met here with the founder physically present."_
@@ -41,6 +44,44 @@ So Setup:
 4. says so explicitly if the log itself could not be written, rather than
    pointing at a file that will not be there.
 
+## Service hosting: WinSW
+
+**node.exe cannot be a Windows service.** A service image must call
+`StartServiceCtrlDispatcher` and answer the Service Control Manager within about
+thirty seconds. Node never does, so the SCM kills it with **1053** however the
+service was registered. Two rounds went into the registration command line
+(`sc.exe` exit **1639**) before that became visible: the command line was
+genuinely broken, but fixing it only moved the failure.
+
+[WinSW](https://github.com/winsw/winsw) (MIT) is a service-aware host. The SCM
+talks to WinSW; WinSW runs node as a supervised child.
+
+|                |                                                                                                                      |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Binary         | `winsw/WinSW.exe`, pinned to v2.12.0 and **SHA-256 verified** at fetch time                                          |
+| Registered as  | `MehvarNode.exe` + `MehvarNode.xml` in the install root — WinSW takes its identity from its own filename             |
+| Runs           | `runtime\node.exe "app\bin\ops\serve.js"`, working directory `app\`                                                  |
+| Restart policy | three escalating restarts (5s, 10s, 30s), then stop; failure count resets daily                                      |
+| Logs           | `C:\ProgramData\Mehvar\logs`, rolled by size, 8 kept                                                                 |
+| Removal        | `MehvarNode.exe stop` then `uninstall` — never `sc delete`, which deregisters the service while leaving node running |
+
+`serve.js` exists because the two obvious alternatives fail: pointing the
+service at `server.js` gives a server with no configuration (Next's standalone
+server reads `process.env` and never loads a `.env` file), and
+`node -r dotenv/config server.js` cannot resolve `dotenv`, which Next does not
+trace into the standalone tree. `serve.js` is bundled with `dotenv` compiled in,
+loads the environment, and hands over to the standalone server **in the same
+process** — so the PID WinSW watches is the PID actually serving, which is what
+makes its restart policy mean anything.
+
+The descriptor is built by `New-WinSwDescriptor` in `lib-service.ps1` and pinned
+by 20 assertions in `service-descriptor.tests.ps1`.
+
+The environment is **not** frozen into the descriptor: WinSW passes only
+`DOTENV_CONFIG_PATH`, and `serve.js` reads the file at startup. So an owner who
+edits `MEHVAR_BACKUP_DIR` in `.env` and restarts the service gets what they
+asked for.
+
 ## Rules that cost round-trips
 
 Each of these shipped, failed on a real machine, and is now enforced by
@@ -63,7 +104,9 @@ Each of these shipped, failed on a real machine, and is now enforced by
    ERROR_INVALID_COMMAND_LINE). Use `New-Service -BinaryPathName`, which reaches
    `CreateService` with no command line in between. `service-image-path.tests.ps1`
    pins the built string.
-5. **Never put a non-ASCII character in a `.ps1`.** Windows PowerShell 5.1
+5. **Never register node.exe as a Windows service directly**, with `sc.exe
+create` or `New-Service`. It cannot start (1053). WinSW hosts it.
+6. **Never put a non-ASCII character in a `.ps1`.** Windows PowerShell 5.1
    reads a no-BOM `.ps1` using the system ANSI code page, not UTF-8. An em dash
    (`E2 80 94`) then arrives as three characters ending in U+201D — and
    PowerShell accepts curly quotes as string delimiters, so a dash inside a
@@ -100,7 +143,7 @@ npm install --os=win32 --cpu=x64 --include=optional
 # 2. Assemble the application payload into dist\package
 npm run package:build
 
-# 3. Fetch the Node runtime and PostgreSQL binaries (large, cached, yearly)
+# 3. Fetch Node, PostgreSQL and WinSW (large, cached, yearly; WinSW hash-pinned)
 powershell -ExecutionPolicy Bypass -File packaging\windows\fetch-runtimes.ps1
 
 # 4. Compile the installer  (finds ISCC.exe itself; Inno Setup 5-7)

@@ -56,6 +56,8 @@ const OPS_ENTRYPOINTS = [
   'scripts/ops/backup.ts',
   'scripts/ops/restore-drill.ts',
   'scripts/ops/support-bundle.ts',
+  // The service entry point WinSW runs. Bundled so `dotenv` is compiled in.
+  'scripts/ops/serve.ts',
 ];
 
 /**

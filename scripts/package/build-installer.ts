@@ -35,6 +35,9 @@ const REQUIRED_PAYLOAD: ReadonlyArray<{ path: string; producedBy: string }> = [
   { path: 'VERSION', producedBy: 'npm run package:build' },
   { path: 'runtime/node.exe', producedBy: 'packaging\\windows\\fetch-runtimes.ps1' },
   { path: 'pgsql/bin/initdb.exe', producedBy: 'packaging\\windows\\fetch-runtimes.ps1' },
+  // WinSW hosts the counter service; node.exe cannot be one on its own.
+  { path: 'winsw/WinSW.exe', producedBy: 'packaging\\windows\\fetch-runtimes.ps1' },
+  { path: 'app/bin/ops/serve.js', producedBy: 'npm run package:build' },
 ];
 
 function assertPayloadComplete(): void {

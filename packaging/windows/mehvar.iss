@@ -57,6 +57,7 @@ Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignore
 Source: "{#PayloadDir}\migrations\*"; DestDir: "{app}\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\runtime\*";    DestDir: "{app}\runtime";    Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadDir}\winsw\*";      DestDir: "{app}\winsw";      Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\VERSION";      DestDir: "{app}";            Flags: ignoreversion
 Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}install-services.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
@@ -411,9 +412,13 @@ Type: filesandordirs; Name: "{app}\app"
 ; The three .cmd wrappers are written by install-services.ps1 at post-install,
 ; not installed by Setup — so Setup does not know to remove them, and without
 ; these lines an uninstall leaves {app} behind holding three orphaned files.
-Type: files; Name: "{app}\mehvar-node.cmd"
 Type: files; Name: "{app}\mehvar-backup.cmd"
 Type: files; Name: "{app}\mehvar-support.cmd"
+
+; WinSW's service host, descriptor and its own logs, all written post-install.
+Type: files; Name: "{app}\MehvarNode.exe"
+Type: files; Name: "{app}\MehvarNode.xml"
+Type: files; Name: "{app}\MehvarNode.*.log"
 
 ; NOTE: {commonappdata}\Mehvar is deliberately NOT deleted. It holds the
 ; database and every backup. An uninstall that destroys a pharmacy's records

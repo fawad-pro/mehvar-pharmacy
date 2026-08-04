@@ -1,94 +1,143 @@
 <#
 .SYNOPSIS
-    Building a Windows service ImagePath, correctly and testably.
+    Building the WinSW service descriptor, correctly and testably.
 
 .DESCRIPTION
     Extracted from install-services.ps1 so it can be asserted against rather
-    than adjusted by trial and error. `service-image-path.tests.ps1` is the
+    than adjusted by trial and error. `service-descriptor.tests.ps1` is the
     regression suite; `npm run lint:ps` runs it.
 
-    WHY THIS EXISTS
+    WHY WinSW
 
-    Registering the service with `sc.exe` failed on a real machine with exit
-    1639, ERROR_INVALID_COMMAND_LINE:
+    node.exe is not a Windows service. A service image must call
+    StartServiceCtrlDispatcher and answer the Service Control Manager within
+    about thirty seconds; node does not, so the SCM kills it with 1053 no matter
+    how the service was registered. Two rounds were spent on the registration
+    command line (sc.exe exit 1639) before that became the visible problem --
+    the command line was genuinely broken, but fixing it only moved the failure.
 
-        sc.exe create MehvarNode binPath= "cmd.exe /c `"$wrapper`"" ...
+    WinSW is a service-aware host: the SCM talks to WinSW, WinSW runs node as a
+    child and supervises it. MIT licensed, a single self-contained .exe, no
+    runtime prerequisite, configured by one XML file beside it. It also brings
+    the restart policy and log rotation that would otherwise be `sc.exe failure`
+    plus a hand-rolled log roller.
 
-    The argument array PowerShell builds is correct -- `binPath=` and its value
-    are separate arguments, confirmed by echoing raw argv. The corruption is one
-    layer lower. Windows has no argv: PowerShell must serialise those arguments
-    back into a single command-line STRING, and `sc.exe` re-parses it. A value
-    holding both spaces and embedded quotes gets backslash-escaped quotes on the
-    way out, and sc.exe's parser does not implement that escaping.
+    WHY THIS FILE IS SEPARATE
 
-    The fix is not a better escape. It is to stop serialising: `New-Service`
-    hands -BinaryPathName to the Win32 CreateService API as a string, with no
-    command line in between and nothing to re-parse. That is why this fix does
-    not depend on knowing exactly which escaping rule sc.exe applies -- there is
-    no longer a command line for any rule to apply to.
-
-    The one quoting that remains is Windows' own: the SCM parses ImagePath with
-    CommandLineToArgvW rules, so a path containing spaces must be quoted. That
-    is a documented, stable rule, and it is what the tests pin.
+    Everything below is string construction, and string construction is exactly
+    what has failed repeatedly here. As a function it can be asserted against on
+    any machine; inline in the installer it could only be tested by installing.
 #>
 
 <#
 .SYNOPSIS
-    An ImagePath that runs $ScriptPath through a command interpreter.
+    XML-escape a value destined for an element body or attribute.
 
 .DESCRIPTION
-    Both paths are quoted unconditionally. "C:\Program Files\..." is the normal
-    case on Windows, not the exception, and quoting a path that needs no quotes
-    is harmless -- whereas the reverse silently truncates at the first space and
-    produces a service pointing at "C:\Program".
+    The descriptor carries real Windows paths and a generated password. An
+    ampersand or angle bracket that reaches the XML unescaped produces a file
+    WinSW cannot parse, and the service then fails to install for a reason that
+    has nothing to do with the service.
 #>
-function New-ServiceImagePath {
+function ConvertTo-XmlText {
     [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [string] $Interpreter,
-        [Parameter(Mandatory)] [string] $ScriptPath
-    )
+    param([Parameter(Mandatory)] [AllowEmptyString()] [string] $Value)
 
-    if ([string]::IsNullOrWhiteSpace($Interpreter)) {
-        throw 'New-ServiceImagePath: Interpreter is empty.'
-    }
-    if ([string]::IsNullOrWhiteSpace($ScriptPath)) {
-        throw 'New-ServiceImagePath: ScriptPath is empty.'
-    }
-    <#
-        A double quote inside either path cannot be represented here and is not
-        a real Windows path anyway. Refusing beats emitting an ImagePath that
-        parses into something else entirely.
-    #>
-    if ($Interpreter.Contains('"') -or $ScriptPath.Contains('"')) {
-        throw 'New-ServiceImagePath: paths must not contain double quotes.'
-    }
-
-    return ('"{0}" /c "{1}"' -f $Interpreter, $ScriptPath)
+    return $Value.
+        Replace('&', '&amp;').
+        Replace('<', '&lt;').
+        Replace('>', '&gt;').
+        Replace('"', '&quot;').
+        Replace("'", '&apos;')
 }
 
 <#
 .SYNOPSIS
-    cmd.exe, addressed absolutely.
+    The WinSW XML descriptor for the Mehvar counter service.
 
 .DESCRIPTION
-    A service ImagePath is resolved by the SCM, not by a shell, so a bare
-    "cmd.exe" depends on the service's PATH. %SystemRoot% is guarded because
-    Join-Path throws on a null -- the rule that has already cost three
-    round-trips.
+    Deliberately explicit about the restart policy and log handling, because
+    both are promises the product makes elsewhere:
+
+      - onfailure restart, three escalating delays, then stop. A counter that
+        restarts forever hides the fault it is papering over; one that never
+        restarts turns a transient error into a closed shop.
+      - roll-by-size logging, so node.log cannot fill the disk of a machine
+        nobody administers. The support bundle reads the newest of these.
+      - resetfailure daily, so a shop that crashes once a month is not treated
+        as a shop that crashed three times.
+
+    Environment comes from the .env file at runtime via serve.js, NOT from <env>
+    elements here. That keeps .env the single source of truth: an owner who
+    edits MEHVAR_BACKUP_DIR and restarts the service gets what they asked for,
+    rather than the value frozen into this XML at install time.
 #>
-function Get-CmdExePath {
+function New-WinSwDescriptor {
     [CmdletBinding()]
-    param([string] $SystemRoot = $env:SystemRoot)
+    param(
+        [Parameter(Mandatory)] [string] $ServiceId,
+        [Parameter(Mandatory)] [string] $DisplayName,
+        [Parameter(Mandatory)] [string] $Description,
+        [Parameter(Mandatory)] [string] $NodeExe,
+        [Parameter(Mandatory)] [string] $ServerScript,
+        [Parameter(Mandatory)] [string] $WorkingDirectory,
+        [Parameter(Mandatory)] [string] $LogDirectory,
+        [Parameter(Mandatory)] [string] $EnvFile
+    )
 
-    $root = if (-not [string]::IsNullOrWhiteSpace($SystemRoot)) { $SystemRoot } else { 'C:\Windows' }
+    foreach ($pair in @(
+        @{ Name = 'ServiceId';        Value = $ServiceId },
+        @{ Name = 'NodeExe';          Value = $NodeExe },
+        @{ Name = 'ServerScript';     Value = $ServerScript },
+        @{ Name = 'WorkingDirectory'; Value = $WorkingDirectory },
+        @{ Name = 'LogDirectory';     Value = $LogDirectory },
+        @{ Name = 'EnvFile';          Value = $EnvFile }
+    )) {
+        if ([string]::IsNullOrWhiteSpace($pair.Value)) {
+            throw "New-WinSwDescriptor: $($pair.Name) is empty."
+        }
+    }
 
-    <#
-        Joined with a literal backslash rather than Join-Path. Join-Path is
-        PowerShell-provider aware, so it resolves "C:" against the drive list
-        and fails outright anywhere the C: drive does not exist -- which makes
-        the function untestable off Windows for no benefit. A service ImagePath
-        is a plain Windows string; build it as one.
-    #>
-    return ($root.TrimEnd('\') + '\System32\cmd.exe')
+    $id      = ConvertTo-XmlText $ServiceId
+    $name    = ConvertTo-XmlText $DisplayName
+    $desc    = ConvertTo-XmlText $Description
+    $exe     = ConvertTo-XmlText $NodeExe
+    $script  = ConvertTo-XmlText $ServerScript
+    $workdir = ConvertTo-XmlText $WorkingDirectory
+    $logs    = ConvertTo-XmlText $LogDirectory
+    $envPath = ConvertTo-XmlText $EnvFile
+
+    return @"
+<service>
+  <id>$id</id>
+  <name>$name</name>
+  <description>$desc</description>
+
+  <executable>$exe</executable>
+  <arguments>"$script"</arguments>
+  <workingdirectory>$workdir</workingdirectory>
+
+  <!-- serve.js reads this and loads the file itself, so .env stays the single
+       source of truth rather than being frozen into this descriptor. -->
+  <env name="DOTENV_CONFIG_PATH" value="$envPath" />
+
+  <logpath>$logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>8</keepFiles>
+  </log>
+
+  <startmode>Automatic</startmode>
+
+  <!-- Escalating restarts, then stop and leave it for someone to look at. -->
+  <onfailure action="restart" delay="5 sec" />
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <resetfailure>1 day</resetfailure>
+
+  <!-- Give Next time to close connections before the process is killed. -->
+  <stoptimeout>15 sec</stoptimeout>
+  <stopparentprocessfirst>true</stopparentprocessfirst>
+</service>
+"@
 }
