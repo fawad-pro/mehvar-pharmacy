@@ -4,9 +4,9 @@
     Create the desktop shortcut the counter actually uses.
 
 .DESCRIPTION
-    ADR-6 and Phase 12 §6: a dedicated browser profile, kiosk printing, app
+    ADR-6 and Phase 12 section 6: a dedicated browser profile, kiosk printing, app
     mode, pinned and autostarted. The operator double-clicks one icon and gets
-    the sale screen — no address bar, no tabs, no other browsing.
+    the sale screen -- no address bar, no tabs, no other browsing.
 
     The dedicated profile is not tidiness. `--kiosk-printing` suppresses the
     print dialog for every page the profile opens, so it must not be the
@@ -17,7 +17,7 @@
     Use an IP, not a hostname: name resolution on a shop LAN is unreliable, and
     a counter that cannot resolve the server is a counter that cannot sell.
 
-    UNVERIFIED — see README.md. Never executed on Windows.
+    UNVERIFIED -- see README.md. Never executed on Windows.
 #>
 [CmdletBinding()]
 param(
@@ -61,7 +61,7 @@ if (-not (Test-Path $ProfileDir)) {
 
 $arguments = @(
     "--app=$url"                      # No address bar, no tabs.
-    "--user-data-dir=`"$ProfileDir`"" # Dedicated profile — see above.
+    "--user-data-dir=`"$ProfileDir`"" # Dedicated profile -- see above.
     '--kiosk-printing'                # ADR-6: receipts print without a dialog.
     '--no-first-run'
     '--no-default-browser-check'
@@ -76,7 +76,7 @@ function New-Shortcut {
     $link.TargetPath = $browser
     $link.Arguments = $arguments
     $link.WorkingDirectory = Split-Path $browser -Parent
-    $link.Description = 'Mehvar Pharmacy — counter'
+    $link.Description = 'Mehvar Pharmacy -- counter'
     $link.Save()
 }
 

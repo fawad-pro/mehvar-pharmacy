@@ -10,14 +10,14 @@
     bytes.
 
     Both are pinned. A pharmacy's runtime must not change because an upstream
-    "latest" moved — the whole point of bundling is that the shop machine runs
+    "latest" moved -- the whole point of bundling is that the shop machine runs
     what was tested, not what is current.
 
     PostgreSQL comes from EDB's ZIP archive rather than their interactive
     installer: the installer is GUI-driven and versioned independently of us,
     which is unacceptable in a silent install.
 
-    UNVERIFIED — see README.md. Never executed on Windows.
+    UNVERIFIED -- see README.md. Never executed on Windows.
 #>
 [CmdletBinding()]
 param(
@@ -25,7 +25,7 @@ param(
         Deliberately NOT defaulted to a $PSScriptRoot expression.
 
         Parameter defaults are evaluated during binding, and $PSScriptRoot can
-        be empty there — which is how this script died on a real Windows box
+        be empty there -- which is how this script died on a real Windows box
         before running a single line of its own logic. `Join-Path` refuses an
         empty -Path, so the only error anyone saw named Join-Path and said
         nothing about $PSScriptRoot or even which script had failed.
@@ -54,7 +54,7 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 }
 
 # Relative paths resolve against the session's location, not .NET's current
-# directory — those disagree whenever the session has changed location.
+# directory -- those disagree whenever the session has changed location.
 # Normalising also means errors name `C:\Mehvar\dist\package` rather than
 # `C:\Mehvar\packaging\windows\..\..\dist\package`.
 if (-not [System.IO.Path]::IsPathRooted($OutputRoot)) {

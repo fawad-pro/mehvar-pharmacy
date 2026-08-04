@@ -5,14 +5,14 @@
 
 .DESCRIPTION
     Called by mehvar.iss after files are copied. Everything a developer would
-    do by hand — create a database cluster, provision roles, migrate, grant,
-    register services — happens here, silently, because a pharmacy has no
+    do by hand -- create a database cluster, provision roles, migrate, grant,
+    register services -- happens here, silently, because a pharmacy has no
     developer tools and no terminal.
 
     Idempotent throughout. A repair install, or a re-run after a failure, must
     converge on a working system rather than a second broken one.
 
-    UNVERIFIED — see README.md. Never executed on Windows.
+    UNVERIFIED -- see README.md. Never executed on Windows.
 #>
 [CmdletBinding()]
 param(
@@ -57,11 +57,11 @@ $script:CurrentStep = 'starting up'
     Everything this script does goes to one file, in order, with timestamps.
 
     The first real install failed with nothing but "code 1" and an empty log
-    directory, because nothing here wrote a log and the only thing that did —
-    the service wrappers — is created at the very last step. So the log is
+    directory, because nothing here wrote a log and the only thing that did --
+    the service wrappers -- is created at the very last step. So the log is
     opened before any work, and every step and every child process writes to it
     whether it succeeds or not. Diagnosing a machine you cannot see is the whole
-    job (Phase 12 §7); a silent installer makes that impossible.
+    job (Phase 12 section 7); a silent installer makes that impossible.
 #>
 function Write-Log {
     param([string] $Message, [string] $Level = 'INFO')
@@ -131,7 +131,7 @@ function New-Secret {
     Run a child process, capturing BOTH streams into the log.
 
     `2>&1` merges native stderr into the pipeline, so a failure carries the
-    tool's own explanation rather than just an exit code — `migrate` saying
+    tool's own explanation rather than just an exit code -- `migrate` saying
     which folders it searched is the difference between a fix and another
     round-trip.
 #>
@@ -230,7 +230,7 @@ foreach ($attempt in 1..30) {
 if (-not $ready) { throw "PostgreSQL did not become ready on port $PgPort." }
 
 # ---------------------------------------------------------------------------
-# 3. Roles and database — PCN-001's two-role model
+# 3. Roles and database -- PCN-001's two-role model
 # ---------------------------------------------------------------------------
 Write-Step 'Provisioning the database and roles'
 
@@ -299,7 +299,7 @@ foreach ($identity in @('SYSTEM', 'Administrators')) {
 Set-Acl -Path $EnvFile -AclObject $acl
 
 # ---------------------------------------------------------------------------
-# 5. Migrate, then GRANT — never one without the other
+# 5. Migrate, then GRANT -- never one without the other
 # ---------------------------------------------------------------------------
 Write-Step 'Applying migrations'
 <#
@@ -307,14 +307,14 @@ Write-Step 'Applying migrations'
 
     `migrate` used to derive its folder from the working directory, which under
     Setup is wherever it launched PowerShell. It found nothing, treated that as
-    "no migrations yet", and exited ZERO against an empty database — so grants
+    "no migrations yet", and exited ZERO against an empty database -- so grants
     failed on the first missing table and the operator saw only "code 1". The
     script now refuses rather than no-ops, and this tells it exactly where the
     files are rather than leaving it to infer.
 #>
 $MigrationsDir = Join-Path $InstallDir 'migrations'
 if (-not (Test-Path $MigrationsDir)) {
-    throw "No migrations folder at $MigrationsDir — the payload is incomplete."
+    throw "No migrations folder at $MigrationsDir -- the payload is incomplete."
 }
 Write-Log "   migrations: $MigrationsDir"
 
@@ -329,7 +329,7 @@ Invoke-Tool -FilePath $NodeExe -Arguments @((Join-Path $BinDir 'db\migrate.js'))
     PCN-001, and the reason this is a step rather than a note: a REVOKE against
     the role that OWNS the tables is silently inert in PostgreSQL. Skip this and
     the pharmacy runs with ADR-1's immutability guarantee unenforced *and
-    looking enforced* — the failure PCN-001 was filed to prevent, reintroduced
+    looking enforced* -- the failure PCN-001 was filed to prevent, reintroduced
     at the installer layer. verify-install.ps1 proves it afterwards.
 #>
 Write-Step 'Applying grants (ADR-1 immutability)'
@@ -367,7 +367,7 @@ if (-not (Get-Service -Name $AppService -ErrorAction SilentlyContinue)) {
 
         The .env file is parsed by cmd rather than by `node -r dotenv/config`.
         Next's standalone server does not load dotenv itself, and dotenv is a
-        devDependency that Next never traces into the standalone tree — so the
+        devDependency that Next never traces into the standalone tree -- so the
         preload would fail to resolve and the service would not start at all.
         The `for /f` loop needs nothing but cmd. `eol=#` skips comments and
         `tokens=1,* delims==` keeps values containing `=` intact, which matters
@@ -402,7 +402,7 @@ Write-Step 'Scheduling the nightly backup'
 <#
     The task runs as SYSTEM, whose environment carries none of the settings
     written above. Pointing schtasks straight at node.exe would give the backup
-    no DATABASE_URL and no MEHVAR_PG_BIN, so it would fail every night —
+    no DATABASE_URL and no MEHVAR_PG_BIN, so it would fail every night --
     silently, until somebody read a support bundle and noticed the backup-age
     warning. The wrapper supplies the configuration, mirroring mehvar-node.cmd.
 #>
@@ -419,7 +419,7 @@ for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
     The Start Menu's "Support bundle" entry, for the same reason: the bundle's
     most useful sections are the verifier and backup age, and both need the
     configuration. A shortcut straight to node.exe would produce a bundle
-    reporting "DATABASE_URL is not set" — which describes the shortcut, not the
+    reporting "DATABASE_URL is not set" -- which describes the shortcut, not the
     pharmacy, and would send the founder chasing the wrong thing.
 
     Pauses at the end because a support bundle is run by a person who needs to
@@ -458,7 +458,7 @@ Write-Step 'Confirming the install'
 
 $firstRun = Join-Path $DataDir 'first-run.txt'
 if (-not (Test-Path $firstRun)) {
-    throw "Provisioning did not produce $firstRun — the pharmacy was not created."
+    throw "Provisioning did not produce $firstRun -- the pharmacy was not created."
 }
 
 $appSvc = Get-Service -Name $AppService -ErrorAction SilentlyContinue

@@ -4,17 +4,17 @@
     Prove the install is sound before anyone tries to sell on it.
 
 .DESCRIPTION
-    Phase 12 §2.4 requires post-deploy verification. On a platform deployment
+    Phase 12 section 2.4 requires post-deploy verification. On a platform deployment
     that meant checking a URL; on a shop machine it means checking that the
     services came up, the grants took, and the verifier agrees with the records.
 
     The grant assertion is the one that matters most. PCN-001 established that a
     REVOKE against the table owner is silently inert, so "the installer ran
-    grants" is not evidence — the only evidence is an UPDATE that fails. If
+    grants" is not evidence -- the only evidence is an UPDATE that fails. If
     this script's UPDATE ever SUCCEEDS, the install is bad no matter how
     healthy everything else looks.
 
-    UNVERIFIED — see README.md. Never executed on Windows.
+    UNVERIFIED -- see README.md. Never executed on Windows.
 #>
 [CmdletBinding()]
 param(
@@ -37,7 +37,7 @@ function Check {
         & $Test
         Write-Host "  [ ok ] $Name"
     } catch {
-        Write-Host "  [FAIL] $Name — $($_.Exception.Message)"
+        Write-Host "  [FAIL] $Name -- $($_.Exception.Message)"
         $script:failures += $Name
     }
 }
@@ -80,7 +80,7 @@ Check 'The counter answers on the sale screen' {
 
 Check 'Static assets are present (standalone omits them)' {
     if (-not (Test-Path (Join-Path $InstallDir 'app\.next\static'))) {
-        throw 'app\.next\static is missing — the packager did not copy it'
+        throw 'app\.next\static is missing -- the packager did not copy it'
     }
 }
 
@@ -96,14 +96,14 @@ Check 'Event tables are immutable for the app role (ADR-1 / PCN-001)' {
 
     & $psql $appUrl -v ON_ERROR_STOP=1 -c 'UPDATE sales SET total_paisa = total_paisa WHERE false' 2>$null
     if ($LASTEXITCODE -eq 0) {
-        throw 'UPDATE on sales SUCCEEDED — the app role can rewrite history'
+        throw 'UPDATE on sales SUCCEEDED -- the app role can rewrite history'
     }
 }
 
 Check 'The verifier agrees with the records (ADR-8)' {
     $env:DOTENV_CONFIG_PATH = $EnvFile
     & $NodeExe (Join-Path $BinDir 'db\verify.js')
-    if ($LASTEXITCODE -ne 0) { throw 'db:verify reported a mismatch — this is sev-1' }
+    if ($LASTEXITCODE -ne 0) { throw 'db:verify reported a mismatch -- this is sev-1' }
 }
 
 Check 'A backup can be taken and restored' {
@@ -111,7 +111,7 @@ Check 'A backup can be taken and restored' {
     & $NodeExe (Join-Path $BinDir 'ops\backup.js')
     if ($LASTEXITCODE -ne 0) { throw 'ops:backup failed' }
 
-    # Phase 12 §3: an untested backup is not a backup. The drill is the test,
+    # Phase 12 section 3: an untested backup is not a backup. The drill is the test,
     # and running it once at install is what makes the first one trustworthy.
     & $NodeExe (Join-Path $BinDir 'ops\restore-drill.js')
     if ($LASTEXITCODE -ne 0) { throw 'the restore drill failed' }

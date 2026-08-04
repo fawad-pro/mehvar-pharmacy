@@ -21,6 +21,26 @@ Roadmap Phase 1's own risk section named this: _"real shop hardware is the
 unknown, and it is deliberately met here with the founder physically present."_
 This directory is where that gets discovered.
 
+## The logging invariant
+
+**If Setup shows an error dialog, a log file explaining it already exists.**
+
+That invariant is enforced by `mehvar.iss`, not by the PowerShell it launches,
+and the distinction is the whole point. The second failed install produced no
+log because `install-services.ps1` failed to _parse_ — no line of it ran, so
+nothing it could have contained would have helped. Only the process that shows
+the dialog can guarantee the dialog comes with a log.
+
+So Setup:
+
+1. writes `C:\ProgramData\Mehvar\logs\setup.log` **before** launching anything;
+2. runs PowerShell through `cmd.exe /c ... > console.log 2>&1`, so parse errors
+   — which happen before the script exists as far as the script is concerned —
+   are captured instead of vanishing into a hidden window;
+3. reads that console log back and puts its tail in both the log and the dialog;
+4. says so explicitly if the log itself could not be written, rather than
+   pointing at a file that will not be there.
+
 ## Rules that cost round-trips
 
 Each of these shipped, failed on a real machine, and is now enforced by
@@ -36,6 +56,14 @@ Each of these shipped, failed on a real machine, and is now enforced by
    Under Setup the working directory is wherever it launched PowerShell. This
    is what made the first real install create an empty database and report
    success.
+4. **Never put a non-ASCII character in a `.ps1`.** Windows PowerShell 5.1
+   reads a no-BOM `.ps1` using the system ANSI code page, not UTF-8. An em dash
+   (`E2 80 94`) then arrives as three characters ending in U+201D — and
+   PowerShell accepts curly quotes as string delimiters, so a dash inside a
+   string closes it and the file fails to parse. **A file that fails to parse
+   runs no line at all**, which is why the second install produced no log.
+   `pwsh` reads `.ps1` as UTF-8 and parsed these files happily; checking on the
+   wrong runtime is the same mistake as checking on the wrong platform.
 
 ## What the log tells you
 

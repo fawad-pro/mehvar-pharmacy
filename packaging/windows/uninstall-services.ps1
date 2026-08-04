@@ -11,17 +11,17 @@
     holds the database and every backup. An uninstall that destroys a
     pharmacy's records because somebody was troubleshooting is not recoverable,
     and no confirmation dialog makes it a reasonable default. Removing the data
-    stays a separate, deliberate, manual act — the same posture ADR-1 takes
+    stays a separate, deliberate, manual act -- the same posture ADR-1 takes
     toward every other irreversible operation in the product.
 
     Best-effort throughout: an uninstall must finish even if a piece is already
     gone, or the machine is left half-removed and unfixable through the UI.
 
-    UNVERIFIED — see README.md. Never executed on Windows.
+    UNVERIFIED -- see README.md. Never executed on Windows.
 #>
 [CmdletBinding()]
 param(
-    # Not a $PSScriptRoot expression — see fetch-runtimes.ps1 for what that
+    # Not a $PSScriptRoot expression -- see fetch-runtimes.ps1 for what that
     # costs. It matters more here: this runs during uninstall, and a script
     # that throws during parameter binding leaves both services registered
     # against files the uninstaller is about to delete.

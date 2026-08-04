@@ -127,6 +127,53 @@ function checkUnguardedEnvPaths(file: string, source: string): Finding[] {
 }
 
 /**
+ * No non-ASCII bytes in a `.ps1`.
+ *
+ * This is the rule that would have prevented the second failed Windows
+ * install, and it is not about tidiness.
+ *
+ * Windows PowerShell 5.1 — which is what `powershell.exe` is, and what the
+ * installer runs — decodes a `.ps1` with no byte-order mark using the system
+ * ANSI code page, NOT UTF-8. An em dash written as UTF-8 `E2 80 94` therefore
+ * arrives as three ANSI characters, the last of which is U+201D. PowerShell
+ * accepts curly quotes as string delimiters, so a dash inside a double-quoted
+ * string CLOSES THE STRING, and the file fails to parse.
+ *
+ * A script that fails to parse runs no line at all. That is why the installer
+ * produced no log: there was nothing wrong with the logging, and nothing the
+ * script could have done, because the script never started.
+ *
+ * `pwsh` reads `.ps1` as UTF-8 and parses these files happily, which is
+ * precisely why the earlier check passed. Verifying on the wrong runtime is
+ * the same mistake as verifying on the wrong platform.
+ *
+ * ASCII-only is the fix that needs no BOM handling and cannot regress.
+ */
+function checkAsciiOnly(file: string, source: string): Finding[] {
+  const findings: Finding[] = [];
+
+  source.split('\n').forEach((line, index) => {
+    const match = /[^\x00-\x7F]/.exec(line);
+    if (match === null) return;
+
+    const char = match[0] ?? '';
+    findings.push({
+      file,
+      line: index + 1,
+      message:
+        `non-ASCII character ${JSON.stringify(char)} (U+${(char.codePointAt(0) ?? 0)
+          .toString(16)
+          .toUpperCase()
+          .padStart(4, '0')}) at column ${match.index + 1}. ` +
+        'Windows PowerShell 5.1 reads .ps1 as ANSI, which can turn this into a ' +
+        'string delimiter and stop the whole file parsing. Use ASCII.',
+    });
+  });
+
+  return findings;
+}
+
+/**
  * Block comments must be closed.
  *
  * An unterminated `<#` swallows the rest of the file, and PowerShell reports it
@@ -262,6 +309,7 @@ function main(): void {
   const findings: Finding[] = [];
   for (const name of files) {
     const source = readFileSync(join(scriptDir, name), 'utf8');
+    findings.push(...checkAsciiOnly(name, source));
     findings.push(...checkScriptRootInParamBlock(name, source));
     findings.push(...checkUnguardedEnvPaths(name, source));
     findings.push(...checkBlockComments(name, source));

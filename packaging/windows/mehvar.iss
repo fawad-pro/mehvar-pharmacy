@@ -85,6 +85,9 @@ var
     pass. Everything the Finish page offers is gated on it. }
   ProvisioningOk: Boolean;
   FailureSummary: String;
+  { Set if SaveStringToFile ever fails, so a failure dialog never points at a
+    log that does not exist. }
+  LogUnwritable: Boolean;
 
 procedure InitializeWizard;
 begin
@@ -144,10 +147,115 @@ begin
   end;
 end;
 
+{ ------------------------------------------------------------------------
+  Setup's own log.
+
+  THE INVARIANT: if Setup shows an error dialog, a log file explaining it
+  already exists. Nothing below may weaken that.
+
+  It is written by SETUP, not by the PowerShell it launches, because the
+  failure that made this necessary was PowerShell refusing to parse the
+  script at all -- no line ran, so nothing the script could have done would
+  have produced a log. Only the process that shows the dialog can guarantee
+  the dialog is accompanied by one.
+  ------------------------------------------------------------------------ }
+
+function LogDir(): String;
+begin
+  Result := ExpandConstant('{commonappdata}\Mehvar\logs');
+end;
+
+function SetupLogPath(): String;
+begin
+  Result := LogDir() + '\setup.log';
+end;
+
+procedure AppendLog(Line: String);
+begin
+  { ForceDirectories first: [Dirs] runs during installation, and this is
+    called from wizard events that can happen earlier. }
+  ForceDirectories(LogDir());
+  if not SaveStringToFile(SetupLogPath(), GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':')
+    + '  ' + Line + #13#10, True) then
+    { The last hole in the invariant. If the log cannot be written, the dialog
+      must say so rather than pointing at a file that will not be there --
+      otherwise "send me the log" sends the operator to an empty folder, which
+      is exactly the round-trip this whole mechanism exists to prevent. }
+    LogUnwritable := True;
+end;
+
+{ Appended to any failure message when the log could not be written. }
+function LogAdvice(): String;
+begin
+  if LogUnwritable then
+    Result := 'Setup could NOT write its log (permission denied at' + #13#10 +
+              LogDir() + ').' + #13#10 +
+              'Re-run Setup as Administrator, or send a photo of this message.'
+  else
+    Result := 'Send this file to Mehvar support:' + #13#10 + SetupLogPath();
+end;
+
+{ The last Count lines of a file, for putting a tool's own words in front of
+  whoever is reading the dialog. }
+function TailOf(FileName: String; Count: Integer): String;
+var
+  Lines: TArrayOfString;
+  Index, First: Integer;
+begin
+  Result := '';
+  if not LoadStringsFromFile(FileName, Lines) then
+    Exit;
+
+  First := GetArrayLength(Lines) - Count;
+  if First < 0 then
+    First := 0;
+
+  for Index := First to GetArrayLength(Lines) - 1 do
+    if Trim(Lines[Index]) <> '' then
+      Result := Result + Lines[Index] + #13#10;
+end;
+
 function PowerShellArgs(ScriptName, Extra: String): String;
 begin
   Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\')
     + ScriptName + '" ' + Extra;
+end;
+
+{ Run PowerShell with EVERY stream redirected to a file.
+
+  Through cmd.exe rather than Exec directly, because Exec cannot capture
+  output -- and the output is the whole point. A script that fails to PARSE
+  never runs a line, so its own logging is irrelevant; the only record of why
+  is what powershell.exe printed to stderr. That used to go to a hidden window
+  and vanish. Now it lands in a file Setup reads back. }
+function RunPowerShellLogged(ScriptName, Extra, ConsoleLog: String; var Output: String): Integer;
+var
+  ResultCode: Integer;
+  Command: String;
+begin
+  DeleteFile(ConsoleLog);
+
+  Command := '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') + '" '
+    + PowerShellArgs(ScriptName, Extra) + ' > "' + ConsoleLog + '" 2>&1"';
+
+  AppendLog('run: cmd.exe ' + Command);
+
+  if not Exec(ExpandConstant('{cmd}'), Command, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    AppendLog('FAILED to start cmd.exe at all.');
+    Output := 'Setup could not start cmd.exe.';
+    Result := -1;
+    Exit;
+  end;
+
+  Output := TailOf(ConsoleLog, 20);
+  AppendLog(ScriptName + ' exited with code ' + IntToStr(ResultCode));
+  if Trim(Output) <> '' then
+    AppendLog('--- output of ' + ScriptName + ' ---' + #13#10 + Output)
+  else
+    AppendLog(ScriptName + ' produced no output at all.');
+
+  Result := ResultCode;
 end;
 
 function ShellQuote(Value: String): String;
@@ -186,72 +294,87 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
-  Args: String;
   DataDir: String;
   Step: String;
   Detail: String;
-  LogPath: String;
+  Output: String;
+  ConsoleLog: String;
 begin
   if CurStep <> ssPostInstall then
     Exit;
 
   DataDir := ExpandConstant('{commonappdata}\Mehvar');
+  ConsoleLog := LogDir() + '\install-console.log';
   ProvisioningOk := False;
 
-  Args := PowerShellArgs('install-services.ps1',
+  { Written before anything can fail. From here on the invariant holds: a log
+    exists, so no dialog can appear without one. }
+  AppendLog('=== Mehvar {#AppVersion} provisioning ===');
+  AppendLog('InstallDir ' + ExpandConstant('{app}'));
+  AppendLog('DataDir    ' + DataDir);
+
+  ResultCode := RunPowerShellLogged('install-services.ps1',
       '-InstallDir '  + ShellQuote(ExpandConstant('{app}')) +
       ' -DataDir '    + ShellQuote(DataDir) +
       ' -ShopName '   + ShellQuote(ShopPage.Values[0]) +
       ' -ShopAddress '+ ShellQuote(ShopPage.Values[1]) +
       ' -ShopPhone '  + ShellQuote(ShopPage.Values[2]) +
       ' -OwnerName '  + ShellQuote(ShopPage.Values[3]) +
-      ' -OwnerPin '   + ShellQuote(PinPage.Values[0]));
+      ' -OwnerPin '   + ShellQuote(PinPage.Values[0]),
+      ConsoleLog, Output);
 
-  Exec('powershell.exe', Args, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
-
-  { The status file, not the exit code, is the source of truth: it names the
-    step. An exit code alone is what produced "code 1" and a wasted round-trip. }
-  Step    := StatusValue('STEP');
-  Detail  := StatusValue('DETAIL');
-  LogPath := StatusValue('LOG');
-  if LogPath = '' then
-    LogPath := DataDir + '\logs';
-
+  Step   := StatusValue('STEP');
+  Detail := StatusValue('DETAIL');
   ProvisioningOk := (StatusValue('STATE') = 'OK') and (ResultCode = 0);
 
   if not ProvisioningOk then
   begin
+    { No status file means the script never got far enough to write one --
+      usually that it never started. The console output is then the ONLY
+      evidence, which is exactly why it is captured. }
     if Step = '' then
-      Step := 'starting up (the installer did not get far enough to say)';
+    begin
+      Step := 'launching install-services.ps1 (it never reported a step)';
+      if Trim(Output) <> '' then
+        Detail := Output
+      else
+        Detail := 'PowerShell produced no output. Exit code ' + IntToStr(ResultCode) + '.';
+    end;
 
     FailureSummary :=
       'Setup could not finish configuring Mehvar.' + #13#10 + #13#10 +
       'Failed at:  ' + Step + #13#10 +
-      'Reason:     ' + Detail + #13#10 + #13#10 +
+      'Reason:' + #13#10 + Detail + #13#10 + #13#10 +
       'Nothing has been lost, and no pharmacy data was created.' + #13#10 +
-      'Send this file to Mehvar support:' + #13#10 + LogPath;
+      LogAdvice();
 
+    AppendLog('PROVISIONING FAILED at: ' + Step);
     MsgBox(FailureSummary, mbCriticalError, MB_OK);
     Exit;
   end;
 
-  Exec('powershell.exe', PowerShellArgs('counter-shortcut.ps1', '-Autostart'), '', SW_HIDE,
-       ewWaitUntilTerminated, ResultCode);
+  AppendLog('Provisioning OK.');
 
-  { Phase 12 §2.4: verify after deploying, always. A machine that fails this
-    must not be handed over, and the person installing needs to be told so
+  RunPowerShellLogged('counter-shortcut.ps1', '-Autostart',
+    LogDir() + '\shortcut-console.log', Output);
+
+  { Phase 12 section 2.4: verify after deploying, always. A machine that fails
+    this must not be handed over, and the person installing needs to be told so
     plainly rather than left to discover it during trading. }
-  if not Exec('powershell.exe',
-        PowerShellArgs('verify-install.ps1',
-          '-InstallDir ' + ShellQuote(ExpandConstant('{app}')) +
-          ' -DataDir '   + ShellQuote(DataDir)),
-        '', SW_SHOW, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+  ResultCode := RunPowerShellLogged('verify-install.ps1',
+      '-InstallDir ' + ShellQuote(ExpandConstant('{app}')) +
+      ' -DataDir '   + ShellQuote(DataDir),
+      LogDir() + '\verify-console.log', Output);
+
+  if ResultCode <> 0 then
   begin
     ProvisioningOk := False;
     FailureSummary :=
       'Mehvar installed, but the post-install checks did not all pass.' + #13#10 + #13#10 +
+      Output + #13#10 +
       'Do not hand this machine over yet.' + #13#10 +
-      'Send this file to Mehvar support:' + #13#10 + LogPath;
+      LogAdvice();
+    AppendLog('POST-INSTALL CHECKS FAILED.');
     MsgBox(FailureSummary, mbError, MB_OK);
   end;
 end;
