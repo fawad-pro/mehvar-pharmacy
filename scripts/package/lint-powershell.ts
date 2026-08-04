@@ -16,7 +16,7 @@
  *      and the same caveat applies: skipping is not passing.
  */
 import { execFileSync } from 'node:child_process';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -161,6 +161,59 @@ function parseWithPowerShell(shell: string, files: string[]): Finding[] {
   });
 }
 
+/**
+ * Cross-file consistency for `mehvar.iss`.
+ *
+ * The Inno Setup script cannot be compiled outside Windows, so nothing here
+ * reads it at all. These are the mistakes that have actually happened: a
+ * `[Icons]` entry pointing at a file nothing creates, and `[UninstallDelete]`
+ * still naming `{app}\bin` after the compiled scripts moved inside `app\`.
+ *
+ * Deliberately shallow. This is not a parser and should not grow into one —
+ * the compiler on the Windows box is the real check.
+ */
+function checkInnoSetupScript(file: string, source: string, wrapperNames: string[]): Finding[] {
+  const findings: Finding[] = [];
+  const lines = source.split('\n');
+
+  lines.forEach((line, index) => {
+    if (line.trimStart().startsWith(';')) return;
+
+    // Paths under {app} that Setup neither installs nor is told to create.
+    const target = /Filename:\s*"\{app\}\\([^"\\]+\.cmd)"/i.exec(line);
+    if (target !== null) {
+      const name = target[1];
+      if (name !== undefined && !wrapperNames.includes(name)) {
+        findings.push({
+          file,
+          line: index + 1,
+          message:
+            `[Icons] points at {app}\\${name}, which install-services.ps1 does not write. ` +
+            'The shortcut would dangle.',
+        });
+      }
+    }
+
+    // `bin\` moved inside `app\`; a bare {app}\bin is left over from before.
+    if (/Name:\s*"\{app\}\\bin"/i.test(line)) {
+      findings.push({
+        file,
+        line: index + 1,
+        message: '{app}\\bin no longer exists — the compiled scripts live in {app}\\app\\bin.',
+      });
+    }
+  });
+
+  return findings;
+}
+
+/** The `.cmd` files install-services.ps1 writes into the install root. */
+function installedWrappers(source: string): string[] {
+  return [...source.matchAll(/Join-Path \$InstallDir '([^']+\.cmd)'/g)]
+    .map((match) => match[1])
+    .filter((name): name is string => name !== undefined);
+}
+
 function main(): void {
   const files = readdirSync(scriptDir)
     .filter((name) => name.endsWith('.ps1'))
@@ -176,6 +229,15 @@ function main(): void {
     const source = readFileSync(join(scriptDir, name), 'utf8');
     findings.push(...checkScriptRootInParamBlock(name, source));
     findings.push(...checkBlockComments(name, source));
+  }
+
+  const issName = 'mehvar.iss';
+  const issPath = join(scriptDir, issName);
+  if (existsSync(issPath)) {
+    const wrappers = installedWrappers(
+      readFileSync(join(scriptDir, 'install-services.ps1'), 'utf8'),
+    );
+    findings.push(...checkInnoSetupScript(issName, readFileSync(issPath, 'utf8'), wrappers));
   }
 
   const shell = findPowerShell();
@@ -203,8 +265,8 @@ function main(): void {
   }
 
   console.log(
-    `${files.length} PowerShell script(s) checked` +
-      (shell === undefined ? ' (static only).' : ` and parsed with ${shell}.`),
+    `${files.length} PowerShell script(s) + mehvar.iss checked` +
+      (shell === undefined ? ' (static only).' : `, PowerShell parsed with ${shell}.`),
   );
 }
 

@@ -42,11 +42,18 @@ npm run package:build
 # 3. Fetch the Node runtime and PostgreSQL binaries (large, cached, yearly)
 powershell -ExecutionPolicy Bypass -File packaging\windows\fetch-runtimes.ps1
 
-# 4. Compile the installer  (Inno Setup 6 must be installed)
-&"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\windows\mehvar.iss
+# 4. Compile the installer  (finds ISCC.exe itself; Inno Setup 5-7)
+npm run package:installer
 ```
 
 Output: `dist\MehvarSetup-<version>.exe`.
+
+`package:installer` searches `Program Files` and `Program Files (x86)` for
+Inno Setup 7, 6 then 5, newest first, and stamps the version from
+`package.json`. Override with `set ISCC=D:\Tools\InnoSetup\ISCC.exe` for a
+portable copy. It also preflights the payload, because ISCC's own message for a
+missing directory (`No files found matching "...\pgsql\*"`) is true and does
+not mention that the fix is to run `fetch-runtimes.ps1`.
 
 ## What the installer does
 

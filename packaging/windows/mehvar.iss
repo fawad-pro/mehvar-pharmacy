@@ -8,9 +8,12 @@
 ; toolchain, and the single-file .exe a non-technical buyer expects. WiX buys
 ; GPO deployment and transforms, which this market will never use.
 ;
-; UNVERIFIED — see README.md. This has never been compiled.
+; UNVERIFIED — see README.md. This has never been compiled: Inno Setup is
+; Windows-only and jrsoftware.org is unreachable from the dev container, so
+; every fix below comes from review rather than from a compiler.
 ;
-; Build:  ISCC.exe packaging\windows\mehvar.iss
+; Build:  npm run package:installer   (locates ISCC.exe itself)
+;    or:  ISCC.exe /DAppVersion=1.2.3 packaging\windows\mehvar.iss
 
 #define AppName        "Mehvar Pharmacy"
 #define AppPublisher   "Mehvar"
@@ -32,7 +35,8 @@ AppPublisher={#AppPublisher}
 DefaultDirName={autopf}\Mehvar
 DefaultGroupName=Mehvar
 OutputDir={#SourcePath}..\..\dist
-OutputBaseFilename=MehvarSetup
+; Carries the version, so two builds are never the same file on a USB stick.
+OutputBaseFilename=MehvarSetup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 ; The services and ProgramData layout both require elevation.
@@ -67,7 +71,10 @@ Name: "{commonappdata}\Mehvar\backups"
 [Icons]
 ; The counter shortcut itself is created by counter-shortcut.ps1, which is the
 ; only thing that knows where Chrome landed on this machine.
-Name: "{group}\Support bundle";   Filename: "{app}\runtime\node.exe"; Parameters: """{app}\app\bin\ops\support-bundle.js"""; Comment: "Collect diagnostics to send to Mehvar support"
+; Points at the wrapper install-services.ps1 writes, not at node.exe
+; directly: the bundle's most useful section is the verifier, and that
+; needs the configuration a bare shortcut would not supply.
+Name: "{group}\Support bundle";   Filename: "{app}\mehvar-support.cmd"; Comment: "Collect diagnostics to send to Mehvar support"
 Name: "{group}\Uninstall Mehvar"; Filename: "{uninstallexe}"
 
 [Code]
@@ -133,13 +140,13 @@ begin
   end;
 end;
 
-function PowerShellArgs(const ScriptName, Extra: String): String;
+function PowerShellArgs(ScriptName, Extra: String): String;
 begin
   Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\')
     + ScriptName + '" ' + Extra;
 end;
 
-function ShellQuote(const Value: String): String;
+function ShellQuote(Value: String): String;
 begin
   Result := '"' + Value + '"';
 end;
@@ -191,7 +198,8 @@ begin
 end;
 
 [Run]
-Filename: "notepad.exe"; Parameters: "{commonappdata}\Mehvar\first-run.txt"; \
+; Doubled quotes are Inno's escape, so notepad receives a quoted path.
+Filename: "notepad.exe"; Parameters: """{commonappdata}\Mehvar\first-run.txt"""; \
   Description: "Show the counter pairing key"; Flags: postinstall skipifsilent
 
 [UninstallRun]
@@ -201,8 +209,15 @@ Filename: "powershell.exe"; \
   RunOnceId: "MehvarServices"; Flags: waituntilterminated runhidden
 
 [UninstallDelete]
+; app\ carries the server, node_modules and the compiled bin\ scripts.
 Type: filesandordirs; Name: "{app}\app"
-Type: filesandordirs; Name: "{app}\bin"
+
+; The three .cmd wrappers are written by install-services.ps1 at post-install,
+; not installed by Setup — so Setup does not know to remove them, and without
+; these lines an uninstall leaves {app} behind holding three orphaned files.
+Type: files; Name: "{app}\mehvar-node.cmd"
+Type: files; Name: "{app}\mehvar-backup.cmd"
+Type: files; Name: "{app}\mehvar-support.cmd"
 
 ; NOTE: {commonappdata}\Mehvar is deliberately NOT deleted. It holds the
 ; database and every backup. An uninstall that destroys a pharmacy's records

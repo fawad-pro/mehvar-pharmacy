@@ -33,7 +33,8 @@
     "ops:restore-drill": "tsx --conditions=react-server scripts/ops/restore-drill.ts",
     "ops:support-bundle": "tsx --conditions=react-server scripts/ops/support-bundle.ts",
     "package:build": "tsx scripts/package/build.ts",
-    "lint:ps": "tsx scripts/package/lint-powershell.ts"
+    "lint:ps": "tsx scripts/package/lint-powershell.ts",
+    "package:installer": "tsx scripts/package/build-installer.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

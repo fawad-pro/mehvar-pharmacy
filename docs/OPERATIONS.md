@@ -33,14 +33,14 @@ Build the installer (on Windows):
 npm install --os=win32 --cpu=x64 --include=optional
 npm run package:build
 powershell -ExecutionPolicy Bypass -File packaging\windows\fetch-runtimes.ps1
-&"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DAppVersion=0.1.0 packaging\windows\mehvar.iss
+npm run package:installer
 ```
 
-Carry `dist\MehvarSetup.exe` on a USB stick. It needs no internet to install.
+Carry `dist\MehvarSetup-<version>.exe` on a USB stick. It needs no internet to install.
 
 ## 2. Installing (at the shop, ~30 minutes)
 
-1. Run `MehvarSetup.exe` as administrator.
+1. Run `MehvarSetup-<version>.exe` as administrator.
 2. Answer the two wizard pages: pharmacy name, address, phone, owner name; then
    a 4-digit owner PIN. **The owner chooses the PIN, not you.**
 3. Wait. The installer creates the database, provisions both roles, migrates,

@@ -301,6 +301,27 @@ for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
 "$NodeExe" "$BinDir\ops\backup.js" >> "$LogDir\backup.log" 2>&1
 "@ | Set-Content -Path $backupWrapper -Encoding ascii
 
+<#
+    The Start Menu's "Support bundle" entry, for the same reason: the bundle's
+    most useful sections are the verifier and backup age, and both need the
+    configuration. A shortcut straight to node.exe would produce a bundle
+    reporting "DATABASE_URL is not set" — which describes the shortcut, not the
+    pharmacy, and would send the founder chasing the wrong thing.
+
+    Pauses at the end because a support bundle is run by a person who needs to
+    read where the file was written.
+#>
+$supportWrapper = Join-Path $InstallDir 'mehvar-support.cmd'
+@"
+@echo off
+cd /d "$AppDir"
+set "DOTENV_CONFIG_PATH=$EnvFile"
+for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
+"$NodeExe" "$BinDir\ops\support-bundle.js"
+echo.
+pause
+"@ | Set-Content -Path $supportWrapper -Encoding ascii
+
 & schtasks.exe /Create /F /TN 'Mehvar\NightlyBackup' /TR "`"$backupWrapper`"" /SC DAILY /ST 02:30 /RU SYSTEM | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Could not schedule the nightly backup (schtasks exit $LASTEXITCODE)." }
 
