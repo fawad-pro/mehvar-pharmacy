@@ -41,6 +41,23 @@ async function psql(url: string, statement: string): Promise<void> {
   await run('psql', [url, '-v', 'ON_ERROR_STOP=1', '-c', statement], { quiet: true });
 }
 
+/**
+ * Drop the scratch database, terminating anything still connected to it.
+ *
+ * `WITH (FORCE)` (PostgreSQL 13+; the bundled runtime is 16) is the second half
+ * of the fix, not the first. The first is closing our own pool — see the
+ * `finally` block below. FORCE is here for the sessions we cannot close from
+ * inside this process: a psql window someone left open on a previous drill, or
+ * a drill that was killed mid-run. Both used to leave the next drill reporting
+ * `is being accessed by other users`, which reads like a backup problem and is
+ * not one.
+ *
+ * Only ever aimed at SCRATCH_DB, which nothing but this script creates.
+ */
+async function dropScratch(maintenanceUrl: string): Promise<void> {
+  await psql(maintenanceUrl, `DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)`);
+}
+
 async function main(): Promise<void> {
   const adminUrl = process.env.DATABASE_ADMIN_URL ?? process.env.DATABASE_URL;
   if (!adminUrl) {
@@ -63,7 +80,7 @@ async function main(): Promise<void> {
   console.log(`Drilling ${newest} into ${SCRATCH_DB}…\n`);
 
   // Drop first: a previous drill that died mid-run must not block this one.
-  await psql(maintenanceUrl, `DROP DATABASE IF EXISTS ${SCRATCH_DB}`);
+  await dropScratch(maintenanceUrl);
   await psql(maintenanceUrl, `CREATE DATABASE ${SCRATCH_DB}`);
 
   let verified = false;
@@ -87,9 +104,23 @@ async function main(): Promise<void> {
     const { verifyAllTenants } = await import('../db/verify-all');
     verified = await verifyAllTenants();
   } finally {
+    /*
+     * Close the verifier's own connection before dropping the database it was
+     * verifying. `src/db/client.ts` builds one module-level pool lazily and
+     * never closes it — correct for the server, fatal here, because PostgreSQL
+     * will not drop a database that has a session on it. Without this the
+     * drill fails at cleanup with "is being accessed by other users", which
+     * looks like a backup failure and is really this script holding the door.
+     *
+     * Same module instance the dynamic import above reached, so this closes
+     * the pool that actually connected. Cheap and safe if it never opened.
+     */
+    const { closeDatabase } = await import('../../src/db/client');
+    await closeDatabase();
+
     // Always clean up, including after a failed verify — a leftover scratch
     // database is how the next drill starts by reporting a stale problem.
-    await psql(maintenanceUrl, `DROP DATABASE IF EXISTS ${SCRATCH_DB}`);
+    await dropScratch(maintenanceUrl);
   }
 
   if (!verified) {

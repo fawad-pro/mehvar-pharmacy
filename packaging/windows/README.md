@@ -1,28 +1,49 @@
-# Windows packaging — **partly verified**
+# Windows packaging — **installs on real hardware**
 
-> **Read this first.** Know exactly how much of this has been run, because the
-> honest answer is "some of it, and none of it on Windows."
+> **Read this first.** Know exactly how much of this has been run.
 
-| Piece                                                                 | Status                                                                                                                                                                                                       |
-| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| All five `.ps1` files                                                 | **Parsed** by PowerShell — `npm run lint:ps`                                                                                                                                                                 |
-| `install-services.ps1`                                                | **Run** on PowerShell 7 against a real PostgreSQL cluster: logging, step boundaries, the failure trap, the status file, and `initdb` all exercised. Stops at `Get-Service`, which does not exist off Windows |
-| The provisioning chain                                                | **Run end to end** with the _bundled_ scripts against a real database from a deliberately wrong working directory: migrate → grants → init → `first-run.txt` → verify                                        |
-| `fetch-runtimes.ps1`                                                  | **Run for real**: binding, download, cache hit, extraction, top-level strip, `runtime/node.exe` in place. Only the PostgreSQL download is unexercised, and only because that host is network-blocked         |
-| `uninstall-services.ps1`                                              | Binds and enters its body; stops at `Get-Service`                                                                                                                                                            |
-| `verify-install.ps1`, `counter-shortcut.ps1`                          | **Parse only.** Almost entirely Windows-specific cmdlets                                                                                                                                                     |
-| `mehvar.iss`                                                          | **Never compiled.** Inno Setup is Windows-only and jrsoftware.org is unreachable from the dev container. Reviewed, and cross-checked against `install-services.ps1` by `npm run lint:ps`                     |
-| `serve.js` (what WinSW supervises)                                    | **Run for real**: bundled, then started with an empty environment and the wrong working directory -- loaded `.env`, booted Next, answered HTTP 200 on `/login`                                               |
-| WinSW fetch + SHA-256 pin                                             | **Run for real**, including refusing a tampered binary                                                                                                                                                       |
-| WinSW `install` / `start` / `uninstall`, kiosk shortcut, installer UI | **Never executed.** WinSW service control, `schtasks`, firewall rules and Inno's own `[Code]` are Windows-only                                                                                               |
+An install has now completed on a clean Windows laptop: payload, the PostgreSQL
+service, the whole provisioning chain, WinSW registering and starting the
+counter service, and the installer's own wizard and logging. What failed on that
+machine was the **post-install verification**, twice, and both were bugs in the
+checks rather than in the install — see "What the first successful install
+found" below.
 
-So: syntax, argument handling, the provisioning chain and the served
-application are real evidence now. Registering the service with the SCM, the
-kiosk shortcut and the installer UI are still first drafts.
+| Piece                                            | Status                                                                                                                                                                                                       |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| The installer, end to end                        | **Run on Windows.** Wizard pages, payload, PostgreSQL service, provisioning, WinSW registration and start, logging and the status file                                                                       |
+| `install-services.ps1`                           | **Run on Windows**, and before that on PowerShell 7 against a real PostgreSQL cluster: logging, step boundaries, the failure trap, the status file, `initdb`                                                 |
+| The provisioning chain                           | **Run end to end** with the _bundled_ scripts against a real database from a deliberately wrong working directory: migrate → grants → init → `first-run.txt` → verify                                        |
+| `fetch-runtimes.ps1`                             | **Run for real**: binding, download, cache hit, extraction, top-level strip, `runtime/node.exe` in place                                                                                                     |
+| `verify-install.ps1` + `lib-verify.ps1`          | **Run on Windows.** Two of its checks were wrong, and are fixed; the reasoning is pinned by `verify-checks.tests.ps1` and the immutability verdict was reproduced against a real cluster in all three states |
+| `uninstall-services.ps1`, `counter-shortcut.ps1` | **Parse only**, plus the shortcut having been launched by the installer. Neither has been asserted against                                                                                                   |
+| `mehvar.iss`                                     | **Compiled and run on Windows.** Never compiled _here_ — Inno Setup is Windows-only and jrsoftware.org is unreachable from the dev container — so `npm run lint:ps` cross-checks it against the `.ps1` files |
+| `serve.js` (what WinSW supervises)               | **Run for real**: bundled, then started with an empty environment and the wrong working directory -- loaded `.env`, booted Next, answered HTTP 200 on `/login`                                               |
+| WinSW fetch + SHA-256 pin                        | **Run for real**, including refusing a tampered binary                                                                                                                                                       |
 
 Roadmap Phase 1's own risk section named this: _"real shop hardware is the
 unknown, and it is deliberately met here with the founder physically present."_
-This directory is where that gets discovered.
+This directory is where that got discovered, five rounds of it.
+
+## What the first successful install found
+
+Both failures were in the checks, not the install — which is its own lesson: a
+verifier is code, and unverified code that guards a trust promise is the worst
+place to be sloppy.
+
+1. **The immutability check reported a passing guarantee as a failure.** It
+   printed `ERROR: permission denied for table sales`, which is precisely what
+   ADR-1 requires. Two defects, one hiding the other; both are rule 7 below.
+2. **The restore drill could not drop its own scratch database** — the ADR-8
+   verifier's connection pool was still on it. `src/db/client.ts` builds that
+   pool lazily and never closes it, which is right for a server and fatal for a
+   script that drops the database it just verified.
+3. **The Finish page said "Mehvar Setup did not finish"** over a machine that
+   had a working pharmacy on it, and withheld the pairing key — so the operator
+   could not open the counter to look at what the checks were complaining
+   about. Installation failing and verification failing are different events;
+   they now get different words, and the pairing key is gated on the install,
+   never on the checks.
 
 ## The logging invariant
 
@@ -75,7 +96,8 @@ process** — so the PID WinSW watches is the PID actually serving, which is wha
 makes its restart policy mean anything.
 
 The descriptor is built by `New-WinSwDescriptor` in `lib-service.ps1` and pinned
-by 20 assertions in `service-descriptor.tests.ps1`.
+by 20 assertions in `service-descriptor.tests.ps1`. It registered and started on
+real Windows hardware first time.
 
 The environment is **not** frozen into the descriptor: WinSW passes only
 `DOTENV_CONFIG_PATH`, and `serve.js` reads the file at startup. So an owner who
@@ -114,6 +136,21 @@ create` or `New-Service`. It cannot start (1053). WinSW hosts it.
    runs no line at all**, which is why the second install produced no log.
    `pwsh` reads `.ps1` as UTF-8 and parsed these files happily; checking on the
    wrong runtime is the same mistake as checking on the wrong platform.
+7. **Never write a check as "run the tool, then look at `$LASTEXITCODE`."**
+   `$ErrorActionPreference = 'Stop'` — correct for cmdlets — also changes what a
+   _native_ command does, differently on each runtime: Windows PowerShell 5.1
+   turns a redirected stderr line into a terminating ErrorRecord, and
+   PowerShell 7's `$PSNativeCommandUseErrorActionPreference` does the same for a
+   non-zero exit. Either way the throw lands before the exit code is read, and
+   the check's own `throw` never runs. The giveaway in a log is a failure
+   message in the _tool's_ words rather than the script's. Use `Invoke-Native`
+   in `lib-verify.ps1`. And while fixing it, notice the bug underneath: an
+   assertion of the form "non-zero means it failed, so we pass" also passes when
+   the tool could not run at all. Require the specific refusal.
+8. **Never ship a script without the library it dot-sources.** `[Files]` is
+   checked against every `. (Join-Path $Root 'lib-*.ps1')` by `npm run lint:ps`;
+   the omission would only ever surface on a shop machine, at the script's
+   first line.
 
 ## What the log tells you
 
@@ -183,25 +220,27 @@ where ADR-1's immutability guarantee is decorative _and appears enforced_ — th
 exact failure PCN-001 was filed to prevent, reintroduced at a new layer.
 
 `verify-install.ps1` asserts it afterwards by attempting an `UPDATE` on an event
-table and requiring it to fail. If that check ever passes, the install is bad
-regardless of how well everything else went.
+table and requiring PostgreSQL to refuse it **for lack of privilege**. Three
+outcomes, and only one of them passes:
+
+| psql said                                                            | Verdict        |
+| -------------------------------------------------------------------- | -------------- |
+| exit non-zero, `permission denied`                                   | `immutable`    |
+| exit 0                                                               | `writable`     |
+| anything else — refused connection, typo'd table, missing `psql.exe` | `inconclusive` |
+
+`writable` means the install is bad regardless of how well everything else went.
+`inconclusive` is also a failure, and deliberately so: a check that passes when
+it could not run is PCN-001's own failure mode wearing the verifier's clothes.
 
 ## Known unknowns
 
 These are the things most likely to break first, listed so the first Windows
 session knows where to look:
 
-- **Starting the Node service will probably fail with 1053, and that is
-  structural.** A Windows service image must call `StartServiceCtrlDispatcher`
-  and answer the Service Control Manager within ~30 seconds. `node.exe` does
-  not, so a service wrapping it can be _registered_ (that part is now fixed)
-  but not _started_. No command line fixes this. The options are a supervisor
-  (NSSM, WinSW -- both small and permissively licensed, but a new bundled
-  binary), or dropping the service and running the counter from a Task
-  Scheduler entry at startup, which is built in and supports restart-on-failure
-  but does not appear in `services.msc`. `install-services.ps1` detects 1053
-  and says exactly this rather than leaving another code to decode. **This is a
-  decision, not a bug fix.**
+- **Uninstall has never been run.** `uninstall-services.ps1` stops and removes
+  two services, a scheduled task, a firewall rule and the shortcuts, and none of
+  that has executed on Windows. It is the last unexercised path in the lifecycle.
 - **PostgreSQL data-directory ACLs** on a locked-down profile. `initdb` refuses
   to run as an administrator with a writable-by-others data directory.
 - **Antivirus and SmartScreen** against an unsigned installer that registers two

@@ -10,11 +10,19 @@
 
     The grant assertion is the one that matters most. PCN-001 established that a
     REVOKE against the table owner is silently inert, so "the installer ran
-    grants" is not evidence -- the only evidence is an UPDATE that fails. If
-    this script's UPDATE ever SUCCEEDS, the install is bad no matter how
-    healthy everything else looks.
+    grants" is not evidence -- the only evidence is an UPDATE that fails for
+    lack of privilege. If this script's UPDATE ever SUCCEEDS, the install is bad
+    no matter how healthy everything else looks.
 
-    UNVERIFIED -- see README.md. Never executed on Windows.
+    EVERY native tool here is run through Invoke-Native (lib-verify.ps1) rather
+    than called directly. That is not tidiness: $ErrorActionPreference = 'Stop'
+    turns a native command's own diagnostics into a terminating error before
+    $LASTEXITCODE can be read, which is what made the first real install report
+    "permission denied for table sales" as a FAILURE when it is the thing being
+    asserted. The reasoning lives in lib-verify.ps1's header.
+
+    Run on Windows once, against a real install: it found nothing wrong with
+    the installation and two things wrong with itself.
 #>
 [CmdletBinding()]
 param(
@@ -24,6 +32,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+<#
+    Resolved before use, never in a parameter default -- see fetch-runtimes.ps1.
+    Same ladder as install-services.ps1; keep them identical.
+#>
+$MyRoot =
+    if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) { $PSScriptRoot }
+    elseif (-not [string]::IsNullOrWhiteSpace($MyInvocation.MyCommand.Path)) {
+        Split-Path -Parent $MyInvocation.MyCommand.Path
+    }
+    else { (Get-Location).Path }
+
+. (Join-Path $MyRoot 'lib-verify.ps1')
 
 $NodeExe = Join-Path $InstallDir 'runtime\node.exe'
 $BinDir  = Join-Path $InstallDir 'app\bin'
@@ -94,32 +115,44 @@ Check 'Event tables are immutable for the app role (ADR-1 / PCN-001)' {
     $appUrl = Get-EnvValue 'DATABASE_URL'
     $psql   = Join-Path $PgBin 'psql.exe'
 
-    & $psql $appUrl -v ON_ERROR_STOP=1 -c 'UPDATE sales SET total_paisa = total_paisa WHERE false' 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        throw 'UPDATE on sales SUCCEEDED -- the app role can rewrite history'
+    # WHERE false so nothing could change even if the grant were missing.
+    # PostgreSQL checks privilege before it looks at the predicate, so the
+    # refusal arrives all the same.
+    $result = Invoke-Native $psql @(
+        $appUrl, '-v', 'ON_ERROR_STOP=1',
+        '-c', 'UPDATE sales SET total_paisa = total_paisa WHERE false'
+    )
+
+    $verdict = Get-ImmutabilityVerdict -ExitCode $result.ExitCode -Output $result.Output
+    if ($verdict -ne 'immutable') {
+        throw (Get-ImmutabilityMessage -Verdict $verdict -ExitCode $result.ExitCode -Output $result.Output)
     }
 }
 
 Check 'The verifier agrees with the records (ADR-8)' {
     $env:DOTENV_CONFIG_PATH = $EnvFile
-    & $NodeExe (Join-Path $BinDir 'db\verify.js')
-    if ($LASTEXITCODE -ne 0) { throw 'db:verify reported a mismatch -- this is sev-1' }
+    $result = Invoke-Native $NodeExe @((Join-Path $BinDir 'db\verify.js'))
+    if ($result.ExitCode -ne 0) {
+        throw "db:verify reported a mismatch -- this is sev-1. $($result.Output)"
+    }
 }
 
 Check 'A backup can be taken and restored' {
     $env:DOTENV_CONFIG_PATH = $EnvFile
-    & $NodeExe (Join-Path $BinDir 'ops\backup.js')
-    if ($LASTEXITCODE -ne 0) { throw 'ops:backup failed' }
+    $result = Invoke-Native $NodeExe @((Join-Path $BinDir 'ops\backup.js'))
+    if ($result.ExitCode -ne 0) { throw "ops:backup failed. $($result.Output)" }
 
     # Phase 12 section 3: an untested backup is not a backup. The drill is the test,
     # and running it once at install is what makes the first one trustworthy.
-    & $NodeExe (Join-Path $BinDir 'ops\restore-drill.js')
-    if ($LASTEXITCODE -ne 0) { throw 'the restore drill failed' }
+    $result = Invoke-Native $NodeExe @((Join-Path $BinDir 'ops\restore-drill.js'))
+    if ($result.ExitCode -ne 0) { throw "the restore drill failed. $($result.Output)" }
 }
 
 Check 'The nightly backup is scheduled' {
-    & schtasks.exe /Query /TN 'Mehvar\NightlyBackup' | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw 'scheduled task Mehvar\NightlyBackup not found' }
+    $result = Invoke-Native 'schtasks.exe' @('/Query', '/TN', 'Mehvar\NightlyBackup')
+    if ($result.ExitCode -ne 0) {
+        throw "scheduled task Mehvar\NightlyBackup not found. $($result.Output)"
+    }
 }
 
 if ($failures.Count -gt 0) {

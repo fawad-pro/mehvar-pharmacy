@@ -346,6 +346,50 @@ function installedWrappers(source: string): string[] {
     .filter((name): name is string => name !== undefined);
 }
 
+/** The sibling `.ps1` files a script dot-sources at run time. */
+function dotSourcedLibraries(source: string): string[] {
+  return [...source.matchAll(/^\s*\.\s+\(Join-Path \$\w+ '([^']+\.ps1)'\)/gm)]
+    .map((match) => match[1])
+    .filter((name): name is string => name !== undefined);
+}
+
+/**
+ * A dot-sourced library must be installed alongside the script that sources it.
+ *
+ * `verify-install.ps1` sources `lib-verify.ps1`; `install-services.ps1` sources
+ * `lib-service.ps1`. Ship the sourcing script without its library and the whole
+ * step dies at its first line — a failure identical in shape to the parse error
+ * that produced no log at all, and equally invisible until an install.
+ *
+ * Only scripts `mehvar.iss` actually installs are checked, so a dev-only suite
+ * that sources a library is not required to be shipped.
+ */
+function checkDotSourcedLibrariesAreShipped(issSource: string, scriptSources: Map<string, string>) {
+  const shipped = new Set(
+    [...issSource.matchAll(/Source:\s*"\{#ScriptsDir\}([^"]+\.ps1)"/g)]
+      .map((match) => match[1])
+      .filter((name): name is string => name !== undefined),
+  );
+
+  const findings: Finding[] = [];
+  for (const name of shipped) {
+    const source = scriptSources.get(name);
+    if (source === undefined) continue;
+
+    for (const library of dotSourcedLibraries(source)) {
+      if (shipped.has(library)) continue;
+      findings.push({
+        file: 'mehvar.iss',
+        line: 1,
+        message:
+          `[Files] installs ${name}, which dot-sources ${library} — but ${library} is ` +
+          'not installed. The script would fail at its first line, on the shop machine only.',
+      });
+    }
+  }
+  return findings;
+}
+
 function main(): void {
   const files = readdirSync(scriptDir)
     .filter((name) => name.endsWith('.ps1'))
@@ -357,8 +401,10 @@ function main(): void {
   }
 
   const findings: Finding[] = [];
+  const sources = new Map<string, string>();
   for (const name of files) {
     const source = readFileSync(join(scriptDir, name), 'utf8');
+    sources.set(name, source);
     findings.push(...checkAsciiOnly(name, source));
     findings.push(...checkScriptRootInParamBlock(name, source));
     findings.push(...checkUnguardedEnvPaths(name, source));
@@ -369,28 +415,35 @@ function main(): void {
   const issName = 'mehvar.iss';
   const issPath = join(scriptDir, issName);
   if (existsSync(issPath)) {
+    const issSource = readFileSync(issPath, 'utf8');
     const wrappers = installedWrappers(
       readFileSync(join(scriptDir, 'install-services.ps1'), 'utf8'),
     );
-    findings.push(...checkInnoSetupScript(issName, readFileSync(issPath, 'utf8'), wrappers));
+    findings.push(...checkInnoSetupScript(issName, issSource, wrappers));
+    findings.push(...checkDotSourcedLibrariesAreShipped(issSource, sources));
   }
 
   const shell = findPowerShell();
 
   if (shell !== undefined) {
-    // The service-argument regression suite. Run rather than merely parsed:
-    // sc.exe exit 1639 was a malformed argument string, and only an assertion
-    // on the built string can stop that recurring.
-    const suite = join(scriptDir, 'service-descriptor.tests.ps1');
-    if (existsSync(suite)) {
+    /*
+     * The behavioural suites, RUN rather than merely parsed. Each exists
+     * because the thing it pins failed on real hardware and no static check
+     * could have seen it:
+     *
+     *   service-descriptor  sc.exe exit 1639 — a malformed argument string.
+     *   verify-checks       a passing ADR-1 guarantee reported as a failure,
+     *                       because $ErrorActionPreference = 'Stop' turned
+     *                       psql's own diagnostics into a terminating error
+     *                       before the exit code could be read.
+     */
+    for (const name of ['service-descriptor.tests.ps1', 'verify-checks.tests.ps1']) {
+      const suite = join(scriptDir, name);
+      if (!existsSync(suite)) continue;
       try {
         execFileSync(shell, ['-NoProfile', '-File', suite], { stdio: 'inherit' });
       } catch {
-        findings.push({
-          file: 'service-descriptor.tests.ps1',
-          line: 1,
-          message: 'service-argument assertions FAILED (output above).',
-        });
+        findings.push({ file: name, line: 1, message: 'assertions FAILED (output above).' });
       }
     }
   }

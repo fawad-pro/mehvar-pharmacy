@@ -8,11 +8,11 @@ Mehvar and begin trading without developer tools.** If any step below requires
 the shop to open a terminal, that is a bug in the product, not a gap in the
 guide.
 
-> **Status: the Windows half is partly verified.** Every `.ps1` parses and is
-> checked by `npm run lint:ps`; `fetch-runtimes.ps1` and the whole provisioning
-> chain (migrate → grants → init → verify) have been run end to end against a
-> real PostgreSQL cluster. Service registration, the kiosk shortcut and the
-> installer UI have still never executed — they are Windows-only.
+> **Status: the installer works on real hardware.** A clean Windows laptop has
+> been taken from `MehvarSetup.exe` to a registered, running counter service:
+> payload, PostgreSQL, provisioning, WinSW, wizard and logging all exercised.
+> Two **post-install checks** failed on that machine and both were bugs in the
+> checks, now fixed. Uninstall has still never been run.
 > `packaging/windows/README.md` has the line-by-line status. The first install
 > is a debugging session with the founder present, and roadmap Phase 1's risk
 > section says so on purpose.
@@ -58,9 +58,17 @@ If anything fails, Setup names the step that failed and points at the log. **Do
 not hand the machine over.** Send `C:\ProgramData\Mehvar\logs\install-*.log`
 to support; `install-status.txt` beside it carries the one-line summary.
 
-The pairing-key option on the Finish page only appears when provisioning
-actually produced the file — if it is absent, the install did not complete, no
-matter what else the page says.
+### Read the Finish page carefully — it says one of three things
+
+| Heading                                     | What it means                                                                                                                                                                                         |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _Completing the Mehvar Setup Wizard_        | Everything installed and every post-install check passed. Trade on it.                                                                                                                                |
+| _Mehvar is installed, but not yet verified_ | The shop exists — database, both services, pharmacy record — and at least one check that proves it safe to trade on did not pass. The pairing key is still offered; open the counter and investigate. |
+| _Mehvar Setup did not finish_               | Provisioning failed. There is no working pharmacy on this machine. The page names the step and the reason.                                                                                            |
+
+The pairing-key option only appears when provisioning actually produced the
+file. It is **not** withheld when only the checks failed: you need the counter
+open to diagnose them.
 
 ## 3. Opening stock (W9) — the adoption gate
 
@@ -126,6 +134,12 @@ npm run ops:restore-drill
 Restores the newest dump into a scratch database, runs the ADR-8 verifier,
 confirms Phase 5 §5 invariants, drops the scratch database. Never touches the
 live one.
+
+The drill closes its own database connection before the drop, and forces the
+drop past anything else still attached. Without the first of those it used to
+verify the dump successfully and then fail at cleanup with
+`database "mehvar_restore_drill" is being accessed by other users` — which
+reads like a backup problem and is not one.
 
 Phase 12 §3: **once before the first paying customer, then quarterly.** An
 untested backup is not a backup, and a drill you have not run is a claim, not a

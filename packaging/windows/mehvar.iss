@@ -60,6 +60,9 @@ Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignore
 Source: "{#PayloadDir}\winsw\*";      DestDir: "{app}\winsw";      Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\VERSION";      DestDir: "{app}";            Flags: ignoreversion
 Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{app}\packaging"; Flags: ignoreversion
+; verify-install.ps1 dot-sources this. Shipping one without the other kills the
+; whole verification step at its first line.
+Source: "{#ScriptsDir}lib-verify.ps1";        DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}install-services.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}verify-install.ps1";    DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}counter-shortcut.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
@@ -84,8 +87,16 @@ var
   ShopPage: TInputQueryWizardPage;
   PinPage: TInputQueryWizardPage;
   { False until install-services.ps1 reports STATE=OK *and* its own assertions
-    pass. Everything the Finish page offers is gated on it. }
+    pass. This is "is there a working Mehvar on this machine". }
   ProvisioningOk: Boolean;
+  { False when verify-install.ps1 finds something wrong AFTERWARDS. Kept apart
+    from ProvisioningOk deliberately: the first real successful install failed
+    two post-install checks and was told "Mehvar Setup did not finish", which
+    was untrue -- and worse, it withheld the pairing key, so the operator could
+    not even open the counter to look at what the checks were complaining
+    about. Installation failing and verification failing are different events
+    and need different words. }
+  ChecksOk: Boolean;
   FailureSummary: String;
   { Set if SaveStringToFile ever fails, so a failure dialog never points at a
     log that does not exist. }
@@ -285,9 +296,15 @@ begin
     end;
 end;
 
-{ Only true when provisioning wrote the file the shortcut would open. The last
+{ Only true when provisioning wrote the file the shortcut would open. An early
   install offered a pairing key that did not exist, which is how a failed
-  install still managed to look finished. }
+  install still managed to look finished.
+
+  Note what this is NOT gated on: ChecksOk. A machine that installed cleanly and
+  then failed a post-install check still has a real pharmacy in its database and
+  a real pairing key, and whoever is standing in front of it needs that key to
+  open the counter and see what the check was complaining about. Withholding it
+  turns a diagnosable problem into a dead end. }
 function PairingKeyAvailable(): Boolean;
 begin
   Result := ProvisioningOk and FileExists(ExpandConstant('{commonappdata}\Mehvar\first-run.txt'));
@@ -308,6 +325,7 @@ begin
   DataDir := ExpandConstant('{commonappdata}\Mehvar');
   ConsoleLog := LogDir() + '\install-console.log';
   ProvisioningOk := False;
+  ChecksOk := True;
 
   { Written before anything can fail. From here on the invariant holds: a log
     exists, so no dialog can appear without one. }
@@ -370,24 +388,47 @@ begin
 
   if ResultCode <> 0 then
   begin
-    ProvisioningOk := False;
+    { ProvisioningOk stays True. This machine HAS Mehvar on it: the database,
+      both services and the pharmacy record all exist. What did not pass is the
+      separate step that proves it is safe to trade on. Saying "Setup did not
+      finish" here sends the founder looking for an installation problem that
+      is not there. }
+    ChecksOk := False;
     FailureSummary :=
-      'Mehvar installed, but the post-install checks did not all pass.' + #13#10 + #13#10 +
+      'Mehvar is installed, but the post-install checks did not all pass.' + #13#10 + #13#10 +
+      'Installation itself completed -- the database, both services and the' + #13#10 +
+      'pharmacy record were all created. These checks are the separate step' + #13#10 +
+      'that proves the install is safe to trade on, and at least one did not.' + #13#10 + #13#10 +
       Output + #13#10 +
-      'Do not hand this machine over yet.' + #13#10 +
+      'Do not hand this machine over until they pass. The shop data is intact,' + #13#10 +
+      'and the pairing key is still offered on the next page so you can open' + #13#10 +
+      'the counter and look.' + #13#10 +
       LogAdvice();
-    AppendLog('POST-INSTALL CHECKS FAILED.');
+    AppendLog('INSTALL OK, POST-INSTALL CHECKS FAILED.');
     MsgBox(FailureSummary, mbError, MB_OK);
   end;
 end;
 
 { Setup always shows a final page, so the honest thing is to make that page say
-  what actually happened rather than "finished installing" over a failure. }
+  what actually happened rather than "finished installing" over a failure.
+
+  Three outcomes, three headings. The middle one exists because the first
+  successful install was told the second one, which was wrong in the direction
+  that matters: it read as "you have nothing", when what the founder had was a
+  working shop and two verifier bugs. }
 procedure CurPageChanged(CurPageID: Integer);
 begin
-  if (CurPageID = wpFinished) and (not ProvisioningOk) then
+  if CurPageID <> wpFinished then
+    Exit;
+
+  if not ProvisioningOk then
   begin
     WizardForm.FinishedHeadingLabel.Caption := 'Mehvar Setup did not finish';
+    WizardForm.FinishedLabel.Caption := FailureSummary;
+  end
+  else if not ChecksOk then
+  begin
+    WizardForm.FinishedHeadingLabel.Caption := 'Mehvar is installed, but not yet verified';
     WizardForm.FinishedLabel.Caption := FailureSummary;
   end;
 end;
