@@ -19,6 +19,8 @@ import {
 import type { FoundSale, ReturnableLineRow } from '@/domain/sales/return-command';
 import { findSaleForReturn, returnableLinesForSale } from '@/db/returns-queries';
 
+import { revalidateAfter } from '../revalidate';
+
 // `FoundSale` and `ReturnableLineRow` are not re-exported here — a type-only
 // re-export inside a `'use server'` file does not survive Next's
 // server-actions transform (CLAUDE.md, Day 4 and Day 6). The screen imports
@@ -82,6 +84,10 @@ export async function commitReturnAction(command: ReturnCommand): Promise<Return
   if (!result.ok) {
     return { ok: false, message: messageFor(result.reason) };
   }
+
+  // A return touches all four: stock goes back, cash or credit moves, the
+  // customer's balance changes, and the receipt gains a return against it.
+  revalidateAfter('receipts', 'stock', 'money', 'customers');
 
   return {
     ok: true,

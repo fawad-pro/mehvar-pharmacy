@@ -22,6 +22,8 @@ import { tenantSettings, updateTenantSettings } from '@/db/provisioning';
 import type { TenantSettings } from '@/db/schema';
 import { uuidv7 } from '@/lib/uuid';
 
+import { revalidateAfter } from '../revalidate';
+
 // Neither `UserListItem` nor the receipt-settings shape is re-exported here —
 // a type-only re-export inside a `'use server'` file does not survive Next's
 // server-actions transform (CLAUDE.md, Day 4/6/7), even though importing them
@@ -64,6 +66,7 @@ export async function updateReceiptSettingsAction(input: {
     receiptFooter: input.receiptFooter,
     autoPrintReceipt: input.autoPrintReceipt,
   });
+  revalidateAfter('settings');
   return { ok: true };
 }
 
@@ -99,6 +102,7 @@ export async function addSalesmanAction(input: {
   }
 
   await insertSalesman(scopeFor(session), { id: uuidv7(), name, pinHash });
+  revalidateAfter('settings');
   return { ok: true };
 }
 
@@ -111,6 +115,7 @@ export async function setUserActiveAction(
     return { ok: false, message: 'Only the owner can change this.' };
   }
   await setUserActive(scopeFor(session), userId, isActive);
+  revalidateAfter('settings');
   return { ok: true };
 }
 
@@ -129,5 +134,6 @@ export async function resetUserPinAction(userId: string, pin: string): Promise<S
     throw error;
   }
   await resetUserPin(scopeFor(session), userId, pinHash);
+  revalidateAfter('settings');
   return { ok: true };
 }

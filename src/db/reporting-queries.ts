@@ -13,7 +13,9 @@
 
 import 'server-only';
 
-import { desc, eq, gte, lt, ne, sql, sum } from 'drizzle-orm';
+import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
+
+import { summariseBook } from '@/domain/udhaar/position';
 
 import type { TenantScope } from './scoped';
 import {
@@ -35,7 +37,21 @@ import {
 export interface ThreeNumbers {
   readonly salesPaisa: number;
   readonly expectedCashPaisa: number;
-  readonly udhaarTotalPaisa: number;
+  /**
+   * Money out on the street: Σ of the balances that are OWED, floored per
+   * customer at zero. Never negative.
+   *
+   * This used to be a single netted subtraction across the whole book, which
+   * disagreed with the customers list — that screen has always floored each
+   * balance before summing, on the grounds that "a customer in credit does not
+   * offset someone else's debt, and netting them would understate the book".
+   * Both screens now use `summariseBook`, so one label cannot mean two things.
+   */
+  readonly udhaarOwedPaisa: number;
+  /** Advances customers have paid ahead. Reported beside the debt, never against it. */
+  readonly udhaarCreditPaisa: number;
+  readonly customersOwing: number;
+  readonly customersInCredit: number;
 }
 
 /**
@@ -91,20 +107,50 @@ export async function threeNumbers(
       ),
     );
 
-  const [creditExtended] = await scope.db
-    .select({ total: sum(sales.creditPaisa).as('total') })
-    .from(sales)
-    .where(scope.scopeOf(sales));
+  /*
+   * The udhaar position, PER CUSTOMER before it is summed.
+   *
+   * Grouping is the whole point. Summing the three terms globally and
+   * subtracting produces a net figure across the entire book, and one customer
+   * holding an advance then cancels another customer's debt — which is how the
+   * day summary came to report "-Rs 100 owed to you" while the customers list,
+   * which has always floored per customer, reported money outstanding.
+   *
+   * Always all-time, whatever the range: a debt is a position, not an event in
+   * a window. The Day surface labels it accordingly.
+   */
+  const [extendedRows, paidRows, reversedRows] = await Promise.all([
+    scope.db
+      .select({ customerId: sales.customerId, total: sum(sales.creditPaisa).as('total') })
+      .from(sales)
+      .where(scope.scopeOf(sales, isNotNull(sales.customerId)))
+      .groupBy(sales.customerId),
+    scope.db
+      .select({ customerId: payments.customerId, total: sum(payments.amountPaisa).as('total') })
+      .from(payments)
+      .where(scope.scopeOf(payments, isNotNull(payments.customerId)))
+      .groupBy(payments.customerId),
+    scope.db
+      .select({
+        customerId: sales.customerId,
+        total: sum(saleReturns.creditReducedPaisa).as('total'),
+      })
+      .from(saleReturns)
+      .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+      .where(scope.scopeOf(saleReturns, isNotNull(sales.customerId)))
+      .groupBy(sales.customerId),
+  ]);
 
-  const [creditPaid] = await scope.db
-    .select({ total: sum(payments.amountPaisa).as('total') })
-    .from(payments)
-    .where(scope.scopeOf(payments));
+  const balances = new Map<string, number>();
+  const apply = (customerId: string | null, delta: number): void => {
+    if (customerId === null) return;
+    balances.set(customerId, (balances.get(customerId) ?? 0) + delta);
+  };
+  for (const row of extendedRows) apply(row.customerId, Number(row.total ?? 0));
+  for (const row of paidRows) apply(row.customerId, -Number(row.total ?? 0));
+  for (const row of reversedRows) apply(row.customerId, -Number(row.total ?? 0));
 
-  const [creditReversed] = await scope.db
-    .select({ total: sum(saleReturns.creditReducedPaisa).as('total') })
-    .from(saleReturns)
-    .where(scope.scopeOf(saleReturns));
+  const book = summariseBook(balances.values());
 
   const expectedCashPaisa =
     Number(salesRow?.cash ?? 0) +
@@ -116,10 +162,10 @@ export async function threeNumbers(
   return {
     salesPaisa: Number(salesRow?.total ?? 0),
     expectedCashPaisa,
-    udhaarTotalPaisa:
-      Number(creditExtended?.total ?? 0) -
-      Number(creditPaid?.total ?? 0) -
-      Number(creditReversed?.total ?? 0),
+    udhaarOwedPaisa: book.owedPaisa,
+    udhaarCreditPaisa: book.creditPaisa,
+    customersOwing: book.customersOwing,
+    customersInCredit: book.customersInCredit,
   };
 }
 

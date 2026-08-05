@@ -18,6 +18,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { CustomerHit } from '@/app/(counter)/customers/actions';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { miniStatement } from '@/domain/udhaar/settlement';
+import { settlementEffect } from '@/domain/udhaar/position';
+import { BalanceInline } from '@/components/balance-figure';
 import { CustomerPicker } from '@/components/customer-picker';
 import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
@@ -148,16 +150,8 @@ export function SettleUdhaarOverlay({
                     has to answer at the moment the figure is typed, not one
                     the cashier carries in their head from the picker. */}
                 <div className="border-line mb-3 flex items-baseline justify-between rounded border px-3 py-2">
-                  <span className="text-ink/60 text-xs tracking-[0.1em] uppercase">
-                    Currently owes
-                  </span>
-                  <span
-                    className={`numeral font-semibold ${
-                      step.customer.balancePaisa > 0 ? 'text-amber' : 'text-green-900'
-                    }`}
-                  >
-                    {formatPaisa(paisa(step.customer.balancePaisa), { withSymbol: true })}
-                  </span>
+                  <span className="text-ink/60 text-xs tracking-[0.1em] uppercase">Before</span>
+                  <BalanceInline balancePaisa={step.customer.balancePaisa} />
                 </div>
 
                 <label className="text-ink/60 mb-1 block text-xs" htmlFor="settle-amount">
@@ -184,6 +178,49 @@ export function SettleUdhaarOverlay({
                   placeholder="0"
                 />
 
+                {/* What this amount will actually do, said before it is
+                    committed. Overpayment is legal (W3 caps nothing) and is
+                    recorded exactly as asked — but unannounced it produced the
+                    single most confusing thing in the product: a balance that
+                    appeared to move the wrong way after a payment. The rule is
+                    "never surprise", not "never allow". */}
+                {(() => {
+                  const typed = paisaFromRupeeInput(amount);
+                  if (typed <= 0) return null;
+                  const effect = settlementEffect(step.customer.balancePaisa, typed);
+                  if (effect.overpaidPaisa === 0) {
+                    return (
+                      <p className="text-ink/60 mt-2 text-sm">
+                        Leaves{' '}
+                        {effect.resulting.kind === 'settled' ? (
+                          <strong className="text-green-900">nothing owing</strong>
+                        ) : (
+                          <strong className="text-amber">
+                            {formatPaisa(paisa(effect.resulting.amountPaisa), { withSymbol: true })}{' '}
+                            still owing
+                          </strong>
+                        )}
+                        .
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="text-ink/70 border-line mt-2 rounded border border-dashed p-2 text-sm">
+                      That is more than is owed.{' '}
+                      {effect.clearsPaisa > 0 ? (
+                        <>
+                          {formatPaisa(paisa(effect.clearsPaisa), { withSymbol: true })} clears the
+                          balance and{' '}
+                        </>
+                      ) : null}
+                      <strong>
+                        {formatPaisa(paisa(effect.overpaidPaisa), { withSymbol: true })}
+                      </strong>{' '}
+                      will be held as an advance against future purchases.
+                    </p>
+                  );
+                })()}
+
                 {error ? (
                   <p className="text-red mt-2 text-sm" role="alert">
                     {error}
@@ -206,10 +243,16 @@ export function SettleUdhaarOverlay({
               </>
             ) : (
               <>
+                {/* The dispute-ender (T4/T5). Balances speak the position
+                    vocabulary; only "Paid" is a plain amount, because it is a
+                    transaction rather than a position. */}
                 <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-3 text-sm">
-                  <Row label="Previous balance" amountPaisa={step.statement.previousBalancePaisa} />
+                  <BalanceRow
+                    label="Before"
+                    balancePaisa={step.statement.previousBalancePaisa}
+                  />
                   <Row label="Paid" amountPaisa={Math.abs(step.statement.amountPaisa)} />
-                  <Row label="New balance" amountPaisa={step.statement.newBalancePaisa} bold />
+                  <BalanceRow label="Now" balancePaisa={step.statement.newBalancePaisa} bold />
                 </div>
                 <p className="text-ink/50 mt-2 text-xs">Receipt {step.receiptNumber}</p>
 
@@ -230,6 +273,23 @@ export function SettleUdhaarOverlay({
 
       {receipt ? <ReceiptView receipt={receipt} /> : null}
     </>
+  );
+}
+
+function BalanceRow({
+  label,
+  balancePaisa,
+  bold = false,
+}: {
+  label: string;
+  balancePaisa: number;
+  bold?: boolean;
+}) {
+  return (
+    <div className={`flex justify-between ${bold ? 'font-semibold' : ''}`}>
+      <span>{label}</span>
+      <BalanceInline balancePaisa={balancePaisa} />
+    </div>
   );
 }
 

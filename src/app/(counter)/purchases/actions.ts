@@ -19,6 +19,8 @@ import {
 import { insertSupplier, listPurchases, searchSuppliers } from '@/db/purchase-queries';
 import { uuidv7 } from '@/lib/uuid';
 
+import { revalidateAfter } from '../revalidate';
+
 export interface SupplierHit {
   id: string;
   name: string;
@@ -47,6 +49,7 @@ export async function createSupplierAction(
 
   const id = uuidv7();
   await insertSupplier(scopeFor(session), { id, name: trimmed, phone: null });
+  revalidateAfter('purchases');
   return { ok: true, supplier: { id, name: trimmed, phone: null } };
 }
 
@@ -89,6 +92,10 @@ export async function receivePurchaseAction(
   if (!result.ok) {
     return { ok: false, message: messageFor(result.reason) };
   }
+
+  // Stock moved and a batch was created, so the catalog's on-hand figures and
+  // the day's exception list are both stale from this instant.
+  revalidateAfter('purchases', 'stock');
 
   return {
     ok: true,

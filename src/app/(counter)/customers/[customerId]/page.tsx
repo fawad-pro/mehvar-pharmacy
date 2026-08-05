@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
+import { BalanceFigure, BalanceInline } from '@/components/balance-figure';
 import { customerBalance, customerLedger, findCustomer } from '@/db/udhaar-queries';
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
@@ -58,14 +59,9 @@ export default async function CustomerDetailPage({
       </header>
 
       <div className="border-line bg-green-100/50 flex flex-wrap items-end justify-between gap-4 rounded border p-4">
-        <div>
-          <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Balance</p>
-          <p
-            className={`numeral text-total leading-none font-semibold ${balancePaisa > 0 ? 'text-amber' : 'text-green-900'}`}
-          >
-            {formatPaisa(paisa(balancePaisa), { withSymbol: true })}
-          </p>
-        </div>
+        {/* Never "-Rs 100". The direction is a word and the amount is positive
+            — see domain/udhaar/position.ts. */}
+        <BalanceFigure balancePaisa={balancePaisa} size="large" />
         {/* The udhaar loop closes here: the screen that shows the debt is the
             screen that takes the payment against it. */}
         <SettleButton
@@ -115,8 +111,13 @@ export default async function CustomerDetailPage({
                     {row.amountPaisa > 0 ? '+' : '−'}
                     {formatPaisa(paisa(Math.abs(row.amountPaisa)))}
                   </td>
-                  <td className="numeral px-3 py-2 font-medium">
-                    {formatPaisa(paisa(row.runningPaisa))}
+                  {/* The running balance is a position, so it speaks the same
+                      vocabulary as the figure above the table — otherwise the
+                      last row and the headline disagree in wording while
+                      agreeing in value, which is exactly what an udhaar
+                      dispute cannot survive (T4). */}
+                  <td className="px-3 py-2 font-medium">
+                    <BalanceInline balancePaisa={row.runningPaisa} />
                   </td>
                 </tr>
               ))}

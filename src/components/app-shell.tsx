@@ -15,6 +15,7 @@ import { useGlobalKeys } from '@/client/keyboard/use-global-keys';
 import { F8Provider, useF8Registry } from '@/client/keyboard/f8-context';
 import { ReceiptContextProvider } from '@/client/receipt/receipt-context';
 import { SyncProvider } from '@/client/sync/provider';
+import { RefreshOnSync } from '@/client/sync/refresh-on-sync';
 import { ServiceWorker } from '@/client/sync/service-worker';
 
 import { KeyBar } from './key-bar';
@@ -90,6 +91,9 @@ export function AppShell({
     <ReceiptContextProvider tenantId={tenantId}>
       <SyncProvider tenantId={tenantId}>
         <ServiceWorker />
+        {/* Every screen re-reads when the outbox lands a record — see the
+            component's own note. Mounted here so no surface has to know. */}
+        <RefreshOnSync />
 
         <div className="flex h-screen flex-col">
           <TopBar

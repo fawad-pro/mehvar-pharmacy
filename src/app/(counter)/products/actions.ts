@@ -8,7 +8,6 @@
  * server, never by hiding UI (Phase 12 §5).
  */
 
-import { revalidatePath } from 'next/cache';
 
 import { currentSession, scopeFor } from '@/auth/session';
 import {
@@ -22,6 +21,8 @@ import {
 import { parsePackLevels, type ProductDraft } from '@/domain/catalog/product';
 import { rupeesToPaisa } from '@/lib/money';
 import type { Uuid } from '@/lib/uuid';
+
+import { revalidateAfter } from '../revalidate';
 
 export type ActionState =
   { status: 'idle' } | { status: 'error'; message: string } | { status: 'saved' };
@@ -123,7 +124,9 @@ export async function saveProduct(
     return { status: 'error', message: messageFor(result) };
   }
 
-  revalidatePath('/products');
+  // The counter's search index reads the catalog too, so a saved product has
+  // to reach /sale as well as /products.
+  revalidateAfter('catalog');
   return { status: 'saved' };
 }
 
@@ -146,7 +149,7 @@ export async function saveBarcode(
     return { status: 'error', message: messageFor(result) };
   }
 
-  revalidatePath(`/products/${productId}`);
+  revalidateAfter('catalog');
   return { status: 'saved' };
 }
 
@@ -156,7 +159,7 @@ export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<v
     return;
   }
   await removeBarcode(scopeFor(gate.session), productId, barcodeId);
-  revalidatePath(`/products/${productId}`);
+  revalidateAfter('catalog');
 }
 
 export async function archiveProduct(productId: Uuid, isActive: boolean): Promise<void> {
@@ -165,6 +168,5 @@ export async function archiveProduct(productId: Uuid, isActive: boolean): Promis
     return;
   }
   await setProductActive(scopeFor(gate.session), productId, isActive);
-  revalidatePath('/products');
-  revalidatePath(`/products/${productId}`);
+  revalidateAfter('catalog');
 }

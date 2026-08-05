@@ -29,7 +29,10 @@ import { recordCashMovementAction } from './actions';
 interface ThreeNumbers {
   salesPaisa: number;
   expectedCashPaisa: number;
-  udhaarTotalPaisa: number;
+  udhaarOwedPaisa: number;
+  udhaarCreditPaisa: number;
+  customersOwing: number;
+  customersInCredit: number;
 }
 
 interface ReportFigures {
@@ -210,7 +213,16 @@ export function DaySurface({
             amountPaisa={numbers.expectedCashPaisa}
           />
         ) : null}
-        <NumberCard label="Total owed to you" amountPaisa={numbers.udhaarTotalPaisa} amber />
+        {/* Never negative, and never netted against advances — an advance one
+            customer has paid does not reduce what another customer owes. This
+            card and the Customers screen now derive from the same
+            `summariseBook`, so the same label cannot mean two things. */}
+        <NumberCard
+          label="Owed to you, all time"
+          amountPaisa={numbers.udhaarOwedPaisa}
+          amber
+          note={udhaarNote(numbers)}
+        />
       </div>
 
       {/* The count and the movements belong to today's drawer. Rendering them
@@ -369,14 +381,38 @@ function Row({ children }: { children: React.ReactNode }) {
   return <li className="flex flex-wrap items-baseline gap-1 px-3 py-2">{children}</li>;
 }
 
+/**
+ * The one line under "Owed to you".
+ *
+ * Advances appear here rather than as a fourth card. They are real money the
+ * shop is holding, so they must be visible — but they are rare, and a card that
+ * reads "Rs 0.00" on almost every day of the year trains the owner to stop
+ * reading the row it sits in. Mentioned only when there is something to
+ * mention.
+ */
+function udhaarNote(numbers: ThreeNumbers): string {
+  const owing =
+    numbers.customersOwing > 0
+      ? `${numbers.customersOwing} customer${numbers.customersOwing === 1 ? '' : 's'}`
+      : 'Nobody owes you';
+
+  if (numbers.udhaarCreditPaisa === 0) {
+    return owing;
+  }
+  return `${owing} · ${formatPaisa(paisa(numbers.udhaarCreditPaisa), { withSymbol: true })} paid in advance`;
+}
+
 function NumberCard({
   label,
   amountPaisa,
   amber = false,
+  note,
 }: {
   label: string;
   amountPaisa: number;
   amber?: boolean;
+  /** One line under the number, for the context that stops it being ambiguous. */
+  note?: string;
 }) {
   return (
     <div className="border-line rounded border p-4">
@@ -386,6 +422,7 @@ function NumberCard({
       >
         {formatPaisa(paisa(amountPaisa), { withSymbol: true })}
       </p>
+      {note ? <p className="text-ink/50 mt-1 text-xs">{note}</p> : null}
     </div>
   );
 }

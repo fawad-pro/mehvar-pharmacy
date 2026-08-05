@@ -24,7 +24,10 @@ type Tab = 'today' | 'stock' | 'udhaar';
 interface ThreeNumbers {
   readonly salesPaisa: number;
   readonly expectedCashPaisa: number;
-  readonly udhaarTotalPaisa: number;
+  readonly udhaarOwedPaisa: number;
+  readonly udhaarCreditPaisa: number;
+  readonly customersOwing: number;
+  readonly customersInCredit: number;
 }
 
 interface LowStockItem {
@@ -129,7 +132,7 @@ function TodayTab({
       <div className="grid grid-cols-1 gap-3">
         <NumberCard label="Today's sales" amountPaisa={numbers.salesPaisa} />
         <NumberCard label="Expected cash in drawer" amountPaisa={numbers.expectedCashPaisa} />
-        <NumberCard label="Running udhaar total" amountPaisa={numbers.udhaarTotalPaisa} amber />
+        <NumberCard label="Owed to you" amountPaisa={numbers.udhaarOwedPaisa} amber />
       </div>
 
       <div>
