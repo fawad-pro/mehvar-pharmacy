@@ -247,3 +247,31 @@ To build a pack from the source list:
 
 It refuses to build if two entries are the same medicine, because that is a
 curation error to fix before distribution rather than after.
+
+### Importing a distributor, competitor or DRAP list
+
+    npm run catalog:csv -- list.csv                     # review, writes nothing
+    npm run catalog:csv -- list.csv --commit            # apply
+
+Review is the DEFAULT. The first run prints which column it thinks is which,
+lists every row it cannot read and why, and writes nothing. `--commit` is a
+separate, deliberate act — these files run to tens of thousands of rows from a
+source nobody has checked, and an import that writes first and reports
+afterwards is a description of damage already done.
+
+Correct a wrong column guess with `--map`, using the column numbers printed in
+the review:
+
+    npm run catalog:csv -- list.csv --map 2=strength,5=mrp --commit
+
+`--map 4=none` ignores a column. Claiming a role releases it from wherever it
+was, so a role always belongs to exactly one column.
+
+`--pack-level strip` names the level a pack size becomes (default `pack`). The
+base unit is deliberately left as `unit`: a distributor's "pack of 10" does not
+say whether those are tablets or sachets, and a wrong unit NAME is visible to
+the operator where a wrong factor would silently corrupt stock arithmetic.
+
+Everything imported this way lands as **reference** quality, never *verified* —
+verified means someone checked a real box. It goes through the same pack writer
+as everything else, so re-running an import is safe.

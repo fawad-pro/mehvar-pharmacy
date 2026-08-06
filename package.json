@@ -36,7 +36,8 @@
     "lint:ps": "tsx scripts/package/lint-powershell.ts",
     "package:installer": "tsx scripts/package/build-installer.ts",
     "catalog:build": "tsx --conditions=react-server scripts/catalog/build-pack.ts",
-    "catalog:import": "tsx --conditions=react-server scripts/catalog/import-pack.ts"
+    "catalog:import": "tsx --conditions=react-server scripts/catalog/import-pack.ts",
+    "catalog:csv": "tsx --conditions=react-server scripts/catalog/import-csv.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
