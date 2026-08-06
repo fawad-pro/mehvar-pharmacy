@@ -17,6 +17,7 @@
  *     app/bin/ops/    compiled backup, restore-drill, support-bundle
  *                     (inside app/ so they resolve app/node_modules)
  *     migrations/     drizzle SQL, applied at install and at every update
+ *     catalog/        the starter catalogue pack, imported at install
  *     runtime/        the pinned Node runtime (fetched separately)
  *     pgsql/          PostgreSQL binaries (fetched separately)
  *
@@ -53,6 +54,7 @@ const OPS_ENTRYPOINTS = [
   'scripts/db/grants.ts',
   'scripts/db/init.ts',
   'scripts/db/verify.ts',
+  'scripts/catalog/import-pack.ts',
   'scripts/ops/backup.ts',
   'scripts/ops/restore-drill.ts',
   'scripts/ops/support-bundle.ts',
@@ -224,6 +226,18 @@ async function main(): Promise<void> {
 
   step('Copying migrations');
   cpSync(join(root, 'src', 'db', 'migrations'), join(out, 'migrations'), { recursive: true });
+
+  /*
+   * The starter catalogue is BUILT here, not committed.
+   *
+   * A committed pack would be a second copy of the catalogue living beside the
+   * source list, and the two would drift — invisibly, until a pharmacy asked
+   * why a medicine that is plainly in the code is missing from its search.
+   * Building it as part of the payload means the pack in any given installer
+   * was made from that same commit, by definition.
+   */
+  step('Building the starter catalogue');
+  runNpm(['run', 'catalog:build', '--', '--out', join(out, 'catalog', 'starter.json')]);
 
   writeFileSync(
     join(out, 'VERSION'),

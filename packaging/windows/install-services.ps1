@@ -371,6 +371,43 @@ Invoke-Tool -FilePath $NodeExe -Arguments @((Join-Path $BinDir 'db\init.js')) -E
 }
 
 # ---------------------------------------------------------------------------
+# 6b. The starter catalogue
+# ---------------------------------------------------------------------------
+<#
+    A pharmacy that opens on an empty catalogue starts with data entry, which
+    is the difference between a demo that sells in minutes and one that does
+    not (Phase 6 section 1). The pack is data, so it ships beside the migrations and
+    is applied the same way.
+
+    NOT fatal. The catalogue is a convenience -- every product in it can be
+    created by hand, and W6's quick item means an unknown medicine never blocks
+    a sale (P2). An installation that is otherwise complete must not be failed
+    because a reference list did not load; it must say so and carry on. This is
+    the one step in this script deliberately allowed to fail.
+
+    The import is idempotent on medicine identity, so re-running it after a
+    failure -- or on every upgrade -- is safe.
+#>
+Write-Step 'Loading the starter catalogue'
+$CatalogPack = Join-Path $InstallDir 'catalog\starter.json'
+if (-not (Test-Path $CatalogPack)) {
+    Write-Log '   no starter catalogue in the payload; skipping.'
+} else {
+    try {
+        Invoke-Tool -FilePath $NodeExe -Arguments @(
+            (Join-Path $BinDir 'catalog\import-pack.js'), $CatalogPack, '--origin', 'installer'
+        ) -Environment @{
+            DOTENV_CONFIG_PATH = $EnvFile
+            DATABASE_URL       = $appUrl
+        }
+    } catch {
+        Write-Log "   the starter catalogue did not load: $($_.Exception.Message)"
+        Write-Log '   Mehvar is installed and usable. Load it later with:'
+        Write-Log "     node `"$(Join-Path $BinDir 'catalog\import-pack.js')`" `"$CatalogPack`""
+    }
+}
+
+# ---------------------------------------------------------------------------
 # 7. The application service
 # ---------------------------------------------------------------------------
 Write-Step 'Registering the Mehvar Node service'

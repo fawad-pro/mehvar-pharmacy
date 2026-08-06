@@ -208,3 +208,42 @@ stay. Removing a pharmacy's records is a separate, deliberate, manual act.
 | `npm run ops:restore-drill`  | Prove the newest dump restores and verifies.               |
 | `npm run ops:support-bundle` | Collect diagnostics.                                       |
 | `npm run package:build`      | Assemble the installer payload.                            |
+
+## The medicine catalogue
+
+The catalogue travels as a **pack** — one versioned JSON file — so it can be
+updated without shipping a new build of Mehvar.
+
+    node "C:\Program Files\Mehvar\app\bin\catalog\import-pack.js" <path-to-pack.json>
+
+The installer applies the bundled starter pack automatically. If that step
+fails, the installation is still complete and usable: the catalogue is a
+convenience, every product in it can be created by hand, and W6's quick item
+means an unknown medicine never blocks a sale. Run the command above afterwards.
+
+**Importing is always safe to repeat.** Packs are idempotent on medicine
+identity (brand + strength + form + manufacturer), so a re-run after an
+interrupted import updates rather than duplicates.
+
+**Importing never changes a pharmacy's products, prices or stock.** A pack
+carries identity only — what medicines exist in the world, not what this shop
+sells or charges.
+
+Two version numbers, for two different reasons:
+
+- `format` is the shape of the file. A pack from a newer Mehvar is refused
+  outright rather than partly read, and the message says to update Mehvar.
+- `catalogVersion` (`YYYY.MM.N`) is how fresh the data is. Importing an older
+  one than is already applied warns and proceeds — rolling back to a known-good
+  catalogue is a legitimate thing to do on a support call.
+
+To see what a machine is on, read the newest row of `catalog_versions`; the
+import history is kept, so "which catalogue is this shop running?" always has
+an answer.
+
+To build a pack from the source list:
+
+    npm run catalog:build -- --version 2026.08.1
+
+It refuses to build if two entries are the same medicine, because that is a
+curation error to fix before distribution rather than after.

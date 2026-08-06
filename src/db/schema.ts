@@ -697,18 +697,67 @@ export const cashMovements = pgTable(
 /* trust posture (T3) does not permit crossing.                                */
 /* ========================================================================== */
 
-export const globalProducts = pgTable('global_products', {
+export const globalProducts = pgTable(
+  'global_products',
+  {
+    id: uuid('id').primaryKey(),
+    name: text('name').notNull(),
+    manufacturer: text('manufacturer'),
+    formulaText: text('formula_text'),
+    form: text('form'),
+    strength: text('strength'),
+    packLevels: jsonb('pack_levels').$type<PackLevel[]>().notNull().default([]),
+    referenceMrpPaisa: bigint('reference_mrp_paisa', { mode: 'number' }),
+    quality: catalogQuality('quality').notNull(),
+    source: catalogSource('source').notNull(),
+    /**
+     * `identityKey()` from `domain/catalog/identity.ts` — brand + strength +
+     * form + manufacturer, normalised.
+     *
+     * UNIQUE, so the database is the last line of defence against the same
+     * medicine entering the global catalogue twice. Importers are idempotent on
+     * this column: re-applying a pack updates rather than duplicates, which is
+     * what lets a pack be re-imported safely after a partial run.
+     */
+    identityKey: text('identity_key').notNull(),
+    /**
+     * `equivalenceKey()` — formula + strength + form, no brand.
+     *
+     * Emphatically NOT unique: everything sharing it is an alternative a
+     * pharmacy may legitimately stock side by side. Indexed because "what else
+     * is this?" is a question the counter asks.
+     */
+    equivalenceKey: text('equivalence_key'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex('global_products_identity_key').on(table.identityKey),
+    index('global_products_equivalence_idx').on(table.equivalenceKey),
+    index('global_products_name_idx').on(table.name),
+  ],
+);
+
+/**
+ * Which catalogue packs this installation has applied.
+ *
+ * Append-only, like every other record of something that happened: an import is
+ * an event, and the history of what was applied and when is exactly what a
+ * support call needs ("which catalogue is this shop on?"). The newest row by
+ * `catalogVersion` is the current catalogue.
+ */
+export const catalogVersions = pgTable('catalog_versions', {
   id: uuid('id').primaryKey(),
-  name: text('name').notNull(),
-  manufacturer: text('manufacturer'),
-  formulaText: text('formula_text'),
-  form: text('form'),
-  strength: text('strength'),
-  packLevels: jsonb('pack_levels').$type<PackLevel[]>().notNull().default([]),
-  referenceMrpPaisa: bigint('reference_mrp_paisa', { mode: 'number' }),
-  quality: catalogQuality('quality').notNull(),
-  source: catalogSource('source').notNull(),
-  createdAt: createdAt(),
+  catalogVersion: text('catalog_version').notNull(),
+  packFormat: integer('pack_format').notNull(),
+  productCount: integer('product_count').notNull(),
+  /** Rows the import actually created and updated — rarely equal to the above. */
+  insertedCount: integer('inserted_count').notNull(),
+  updatedCount: integer('updated_count').notNull(),
+  generatedAt: text('generated_at'),
+  /** Where it came from: the installer's bundled pack, or a file someone chose. */
+  origin: text('origin').notNull(),
+  appliedAt: createdAt(),
 });
 
 export const globalBarcodes = pgTable(

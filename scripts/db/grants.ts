@@ -32,6 +32,7 @@ const MUTABLE_TABLES = [
   'suppliers',
   'batches',
   'global_products',
+  'catalog_versions',
   'global_barcodes',
   'catalog_proposals',
 ] as const;

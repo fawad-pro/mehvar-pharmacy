@@ -11,6 +11,8 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { DuplicateNotice } from '@/components/duplicate-notice';
+
 import { saveProduct, type ActionState } from './actions';
 import { exceedsMrp, parsePackLevels } from '@/domain/catalog/product';
 import type { PackLevel } from '@/lib/quantity';
@@ -37,6 +39,14 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
     { status: 'idle' },
   );
 
+  // Watched so the duplicate check answers while the operator types, rather
+  // than after they have saved and created the split.
+  const [name, setName] = useState(initial.name);
+  const [strength, setStrength] = useState(initial.strength);
+  const [form, setForm] = useState(initial.form);
+  const [manufacturer, setManufacturer] = useState(initial.manufacturer);
+  const [formulaText, setFormulaText] = useState(initial.formulaText);
+
   const [price, setPrice] = useState(initial.priceRupees);
   const [mrp, setMrp] = useState(initial.mrpRupees);
   const [baseUnit, setBaseUnit] = useState(initial.baseUnitName);
@@ -60,15 +70,53 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
   return (
     <form action={action} className="flex flex-col gap-5">
       <Section title="What it is">
-        <Field name="name" label="Name" defaultValue={initial.name} required autoFocus />
-        <Field name="strength" label="Strength" hint="e.g. 500mg" defaultValue={initial.strength} />
-        <Field name="form" label="Form" hint="e.g. Tablet, Syrup" defaultValue={initial.form} />
-        <Field name="manufacturer" label="Manufacturer" defaultValue={initial.manufacturer} />
+        <Field
+          name="name"
+          label="Name"
+          value={name}
+          onChange={setName}
+          required
+          autoFocus
+        />
+        <Field
+          name="strength"
+          label="Strength"
+          hint="e.g. 500mg, 125mg/5ml, 500mg+65mg"
+          value={strength}
+          onChange={setStrength}
+        />
+        <Field
+          name="form"
+          label="Form"
+          hint="e.g. Tablet, Syrup"
+          value={form}
+          onChange={setForm}
+        />
+        <Field
+          name="manufacturer"
+          label="Manufacturer"
+          value={manufacturer}
+          onChange={setManufacturer}
+        />
         <Field
           name="formulaText"
           label="Salt / formula"
           hint="What it contains. This is how substitutes are found."
-          defaultValue={initial.formulaText}
+          value={formulaText}
+          onChange={setFormulaText}
+        />
+
+        {/* Said while it is being typed, never after saving — by then the
+            duplicate exists and its stock has started splitting. */}
+        <DuplicateNotice
+          candidate={{
+            id: initial.id,
+            name,
+            strength,
+            form,
+            manufacturer,
+            formulaText,
+          }}
         />
       </Section>
 

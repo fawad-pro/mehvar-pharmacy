@@ -55,6 +55,11 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Files]
 Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\migrations\*"; DestDir: "{app}\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The starter catalogue. Not skipifsourcedoesntexist: a payload built without
+; one is a broken build, and a pharmacy opening on an empty catalogue starts
+; with data entry (Phase 6 §1). install-services.ps1 tolerates a failed IMPORT;
+; it does not tolerate a missing file being passed off as success.
+Source: "{#PayloadDir}\catalog\*";      DestDir: "{app}\catalog";     Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\runtime\*";    DestDir: "{app}\runtime";    Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\winsw\*";      DestDir: "{app}\winsw";      Flags: ignoreversion recursesubdirs createallsubdirs

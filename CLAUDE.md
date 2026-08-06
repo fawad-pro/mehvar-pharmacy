@@ -373,6 +373,38 @@ exception visibility.
   rather than the question. The empty state is a positive statement ("Nothing
   needs a look today") because an absence reads as a missing section.
 
+## Things Day 10 established
+
+- **A pharmacy asks two questions about two medicines, and they are not the
+  same question.** `identityKey` (brand + strength + form + manufacturer)
+  answers "have I already got this?" and blocks. `equivalenceKey` (formula +
+  strength + form) answers "can I give this instead?" and only informs.
+  Merging Panadol and Paracip because they share a molecule would destroy real
+  inventory — they are alternatives a shop stocks on purpose.
+- **`875mg/125mg` and `125mg/5ml` are written identically and mean different
+  things.** Same dimension on both sides is a combination; different dimensions
+  is a concentration. Strength is parsed to integer micrograms/microlitres, not
+  compared as text, because a strength mix-up reaches a patient.
+- **Reduce for comparison, never for display.** A concentration reduced to
+  lowest terms is arithmetically identical and unreadable (`25mcg/1mcl`). The
+  parsed value keeps what the pack says (D4); `componentKey` does the reducing.
+- **A catalogue update must not need an application release.** Packs are
+  versioned data files (`domain/catalog/pack.ts`), applied idempotently on
+  identity so "run it again" is always safe advice. `format` (shape) and
+  `catalogVersion` (freshness) are separate numbers; a pack from a newer format
+  is REFUSED whole rather than partially imported.
+- **Importing a catalogue never changes a pharmacy's own products, prices or
+  stock.** Identity only, both because Phase 6 §2 says so and because a pack is
+  shared by every shop (T3).
+- **`uuidv7().slice(0, 8)` is not unique.** The first 48 bits of a v7 are a
+  millisecond timestamp, so the leading 8 hex characters change roughly once a
+  minute — two runs seconds apart produce identical "unique" values. Use the
+  tail, which is the random part.
+- **The shared-database rule has a second half.** `catalog_versions` and
+  `global_products` have no tenant column at all, so they accumulate across
+  every run, not just every test. Assert the property ("the older pack did not
+  become current"), never the value.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

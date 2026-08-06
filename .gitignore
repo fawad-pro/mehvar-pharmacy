@@ -13,3 +13,9 @@ out/
 playwright-report/
 test-results/
 .playwright/
+
+# Built catalogue packs. The pack is generated from scripts/db/seed-data.ts at
+# package time, never committed: a committed copy would drift from the source
+# list and the drift would be invisible until a pharmacy asked why a medicine
+# in the code is missing from its search.
+dist/catalog/

@@ -36,6 +36,13 @@
       "when": 1785540746249,
       "tag": "0004_aromatic_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786016079570,
+      "tag": "0005_catalog_identity",
+      "breakpoints": true
     }
   ]
 }
