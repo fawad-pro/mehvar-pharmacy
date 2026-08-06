@@ -18,7 +18,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "e2e:reset": "npm run db:reset && npm run db:migrate && npm run db:grants && npm run db:seed && playwright test",
+    "e2e:reset": "npm run db:reset && npm run db:setup && playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --conditions=react-server scripts/db/migrate.ts",
     "db:grants": "tsx --conditions=react-server scripts/db/grants.ts",
@@ -37,7 +37,8 @@
     "package:installer": "tsx scripts/package/build-installer.ts",
     "catalog:build": "tsx --conditions=react-server scripts/catalog/build-pack.ts",
     "catalog:import": "tsx --conditions=react-server scripts/catalog/import-pack.ts",
-    "catalog:csv": "tsx --conditions=react-server scripts/catalog/import-csv.ts"
+    "catalog:csv": "tsx --conditions=react-server scripts/catalog/import-csv.ts",
+    "db:setup": "npm run db:migrate && npm run db:grants && npm run db:seed"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

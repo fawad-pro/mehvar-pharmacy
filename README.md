@@ -46,13 +46,25 @@ npm run hooks:install          # pre-push: typecheck + lint + tests
 cp .env.example .env           # then set SESSION_SECRET
 docker compose up -d postgres
 
-npm run db:reset && npm run db:migrate && npm run db:grants && npm run db:seed
+npm run db:setup               # migrate + grants + seed, in that order
 npm run dev
 ```
 
+`db:setup` is one command on purpose. The three steps are not independent:
+`db:grants` is what CREATES the application role `mehvar_app`, and `db:seed`
+connects as it. Run them separately and it is possible to stop halfway; the
+symptom of skipping grants is not "role missing" but
+
+    password authentication failed for user "mehvar_app"
+
+because Postgres deliberately reports a non-existent role as an authentication
+failure, which sends you looking at a password that was never wrong.
+
+To start over from an empty database, `npm run db:reset` first.
+
 `db:seed` prints the demo counter's setup key and the PINs it created.
 
-`db:reset && db:migrate && db:seed` must always produce a working demo pharmacy
+`db:reset && db:setup` must always produce a working demo pharmacy
 (Phase 11 §4) — the demo is a build artifact, always one command away. From
 Session 1 onward it seeds ~50 curated products with real pack structures, a
 customer with a balance, opening batches, and an open purchase draft.

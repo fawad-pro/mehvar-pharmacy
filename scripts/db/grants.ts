@@ -75,13 +75,33 @@ async function main(): Promise<void> {
       'SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS exists',
       [role],
     );
+    /*
+     * The role is created AND its password is set on every run.
+     *
+     * It used to set the password only when creating the role, which quietly
+     * made `APP_DB_PASSWORD` mean "the password to use if this role happens not
+     * to exist yet". Change the password in `.env` on a database that already
+     * has the role and nothing happens — the application then fails with
+     * "password authentication failed", pointing at a credential the operator
+     * can see is correct in the file in front of them.
+     *
+     * Configuring a role is idempotent work, like the grants below it. Doing it
+     * once at creation and never again is what makes a setup step something you
+     * can only get right by starting over.
+     */
+    const password = process.env.APP_DB_PASSWORD;
     if (!rows[0]?.exists) {
-      const password = process.env.APP_DB_PASSWORD;
       if (!password) {
-        throw new Error(`Role ${role} does not exist and APP_DB_PASSWORD is not set to create it.`);
+        throw new Error(
+          `Role ${role} does not exist and APP_DB_PASSWORD is not set to create it.\n` +
+            'Set APP_DB_PASSWORD in .env (it must match the password in DATABASE_URL).',
+        );
       }
       await pool.query(`CREATE ROLE ${app} LOGIN PASSWORD '${password.replaceAll("'", "''")}'`);
       console.log(`Created role ${role}.`);
+    } else if (password) {
+      await pool.query(`ALTER ROLE ${app} LOGIN PASSWORD '${password.replaceAll("'", "''")}'`);
+      console.log(`Role ${role} already existed; its password now matches APP_DB_PASSWORD.`);
     }
 
     /*

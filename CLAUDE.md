@@ -405,6 +405,39 @@ exception visibility.
   every run, not just every test. Assert the property ("the older pack did not
   become current"), never the value.
 
+## Things Day 11 established
+
+- **A success message that counts files is not a success message.** `db:migrate`
+  printed "Migrations applied (6 file(s))" whether it applied six or zero — the
+  number was `readdir().length`. It now names the target database and each
+  migration it actually applied, and says "already up to date" out loud.
+- **`migrate()` resolving is not evidence the schema is current.** It resolves
+  happily when it decides there is nothing to do, and that decision comes from
+  a table that can disagree with the journal (a stale `created_at` watermark is
+  enough). `assertJournalApplied` compares the journal to
+  `drizzle.__drizzle_migrations` afterwards and refuses, naming the migration.
+  Without it the symptom surfaces days later as "column does not exist" on an
+  unrelated page.
+- **PostgreSQL reports a MISSING role and a wrong password identically** —
+  `password authentication failed for user` — deliberately, so roles cannot be
+  enumerated. Anyone debugging a fresh install is therefore sent to check a
+  password that was never wrong. `db:grants` is the only thing that creates
+  `mehvar_app`, so `docker compose down -v` + migrate + seed leaves no role at
+  all.
+- **`npm run db:setup` is the supported fresh path**, one command, because the
+  three steps are not independent: grants creates the role that seed connects
+  as. `e2e:reset` and the README use it, so they cannot drift.
+- **Configure on every run, not only on create.** `db:grants` set the app role's
+  password only when creating the role, which quietly made `APP_DB_PASSWORD`
+  mean "the password to use if this role does not exist yet". Rotating it in
+  `.env` did nothing and the app failed authentication against a credential the
+  operator could see was correct.
+- **`dotenv/config` fills any variable the shell left unset.** Unsetting
+  `DATABASE_ADMIN_URL` to target a scratch database silently got `.env`'s value
+  instead — so a migration ran against a completely different database and
+  reported success. This cost a wrong diagnosis during this very session;
+  printing the target is what makes it visible.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
