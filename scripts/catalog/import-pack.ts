@@ -12,7 +12,14 @@
  * Usage:
  *   npm run catalog:import -- <path-to-pack.json>
  *   npm run catalog:import -- <path> --origin installer
+ *
+ * `dotenv/config` first, like every other script that reaches the database.
+ * Without it this reads `.env` only when the shell already happens to export
+ * the variables — which is true on a developer machine mid-session and false
+ * on every clean run, so it fails exactly where it must not.
  */
+
+import 'dotenv/config';
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

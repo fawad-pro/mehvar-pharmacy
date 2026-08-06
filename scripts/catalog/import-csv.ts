@@ -26,6 +26,8 @@
  *   npm run catalog:csv -- list.csv --commit --version 2026.09.1 --pack-level strip
  */
 
+import 'dotenv/config';
+
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 

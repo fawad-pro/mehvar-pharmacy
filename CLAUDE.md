@@ -503,6 +503,32 @@ exception visibility.
   with no opening stock; inventing batches on a database somebody has been
   testing against would corrupt the figures they were testing.
 
+## Things Day 15 established
+
+- **A script that reaches the database loads `dotenv/config` first.** The two
+  catalogue scripts did not, so they read `.env` only when the shell already
+  exported `DATABASE_URL` and `SESSION_SECRET`. `db:setup` completed migrate,
+  grants and seed and then died in its last step — on a machine whose `.env` was
+  present and correct the whole time, which is why the report reasonably
+  suspected everything except the missing import.
+- **`catalog:build` passing told us nothing**, because it writes a file from a
+  static list and never calls `serverEnv()`. The half of a chain that needs
+  configuration is the half that must be tested with none.
+- **My own environment masked it, for the third time this month.** Day 12's
+  hand-imported pack, Day 14's already-seeded database, and now every command
+  in this session being prefixed with `export`. A clean-run reproduction
+  (`env -i PATH HOME`, `.env` as the only source) is now the standard for
+  anything on the setup path — not because Windows is different, but because a
+  developer shell is.
+- **`tests/script-env.test.ts` checks the class, not the two broken files.** It
+  walks the module graph from every npm-script entry point and requires dotenv
+  from any script that reaches `src/env`/`src/db` **or** names a variable
+  `.env.example` defines. Taking the variable list from the template means a new
+  one is covered without anyone remembering this test exists. Libraries are
+  excluded on purpose: `scripts/db/verify-all.ts` reaches the database and must
+  NOT load dotenv, because a module that reads `.env` as a side effect of being
+  imported is worse than the bug being prevented.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
