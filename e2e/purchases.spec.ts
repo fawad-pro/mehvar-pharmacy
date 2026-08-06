@@ -49,7 +49,7 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
 }) => {
   await openCounter(page);
 
-  await page.keyboard.press('F2');
+  await page.keyboard.press('F7');
   await expect(page).toHaveURL(PURCHASES_URL);
 
   await page.getByLabel('Invoice no.').fill('DIST-4417');
@@ -75,7 +75,7 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
   // Back to the invoice — nothing lost.
-  await page.keyboard.press('F2');
+  await page.keyboard.press('F7');
   await expect(page).toHaveURL(PURCHASES_URL);
   await expect(page.getByText(/Resumed/)).toBeVisible();
   await expect(page.getByRole('table')).toContainText('Panadol');
@@ -133,7 +133,7 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   await expect(shortfalls).toContainText(SHORTFALL_PRODUCT);
 
   // Day 6's promise — the missing purchase arrives.
-  await page.keyboard.press('F2');
+  await page.keyboard.press('F7');
   await expect(page).toHaveURL(PURCHASES_URL);
   await addLine(page, SHORTFALL_PRODUCT.toLowerCase(), {
     qty: '500',
@@ -163,7 +163,7 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
 
 test('W7: twenty lines go in without the invoice growing harder to enter', async ({ page }) => {
   await openCounter(page);
-  await page.keyboard.press('F2');
+  await page.keyboard.press('F7');
   await expect(page).toHaveURL(PURCHASES_URL);
 
   await page.getByLabel('Invoice no.').fill('DIST-4418');
@@ -188,7 +188,7 @@ test('W7: twenty lines go in without the invoice growing harder to enter', async
 test('W8: an adjustment needs a coded reason, and says who made it', async ({ page }) => {
   await openCounter(page);
 
-  await page.keyboard.press('F9');
+  await page.keyboard.press('F8');
   await expect(page).toHaveURL(/\/stock\/adjust$/);
 
   // Adding stock creates its own batch, so no batch is asked for.
@@ -212,7 +212,7 @@ test('W8: an adjustment needs a coded reason, and says who made it', async ({ pa
 
 test('W8: removing stock must name the batch it leaves from', async ({ page }) => {
   await openCounter(page);
-  await page.keyboard.press('F9');
+  await page.keyboard.press('F8');
   // Wait for the destination before typing: without it the fill lands in the
   // Sale screen's search box, and the option it resolves detaches under the
   // click as the adjustment screen mounts.

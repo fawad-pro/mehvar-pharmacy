@@ -17,40 +17,64 @@ export interface GlobalKey {
   readonly label: string;
   /** Route it navigates to, or null for keys handled contextually. */
   readonly href: string | null;
+  /**
+   * What a routeless key MEANS, for the handler to dispatch on.
+   *
+   * The handler used to branch on the literal strings 'F8' and 'F10', which
+   * quietly made the registry a half-truth: "add a key in one place" was true
+   * for anything with an href and false for everything else, and reordering the
+   * bar would have sent Udhaar's dispatch to whatever key happened to land on
+   * F8. Binding by meaning is what makes the one-array rule actually hold.
+   */
+  readonly dispatch?: 'udhaar' | 'switch-user';
   /** Owner-only surfaces are dimmed for a salesman rather than hidden (T1 over P5). */
   readonly ownerOnly?: boolean;
+  /**
+   * Which band of the day this key belongs to. The bar draws a divider between
+   * bands so the grouping is visible rather than merely intended — a rationale
+   * nobody can see is not a design, it is a comment.
+   */
+  readonly group: 'counter' | 'goods' | 'owner';
 }
 
 export const GLOBAL_KEYS: readonly GlobalKey[] = [
-  { key: 'F1', label: 'Sale', href: '/sale' },
-  { key: 'F2', label: 'Purchases', href: '/purchases' },
-  { key: 'F3', label: 'Products', href: '/products' },
-  { key: 'F4', label: 'Customers', href: '/customers' },
-  { key: 'F5', label: 'Day', href: '/day', ownerOnly: true },
-  { key: 'F6', label: 'Stock', href: '/stock' },
   /*
-   * F7 is Receipts, not Returns — a deliberate swap, recorded here because it
-   * changes a printed shortcut.
+   * ORDERED BY HOW CLOSE THE TASK IS TO THE CUSTOMER, IN THREE GROUPS.
    *
-   * The two acts are not peers. Looking a receipt up happens many times a day
-   * ("what did she buy?", "is this our slip?", "did that sale go through?");
-   * a refund happens rarely and always *about* a specific receipt. Giving the
-   * key to the frequent, harmless act and reaching the rare, consequential one
-   * from the record it applies to is the same principle the whole receipts
-   * surface exists for: a clear place to do something, a separate obvious
-   * place to review what already happened.
+   * The old order was arbitrary — Purchases, a back-office task done once a
+   * week when a delivery arrives, sat at F2 beside Sale, while Receipts was at
+   * F7 and Stock at F6 with Day wedged between them. Ten keys with no pattern
+   * is ten things to memorise. Three groups of three or four is a shape you
+   * learn once:
    *
-   * `/returns` keeps its route and its own search — a customer arriving with
-   * goods and no slip still works. It is linked from Receipts so it has a
-   * visible entry point (Day 8: a workflow nothing links to is not built).
+   *   F1-F4  at the counter, with a customer in front of you
+   *   F5-F8  about goods, walking the shop
+   *   F9-F10 the owner's view, and whose hands are on the keyboard
+   *
+   * Frequency falls off left to right, which also means the keys nearest the
+   * hand are the ones pressed all day.
    */
-  { key: 'F7', label: 'Receipts', href: '/receipts' },
-  // F8 is deliberately contextual (defect C5's resolution): with items in the
-  // cart it attaches a customer for udhaar (W2); with an empty cart it opens
-  // Settle Udhaar (W3). One key, two contexts, both meaning "customer + money".
-  { key: 'F8', label: 'Udhaar', href: null },
-  { key: 'F9', label: 'Adjust', href: '/stock/adjust' },
-  { key: 'F10', label: 'Switch user', href: null },
+
+  // — At the counter ——————————————————————————————————————————————
+  { key: 'F1', label: 'Sale', href: '/sale', group: 'counter' },
+  { key: 'F2', label: 'Receipts', href: '/receipts', group: 'counter' },
+  { key: 'F3', label: 'Customers', href: '/customers', group: 'counter' },
+  // F8-turned-F4 is deliberately contextual (defect C5's resolution): with
+  // items in the cart it attaches a customer for udhaar (W2); with an empty
+  // cart it opens Settle Udhaar (W3). One key, two contexts, both meaning
+  // "customer + money" — which is why it now sits beside Customers rather than
+  // stranded between Receipts and Adjust.
+  { key: 'F4', label: 'Udhaar', href: null, dispatch: 'udhaar', group: 'counter' },
+
+  // — About goods —————————————————————————————————————————————————
+  { key: 'F5', label: 'Products', href: '/products', group: 'goods' },
+  { key: 'F6', label: 'Stock', href: '/stock', group: 'goods' },
+  { key: 'F7', label: 'Purchases', href: '/purchases', group: 'goods' },
+  { key: 'F8', label: 'Adjust', href: '/stock/adjust', group: 'goods' },
+
+  // — The owner, and the device ———————————————————————————————————
+  { key: 'F9', label: 'Day', href: '/day', ownerOnly: true, group: 'owner' },
+  { key: 'F10', label: 'Switch user', href: null, dispatch: 'switch-user', group: 'owner' },
 ] as const;
 
 /** Esc returns to Sale, or closes the overlay on top of it (Phase 10 §1). */

@@ -51,7 +51,7 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(total(page)).toHaveText('35.00');
 
   // F8 with items in the cart attaches a customer (defect C5), not Settle Udhaar.
-  await page.keyboard.press('F8');
+  await page.keyboard.press('F4');
   const picker = page.getByRole('dialog', { name: 'Attach customer' });
   await expect(picker).toBeVisible();
 
@@ -112,7 +112,7 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
 
   // The cart is empty — F8 has nothing of its own to do, so it falls back to
   // the global Settle Udhaar overlay (defect C5).
-  await page.keyboard.press('F8');
+  await page.keyboard.press('F4');
   const picker = page.getByRole('dialog', { name: 'Settle udhaar' });
   await expect(picker).toBeVisible();
 

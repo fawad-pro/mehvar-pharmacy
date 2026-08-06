@@ -6,7 +6,6 @@ import {
   lowStockProducts,
   nearExpiryBatches,
   pendingIncidents,
-  recentAdjustments,
 } from '@/db/adjustment-queries';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
@@ -42,11 +41,10 @@ export default async function StockPage({
   const within = HORIZONS.includes(requested as (typeof HORIZONS)[number]) ? requested : 30;
 
   const scope = scopeFor(session);
-  const [expiring, lowStock, incidents, adjustments] = await Promise.all([
+  const [expiring, lowStock, incidents] = await Promise.all([
     nearExpiryBatches(scope, within),
     lowStockProducts(scope),
     pendingIncidents(scope),
-    recentAdjustments(scope, 15),
   ]);
 
   return (
@@ -208,32 +206,6 @@ export default async function StockPage({
         )}
       </div>
 
-      {/* T1 — every adjustment is visible, without exception. */}
-      <div>
-        <h2 className="text-green-900 mb-2 font-medium">Recent adjustments</h2>
-        {adjustments.length === 0 ? (
-          <p className="text-ink/50 text-sm">No stock adjustments yet.</p>
-        ) : (
-          <ul className="border-line divide-line divide-y rounded border text-sm">
-            {adjustments.map((row) => (
-              <li key={row.id} className="flex flex-wrap items-baseline gap-2 px-3 py-2">
-                <span className="font-medium">{row.productName}</span>
-                <span
-                  className={`numeral ${row.qtyBaseDelta < 0 ? 'text-amber' : 'text-green-900'}`}
-                >
-                  {row.qtyBaseDelta > 0 ? '+' : ''}
-                  {row.qtyBaseDelta} {row.baseUnitName}
-                </span>
-                <span className="text-ink/60">{row.reason.replaceAll('_', ' ')}</span>
-                {row.note ? <span className="text-ink/50 text-xs">“{row.note}”</span> : null}
-                <span className="text-ink/40 ml-auto text-xs">
-                  {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </section>
   );
 }

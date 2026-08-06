@@ -20,11 +20,13 @@ import { summariseBook } from '@/domain/udhaar/position';
 import type { TenantScope } from './scoped';
 import {
   adjustments,
+  batches,
   cashMovements,
   payments,
   products,
   saleLineAllocations,
   saleLines,
+  saleReturnLines,
   saleReturns,
   sales,
   users,
@@ -35,7 +37,23 @@ import {
 /* ========================================================================== */
 
 export interface ThreeNumbers {
+  /**
+   * Sold, minus what came back — NET, and the only "sales" figure in the
+   * product.
+   *
+   * It used to be gross, while `reportFigures.revenuePaisa` was the identical
+   * gross query under a second name; the Day screen printed both, as "Sales
+   * today" and "Revenue", showing one number twice and inviting the owner to
+   * hunt for a difference that did not exist. Both are now net and there is
+   * one of them.
+   *
+   * Net because the question is the day's health. Selling Rs 10,000 and
+   * refunding Rs 4,000 is not a Rs 10,000 day, and a figure that says so is
+   * one the owner has to mentally correct before it means anything.
+   */
   readonly salesPaisa: number;
+  /** What was refunded in the range, so the label above can explain itself. */
+  readonly salesReturnedPaisa: number;
   readonly expectedCashPaisa: number;
   /**
    * Money out on the street: Σ of the balances that are OWED, floored per
@@ -77,7 +95,10 @@ export async function threeNumbers(
     .where(scope.scopeOf(payments, gte(payments.createdAt, from), lt(payments.createdAt, to)));
 
   const [returnsRow] = await scope.db
-    .select({ cashOut: sum(saleReturns.cashOutPaisa).as('cashOut') })
+    .select({
+      cashOut: sum(saleReturns.cashOutPaisa).as('cashOut'),
+      refunded: sql<string>`sum(${saleReturns.cashOutPaisa} + ${saleReturns.creditReducedPaisa})`,
+    })
     .from(saleReturns)
     .where(
       scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
@@ -159,8 +180,11 @@ export async function threeNumbers(
     Number(movementsIn?.total ?? 0) -
     Number(movementsOut?.total ?? 0);
 
+  const salesReturnedPaisa = Number(returnsRow?.refunded ?? 0);
+
   return {
-    salesPaisa: Number(salesRow?.total ?? 0),
+    salesPaisa: Number(salesRow?.total ?? 0) - salesReturnedPaisa,
+    salesReturnedPaisa,
     expectedCashPaisa,
     udhaarOwedPaisa: book.owedPaisa,
     udhaarCreditPaisa: book.creditPaisa,
@@ -444,12 +468,15 @@ export async function lateSyncedInRange(
 /* ========================================================================== */
 
 export interface ReportFigures {
+  /** Sold, minus what came back. Never gross — see the note on `reportFigures`. */
   readonly revenuePaisa: number;
   readonly costPaisa: number;
   readonly marginPaisa: number;
   readonly saleCount: number;
   readonly unitsSold: number;
   readonly returnCount: number;
+  /** Refunded in the range, so the net figures can show their own adjustment. */
+  readonly returnedPaisa: number;
 }
 
 /**
@@ -458,6 +485,24 @@ export interface ReportFigures {
  * here) and pending allocations (`unit_cost_paisa` is null while pending, and
  * `sum()` skips nulls — an unresolved shortfall simply contributes no cost
  * until a purchase or count correction gives it one).
+ *
+ * And now about a third: RETURNS.
+ *
+ * Revenue and cost were both gross. `commitReturn` writes its own rows and
+ * touches neither the sale nor its allocations (correctly — ADR-1 forbids it),
+ * so a refunded sale kept contributing its full revenue and its full cost to
+ * this report forever. Margin is revenue minus cost, and removing a returned
+ * item takes away more revenue than cost — so the reported margin was strictly
+ * HIGHER than the real one.
+ *
+ * That is the exact failure Day 6 wrote a rule against when it made effective
+ * unit cost floor rather than round: "a reported margin is never better than
+ * the real one." The rule was right and this report was breaking it.
+ *
+ * Returns are subtracted in the range they HAPPENED, not the range of the sale
+ * they undo. A refund paid out of today's drawer is today's money leaving,
+ * which is already how `expectedCash` treats it — the two figures would
+ * otherwise disagree about the same event.
  */
 export async function reportFigures(
   scope: TenantScope,
@@ -489,14 +534,41 @@ export async function reportFigures(
     );
 
   const [returnsRow] = await scope.db
-    .select({ count: sql<string>`count(*)` })
+    .select({
+      count: sql<string>`count(*)`,
+      refunded: sql<string>`sum(${saleReturns.cashOutPaisa} + ${saleReturns.creditReducedPaisa})`,
+    })
     .from(saleReturns)
     .where(
       scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
     );
 
-  const revenuePaisa = Number(salesRow?.total ?? 0);
-  const costPaisa = Number(costRow?.total ?? 0);
+  /*
+   * The cost of what came back, valued at the batch it was restocked into.
+   *
+   * That batch is the one `restockToBatch` actually put the units in, so its
+   * unit cost is the cost the system really reversed — not a re-derivation from
+   * the original allocations, which could span several batches and would give a
+   * figure the inventory never used.
+   */
+  const [returnedCostRow] = await scope.db
+    .select({
+      total: sql<string>`sum(${saleReturnLines.qtyBase} * ${batches.unitCostPaisa})`,
+    })
+    .from(saleReturnLines)
+    .innerJoin(saleReturns, eq(saleReturnLines.saleReturnId, saleReturns.id))
+    .innerJoin(batches, eq(saleReturnLines.restockBatchId, batches.id))
+    .where(
+      scope.scopeOf(
+        saleReturnLines,
+        gte(saleReturns.createdAt, from),
+        lt(saleReturns.createdAt, to),
+      ),
+    );
+
+  const returnedPaisa = Number(returnsRow?.refunded ?? 0);
+  const revenuePaisa = Number(salesRow?.total ?? 0) - returnedPaisa;
+  const costPaisa = Number(costRow?.total ?? 0) - Number(returnedCostRow?.total ?? 0);
 
   return {
     revenuePaisa,
@@ -505,5 +577,6 @@ export async function reportFigures(
     saleCount: Number(salesRow?.count ?? 0),
     unitsSold: Number(unitsRow?.total ?? 0),
     returnCount: Number(returnsRow?.count ?? 0),
+    returnedPaisa,
   };
 }

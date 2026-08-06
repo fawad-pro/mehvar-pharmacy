@@ -341,6 +341,38 @@ exception visibility.
   The key bar is navigable now. Dismissal is per-overlay and deliberate:
   pickers dismiss on backdrop click, the payment overlay does not.
 
+## Things Day 9 established
+
+- **A place to do, a separate place to review.** `/receipts` and
+  `/purchases/[id]` are the review halves of Sale and Purchases; adjustment
+  history moved off Stock and onto Adjust. Stock browsing answers "what do I
+  have"; a log of corrections answers "what did we change" and belongs with the
+  screen that makes them. Reviewing must never enter a workflow that can change
+  something — the one control that does says so and navigates away.
+- **Two names for one query is a bug, not a presentation choice.**
+  `threeNumbers.salesPaisa` and `reportFigures.revenuePaisa` were the identical
+  SQL, printed on one screen as "Sales today" and "Revenue". There is now one
+  sales figure in the product and it is net of returns.
+- **A reported margin must never be better than the real one** — Day 6's rule,
+  which the report was breaking. `commitReturn` correctly touches neither the
+  sale nor its allocations (ADR-1), so refunded sales kept contributing full
+  revenue *and* full cost forever; since a sale earns more than it costs,
+  dropping the returned portion removes more revenue than cost and the gross
+  figure was strictly optimistic. Returns are subtracted in the range they
+  happened, matching how `expectedCash` already treats them.
+- **The key registry is only "one array" if the handler binds by meaning.** It
+  branched on the literal strings `'F8'` and `'F10'`, so reordering the bar
+  would have silently rewired what the keys did. Routeless keys now carry a
+  `dispatch` field, and `registry.test.ts` pins that every one of them has it.
+- **Ten keys with no pattern is ten things to memorise.** The bar is three
+  bands — counter (F1–F4), goods (F5–F8), owner (F9–F10) — ordered by how close
+  the task is to the customer, with a visible divider. A grouping nobody can
+  see is a comment, not a design.
+- **Six headings the owner has to total up is not a summary.** The exception
+  list is one banner naming the kinds, with the groups beneath as the answer
+  rather than the question. The empty state is a positive statement ("Nothing
+  needs a look today") because an absence reads as a missing section.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

@@ -8,7 +8,7 @@ import { cart, DEMO, lastSale, openCounter, printedReceipt, search } from './sup
  * answer in one glance on a phone" (Phase 13).
  *
  * `openCounter` pairs the device as the owner (loginDevice's starting user),
- * so F5/F7/Settings are reachable here without a PIN switch first.
+ * so F9/F2/Settings are reachable here without a PIN switch first.
  */
 
 test('W4: a return finds the sale, restocks a batch, and prints a refund receipt', async ({
@@ -30,10 +30,10 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
   const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
   expect(receiptNumber).toBeTruthy();
 
-  // F7 is Receipts now, not Returns. The whole point of the change is that
+  // F2 is Receipts. The whole point of the separation is that
   // looking at a sale and refunding it are different acts, so the walk is:
   // find the receipt → read it → decide → start the return from it.
-  await page.keyboard.press('F7');
+  await page.keyboard.press('F2');
   await expect(page).toHaveURL(/\/receipts$/);
 
   await page.getByLabel('Find a receipt').fill(receiptNumber!);
@@ -59,7 +59,7 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
 test('W10: the three numbers, a cash movement, and the drawer count', async ({ page }) => {
   await openCounter(page);
 
-  await page.keyboard.press('F5');
+  await page.keyboard.press('F9');
   await expect(page).toHaveURL(/\/day$/);
 
   // Each label carries its own time scope, because the three numbers do not
@@ -68,6 +68,18 @@ test('W10: the three numbers, a cash movement, and the drawer count', async ({ p
   await expect(page.getByText('Sales today')).toBeVisible();
   await expect(page.getByText('Cash expected in drawer')).toBeVisible();
   await expect(page.getByText('Owed to you, all time')).toBeVisible();
+
+  // Three, and only three, at that size. "Revenue" was the same query as
+  // "Sales today" under another name, so an owner scanning the screen saw one
+  // number twice and had to work out that they were not different figures.
+  await expect(page.getByText('Revenue')).toBeHidden();
+  await expect(page.getByText('Sale count')).toBeHidden();
+
+  // And one line answering "is anything wrong?", in place of six headings the
+  // owner had to scan and total up for themselves.
+  await expect(
+    page.getByText(/Nothing needs a look today\.|thing(s)? need(s)? a look/),
+  ).toBeVisible();
 
   // Record a cash movement — an owner withdrawal.
   await page.getByLabel('Reason').selectOption('owner_withdrawal');

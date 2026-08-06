@@ -34,8 +34,12 @@ export function KeyBar({ role }: { role: 'owner' | 'salesman' }) {
       aria-label="Function keys"
       className="bg-green-900 text-paper flex h-touch shrink-0 items-stretch gap-px overflow-x-auto text-xs"
     >
-      {GLOBAL_KEYS.map((binding) => {
+      {GLOBAL_KEYS.map((binding, index) => {
         const active = binding.href !== null && pathname.startsWith(binding.href);
+        // A visible break between the registry's bands (counter / goods /
+        // owner). Without it the grouping exists only in a source comment,
+        // which helps nobody standing at the counter.
+        const startsBand = index > 0 && GLOBAL_KEYS[index - 1]!.group !== binding.group;
         // Salesmen have no report access beyond the current day (Phase 5 §2).
         // The key stays visible and dimmed: the map is furniture, and furniture
         // that rearranges itself stops being trustworthy.
@@ -45,6 +49,7 @@ export function KeyBar({ role }: { role: 'owner' | 'salesman' }) {
           'flex items-center gap-1.5 whitespace-nowrap px-3 transition-colors',
           active ? 'bg-green-600' : '',
           permitted ? '' : 'opacity-40',
+          startsBand ? 'ml-2 border-l border-paper/25' : '',
         ].join(' ');
 
         const content = (

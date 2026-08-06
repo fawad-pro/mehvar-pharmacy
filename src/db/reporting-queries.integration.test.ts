@@ -11,7 +11,7 @@ import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
 import { commitReturn, type ReturnCommand } from '@/domain/sales/commit-return';
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
 import { commitSettlement } from '@/domain/udhaar/commit-settlement';
-import { threeNumbers } from '@/db/reporting-queries';
+import { reportFigures, threeNumbers } from '@/db/reporting-queries';
 import { uuidv7 } from '@/lib/uuid';
 
 import {
@@ -259,6 +259,77 @@ suite('threeNumbers against Postgres', () => {
 
     // And the advance is reported separately rather than silently cancelling it.
     expect(after.udhaarCreditPaisa - before.udhaarCreditPaisa).toBe(10_000);
+  });
+
+  /**
+   * Day 6 wrote the rule: "a reported margin is never better than the real one."
+   * The margin figure was breaking it.
+   *
+   * `commitReturn` correctly touches neither the sale nor its allocations
+   * (ADR-1), so a refunded sale used to keep contributing its full revenue AND
+   * its full cost to the report forever. Since a sale earns more revenue than it
+   * costs, dropping the returned portion removes more revenue than cost — so the
+   * gross figure was strictly optimistic, which is the one direction this
+   * project has said a margin must never err in.
+   */
+  it('subtracts a return from revenue and from cost, so margin never flatters', async () => {
+    const product = await createTestProduct(tenant.scope, `Margin ${uuidv7().slice(0, 6)}`, 1_000);
+    // Costs 400 a unit, sells at 1,000 — 600 of margin per unit.
+    const batchId = await addOpeningStock(tenant.scope, product.id, 100, {
+      pricePaisa: 1_000,
+      unitCostPaisa: 400,
+    });
+
+    const from = new Date();
+    const saleId = uuidv7();
+    const lineId = uuidv7();
+    await commitSale(tenant.scope, {
+      saleId,
+      receiptNumber: nextReceipt(),
+      customerId: null,
+      lines: [
+        {
+          lineId,
+          productId: product.id,
+          qtyBase: 10,
+          enteredUnitLevel: 'tab',
+          unitPricePaisa: 1_000,
+          lineDiscountPaisa: 0,
+          priceOverridden: false,
+        },
+      ],
+      invoiceDiscountPaisa: 0,
+      cashPaisa: 10_000,
+      creditPaisa: 0,
+      changePaisa: 0,
+      origin: 'online',
+      clientSchemaVersion: 1,
+      clientCommittedAt: new Date(),
+    });
+
+    const sold = await reportFigures(tenant.scope, from, new Date(Date.now() + 60_000));
+    expect(sold.revenuePaisa).toBe(10_000);
+    expect(sold.costPaisa).toBe(4_000);
+    expect(sold.marginPaisa).toBe(6_000);
+
+    // Four units come back: 4,000 of revenue and 1,600 of cost reversed.
+    await commitReturn(tenant.scope, {
+      returnId: uuidv7(),
+      saleId,
+      receiptNumber: nextReceipt(),
+      lines: [{ saleLineId: lineId, qtyBase: 4, restockBatchId: batchId }],
+      refundMethod: 'cash',
+      reasonNote: null,
+    });
+
+    const after = await reportFigures(tenant.scope, from, new Date(Date.now() + 60_000));
+    expect(after.returnedPaisa).toBe(4_000);
+    expect(after.revenuePaisa).toBe(6_000);
+    expect(after.costPaisa).toBe(2_400);
+
+    // Six units really sold at 600 margin each. Gross would have said 6,000.
+    expect(after.marginPaisa).toBe(3_600);
+    expect(after.marginPaisa).toBeLessThan(sold.marginPaisa);
   });
 
   it('a count correction leaves the three numbers untouched — stock, not money', async () => {

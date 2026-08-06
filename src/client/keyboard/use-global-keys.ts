@@ -52,11 +52,13 @@ export function useGlobalKeys(handlers: GlobalKeyHandlers = {}): void {
 
       event.preventDefault();
 
-      if (binding.key === 'F8') {
+      // Dispatched by MEANING, not by key name — so the bar can be reordered
+      // without silently rewiring what the keys do.
+      if (binding.dispatch === 'udhaar') {
         handlers.onUdhaar?.();
         return;
       }
-      if (binding.key === 'F10') {
+      if (binding.dispatch === 'switch-user') {
         handlers.onSwitchUser?.();
         return;
       }

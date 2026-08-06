@@ -29,6 +29,7 @@ import { recordCashMovementAction } from './actions';
 
 interface ThreeNumbers {
   salesPaisa: number;
+  salesReturnedPaisa: number;
   expectedCashPaisa: number;
   udhaarOwedPaisa: number;
   udhaarCreditPaisa: number;
@@ -37,7 +38,6 @@ interface ThreeNumbers {
 }
 
 interface ReportFigures {
-  revenuePaisa: number;
   costPaisa: number;
   marginPaisa: number;
   saleCount: number;
@@ -188,14 +188,21 @@ export function DaySurface({
         </div>
       ) : null}
 
-      {/* The three numbers, first — I6's huge-numerals treatment, the same
-          promise the owner phone view (W11) makes.
+      {/* The three numbers, and for ten seconds they are the whole screen.
+          I6's huge-numerals treatment, the same promise the owner phone view
+          (W11) makes.
 
-          Each label carries its own time scope, because they do not share one:
-          sales and cash are scoped to the range, while the udhaar total is a
-          position and is always all-time (see `threeNumbers`). Two cards
-          meaning "today" and one meaning "ever" under one heading is not
-          something an owner can be expected to infer. */}
+          Nothing else competes at this size any more. There used to be four
+          more cards immediately beneath — Revenue, Margin, Sale count, Units
+          sold — and the first of them printed the same number as "Sales today"
+          under a different name, because `revenuePaisa` and `salesPaisa` were
+          the identical query. Seven figures, two of them the same figure, is
+          not something anyone reads in ten seconds. The rest moved below the
+          fold, where they read as detail rather than as competition.
+
+          Each label still carries its own time scope, because they do not
+          share one: sales and cash are the range's, the udhaar total is a
+          position and is always all-time. */}
       <div
         className={`grid grid-cols-1 gap-3 ${isDrawerDay ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}
       >
@@ -204,6 +211,11 @@ export function DaySurface({
             view === 'overall' ? 'Sales, all time' : isToday ? 'Sales today' : 'Sales that day'
           }
           amountPaisa={numbers.salesPaisa}
+          {...(numbers.salesReturnedPaisa > 0
+            ? {
+                note: `after ${formatPaisa(paisa(numbers.salesReturnedPaisa), { withSymbol: true })} returned`,
+              }
+            : {})}
         />
         {/* Only ever a daily figure. Summed over all time it is every rupee
             that has crossed the drawer since installation — a number with no
@@ -226,10 +238,58 @@ export function DaySurface({
         />
       </div>
 
-      {/* The count and the movements belong to today's drawer. Rendering them
-          against a range figure invites an over/short entry off an all-time
-          expected cash — an append-only row that cannot be edited and would
-          poison every later cash figure. */}
+      {/* The second thing read, and the last thing that has to be read at all:
+          is anything wrong?
+
+          This replaces six competing <h3> group headings. The groups still
+          exist below — T1 is not negotiable, every sensitive act stays visible
+          — but they are now the ANSWER to a question the banner has already
+          asked, rather than six lists the owner has to scan and total up
+          themselves. */}
+      <AttentionBanner
+        count={exceptionCount}
+        parts={[
+          [overrides.length, 'discount'],
+          [returns.length, 'return'],
+          [quickItems.length, 'quick item'],
+          [adjustments.length, 'adjustment'],
+          [cashMovements.length, 'cash movement'],
+          [lateSynced.length, 'synced late'],
+        ]}
+      />
+
+      {/* Everything below here is detail. An owner who wanted the ten-second
+          read has already had it and stopped. */}
+
+      <div className="text-ink/60 flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+        <span>
+          Margin{' '}
+          <span className="numeral text-green-900 font-medium">
+            {formatPaisa(paisa(figures.marginPaisa), { withSymbol: true })}
+          </span>
+        </span>
+        {/* "How many sales" is exactly the moment an owner wants to see which
+            ones — and this used to land on Returns, dropping someone reviewing
+            the day into a refund workflow. It goes to Receipts now: a place to
+            look, with no way to change anything from it. */}
+        <Link href="/receipts" className="text-green-600 hover:underline">
+          {figures.saleCount} sale{figures.saleCount === 1 ? '' : 's'} →
+        </Link>
+        <span>{figures.unitsSold.toLocaleString()} units sold</span>
+      </div>
+
+      {/* THE THINGS YOU CAN DO, below the things you can read.
+          
+          These two forms used to sit between the three numbers and the rest of
+          the page, so the ten-second read was interrupted by a text input and a
+          dropdown a third of the way down. Reading and acting are separated
+          everywhere else in this product now; the Day screen is where the owner
+          does both, which makes the order matter more here rather than less.
+
+          Still only ever today's drawer. Rendered against a range figure, the
+          count would invite an over/short entry off an all-time expected cash —
+          an append-only row that cannot be edited and would poison every later
+          cash figure. */}
       {isDrawerDay ? (
         <>
           <DrawerCount expectedCashPaisa={numbers.expectedCashPaisa} />
@@ -237,33 +297,8 @@ export function DaySurface({
         </>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <FigureCard label="Revenue" amountPaisa={figures.revenuePaisa} />
-        <FigureCard label="Margin" amountPaisa={figures.marginPaisa} />
-        {/* "How many sales" is exactly the moment an owner wants to see which
-            ones — and this used to land on Returns, dropping someone reviewing
-            the day into a refund workflow. It goes to Receipts now: a place to
-            look, with no way to change anything from it. */}
-        <Link
-          href="/receipts"
-          className="border-line hover:border-green-600 hover:bg-green-100/40 rounded border p-3 transition-colors"
-        >
-          <p className="text-ink/60 text-xs tracking-[0.08em] uppercase">Sale count</p>
-          <p className="numeral text-green-900 mt-1 text-xl font-semibold">{figures.saleCount}</p>
-          <p className="text-green-600 mt-0.5 text-xs">See the receipts →</p>
-        </Link>
-        <FigureCard label="Units sold" value={figures.unitsSold} />
-      </div>
-
       <div>
-        <h2 className="text-green-900 mb-2 font-medium">
-          Exceptions
-          <span className="text-ink/50 ml-2 text-sm font-normal">{exceptionCount}</span>
-        </h2>
-
-        {exceptionCount === 0 ? (
-          <p className="text-ink/50 text-sm">Nothing exceptional today.</p>
-        ) : (
+        {exceptionCount > 0 ? (
           <div className="flex flex-col gap-4">
             <ExceptionGroup title="Discounts and overrides" rows={overrides} empty={false}>
               {overrides.map((row) => (
@@ -350,9 +385,51 @@ export function DaySurface({
               ))}
             </ExceptionGroup>
           </div>
-        )}
+        ) : null}
       </div>
     </section>
+  );
+}
+
+/**
+ * One line answering "is anything wrong?", in place of six headings.
+ *
+ * The empty state is deliberately a positive statement rather than an absence.
+ * "Nothing exceptional today." reads as a missing section; "Nothing needs a
+ * look" reads as an answer, and an owner who sees it can stop — which is the
+ * entire point of a ten-second screen.
+ *
+ * The kinds are named inline because a bare count ("6 exceptions") tells the
+ * owner they must scroll to find out whether it matters. Six routine cash
+ * movements and one price override are very different days.
+ */
+function AttentionBanner({
+  count,
+  parts,
+}: {
+  count: number;
+  parts: ReadonlyArray<readonly [number, string]>;
+}) {
+  if (count === 0) {
+    return (
+      <p className="border-line text-green-900 rounded border bg-green-100/50 px-4 py-3 text-sm font-medium">
+        Nothing needs a look today.
+      </p>
+    );
+  }
+
+  const named = parts
+    .filter(([n]) => n > 0)
+    .map(([n, word]) => `${n} ${word}${n === 1 ? '' : 's'}`)
+    .join(' · ');
+
+  return (
+    <div className="border-amber/40 bg-amber/5 rounded border px-4 py-3">
+      <p className="text-amber text-sm font-medium">
+        {count} thing{count === 1 ? '' : 's'} need{count === 1 ? 's' : ''} a look
+      </p>
+      <p className="text-ink/60 mt-0.5 text-sm">{named}</p>
+    </div>
   );
 }
 
@@ -425,25 +502,6 @@ function NumberCard({
         {formatPaisa(paisa(amountPaisa), { withSymbol: true })}
       </p>
       {note ? <p className="text-ink/50 mt-1 text-xs">{note}</p> : null}
-    </div>
-  );
-}
-
-function FigureCard({
-  label,
-  amountPaisa,
-  value,
-}: {
-  label: string;
-  amountPaisa?: number;
-  value?: number;
-}) {
-  return (
-    <div className="border-line rounded border p-3">
-      <p className="text-ink/60 text-xs tracking-[0.08em] uppercase">{label}</p>
-      <p className="numeral text-green-900 mt-1 text-xl font-semibold">
-        {amountPaisa !== undefined ? formatPaisa(paisa(amountPaisa)) : value}
-      </p>
     </div>
   );
 }

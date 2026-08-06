@@ -86,7 +86,7 @@ test('the index is cached, so a reload does not re-download the catalog', async 
 test('the Products screen lists and edits the catalog', async ({ page }) => {
   await setUpCounter(page);
 
-  await page.keyboard.press('F3');
+  await page.keyboard.press('F5');
   await expect(page).toHaveURL(/\/products$/);
   await expect(page.getByRole('heading', { name: 'Products' })).toBeVisible();
   // Deliberately not an exact count. The suite shares one database, and W6's
