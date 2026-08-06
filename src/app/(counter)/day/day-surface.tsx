@@ -10,6 +10,7 @@
  * verify that by reading the file, so the rule is "don't name the module".
  */
 
+import Link from 'next/link';
 import { useState } from 'react';
 
 import {
@@ -239,17 +240,18 @@ export function DaySurface({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <FigureCard label="Revenue" amountPaisa={figures.revenuePaisa} />
         <FigureCard label="Margin" amountPaisa={figures.marginPaisa} />
-        {/* The one figure with somewhere to go: the sale list already exists on
-            the Returns surface, and "how many sales" is exactly the moment an
-            owner wants to see which ones. */}
-        <a
-          href="/returns"
+        {/* "How many sales" is exactly the moment an owner wants to see which
+            ones — and this used to land on Returns, dropping someone reviewing
+            the day into a refund workflow. It goes to Receipts now: a place to
+            look, with no way to change anything from it. */}
+        <Link
+          href="/receipts"
           className="border-line hover:border-green-600 hover:bg-green-100/40 rounded border p-3 transition-colors"
         >
           <p className="text-ink/60 text-xs tracking-[0.08em] uppercase">Sale count</p>
           <p className="numeral text-green-900 mt-1 text-xl font-semibold">{figures.saleCount}</p>
-          <p className="text-green-600 mt-0.5 text-xs">See the sales →</p>
-        </a>
+          <p className="text-green-600 mt-0.5 text-xs">See the receipts →</p>
+        </Link>
         <FigureCard label="Units sold" value={figures.unitsSold} />
       </div>
 

@@ -9,7 +9,16 @@ import 'server-only';
 import { asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
-import { batches, purchaseLines, purchases, saleLineAllocations, saleLines, suppliers } from './schema';
+import {
+  batches,
+  products,
+  purchaseLines,
+  purchases,
+  saleLineAllocations,
+  saleLines,
+  suppliers,
+  users,
+} from './schema';
 
 import type { Uuid } from '@/lib/uuid';
 
@@ -225,4 +234,96 @@ export async function resolveAllocation(
   const row = (result as unknown as { rows: Array<{ resolve_sale_line_allocation: boolean }> })
     .rows[0];
   return row?.resolve_sale_line_allocation === true;
+}
+
+/* -------------------------------------------------------------------------- */
+/* One purchase, in full — the review half (W8)                                */
+/* -------------------------------------------------------------------------- */
+
+export interface PurchaseDetailLine {
+  readonly lineId: string;
+  readonly productId: string;
+  readonly productName: string;
+  readonly baseUnitName: string;
+  readonly packLevels: readonly { name: string; factor: number }[];
+  readonly qtyBase: number;
+  readonly bonusQtyBase: number;
+  readonly unitCostPaisa: number;
+  readonly priceAtReceivingPaisa: number;
+  readonly mrpAtReceivingPaisa: number | null;
+  readonly expiryDate: string | null;
+  readonly batchNumber: string | null;
+}
+
+export interface PurchaseDetail {
+  readonly id: string;
+  readonly supplierName: string | null;
+  readonly invoiceRef: string | null;
+  readonly invoiceDate: string | null;
+  readonly note: string | null;
+  readonly receivedByName: string;
+  readonly createdAt: Date;
+  readonly lines: readonly PurchaseDetailLine[];
+}
+
+/**
+ * A received invoice, expanded into what actually arrived.
+ *
+ * The "Received recently" list was a dead end — a supplier name, a date and a
+ * total with nothing behind them, so the one question an owner asks of a
+ * delivery ("what came in, and at what cost?") had no answer in the product.
+ * Same gap as receipts, same fix: the record is a place you can open.
+ *
+ * A purchase is deliberately NOT a receipt and does not appear on `/receipts`.
+ * It has no receipt number, nothing was handed to a customer, and folding
+ * supplier invoices into the customer-facing receipt sequence would blur two
+ * different things that happen to both be "documents".
+ */
+export async function findPurchase(
+  scope: TenantScope,
+  purchaseId: string,
+): Promise<PurchaseDetail | null> {
+  const [head] = await scope.db
+    .select({
+      id: purchases.id,
+      supplierName: suppliers.name,
+      invoiceRef: purchases.invoiceRef,
+      invoiceDate: purchases.invoiceDate,
+      note: purchases.note,
+      receivedByName: users.name,
+      createdAt: purchases.createdAt,
+    })
+    .from(purchases)
+    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
+    .leftJoin(users, eq(users.id, purchases.createdBy))
+    .where(scope.scopeOf(purchases, eq(purchases.id, purchaseId)))
+    .limit(1);
+
+  if (!head) return null;
+
+  const lines = await scope.db
+    .select({
+      lineId: purchaseLines.id,
+      productId: purchaseLines.productId,
+      productName: products.name,
+      baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
+      qtyBase: purchaseLines.qtyBase,
+      bonusQtyBase: purchaseLines.bonusQtyBase,
+      unitCostPaisa: purchaseLines.unitCostPaisa,
+      priceAtReceivingPaisa: purchaseLines.priceAtReceivingPaisa,
+      mrpAtReceivingPaisa: purchaseLines.mrpAtReceivingPaisa,
+      expiryDate: purchaseLines.expiryDate,
+      batchNumber: purchaseLines.batchNumber,
+    })
+    .from(purchaseLines)
+    .innerJoin(products, eq(products.id, purchaseLines.productId))
+    .where(scope.scopeOf(purchaseLines, eq(purchaseLines.purchaseId, purchaseId)))
+    .orderBy(purchaseLines.createdAt);
+
+  return {
+    ...head,
+    receivedByName: head.receivedByName ?? 'Unknown',
+    lines,
+  };
 }

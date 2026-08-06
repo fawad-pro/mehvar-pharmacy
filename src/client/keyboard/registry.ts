@@ -28,7 +28,23 @@ export const GLOBAL_KEYS: readonly GlobalKey[] = [
   { key: 'F4', label: 'Customers', href: '/customers' },
   { key: 'F5', label: 'Day', href: '/day', ownerOnly: true },
   { key: 'F6', label: 'Stock', href: '/stock' },
-  { key: 'F7', label: 'Returns', href: '/returns' },
+  /*
+   * F7 is Receipts, not Returns — a deliberate swap, recorded here because it
+   * changes a printed shortcut.
+   *
+   * The two acts are not peers. Looking a receipt up happens many times a day
+   * ("what did she buy?", "is this our slip?", "did that sale go through?");
+   * a refund happens rarely and always *about* a specific receipt. Giving the
+   * key to the frequent, harmless act and reaching the rare, consequential one
+   * from the record it applies to is the same principle the whole receipts
+   * surface exists for: a clear place to do something, a separate obvious
+   * place to review what already happened.
+   *
+   * `/returns` keeps its route and its own search — a customer arriving with
+   * goods and no slip still works. It is linked from Receipts so it has a
+   * visible entry point (Day 8: a workflow nothing links to is not built).
+   */
+  { key: 'F7', label: 'Receipts', href: '/receipts' },
   // F8 is deliberately contextual (defect C5's resolution): with items in the
   // cart it attaches a customer for udhaar (W2); with an empty cart it opens
   // Settle Udhaar (W3). One key, two contexts, both meaning "customer + money".

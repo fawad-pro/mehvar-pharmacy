@@ -147,9 +147,19 @@ exception visibility.
 - **Extend the crown suite, never fork it.** Purchases (Day 6) and returns
   (Day 7) add event kinds to `applyRandomEvent`; the value is that one history
   mixes everything.
-- **Never build a verifier query with a correlated `sql` subquery.** Drizzle
-  renders the interpolated outer column unqualified, and it resolves silently
-  against the inner table. Use plain aggregates.
+- **Never build a query with a correlated `sql` subquery.** Drizzle renders
+  interpolated columns unqualified **when the outer query is a single table** —
+  `where ${saleReturns.saleId} = ${sales.id}` becomes `where "sale_id" = "id"`,
+  both bind to the inner table, and it counts zero forever without erroring.
+  Add a join to the outer query and the same expression renders correctly.
+  _Refined Day 9_: that condition is the trap's real shape, and it makes the
+  rule untestable by example — check it with one joined query and you will
+  conclude it is folklore. Both branches are pinned in
+  `db/drizzle-correlated-subquery.test.ts`. The rule stands for a sharper
+  reason than "Drizzle is broken": a correlated subquery is correct only while
+  its outer query keeps a join it does not own, so an unrelated edit can
+  silently falsify it. Use plain grouped aggregates, which depend on nothing
+  but themselves.
 
 ## Things Day 4 established
 

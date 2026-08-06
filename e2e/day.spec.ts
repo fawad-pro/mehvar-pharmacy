@@ -30,12 +30,24 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
   const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
   expect(receiptNumber).toBeTruthy();
 
+  // F7 is Receipts now, not Returns. The whole point of the change is that
+  // looking at a sale and refunding it are different acts, so the walk is:
+  // find the receipt → read it → decide → start the return from it.
   await page.keyboard.press('F7');
-  await expect(page).toHaveURL(/\/returns$/);
+  await expect(page).toHaveURL(/\/receipts$/);
 
-  await page.getByLabel('Receipt number or customer name').fill(receiptNumber!);
-  await page.getByRole('button', { name: new RegExp(receiptNumber!) }).click();
+  await page.getByLabel('Find a receipt').fill(receiptNumber!);
+  await page.getByRole('link', { name: receiptNumber! }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/receipts/${receiptNumber!}$`));
 
+  // Reviewing shows what was sold without entering any workflow.
+  await expect(page.getByRole('table')).toContainText('Panadol');
+
+  // Only now, and only deliberately, does the refund path open.
+  await page.getByRole('link', { name: 'Start a return' }).click();
+  await expect(page).toHaveURL(/\/returns\?receipt=/);
+
+  // The handoff lands on the sale itself — the operator does not search twice.
   await expect(page.getByRole('table')).toContainText('Panadol');
   await page.getByLabel(/Return quantity for Panadol/).fill('1');
   await page.getByRole('button', { name: 'Confirm return' }).click();
@@ -55,7 +67,7 @@ test('W10: the three numbers, a cash movement, and the drawer count', async ({ p
   // position and is always all-time.
   await expect(page.getByText('Sales today')).toBeVisible();
   await expect(page.getByText('Cash expected in drawer')).toBeVisible();
-  await expect(page.getByText('Total owed to you')).toBeVisible();
+  await expect(page.getByText('Owed to you, all time')).toBeVisible();
 
   // Record a cash movement — an owner withdrawal.
   await page.getByLabel('Reason').selectOption('owner_withdrawal');
@@ -86,7 +98,7 @@ test('the Overall range offers no drawer count to record against a lifetime figu
   await page.goto('/day?view=overall');
 
   await expect(page.getByText('Sales, all time')).toBeVisible();
-  await expect(page.getByText('Total owed to you')).toBeVisible();
+  await expect(page.getByText('Owed to you, all time')).toBeVisible();
 
   await expect(page.getByText('Cash expected in drawer')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Record over/short' })).toBeHidden();

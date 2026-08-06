@@ -92,7 +92,19 @@ export default async function CustomerDetailPage({
                   <td className="text-ink/70 px-3 py-2">
                     {row.createdAt.toLocaleDateString('en-PK')}
                   </td>
-                  <td className="text-ink/70 px-3 py-2">{row.receiptNumber}</td>
+                  {/* T4 again, one level deeper: the balance expands into these
+                      rows, and each row now expands into the receipt that
+                      produced it. An udhaar dispute can be walked all the way
+                      down to the items on the slip without leaving the screen
+                      the customer is standing at. */}
+                  <td className="px-3 py-2">
+                    <Link
+                      href={`/receipts/${encodeURIComponent(row.receiptNumber)}`}
+                      className="numeral text-green-700 hover:underline"
+                    >
+                      {row.receiptNumber}
+                    </Link>
+                  </td>
                   <td className="px-3 py-2">
                     {row.kind === 'sale' ? 'Udhaar sale' : null}
                     {row.kind === 'payment' ? 'Payment' : null}
@@ -100,7 +112,13 @@ export default async function CustomerDetailPage({
                       <>
                         Return
                         <span className="text-ink/50 ml-1 text-xs">
-                          against {row.againstReceiptNumber}
+                          against{' '}
+                          <Link
+                            href={`/receipts/${encodeURIComponent(row.againstReceiptNumber ?? '')}`}
+                            className="text-green-700 hover:underline"
+                          >
+                            {row.againstReceiptNumber}
+                          </Link>
                         </span>
                       </>
                     ) : null}

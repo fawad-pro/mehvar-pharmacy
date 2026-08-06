@@ -74,7 +74,7 @@ const DYNAMIC: Record<Area, readonly string[]> = {
   stock: ['/products/[productId]'],
   money: [],
   customers: ['/customers/[customerId]'],
-  purchases: [],
+  purchases: ['/purchases/[purchaseId]'],
   receipts: ['/receipts/[receiptNumber]', '/customers/[customerId]'],
   settings: [],
 };
