@@ -461,6 +461,28 @@ exception visibility.
   chain.** The installer applied the pack; `db:setup` did not. Both now build
   from `seed-data.ts` and apply through `applyCatalogPack`.
 
+## Things Day 13 established
+
+- **The E2E suite had never once been run.** A build failure was reported as an
+  environment limitation and never rechecked; it was transient, and the real
+  blocker was a missing browser binary, which `PLAYWRIGHT_CHROMIUM_PATH` (already
+  supported by the config) solves. Four specs were failing — three from renames
+  and moves this work made, one from a genuine race. "Blocked by the
+  environment" is a claim with a shelf life; re-test it before repeating it.
+- **A debounced URL sync races the navigation it sits next to.** Typing a
+  receipt number schedules a `router.replace` 200ms out; clicking the result
+  inside that window pushed the detail page and the replace landed on top,
+  putting the operator back on the list. The fastest way to use the screen was
+  the one path that broke. Any screen that syncs search state to the URL must
+  cancel that sync when the operator navigates.
+- **An E2E failure after a UI change is the suite doing its job.** Three of the
+  four were labels and locations this work deliberately changed — "Running
+  udhaar total" → "Owed to you", adjustment history moving off Stock, the
+  settlement slip's "Previous/New balance" → "Before/Now". Update the spec to
+  the new intent; never weaken an assertion to make it pass.
+- **A spec asserting `-50.00` on a balance was asserting a bug.** It pinned the
+  minus sign the position vocabulary exists to remove.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

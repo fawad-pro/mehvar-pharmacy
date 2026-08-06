@@ -203,8 +203,12 @@ test('W8: an adjustment needs a coded reason, and says who made it', async ({ pa
   await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
 
   // T1 — visible, attributed, and listed without exception.
-  await page.keyboard.press('F6');
-  await expect(page).toHaveURL(/\/stock$/);
+  //
+  // On Adjust, not Stock. Stock browsing answers "what do I have"; a log of
+  // corrections answers "what did we change", and belongs with the screen that
+  // makes them.
+  await page.keyboard.press('F8');
+  await expect(page).toHaveURL(/\/stock\/adjust$/);
   const adjustments = page.getByRole('list').filter({ hasText: 'count correction' });
   await expect(adjustments).toContainText('Panadol');
   await expect(adjustments).toContainText('found behind the counter');

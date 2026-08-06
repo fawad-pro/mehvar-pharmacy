@@ -62,6 +62,11 @@ export function ReceiptsSurface({
   const params = useSearchParams();
   const [term, setTerm] = useState(search);
   const field = useRef<HTMLInputElement>(null);
+  /**
+   * Set the moment a result is opened, to suppress a search sync that has not
+   * fired yet. See the effect below.
+   */
+  const leaving = useRef(false);
 
   useEffect(() => {
     field.current?.focus();
@@ -76,6 +81,18 @@ export function ReceiptsSurface({
   useEffect(() => {
     if (term === search) return;
     const timer = window.setTimeout(() => {
+      /*
+       * Do not overwrite a navigation the operator has already started.
+       *
+       * The sync and a row click are two navigations racing: typing a receipt
+       * number schedules a `replace` 200ms out, and clicking the result within
+       * that window pushes the detail page — then the replace lands on top and
+       * puts them straight back on the list. Typing a number off a slip and
+       * clicking it immediately is not an unusual thing to do; it is the
+       * fastest way to use this screen, so it was the path most likely to
+       * break. Found by the E2E suite, which had never been run.
+       */
+      if (leaving.current) return;
       const next = new URLSearchParams(params.toString());
       if (term.trim() === '') next.delete('q');
       else next.set('q', term.trim());
@@ -85,6 +102,12 @@ export function ReceiptsSurface({
       window.clearTimeout(timer);
     };
   }, [term, search, params, router]);
+
+  /** Every route out of this screen goes through here. */
+  function open(receiptNumber: string): void {
+    leaving.current = true;
+    router.push(`/receipts/${encodeURIComponent(receiptNumber)}`);
+  }
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
@@ -118,7 +141,7 @@ export function ReceiptsSurface({
           // Enter opens the top result — the slip-in-hand path, end to end,
           // without reaching for the mouse.
           if (event.key === 'Enter' && rows[0]) {
-            router.push(`/receipts/${encodeURIComponent(rows[0].receiptNumber)}`);
+            open(rows[0].receiptNumber);
           }
         }}
         placeholder="Receipt number or customer name"
@@ -154,6 +177,10 @@ export function ReceiptsSurface({
                           keyboard, and this product is keyboard-first. */}
                       <Link
                         href={`/receipts/${encodeURIComponent(row.receiptNumber)}`}
+                        onClick={() => {
+                          // Cancels the pending search sync — see the effect.
+                          leaving.current = true;
+                        }}
                         className="numeral text-green-700 font-medium hover:underline"
                       >
                         {row.receiptNumber}

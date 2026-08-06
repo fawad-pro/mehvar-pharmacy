@@ -147,7 +147,9 @@ test('W11: the owner phone view answers the three questions in one glance', asyn
   await expect(page).toHaveURL(/\/owner$/);
   await expect(page.getByText("Today's sales")).toBeVisible();
   await expect(page.getByText('Expected cash in drawer')).toBeVisible();
-  await expect(page.getByText('Running udhaar total')).toBeVisible();
+  // Renamed with the netting fix: it is money owed TO the shop, floored per
+  // customer, and never a net figure that an advance could push negative.
+  await expect(page.getByText('Owed to you')).toBeVisible();
 
   await page.getByRole('button', { name: 'Udhaar' }).click();
   await expect(page.getByText('Rashid Sahib')).toBeVisible();

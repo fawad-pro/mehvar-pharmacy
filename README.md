@@ -69,6 +69,22 @@ To start over from an empty database, `npm run db:reset` first.
 
 `db:seed` prints the demo counter's setup key and the PINs it created.
 
+### Running the E2E suite
+
+```
+npm run e2e:reset              # db:reset + db:setup + playwright test
+```
+
+It needs a browser. Playwright downloads one on `npx playwright install`; where
+that download is blocked but a Chromium is already present, point at it instead:
+
+```
+PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run e2e:reset
+```
+
+The suite runs on one worker deliberately — one database, one paired device, one
+receipt sequence. Parallel workers are counters contending for the same numbers.
+
 `db:reset && db:setup` must always produce a working demo pharmacy
 (Phase 11 §4) — the demo is a build artifact, always one command away. From
 Session 1 onward it seeds ~50 curated products with real pack structures, a
