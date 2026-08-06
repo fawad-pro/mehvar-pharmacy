@@ -18,10 +18,10 @@ import {
   setProductActive,
   type CatalogResult,
 } from '@/domain/catalog/writers';
-import { searchGlobalCatalog } from '@/db/catalog-queries';
+import { globalCatalogSize, searchGlobalCatalog } from '@/db/catalog-queries';
 import {
   parsePackLevels,
-  type CatalogSuggestion,
+  type CatalogSearchResult,
   type ProductDraft,
 } from '@/domain/catalog/product';
 import { rupeesToPaisa } from '@/lib/money';
@@ -185,10 +185,23 @@ export async function archiveProduct(productId: Uuid, isActive: boolean): Promis
  * report what they already stock — nothing about one pharmacy can reach
  * another through it (T3).
  */
-export async function searchCatalogAction(term: string): Promise<CatalogSuggestion[]> {
+export async function searchCatalogAction(term: string): Promise<CatalogSearchResult> {
   const gate = await requireOwner();
   if ('error' in gate) {
-    return [];
+    return { catalogLoaded: true, matches: [] };
   }
-  return searchGlobalCatalog(scopeFor(gate.session), term);
+
+  const [matches, size] = await Promise.all([
+    searchGlobalCatalog(scopeFor(gate.session), term),
+    globalCatalogSize(),
+  ]);
+
+  /*
+   * The size is reported alongside the matches so the screen can tell "nothing
+   * matched" apart from "the catalogue was never loaded". They look the same to
+   * an operator and are entirely different problems — and the second one is
+   * what shipped: a fresh developer setup left `global_products` empty and the
+   * picker answered "nothing matches" to every query ever typed.
+   */
+  return { catalogLoaded: size > 0, matches };
 }

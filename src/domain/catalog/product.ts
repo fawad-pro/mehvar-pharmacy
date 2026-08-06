@@ -239,3 +239,15 @@ export interface CatalogSuggestion {
   /** The tenant's own product with this identity, if they already stock it. */
   readonly alreadyStockedId: string | null;
 }
+
+/**
+ * What a catalogue search answers with.
+ *
+ * `catalogLoaded` is not decoration: a screen that cannot distinguish an empty
+ * catalogue from an unmatched search will report a missing setup step as a
+ * spelling problem, which is precisely the failure this field was added after.
+ */
+export interface CatalogSearchResult {
+  readonly catalogLoaded: boolean;
+  readonly matches: readonly CatalogSuggestion[];
+}

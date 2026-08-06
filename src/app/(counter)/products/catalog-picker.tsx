@@ -102,10 +102,11 @@ export function CatalogPicker({
    * piece of state to keep in step — and a stale response arriving late can
    * simply be recognised as stale instead of overwriting a newer one.
    */
-  const [answered, setAnswered] = useState<{ term: string; rows: Suggestion[] }>({
-    term: '',
-    rows: [],
-  });
+  const [answered, setAnswered] = useState<{
+    term: string;
+    rows: Suggestion[];
+    catalogLoaded: boolean;
+  }>({ term: '', rows: [], catalogLoaded: true });
   const [highlighted, setHighlighted] = useState(0);
   const field = useRef<HTMLInputElement>(null);
 
@@ -121,8 +122,12 @@ export function CatalogPicker({
     // Debounced: this is a server query, unlike the counter's own search, and a
     // keystroke-per-request would make it feel slower than typing.
     const timer = window.setTimeout(() => {
-      void searchCatalogAction(trimmed).then((rows) => {
-        setAnswered({ term: trimmed, rows });
+      void searchCatalogAction(trimmed).then((result) => {
+        setAnswered({
+          term: trimmed,
+          rows: [...result.matches],
+          catalogLoaded: result.catalogLoaded,
+        });
         setHighlighted(0);
       });
     }, 180);
@@ -134,6 +139,8 @@ export function CatalogPicker({
   // Only trust results that answer what is currently typed.
   const results = answered.term === trimmed ? answered.rows : [];
   const searching = trimmed.length >= 2 && answered.term !== trimmed;
+  /** The catalogue is not there at all — a setup problem, not a search problem. */
+  const catalogueMissing = answered.term === trimmed && !answered.catalogLoaded;
   const addable = results.filter((row) => row.alreadyStockedId === null);
 
   function choose(row: Suggestion): void {
@@ -194,7 +201,23 @@ export function CatalogPicker({
         />
       </div>
 
-      {trimmed.length >= 2 && !searching && results.length === 0 ? (
+      {/* An empty catalogue and an unmatched search look identical to an
+          operator and are completely different problems. Saying "nothing
+          matches" when the catalogue was never loaded sends someone to try
+          another spelling forever. */}
+      {catalogueMissing ? (
+        <div className="border-amber/50 bg-amber/5 rounded border p-3 text-sm" role="status">
+          <p className="text-amber font-medium">Mehvar&rsquo;s medicine catalogue is not loaded.</p>
+          <p className="text-ink/70 mt-1">
+            No search will find anything until it is. Run{' '}
+            <code className="numeral">npm run catalog:seed</code> (or{' '}
+            <code className="numeral">npm run db:setup</code>, which includes it). You can still
+            enter products yourself below.
+          </p>
+        </div>
+      ) : null}
+
+      {!catalogueMissing && trimmed.length >= 2 && !searching && results.length === 0 ? (
         <p className="text-ink/60 text-sm">
           Nothing in the catalogue matches &ldquo;{trimmed}&rdquo;. That is normal for local
           products and general goods — enter it yourself below.

@@ -634,3 +634,21 @@ export async function alternativesFor(
     stockBase: stock[row.id] ?? null,
   }));
 }
+
+/**
+ * How many medicines the shared catalogue holds.
+ *
+ * Exists so a screen can tell "nothing matched your search" apart from "the
+ * catalogue was never loaded". Those look identical to an operator and are
+ * completely different problems: the first means try another spelling, the
+ * second means a setup step did not run and no spelling will ever work.
+ *
+ * Conflating them is exactly how a fresh developer install shipped with an
+ * empty `global_products` and a picker that answered "Nothing in the catalogue
+ * matches" to every query, for days, without anyone being able to tell that the
+ * catalogue simply was not there.
+ */
+export async function globalCatalogSize(): Promise<number> {
+  const [row] = await database().select({ total: count() }).from(globalProducts);
+  return row?.total ?? 0;
+}

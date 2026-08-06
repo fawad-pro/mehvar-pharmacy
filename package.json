@@ -38,7 +38,8 @@
     "catalog:build": "tsx --conditions=react-server scripts/catalog/build-pack.ts",
     "catalog:import": "tsx --conditions=react-server scripts/catalog/import-pack.ts",
     "catalog:csv": "tsx --conditions=react-server scripts/catalog/import-csv.ts",
-    "db:setup": "npm run db:migrate && npm run db:grants && npm run db:seed"
+    "db:setup": "npm run db:migrate && npm run db:grants && npm run db:seed && npm run catalog:seed",
+    "catalog:seed": "npm run catalog:build -- --out dist/catalog/mehvar-catalog.json && npm run catalog:import -- dist/catalog/mehvar-catalog.json --origin dev-setup"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

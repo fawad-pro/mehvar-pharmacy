@@ -50,7 +50,7 @@ npm run db:setup               # migrate + grants + seed, in that order
 npm run dev
 ```
 
-`db:setup` is one command on purpose. The three steps are not independent:
+`db:setup` is one command on purpose. The four steps are not independent:
 `db:grants` is what CREATES the application role `mehvar_app`, and `db:seed`
 connects as it. Run them separately and it is possible to stop halfway; the
 symptom of skipping grants is not "role missing" but
@@ -59,6 +59,11 @@ symptom of skipping grants is not "role missing" but
 
 because Postgres deliberately reports a non-existent role as an authentication
 failure, which sends you looking at a password that was never wrong.
+
+It also loads the bundled medicine catalogue (`catalog:seed`). Without it
+`global_products` is empty and the Add Product picker finds nothing, for every
+query — the catalogue is what makes adding a medicine a search and a price
+rather than nine typed fields.
 
 To start over from an empty database, `npm run db:reset` first.
 

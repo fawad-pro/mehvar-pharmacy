@@ -438,6 +438,29 @@ exception visibility.
   reported success. This cost a wrong diagnosis during this very session;
   printing the target is what makes it visible.
 
+## Things Day 12 established
+
+- **A green component test proves nothing about the path to it.** Every
+  catalogue test passed while the Add Product picker found nothing on every
+  fresh install, because each test applied its OWN pack and then searched it.
+  `db:setup` never loaded the real one; the Windows installer did, and the
+  developer machine had it only because it was imported by hand while building.
+  A test that supplies its own fixture cannot notice the supply chain is
+  broken.
+- **This is the third repeat of the same mistake** (Day 8's unreachable W9, Day
+  10's unreachable global catalogue, this). The fix is a test aimed at the
+  PATH: `tests/setup-path.test.ts` reads the `db:setup` chain and names the
+  stage that went missing. Cheap, runs without a database, and catches a
+  re-omission on every run.
+- **An empty catalogue is a setup state, not a "no results" state.** Reporting
+  one as the other is what made this invisible for days: the operator was told
+  to try another spelling when no spelling would ever work. `searchCatalogAction`
+  returns `catalogLoaded` alongside the matches, and the picker says which
+  command to run.
+- **What ships to a pharmacy and what a developer gets must come from one
+  chain.** The installer applied the pack; `db:setup` did not. Both now build
+  from `seed-data.ts` and apply through `applyCatalogPack`.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
