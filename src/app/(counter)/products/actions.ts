@@ -18,7 +18,12 @@ import {
   setProductActive,
   type CatalogResult,
 } from '@/domain/catalog/writers';
-import { parsePackLevels, type ProductDraft } from '@/domain/catalog/product';
+import { searchGlobalCatalog } from '@/db/catalog-queries';
+import {
+  parsePackLevels,
+  type CatalogSuggestion,
+  type ProductDraft,
+} from '@/domain/catalog/product';
 import { rupeesToPaisa } from '@/lib/money';
 import type { Uuid } from '@/lib/uuid';
 
@@ -62,6 +67,7 @@ function draftFromForm(form: FormData): ProductDraft {
     mrpPaisa: mrp === '' ? null : rupeesToPaisa(Number(mrp)),
     minStockBaseUnits: minStock === '' ? null : Math.trunc(Number(minStock)),
     needsCompletion: form.get('needsCompletion') === 'on',
+    globalProductId: String(form.get('globalProductId') ?? '').trim() || null,
   };
 }
 
@@ -169,4 +175,20 @@ export async function archiveProduct(productId: Uuid, isActive: boolean): Promis
   }
   await setProductActive(scopeFor(gate.session), productId, isActive);
   revalidateAfter('catalog');
+}
+
+/**
+ * Searches Mehvar's shared catalogue while a product is being added.
+ *
+ * Read-only and identity-only. It reaches `global_products`, which has no
+ * tenant column, and cross-references the caller's own catalogue purely to
+ * report what they already stock — nothing about one pharmacy can reach
+ * another through it (T3).
+ */
+export async function searchCatalogAction(term: string): Promise<CatalogSuggestion[]> {
+  const gate = await requireOwner();
+  if ('error' in gate) {
+    return [];
+  }
+  return searchGlobalCatalog(scopeFor(gate.session), term);
 }

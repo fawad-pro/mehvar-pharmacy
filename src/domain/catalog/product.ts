@@ -41,6 +41,15 @@ export interface ProductDraft {
   mrpPaisa: number | null;
   minStockBaseUnits: number | null;
   needsCompletion: boolean;
+  /**
+   * The shared-catalogue identity this product was created from, if any.
+   *
+   * Kept so Phase 6 §4's downward flow has somewhere to land: a corrected
+   * composition or a newly known barcode can be OFFERED to the products that
+   * came from that identity. Never used to overwrite anything — a pharmacy's
+   * catalogue is never silently rewritten under it (P8).
+   */
+  globalProductId: string | null;
 }
 
 /**
@@ -207,4 +216,26 @@ export function validateBarcode(
 function blankToNull(value: string | null): string | null {
   const trimmed = value?.trim() ?? '';
   return trimmed === '' ? null : trimmed;
+}
+
+/**
+ * A medicine Mehvar knows about, offered while a pharmacy is adding one.
+ *
+ * `alreadyStockedId` is the field that makes this useful rather than annoying:
+ * a shop searching for "panadol" mostly already has Panadol, and offering to
+ * create a second one is exactly the duplicate this whole subsystem exists to
+ * prevent. The picker says "you already stock this — open it" instead.
+ */
+export interface CatalogSuggestion {
+  readonly globalProductId: string;
+  readonly name: string;
+  readonly manufacturer: string | null;
+  readonly formulaText: string | null;
+  readonly form: string | null;
+  readonly strength: string | null;
+  readonly packLevels: readonly PackLevel[];
+  readonly referenceMrpPaisa: number | null;
+  readonly quality: 'verified' | 'reference';
+  /** The tenant's own product with this identity, if they already stock it. */
+  readonly alreadyStockedId: string | null;
 }

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
-import { findProduct } from '@/db/catalog-queries';
+import { alternativesFor, findProduct } from '@/db/catalog-queries';
 import { formatPackLevels } from '@/domain/catalog/product';
 import { baseQty } from '@/lib/branded';
 import { describeQuantity } from '@/lib/quantity';
@@ -21,7 +21,11 @@ export default async function ProductDetailPage({
   }
 
   const { productId } = await params;
-  const product = await findProduct(scopeFor(session), productId);
+  const scope = scopeFor(session);
+  const [product, alternatives] = await Promise.all([
+    findProduct(scope, productId),
+    alternativesFor(scope, productId),
+  ]);
   if (!product) {
     notFound();
   }
@@ -45,6 +49,43 @@ export default async function ProductDetailPage({
         </p>
       </header>
 
+      {/* "Panadol nahi hai — kya chalega?"
+          
+          The substitution question, answered from THIS shop's shelves rather
+          than from the shared catalogue. Listing medicines the pharmacy does
+          not stock would answer a question nobody asked and bury the one they
+          did. Driven by `equivalenceKey` — same formula, strength and form —
+          which is emphatically not the same test as "is this a duplicate"
+          (see domain/catalog/identity.ts). */}
+      {alternatives.length > 0 ? (
+        <div className="border-line rounded border p-3">
+          <h2 className="text-ink/60 mb-1 text-xs tracking-[0.14em] uppercase">
+            Same medicine, other brands
+          </h2>
+          <ul className="flex flex-col gap-1 text-sm">
+            {alternatives.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-baseline gap-x-2">
+                <Link href={`/products/${row.id}`} className="text-green-700 hover:underline">
+                  {row.name}
+                </Link>
+                <span className="text-ink/50">
+                  {[row.strength, row.manufacturer].filter(Boolean).join(' · ')}
+                </span>
+                {/* Stock is why this list is useful at all: an alternative
+                    that is also out is not an answer. */}
+                <span className="numeral text-ink/60 ml-auto text-xs">
+                  {row.stockBase === null || row.stockBase <= 0 ? (
+                    <span className="text-amber">none on hand</span>
+                  ) : (
+                    `${row.stockBase} on hand`
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <BarcodePanel
         productId={product.id}
         baseUnitName={product.baseUnitName}
@@ -55,6 +96,7 @@ export default async function ProductDetailPage({
       <ProductForm
         initial={{
           id: product.id,
+          globalProductId: product.globalProductId,
           name: product.name,
           manufacturer: product.manufacturer ?? '',
           form: product.form ?? '',

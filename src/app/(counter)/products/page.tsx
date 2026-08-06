@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
 import { countNeedingCompletion, listProducts } from '@/db/catalog-queries';
+import { formatForm } from '@/domain/catalog/form';
 import { formatPackLevels } from '@/domain/catalog/product';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
@@ -104,7 +105,7 @@ export default async function ProductsPage({
                     <Link href={`/products/${item.id}`} className="text-green-900 font-medium">
                       {item.name}
                       {item.strength ? (
-                        <span className="text-ink/60 font-normal"> {item.strength}</span>
+                        <span className="numeral text-ink/70 font-normal"> {item.strength}</span>
                       ) : null}
                     </Link>
                     {item.needsCompletion ? (
@@ -113,8 +114,14 @@ export default async function ProductsPage({
                     {!item.isActive ? (
                       <span className="text-ink/40 ml-2 text-xs">archived</span>
                     ) : null}
+                    {/* Strength and form carried on their own line, always.
+                        Two Panadols differing only in milligrams are the
+                        commonest thing in a real catalogue, and a row where
+                        that difference is buried in a subtitle is a row an
+                        operator picks the wrong one from. */}
                     <span className="text-ink/50 block text-xs">
-                      {[item.form, item.manufacturer].filter(Boolean).join(' · ')}
+                      {[formatForm(item.form), item.manufacturer].filter(Boolean).join(' · ') ||
+                        'No form or maker recorded'}
                     </span>
                   </td>
                   <td className="text-ink/70 px-3 py-2">{item.formulaText ?? '—'}</td>

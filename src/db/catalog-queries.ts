@@ -13,13 +13,16 @@
 
 import 'server-only';
 
-import { and, asc, count, desc, eq, gt, ilike, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 
+import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
+import type { CatalogSuggestion } from '@/domain/catalog/product';
 import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
+import { database } from './client';
 import { type TenantScope } from './scoped';
-import { batches, productBarcodes, products } from './schema';
+import { batches, globalProducts, productBarcodes, products } from './schema';
 
 /* ========================================================================== */
 /* The ADR-4 index payload                                                     */
@@ -319,6 +322,8 @@ export async function countNeedingCompletion(scope: TenantScope): Promise<number
 export interface ProductDetail extends ProductListItem {
   barcodes: Array<{ id: string; barcode: string; unitLevelName: string }>;
   stockBase: number | null;
+  /** Present when this product came from Mehvar's catalogue (Phase 6 §2). */
+  globalProductId: string | null;
 }
 
 export async function findProduct(
@@ -338,6 +343,7 @@ export async function findProduct(
 
   return {
     id: row.id,
+    globalProductId: row.globalProductId,
     name: row.name,
     strength: row.strength,
     form: row.form,
@@ -437,3 +443,194 @@ export async function recentlyUpdated(
 }
 
 export const CATALOG_FILTERS = { and, eq };
+
+/* -------------------------------------------------------------------------- */
+/* The global catalogue, as the operator meets it                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Searches the shared catalogue by brand, salt or maker.
+ *
+ * Deliberately a server query rather than part of the client index (ADR-4).
+ * The client index is the counter's, sized to a shop's own catalogue and
+ * refreshed on every session; the global catalogue is tens of thousands of
+ * identities and is consulted only when somebody is adding a product, which is
+ * a moment that tolerates a round trip. Shipping it to every browser would cost
+ * every sale to serve an action that happens a few times a week.
+ */
+export async function searchGlobalCatalog(
+  scope: TenantScope,
+  term: string,
+  limit = 12,
+): Promise<CatalogSuggestion[]> {
+  const trimmed = term.trim();
+  if (trimmed.length < 2) return [];
+
+  const pattern = `%${trimmed}%`;
+  const rows = await database()
+    .select({
+      globalProductId: globalProducts.id,
+      name: globalProducts.name,
+      manufacturer: globalProducts.manufacturer,
+      formulaText: globalProducts.formulaText,
+      form: globalProducts.form,
+      strength: globalProducts.strength,
+      packLevels: globalProducts.packLevels,
+      referenceMrpPaisa: globalProducts.referenceMrpPaisa,
+      quality: globalProducts.quality,
+      identityKey: globalProducts.identityKey,
+    })
+    .from(globalProducts)
+    .where(
+      or(
+        ilike(globalProducts.name, pattern),
+        ilike(globalProducts.formulaText, pattern),
+        ilike(globalProducts.manufacturer, pattern),
+      ),
+    )
+    /*
+     * Ordered by RELEVANCE, then quality, then name.
+     *
+     * Alphabetical ordering looks harmless at 53 medicines and is useless at
+     * 25,000: a search for "Getz" would return twelve of their products
+     * beginning with A, and the one the operator wanted would be on a page
+     * that does not exist. The tiers mirror the counter's own ranking ladder
+     * (Phase 10 §5) so the two searches behave the same way — a name match
+     * beats a salt match beats a company match.
+     *
+     * Verified before reference within a tier, because a verified entry
+     * carries the hand-checked pack structure that makes picking it worth
+     * anything.
+     */
+    .orderBy(
+      sql`case
+            when ${globalProducts.name} ilike ${`${trimmed}%`} then 0
+            when ${globalProducts.name} ilike ${pattern} then 1
+            when ${globalProducts.formulaText} ilike ${pattern} then 2
+            else 3
+          end`,
+      desc(globalProducts.quality),
+      globalProducts.name,
+    )
+    .limit(limit);
+
+  if (rows.length === 0) return [];
+
+  /*
+   * Which of these the shop already stocks.
+   *
+   * Matched on identity key rather than on `global_product_id`, because a
+   * product typed by hand before the catalogue existed has no link but is
+   * still the same medicine. Recognising it is the difference between the
+   * picker preventing duplicates and creating them.
+   */
+  const mine = await scope.db
+    .select({
+      id: products.id,
+      name: products.name,
+      strength: products.strength,
+      form: products.form,
+      manufacturer: products.manufacturer,
+      formulaText: products.formulaText,
+    })
+    .from(products)
+    .where(scope.scopeOf(products));
+
+  const stockedByIdentity = new Map(
+    mine.map((row) => [
+      identityKey({
+        name: row.name,
+        strength: row.strength,
+        form: row.form,
+        manufacturer: row.manufacturer,
+        formulaText: row.formulaText,
+      }),
+      row.id,
+    ]),
+  );
+
+  return rows.map((row) => ({
+    globalProductId: row.globalProductId,
+    name: row.name,
+    manufacturer: row.manufacturer,
+    formulaText: row.formulaText,
+    form: row.form,
+    strength: row.strength,
+    packLevels: row.packLevels,
+    referenceMrpPaisa: row.referenceMrpPaisa,
+    quality: row.quality,
+    alreadyStockedId: stockedByIdentity.get(row.identityKey) ?? null,
+  }));
+}
+
+export interface AlternativeProduct {
+  readonly id: string;
+  readonly name: string;
+  readonly strength: string | null;
+  readonly form: string | null;
+  readonly manufacturer: string | null;
+  readonly stockBase: number | null;
+}
+
+/**
+ * What else the shop stocks that could be given instead — the substitution
+ * question, answered from the shop's OWN shelves.
+ *
+ * Deliberately not from the global catalogue. "Panadol nahi hai, kya chalega?"
+ * is a question about what is behind the counter right now; listing medicines
+ * the pharmacy does not stock would answer a question nobody asked and bury the
+ * one they did.
+ */
+export async function alternativesFor(
+  scope: TenantScope,
+  productId: Uuid,
+): Promise<AlternativeProduct[]> {
+  const [subject] = await scope.db
+    .select({
+      id: products.id,
+      name: products.name,
+      strength: products.strength,
+      form: products.form,
+      manufacturer: products.manufacturer,
+      formulaText: products.formulaText,
+    })
+    .from(products)
+    .where(scope.scopeOf(products, eq(products.id, productId)))
+    .limit(1);
+
+  if (!subject) return [];
+
+  const key = equivalenceKey(subject);
+  // No formula recorded means nothing can honestly be said about substitution.
+  if (key === null) return [];
+
+  const candidates = await scope.db
+    .select({
+      id: products.id,
+      name: products.name,
+      strength: products.strength,
+      form: products.form,
+      manufacturer: products.manufacturer,
+      formulaText: products.formulaText,
+      baseUnitName: products.baseUnitName,
+    })
+    .from(products)
+    .where(scope.scopeOf(products, eq(products.isActive, true), ne(products.id, productId)));
+
+  const matching = candidates.filter((row) => equivalenceKey(row) === key);
+  if (matching.length === 0) return [];
+
+  const stock = await stockForProducts(
+    scope,
+    matching.map((row) => row.id),
+  );
+
+  return matching.map((row) => ({
+    id: row.id,
+    name: row.name,
+    strength: row.strength,
+    form: row.form,
+    manufacturer: row.manufacturer,
+    stockBase: stock[row.id] ?? null,
+  }));
+}

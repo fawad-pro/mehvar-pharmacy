@@ -11,6 +11,7 @@ import {
 function draft(overrides: Partial<ProductDraft> = {}): ProductDraft {
   return {
     name: 'Panadol',
+    globalProductId: null,
     manufacturer: 'GSK',
     form: 'Tablet',
     strength: '500mg',
