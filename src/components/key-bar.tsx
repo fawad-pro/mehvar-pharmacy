@@ -22,9 +22,11 @@ import { GLOBAL_KEYS } from '@/client/keyboard/registry';
  * the owner being shown the product for the first time, who has no F-keys in
  * muscle memory yet.
  *
- * `F8` and `F10` have no route (they are contextual and dispatched, see the
- * registry), so those stay non-interactive rather than pretending to lead
- * somewhere — the handler that owns them lives in `AppShell`.
+ * Keys with a `dispatch` instead of an `href` — currently Udhaar and Switch
+ * user — have no route, so those stay non-interactive rather than pretending
+ * to lead somewhere; the handler that owns them lives in `AppShell`. Which
+ * keys those are is whatever the registry says below, not a fact worth
+ * repeating here as letters that a reorder would make wrong.
  */
 export function KeyBar({ role }: { role: 'owner' | 'salesman' }) {
   const pathname = usePathname();

@@ -20,9 +20,9 @@ import { useEffect } from 'react';
 import { BACK_KEY, GLOBAL_KEYS, HOME_ROUTE } from './registry';
 
 export interface GlobalKeyHandlers {
-  /** F8 — contextual: attach customer, or open Settle Udhaar (defect C5). */
+  /** The udhaar key — contextual: attach customer, or open Settle Udhaar (defect C5). */
   onUdhaar?: () => void;
-  /** F10 — PIN switch (ADR-7). */
+  /** The switch-user key — PIN switch (ADR-7). */
   onSwitchUser?: () => void;
   /** Esc — close the topmost overlay; returns true when one was open. */
   onEscape?: () => boolean;

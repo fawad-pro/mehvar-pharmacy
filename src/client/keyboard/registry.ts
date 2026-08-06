@@ -81,3 +81,21 @@ export const GLOBAL_KEYS: readonly GlobalKey[] = [
 export const BACK_KEY = 'Escape';
 
 export const HOME_ROUTE = '/sale';
+
+/**
+ * The printed key for a routeless key's MEANING — `keyFor('udhaar')` → `'F4'`.
+ *
+ * Every on-screen hint that tells the operator which key does something must
+ * call this rather than write the letter itself. A hardcoded "F8" is exactly
+ * what survived the Udhaar → F4 reorder in every hint that said it: nothing
+ * connected that text back to the registry, so the bar moved and the hints
+ * did not. `hint-sourcing.test.ts` polices the rest of the source tree — no
+ * other file may spell a dispatch key's letter out loud.
+ */
+export function keyFor(dispatch: NonNullable<GlobalKey['dispatch']>): string {
+  const binding = GLOBAL_KEYS.find((candidate) => candidate.dispatch === dispatch);
+  if (!binding) {
+    throw new Error(`No key in GLOBAL_KEYS dispatches '${dispatch}'.`);
+  }
+  return binding.key;
+}

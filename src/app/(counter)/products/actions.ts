@@ -10,6 +10,7 @@
 
 
 import { currentSession, scopeFor } from '@/auth/session';
+import { keyFor } from '@/client/keyboard/registry';
 import {
   addBarcode,
   createProduct,
@@ -43,7 +44,9 @@ async function requireOwner() {
     return { error: 'This device needs to sign in again.' } as const;
   }
   if (session.userRole !== 'owner') {
-    return { error: 'Only the owner can change the catalog. Press F10 to switch user.' } as const;
+    return {
+      error: `Only the owner can change the catalog. Press ${keyFor('switch-user')} to switch user.`,
+    } as const;
   }
   return { session } as const;
 }

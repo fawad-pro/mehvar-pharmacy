@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Settle Udhaar — W3, F8 on an empty cart (defect C5).
+ * Settle Udhaar — W3, the udhaar key on an empty cart (defect C5).
  *
  *   "Trigger: customer pays down debt, usually without buying. Path:
  *    settlement key → customer → amount → commit → receipt (mini-statement:
@@ -9,8 +9,9 @@
  *    are the norm.
  *
  * Global, because paying down a debt has nothing to do with what screen the
- * operator happened to be on — AppShell owns this overlay and F8 falls back to
- * it whenever the Sale surface hasn't taken the key for itself (empty cart).
+ * operator happened to be on — AppShell owns this overlay and the udhaar key
+ * falls back to it whenever the Sale surface hasn't taken the key for itself
+ * (empty cart).
  */
 
 import { useEffect, useRef, useState } from 'react';

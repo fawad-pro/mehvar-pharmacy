@@ -169,10 +169,12 @@ exception visibility.
 - **`sales` and `payments` share one receipt-number sequence** (PCN-002).
   `highestReceiptCounterAcrossReceipts` checks both tables; a writer that only
   checked `sales` would let a settlement collide with a sale's number.
-- **F8 is dispatched, never shared state.** `f8-context.tsx`'s registry is how
-  the Sale surface takes the key for itself (cart has items) without either
-  screen importing the other's internals; extend by registering a handler, not
-  by teaching `AppShell` about a new screen's state.
+- **The udhaar key is dispatched, never shared state.** `udhaar-key-context.tsx`
+  (renamed from `f8-context.tsx` on Day 16, once Udhaar itself had moved off
+  F8) is how the Sale surface takes the key for itself (cart has items)
+  without either screen importing the other's internals; extend by
+  registering a handler, not by teaching `AppShell` about a new screen's
+  state.
 - **The receipt is one shape for every receipt-producing event**
   (`ReceiptData` in `src/client/print/receipt.ts`). A settlement is a sale
   receipt with no `lines` — add a new receipt-producing event (returns, Day 7)
@@ -528,6 +530,27 @@ exception visibility.
   excluded on purpose: `scripts/db/verify-all.ts` reaches the database and must
   NOT load dotenv, because a module that reads `.env` as a side effect of being
   imported is worse than the bug being prevented.
+
+## Things Day 16 established
+
+- **A hint that spells out a shortcut by hand can drift the moment the bar is
+  reordered.** Udhaar moved from F8 to F4 (Day 9), and `registry.test.ts`
+  pinned that the *handler* binds by dispatch meaning, but nothing pinned
+  that on-screen *text* did — the Sale surface and payment overlay kept
+  saying "F8" for months after the key moved. `keyFor(dispatch)` is now the
+  only way a hint may name a key; `hint-sourcing.test.ts` requires the four
+  known sites to call it and sweeps the rest of the source tree for the same
+  shape of bug (a dispatch key's meaning named next to a literal number)
+  reappearing anywhere else.
+- **A file named after a key is a hint that will also go stale.**
+  `f8-context.tsx` was renamed to `udhaar-key-context.tsx`, with every
+  export and comment describing the mechanism by meaning ("the udhaar key")
+  rather than by letter. The file compiling with a wrong name in it for
+  months is the same lesson as the hints, one level up.
+- **"Currently correct" is not evidence a hint is sourced correctly.** The
+  top bar's `<kbd>F10</kbd>` for Switch user, and a server action's "Press
+  F10 to switch user", were the identical bug — silent, only because that key
+  has not moved yet. Both now call `keyFor('switch-user')` too.
 
 ## Commits
 

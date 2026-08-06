@@ -15,6 +15,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { paisaFromRupeeInput, splitPayment } from '@/domain/sales/cart';
+import { keyFor } from '@/client/keyboard/registry';
 import { formatPaisa } from '@/lib/money';
 import type { Paisa } from '@/lib/branded';
 
@@ -117,7 +118,7 @@ export function PaymentOverlay({
             </p>
           ) : (
             <p className="text-red mt-3 text-sm" role="alert">
-              Attach a customer (F8) to put the rest on udhaar.
+              Attach a customer ({keyFor('udhaar')}) to put the rest on udhaar.
             </p>
           )
         ) : null}

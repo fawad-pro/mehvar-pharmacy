@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { GLOBAL_KEYS } from './registry';
+import { GLOBAL_KEYS, keyFor } from './registry';
 
 describe('the global key registry', () => {
   it('binds every routeless key to a meaning', () => {
@@ -76,5 +76,20 @@ describe('the global key registry', () => {
       expect(number).toBeGreaterThanOrEqual(1);
       expect(number).toBeLessThanOrEqual(10);
     }
+  });
+});
+
+// Neither assertion below names a letter — that is the whole point. If a
+// future session reorders the bar again, these stay correct untouched, which
+// is exactly the property the hand-typed UI hints lacked.
+describe('keyFor — the one way a UI hint may name a dispatch key', () => {
+  it('returns whatever key currently dispatches udhaar', () => {
+    const binding = GLOBAL_KEYS.find((candidate) => candidate.dispatch === 'udhaar');
+    expect(keyFor('udhaar')).toBe(binding?.key);
+  });
+
+  it('returns whatever key currently dispatches switch-user', () => {
+    const binding = GLOBAL_KEYS.find((candidate) => candidate.dispatch === 'switch-user');
+    expect(keyFor('switch-user')).toBe(binding?.key);
   });
 });
