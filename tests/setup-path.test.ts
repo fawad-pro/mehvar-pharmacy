@@ -98,6 +98,24 @@ describe('catalog:seed — how the bundled catalogue actually arrives', () => {
   });
 });
 
+describe('db:setup must be able to upgrade, not only to install', () => {
+  it('names db:reset as the way to start over, rather than being it', () => {
+    /*
+     * `db:setup` runs against databases people have been developing on for
+     * weeks. It must never be the destructive one: `db:seed` aborting on an
+     * existing demo tenant is what stopped the chain and left the catalogue
+     * step unrun, and "make it drop everything first" would have been the
+     * other, worse answer.
+     */
+    expect(stagesOf(scripts['db:setup'] ?? '')).not.toContain('db:reset');
+  });
+
+  it('tells people how to get a clean demo, since setup no longer gives one', () => {
+    const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
+    expect(readme).toContain('npm run db:reset && npm run db:setup');
+  });
+});
+
 describe('the paths that must not drift from db:setup', () => {
   it('e2e:reset uses db:setup rather than restating its stages', () => {
     // It used to spell the chain out, which is how it would come to be missing

@@ -483,6 +483,26 @@ exception visibility.
 - **A spec asserting `-50.00` on a balance was asserting a bug.** It pinned the
   minus sign the position vocabulary exists to remove.
 
+## Things Day 14 established
+
+- **A bootstrap command runs against databases people have been using for
+  weeks.** `db:seed` meant "create the demo pharmacy" and died on the unique
+  slug, taking `db:setup` with it and leaving the catalogue step unrun. It now
+  means "make sure the demo pharmacy exists and its catalogue is current".
+- **"Idempotent" here means the END STATE is safe to ask for again**, not that
+  the same statements can run twice. The split is deliberate: the tenant's
+  product catalogue is topped up (missing seed products added, matched on
+  `identityKey` so a differently-typed duplicate is never created, existing rows
+  never modified); sales, batches, cash movements, customers, users and devices
+  are created once and never again, because repeating them would double the
+  stock on every shelf and invent sales that never happened.
+- **`db:setup` must never be the destructive one.** `db:reset && db:setup` is
+  how a clean demo is asked for, and `setup-path.test.ts` pins that setup does
+  not itself reset.
+- **A top-up adds nothing it cannot add honestly.** New seed products arrive
+  with no opening stock; inventing batches on a database somebody has been
+  testing against would corrupt the figures they were testing.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

@@ -65,7 +65,19 @@ It also loads the bundled medicine catalogue (`catalog:seed`). Without it
 query — the catalogue is what makes adding a medicine a search and a price
 rather than nine typed fields.
 
-To start over from an empty database, `npm run db:reset` first.
+`db:setup` also brings an EXISTING development database up to date — run it
+after pulling. It is safe to repeat: if the demo pharmacy is already there it is
+kept, any seed products it is missing are added, and the medicine catalogue is
+re-applied (idempotent on medicine identity).
+
+What it deliberately does not do on a database that already has a demo pharmacy
+is re-create sales, batches, cash movements or customers. Repeating those would
+double the stock on every shelf and invent sales that never happened. For a
+clean demo, ask for one:
+
+```
+npm run db:reset && npm run db:setup
+```
 
 `db:seed` prints the demo counter's setup key and the PINs it created.
 

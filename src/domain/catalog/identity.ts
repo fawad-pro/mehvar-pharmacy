@@ -277,3 +277,27 @@ export function findCatalogMatches<T>(
 function strengthSignature(parsed: ParsedStrength): string {
   return parsed.components.map(componentKey).join('+');
 }
+
+/**
+ * Which of a reference list a catalogue does not have yet.
+ *
+ * Used by `db:seed` to top up an existing demo pharmacy. Matching is by
+ * `identityKey`, not by name, for the reason this whole module exists: a
+ * product somebody typed by hand as "Panadol 0.5g tab" is the same medicine as
+ * the seed's "Panadol 500mg Tablet", and adding a second one beside it would
+ * split its stock — which is exactly the damage a top-up is supposed to avoid
+ * causing.
+ *
+ * Returns what is MISSING and never what differs. A product already present is
+ * left alone whatever its price or pack levels say: on a database somebody has
+ * been developing against, those may have been changed deliberately, and
+ * overwriting them is the tenant-data form of the silent rewrite P8 forbids.
+ */
+export function missingFromCatalog<T>(
+  reference: readonly T[],
+  existing: readonly MedicineIdentity[],
+  identify: (item: T) => MedicineIdentity,
+): T[] {
+  const present = new Set(existing.map(identityKey));
+  return reference.filter((item) => !present.has(identityKey(identify(item))));
+}

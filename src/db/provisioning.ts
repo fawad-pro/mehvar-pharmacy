@@ -55,6 +55,23 @@ export async function setTenantStatus(
  * enumerate tenants, and it lives here beside the other unscoped door rather
  * than widening `TenantScope`.
  */
+/**
+ * A tenant by its slug, or undefined.
+ *
+ * `tenants` carries no `tenant_id` — it IS the tenant — so it cannot be reached
+ * through `TenantScope`, and this module is its only door (CLAUDE.md, Day 1).
+ * `db:seed` needs it to answer "has this database already been set up?" before
+ * deciding whether to create a demo pharmacy or top up the one that is there.
+ */
+export async function findTenantBySlug(slug: string): Promise<{ id: Uuid } | undefined> {
+  const rows = await globalCatalog()
+    .select({ id: tenants.id })
+    .from(tenants)
+    .where(eq(tenants.slug, slug))
+    .limit(1);
+  return rows[0];
+}
+
 export async function listTenantIds(): Promise<Uuid[]> {
   const rows = await globalCatalog().select({ id: tenants.id }).from(tenants);
   return rows.map((row) => row.id);

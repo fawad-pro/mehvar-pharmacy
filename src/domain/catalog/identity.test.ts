@@ -14,6 +14,7 @@ import {
   equivalenceKey,
   findCatalogMatches,
   identityKey,
+  missingFromCatalog,
   normaliseFormula,
   normaliseManufacturer,
   normaliseText,
@@ -216,5 +217,95 @@ describe('checking a candidate against the shelf', () => {
       ignoreId: 'p0',
     });
     expect(matches.some((match) => match.kind === 'duplicate')).toBe(false);
+  });
+});
+
+describe('topping up a catalogue that already exists', () => {
+  const seedList = [
+    { name: 'Panadol', strength: '500mg', form: 'Tablet', manufacturer: 'GSK', formula: 'Paracetamol' },
+    { name: 'Brufen', strength: '400mg', form: 'Tablet', manufacturer: 'Abbott', formula: 'Ibuprofen' },
+    { name: 'Amaryl', strength: '2mg', form: 'Tablet', manufacturer: 'Sanofi', formula: 'Glimepiride' },
+  ];
+
+  const identify = (seed: (typeof seedList)[number]) => ({
+    name: seed.name,
+    strength: seed.strength,
+    form: seed.form,
+    manufacturer: seed.manufacturer,
+    formulaText: seed.formula,
+  });
+
+  const missing = (existing: MedicineIdentity[]) =>
+    missingFromCatalog(seedList, existing, identify).map((seed) => seed.name);
+
+  it('returns everything when the catalogue is empty', () => {
+    expect(missing([])).toEqual(['Panadol', 'Brufen', 'Amaryl']);
+  });
+
+  it('returns nothing when everything is already there', () => {
+    expect(missing(seedList.map(identify))).toEqual([]);
+  });
+
+  it('returns only what is genuinely absent', () => {
+    expect(missing([identify(seedList[0]!)])).toEqual(['Brufen', 'Amaryl']);
+  });
+
+  it('recognises a product somebody typed differently, and does not duplicate it', () => {
+    /*
+     * The damage a top-up must not cause. "0.5g tab" is the same medicine as
+     * "500mg Tablet"; adding a second Panadol beside it would split its stock,
+     * which is the exact failure the identity model exists to prevent — met
+     * here in the seed rather than at the counter.
+     */
+    expect(
+      missing([
+        {
+          name: 'panadol',
+          strength: '0.5g',
+          form: 'tab',
+          manufacturer: 'GSK',
+          formulaText: 'Paracetamol',
+        },
+      ]),
+    ).toEqual(['Brufen', 'Amaryl']);
+  });
+
+  it('does not treat another brand of the same molecule as already present', () => {
+    // Paracip is an alternative, not the same product. Skipping Panadol
+    // because Paracip exists would leave the demo missing a medicine.
+    expect(
+      missing([
+        {
+          name: 'Paracip',
+          strength: '500mg',
+          form: 'Tablet',
+          manufacturer: 'Cipla',
+          formulaText: 'Paracetamol',
+        },
+      ]),
+    ).toEqual(['Panadol', 'Brufen', 'Amaryl']);
+  });
+
+  it('does not treat a different strength as already present', () => {
+    expect(
+      missing([
+        {
+          name: 'Panadol',
+          strength: '650mg',
+          form: 'Tablet',
+          manufacturer: 'GSK',
+          formulaText: 'Paracetamol',
+        },
+      ]),
+    ).toEqual(['Panadol', 'Brufen', 'Amaryl']);
+  });
+
+  it('leaves the products it finds untouched — it only ever reports absences', () => {
+    // The function returns items from the REFERENCE list, never from the
+    // existing one, so there is no path by which it can rewrite a price a
+    // developer changed on purpose.
+    const existing = [identify(seedList[0]!)];
+    const result = missingFromCatalog(seedList, existing, identify);
+    expect(result.every((item) => seedList.includes(item))).toBe(true);
   });
 });
