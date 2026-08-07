@@ -10,14 +10,16 @@
  *
  * ON THE STARTER PACK'S CONTENTS
  *
- * It carries the ~50 curated products Phase 11 §4 fixes, marked `verified`,
- * because those are the ones with hand-checked pack structures. That is the
- * *head* of Phase 6 §3's plan and not its breadth: the ~25k DRAP identity seed
- * is a data project with real lead time, and no amount of code substitutes for
- * it. Inventing thousands of plausible-looking medicines to fill the gap would
- * put unverified strengths in front of a pharmacist, which is the one thing a
- * medicine catalogue must never do — so the pipeline is built to accept that
- * data the day it exists, and ships honestly small until then.
+ * It carries the curated starter catalogue in `seed-data.ts` — ~150 of the
+ * most commonly stocked medicines and pharmacy products in Pakistan, each with
+ * a hand-checked, DRAP-cross-referenced pack structure — marked `verified`.
+ * That is the *head* of Phase 6 §3's plan and not its breadth: the ~25k DRAP
+ * identity seed is a data project with real lead time, and no amount of code
+ * substitutes for it. Inventing thousands of plausible-looking medicines to
+ * fill the gap would put unverified strengths in front of a pharmacist, which
+ * is the one thing a medicine catalogue must never do — so the pipeline is
+ * built to accept that data the day it exists, and every entry that ships is
+ * one whose identity was verified rather than guessed.
  *
  * Usage:
  *   npm run catalog:build -- --version 2026.08.1
