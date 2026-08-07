@@ -86,6 +86,36 @@ function step(message: string): void {
 }
 
 /**
+ * A build without a pinned Server Actions key ships an update time bomb.
+ *
+ * Next encrypts every Server Action reference with a key that, when
+ * `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` is unset, is generated randomly at build
+ * time. Each release then gets a different key, so the first thing a pharmacy
+ * that updates in place sees is a 404 on any form left open across the update —
+ * Save product, Pay, Settle — until the operator reloads. Pinning one stable
+ * key across releases removes it.
+ *
+ * A warning rather than a throw: a very first install has nothing older to be
+ * incompatible with, and failing the build would be a worse first experience
+ * than the risk it guards. It is loud, and it names the fix (I5).
+ */
+function warnIfServerActionsKeyMissing(): void {
+  if (process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY) return;
+  console.warn(
+    [
+      '',
+      '  ⚠ NEXT_SERVER_ACTIONS_ENCRYPTION_KEY is not set for this build.',
+      '    Next will bake a random Server Actions key into it, so a shop that',
+      '    updates in place will get a 404 on every open form until it reloads.',
+      '    Set a stable key (the SAME value for every release) before packaging:',
+      '',
+      '      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$(openssl rand -base64 32)',
+      '',
+    ].join('\n'),
+  );
+}
+
+/**
  * Refuse to build a package that would fail at the counter.
  *
  * `@node-rs/argon2` ships a per-platform binary chosen at install time. A build
@@ -170,6 +200,8 @@ async function main(): Promise<void> {
   step('Cleaning dist/package');
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
+
+  warnIfServerActionsKeyMissing();
 
   step('Building the Next.js standalone server');
   runNpm(['run', 'build']);
