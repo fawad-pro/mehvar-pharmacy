@@ -8,6 +8,8 @@ import 'server-only';
 
 import { asc, eq, ilike, inArray, or, sql, sum } from 'drizzle-orm';
 
+import { summariseBook } from '@/domain/udhaar/position';
+
 import type { TenantScope } from './scoped';
 import { customers, payments, saleReturns, sales } from './schema';
 
@@ -111,6 +113,9 @@ export interface CustomerPage {
   pageCount: number;
   /** Sum of positive balances across every matching customer, not just this page. */
   outstandingPaisa: number;
+  /** Advances paid ahead, reported beside the debt rather than against it. */
+  advancesPaisa: number;
+  customersOwing: number;
 }
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -166,10 +171,10 @@ export async function listCustomers(
   // Only debts count toward "owed to you" — a customer in credit (an overpaid
   // settlement, a return larger than the balance) does not offset someone
   // else's debt, and netting them would understate the book.
-  const outstandingPaisa = sorted.reduce(
-    (running, row) => running + Math.max(0, row.balancePaisa),
-    0,
-  );
+  //
+  // Shared with the Day summary through `summariseBook`, which is the point:
+  // the two screens used to floor differently and label identically.
+  const book = summariseBook(sorted.map((row) => row.balancePaisa));
 
   const start = (page - 1) * pageSize;
   return {
@@ -178,7 +183,9 @@ export async function listCustomers(
     page,
     pageSize,
     pageCount: Math.max(1, Math.ceil(total / pageSize)),
-    outstandingPaisa,
+    outstandingPaisa: book.owedPaisa,
+    advancesPaisa: book.creditPaisa,
+    customersOwing: book.customersOwing,
   };
 }
 

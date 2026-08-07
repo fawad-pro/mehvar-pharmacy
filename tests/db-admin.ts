@@ -24,6 +24,18 @@ export async function adminQuery(sql: string, params: unknown[] = []): Promise<v
   await adminPool().query(sql, params);
 }
 
+/**
+ * The first column of the first row, for asking the server a question about
+ * itself — session counts, privilege checks — that the app connection cannot
+ * answer about its own state without changing it.
+ */
+export async function adminValue(sql: string, params: unknown[] = []): Promise<unknown> {
+  const result = await adminPool().query<Record<string, unknown>>(sql, params);
+  const row = result.rows[0];
+  if (row === undefined) return undefined;
+  return Object.values(row)[0];
+}
+
 /** Removes every row belonging to a test tenant, children first. */
 export async function purgeTenant(tenantId: string): Promise<void> {
   const tables = [

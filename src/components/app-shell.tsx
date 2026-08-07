@@ -12,9 +12,10 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { useGlobalKeys } from '@/client/keyboard/use-global-keys';
-import { F8Provider, useF8Registry } from '@/client/keyboard/f8-context';
+import { UdhaarKeyProvider, useUdhaarKeyRegistry } from '@/client/keyboard/udhaar-key-context';
 import { ReceiptContextProvider } from '@/client/receipt/receipt-context';
 import { SyncProvider } from '@/client/sync/provider';
+import { RefreshOnSync } from '@/client/sync/refresh-on-sync';
 import { ServiceWorker } from '@/client/sync/service-worker';
 
 import { KeyBar } from './key-bar';
@@ -44,7 +45,7 @@ export function AppShell({
   const router = useRouter();
   const [switching, setSwitching] = useState(false);
   const [settling, setSettling] = useState(false);
-  const { register, dispatch } = useF8Registry();
+  const { register, dispatch } = useUdhaarKeyRegistry();
 
   const handlers = useMemo(
     () => ({
@@ -52,9 +53,10 @@ export function AppShell({
         setSwitching(true);
       },
       onUdhaar: () => {
-        // Defect C5: the Sale surface takes F8 for itself when the cart has
-        // items (attach customer, W2); with nothing registered — an empty
-        // cart, or any other screen — this is the fallback (Settle Udhaar, W3).
+        // Defect C5: the Sale surface takes the udhaar key for itself when
+        // the cart has items (attach customer, W2); with nothing registered
+        // — an empty cart, or any other screen — this is the fallback
+        // (Settle Udhaar, W3).
         dispatch(() => {
           setSettling(true);
         });
@@ -90,6 +92,9 @@ export function AppShell({
     <ReceiptContextProvider tenantId={tenantId}>
       <SyncProvider tenantId={tenantId}>
         <ServiceWorker />
+        {/* Every screen re-reads when the outbox lands a record — see the
+            component's own note. Mounted here so no surface has to know. */}
+        <RefreshOnSync />
 
         <div className="flex h-screen flex-col">
           <TopBar
@@ -102,9 +107,9 @@ export function AppShell({
             }}
           />
 
-          <F8Provider register={register}>
+          <UdhaarKeyProvider register={register}>
             <main className="min-h-0 flex-1 overflow-auto">{children}</main>
-          </F8Provider>
+          </UdhaarKeyProvider>
 
           <KeyBar role={userRole} />
 

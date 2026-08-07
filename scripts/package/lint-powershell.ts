@@ -1,0 +1,480 @@
+/**
+ * `npm run lint:ps` — check the Windows packaging scripts.
+ *
+ * Nothing in the toolchain looked at `packaging/windows/*.ps1` at all: no
+ * parser, no linter, no test. They were authored on Linux, and the first thing
+ * to read them critically was a Windows machine at the far end of a
+ * round-trip. Two of the bugs that cost round-trips were mechanically
+ * detectable from a checkout.
+ *
+ * Two levels, deliberately:
+ *
+ *   1. **Static checks**, which run everywhere including CI on Linux. They
+ *      encode the specific mistakes already made, so those cannot come back.
+ *   2. **A full parse**, when PowerShell is installed. Skipped with a warning
+ *      otherwise — the same posture `db:grants` takes without `APP_DB_ROLE`,
+ *      and the same caveat applies: skipping is not passing.
+ */
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const scriptDir = join(root, 'packaging', 'windows');
+
+interface Finding {
+  file: string;
+  line: number;
+  message: string;
+}
+
+/**
+ * Blank out comments, keeping line numbers intact.
+ *
+ * Both kinds matter: `<# … #>` blocks as well as `#` to end of line. The rules
+ * below are documented in block comments that necessarily *mention* the thing
+ * they forbid — a checker that reads those as violations flags its own
+ * explanation, which is how the first version of this file behaved.
+ */
+function stripComments(source: string): string {
+  const withoutBlocks = source.replace(/<#[\s\S]*?#>/g, (match) =>
+    // Preserve the newlines so reported line numbers stay true.
+    '\n'.repeat((match.match(/\n/g) ?? []).length),
+  );
+  return withoutBlocks
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, ''))
+    .join('\n');
+}
+
+/**
+ * `$PSScriptRoot` inside a `param(...)` block.
+ *
+ * Parameter defaults are evaluated during binding, where `$PSScriptRoot` can
+ * be empty — and `Join-Path` throws on an empty `-Path`, so the script dies
+ * before its first line with an error naming `Join-Path` and nothing else.
+ * This is exactly how `fetch-runtimes.ps1` failed on Windows.
+ */
+function checkScriptRootInParamBlock(file: string, source: string): Finding[] {
+  const lines = stripComments(source).split('\n');
+  const findings: Finding[] = [];
+
+  let depth = 0;
+  let inParams = false;
+
+  lines.forEach((line, index) => {
+    const code = line;
+
+    if (!inParams && /^\s*param\s*\(/i.test(code)) {
+      inParams = true;
+      depth = 0;
+    }
+
+    if (inParams) {
+      if (/\$PSScriptRoot/i.test(code)) {
+        findings.push({
+          file,
+          line: index + 1,
+          message:
+            '$PSScriptRoot in a param() block — it can be empty during binding. ' +
+            'Bind the parameter empty and resolve it in the body instead.',
+        });
+      }
+
+      depth += (code.match(/\(/g) ?? []).length;
+      depth -= (code.match(/\)/g) ?? []).length;
+      if (depth <= 0 && /\)/.test(code)) inParams = false;
+    }
+  });
+
+  return findings;
+}
+
+/**
+ * `Join-Path $env:SOMETHING` without a null guard.
+ *
+ * `Join-Path` throws on a null or empty `-Path`, and environment variables are
+ * not guaranteed: `LOCALAPPDATA` and `TEMP` are unset for some service
+ * accounts, and none of them exist off Windows. This class has now bitten
+ * three times — `$env:LOCALAPPDATA` in `fetch-runtimes.ps1`, `$env:TEMP` in
+ * `install-services.ps1`, and `$env:LOCALAPPDATA` in a `counter-shortcut.ps1`
+ * parameter default — each time as an exception thrown before the script did
+ * any of its own work.
+ *
+ * Guard the variable, or use an API that cannot return null
+ * (`[System.IO.Path]::GetTempPath()`, `[Environment]::GetFolderPath(...)`).
+ */
+function checkUnguardedEnvPaths(file: string, source: string): Finding[] {
+  const findings: Finding[] = [];
+
+  stripComments(source)
+    .split('\n')
+    .forEach((line, index) => {
+      const match = /Join-Path\s+\$env:(\w+)/i.exec(line);
+      if (match === null) return;
+
+      findings.push({
+        file,
+        line: index + 1,
+        message:
+          `Join-Path over $env:${match[1] ?? ''} — Join-Path throws when the variable ` +
+          'is unset. Guard it, or use an API that cannot return null.',
+      });
+    });
+
+  return findings;
+}
+
+/**
+ * No non-ASCII bytes in a `.ps1`.
+ *
+ * This is the rule that would have prevented the second failed Windows
+ * install, and it is not about tidiness.
+ *
+ * Windows PowerShell 5.1 — which is what `powershell.exe` is, and what the
+ * installer runs — decodes a `.ps1` with no byte-order mark using the system
+ * ANSI code page, NOT UTF-8. An em dash written as UTF-8 `E2 80 94` therefore
+ * arrives as three ANSI characters, the last of which is U+201D. PowerShell
+ * accepts curly quotes as string delimiters, so a dash inside a double-quoted
+ * string CLOSES THE STRING, and the file fails to parse.
+ *
+ * A script that fails to parse runs no line at all. That is why the installer
+ * produced no log: there was nothing wrong with the logging, and nothing the
+ * script could have done, because the script never started.
+ *
+ * `pwsh` reads `.ps1` as UTF-8 and parses these files happily, which is
+ * precisely why the earlier check passed. Verifying on the wrong runtime is
+ * the same mistake as verifying on the wrong platform.
+ *
+ * ASCII-only is the fix that needs no BOM handling and cannot regress.
+ */
+function checkAsciiOnly(file: string, source: string): Finding[] {
+  const findings: Finding[] = [];
+
+  source.split('\n').forEach((line, index) => {
+    const match = /[^\x00-\x7F]/.exec(line);
+    if (match === null) return;
+
+    const char = match[0] ?? '';
+    findings.push({
+      file,
+      line: index + 1,
+      message:
+        `non-ASCII character ${JSON.stringify(char)} (U+${(char.codePointAt(0) ?? 0)
+          .toString(16)
+          .toUpperCase()
+          .padStart(4, '0')}) at column ${match.index + 1}. ` +
+        'Windows PowerShell 5.1 reads .ps1 as ANSI, which can turn this into a ' +
+        'string delimiter and stop the whole file parsing. Use ASCII.',
+    });
+  });
+
+  return findings;
+}
+
+/**
+ * Registering the counter service without WinSW.
+ *
+ * Two failures live here, and only the second is fatal to the approach.
+ *
+ * `sc.exe create ... binPath=` failed with exit 1639: Windows has no argv, so
+ * PowerShell serialises the argument array back into one command-line string
+ * for sc.exe to re-parse, and a value holding both spaces and quotes acquires
+ * backslash-escaped quotes sc.exe's parser does not implement.
+ *
+ * `New-Service` fixes that — and still produces a service that cannot start. A
+ * Windows service image must call `StartServiceCtrlDispatcher` and answer the
+ * Service Control Manager within about thirty seconds; `node.exe` never does,
+ * so the SCM kills it with 1053 however it was registered.
+ *
+ * WinSW is service-aware and runs node as a supervised child. Other `sc.exe`
+ * verbs (`delete`) stay allowed: their arguments are literals with no spaces,
+ * quotes or paths, the only shape that cannot be mangled.
+ */
+function checkScCreate(file: string, source: string): Finding[] {
+  const findings: Finding[] = [];
+
+  stripComments(source)
+    .split('\n')
+    .forEach((line, index) => {
+      const scCreate =
+        /\bsc(?:\.exe)?\b/i.test(line) &&
+        /\b(create|config)\b/i.test(line) &&
+        /binPath\s*=/i.test(line);
+      const newService = /\bNew-Service\b/i.test(line);
+
+      if (!scCreate && !newService) return;
+
+      findings.push({
+        file,
+        line: index + 1,
+        message: scCreate
+          ? 'sc.exe create/config with binPath= — PowerShell re-serialises the ' +
+            'value into a command line sc.exe cannot parse (exit 1639), and the ' +
+            'resulting service could not start anyway (1053). WinSW registers ' +
+            'the service: MehvarNode.exe install.'
+          : 'New-Service registers node.exe as a service directly, which cannot ' +
+            'start: a service image must answer the SCM within ~30s and node ' +
+            'never does (1053). WinSW hosts it instead: MehvarNode.exe install.',
+      });
+    });
+
+  return findings;
+}
+
+/**
+ * Block comments must be closed.
+ *
+ * An unterminated `<#` swallows the rest of the file, and PowerShell reports it
+ * as a syntax error at the last line — nowhere near the cause.
+ */
+function checkBlockComments(file: string, source: string): Finding[] {
+  const opens = (source.match(/<#/g) ?? []).length;
+  const closes = (source.match(/#>/g) ?? []).length;
+  if (opens === closes) return [];
+
+  return [
+    {
+      file,
+      line: 1,
+      message: `${opens} block comment(s) opened with <# but ${closes} closed with #>.`,
+    },
+  ];
+}
+
+/** PowerShell, if this machine has it. `pwsh` is Core; `powershell` is 5.1. */
+function findPowerShell(): string | undefined {
+  for (const candidate of ['pwsh', 'powershell']) {
+    try {
+      execFileSync(candidate, ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], {
+        stdio: 'ignore',
+      });
+      return candidate;
+    } catch {
+      // Not installed, or not on PATH. Try the next one.
+    }
+  }
+  return undefined;
+}
+
+function parseWithPowerShell(shell: string, files: string[]): Finding[] {
+  const script = `
+    $ErrorActionPreference = 'Stop'
+    $results = @()
+    foreach ($path in @(${files.map((file) => `'${file.replace(/'/g, "''")}'`).join(',')})) {
+      $errors = $null
+      [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$null, [ref]$errors)
+      foreach ($e in $errors) {
+        $results += [pscustomobject]@{
+          file = $path
+          line = $e.Extent.StartLineNumber
+          message = $e.Message
+        }
+      }
+    }
+    $results | ConvertTo-Json -Compress -AsArray
+  `;
+
+  const output = execFileSync(shell, ['-NoProfile', '-Command', script], {
+    encoding: 'utf8',
+  }).trim();
+
+  if (output === '' || output === '[]') return [];
+
+  const parsed: unknown = JSON.parse(output);
+  if (!Array.isArray(parsed)) return [];
+
+  return parsed.flatMap((entry): Finding[] => {
+    if (typeof entry !== 'object' || entry === null) return [];
+    const row = entry as Record<string, unknown>;
+    if (typeof row.file !== 'string' || typeof row.message !== 'string') return [];
+    return [{ file: row.file, line: Number(row.line ?? 1), message: row.message }];
+  });
+}
+
+/**
+ * Cross-file consistency for `mehvar.iss`.
+ *
+ * The Inno Setup script cannot be compiled outside Windows, so nothing here
+ * reads it at all. These are the mistakes that have actually happened: a
+ * `[Icons]` entry pointing at a file nothing creates, and `[UninstallDelete]`
+ * still naming `{app}\bin` after the compiled scripts moved inside `app\`.
+ *
+ * Deliberately shallow. This is not a parser and should not grow into one —
+ * the compiler on the Windows box is the real check.
+ */
+function checkInnoSetupScript(file: string, source: string, wrapperNames: string[]): Finding[] {
+  const findings: Finding[] = [];
+  const lines = source.split('\n');
+
+  lines.forEach((line, index) => {
+    if (line.trimStart().startsWith(';')) return;
+
+    // Paths under {app} that Setup neither installs nor is told to create.
+    const target = /Filename:\s*"\{app\}\\([^"\\]+\.cmd)"/i.exec(line);
+    if (target !== null) {
+      const name = target[1];
+      if (name !== undefined && !wrapperNames.includes(name)) {
+        findings.push({
+          file,
+          line: index + 1,
+          message:
+            `[Icons] points at {app}\\${name}, which install-services.ps1 does not write. ` +
+            'The shortcut would dangle.',
+        });
+      }
+    }
+
+    // `bin\` moved inside `app\`; a bare {app}\bin is left over from before.
+    if (/Name:\s*"\{app\}\\bin"/i.test(line)) {
+      findings.push({
+        file,
+        line: index + 1,
+        message: '{app}\\bin no longer exists — the compiled scripts live in {app}\\app\\bin.',
+      });
+    }
+  });
+
+  return findings;
+}
+
+/** The `.cmd` files install-services.ps1 writes into the install root. */
+function installedWrappers(source: string): string[] {
+  return [...source.matchAll(/Join-Path \$InstallDir '([^']+\.cmd)'/g)]
+    .map((match) => match[1])
+    .filter((name): name is string => name !== undefined);
+}
+
+/** The sibling `.ps1` files a script dot-sources at run time. */
+function dotSourcedLibraries(source: string): string[] {
+  return [...source.matchAll(/^\s*\.\s+\(Join-Path \$\w+ '([^']+\.ps1)'\)/gm)]
+    .map((match) => match[1])
+    .filter((name): name is string => name !== undefined);
+}
+
+/**
+ * A dot-sourced library must be installed alongside the script that sources it.
+ *
+ * `verify-install.ps1` sources `lib-verify.ps1`; `install-services.ps1` sources
+ * `lib-service.ps1`. Ship the sourcing script without its library and the whole
+ * step dies at its first line — a failure identical in shape to the parse error
+ * that produced no log at all, and equally invisible until an install.
+ *
+ * Only scripts `mehvar.iss` actually installs are checked, so a dev-only suite
+ * that sources a library is not required to be shipped.
+ */
+function checkDotSourcedLibrariesAreShipped(issSource: string, scriptSources: Map<string, string>) {
+  const shipped = new Set(
+    [...issSource.matchAll(/Source:\s*"\{#ScriptsDir\}([^"]+\.ps1)"/g)]
+      .map((match) => match[1])
+      .filter((name): name is string => name !== undefined),
+  );
+
+  const findings: Finding[] = [];
+  for (const name of shipped) {
+    const source = scriptSources.get(name);
+    if (source === undefined) continue;
+
+    for (const library of dotSourcedLibraries(source)) {
+      if (shipped.has(library)) continue;
+      findings.push({
+        file: 'mehvar.iss',
+        line: 1,
+        message:
+          `[Files] installs ${name}, which dot-sources ${library} — but ${library} is ` +
+          'not installed. The script would fail at its first line, on the shop machine only.',
+      });
+    }
+  }
+  return findings;
+}
+
+function main(): void {
+  const files = readdirSync(scriptDir)
+    .filter((name) => name.endsWith('.ps1'))
+    .sort();
+
+  if (files.length === 0) {
+    console.log('No PowerShell scripts to check.');
+    return;
+  }
+
+  const findings: Finding[] = [];
+  const sources = new Map<string, string>();
+  for (const name of files) {
+    const source = readFileSync(join(scriptDir, name), 'utf8');
+    sources.set(name, source);
+    findings.push(...checkAsciiOnly(name, source));
+    findings.push(...checkScriptRootInParamBlock(name, source));
+    findings.push(...checkUnguardedEnvPaths(name, source));
+    findings.push(...checkScCreate(name, source));
+    findings.push(...checkBlockComments(name, source));
+  }
+
+  const issName = 'mehvar.iss';
+  const issPath = join(scriptDir, issName);
+  if (existsSync(issPath)) {
+    const issSource = readFileSync(issPath, 'utf8');
+    const wrappers = installedWrappers(
+      readFileSync(join(scriptDir, 'install-services.ps1'), 'utf8'),
+    );
+    findings.push(...checkInnoSetupScript(issName, issSource, wrappers));
+    findings.push(...checkDotSourcedLibrariesAreShipped(issSource, sources));
+  }
+
+  const shell = findPowerShell();
+
+  if (shell !== undefined) {
+    /*
+     * The behavioural suites, RUN rather than merely parsed. Each exists
+     * because the thing it pins failed on real hardware and no static check
+     * could have seen it:
+     *
+     *   service-descriptor  sc.exe exit 1639 — a malformed argument string.
+     *   verify-checks       a passing ADR-1 guarantee reported as a failure,
+     *                       because $ErrorActionPreference = 'Stop' turned
+     *                       psql's own diagnostics into a terminating error
+     *                       before the exit code could be read.
+     */
+    for (const name of ['service-descriptor.tests.ps1', 'verify-checks.tests.ps1']) {
+      const suite = join(scriptDir, name);
+      if (!existsSync(suite)) continue;
+      try {
+        execFileSync(shell, ['-NoProfile', '-File', suite], { stdio: 'inherit' });
+      } catch {
+        findings.push({ file: name, line: 1, message: 'assertions FAILED (output above).' });
+      }
+    }
+  }
+
+  if (shell === undefined) {
+    console.log(
+      'PowerShell is not installed — syntax parsing SKIPPED.\n' +
+        'Static checks ran, but skipping is not passing: a syntax error would\n' +
+        'not be caught here. Install PowerShell, or rely on the Windows build.',
+    );
+  } else {
+    findings.push(
+      ...parseWithPowerShell(
+        shell,
+        files.map((name) => join(scriptDir, name)),
+      ),
+    );
+  }
+
+  if (findings.length > 0) {
+    for (const finding of findings) {
+      console.error(`${finding.file}:${finding.line}  ${finding.message}`);
+    }
+    console.error(`\n${findings.length} problem(s) in packaging/windows.`);
+    process.exit(1);
+  }
+
+  console.log(
+    `${files.length} PowerShell script(s) + mehvar.iss checked` +
+      (shell === undefined ? ' (static only).' : `, PowerShell parsed with ${shell}.`),
+  );
+}
+
+main();

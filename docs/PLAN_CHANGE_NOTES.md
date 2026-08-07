@@ -154,7 +154,7 @@ recommendation below, pending your decision**
 
 A settlement is a standalone `payments` row (`sale_id` null) — Phase 5 §3's own
 definition: "money received from a customer independent of a new sale." Phase
-10 §7 requires *that same row* to print a receipt with a footer showing "the
+10 §7 requires _that same row_ to print a receipt with a footer showing "the
 receipt number." There is nowhere to put one: `payments` has no such column, and
 borrowing a `sales` row is not an option — a settlement is not a sale, and the
 schema's own CHECK constraints (`cash + credit = total`) would make a fabricated
@@ -267,10 +267,11 @@ payments.
 
 ---
 
+## Decided notes
+
 ## PCN-004 — the product is to be installed in the shop, but Phase 3 decided cloud
 
-Session: 9 · Raised: 2026-08-03 · Status: **open — nothing implemented,
-awaiting your decision**
+Session: 9 · Raised: 2026-08-03 · **Decided: 2026-08-03 — accepted (Option A)**
 
 Unlike PCN-001–003, this note implements nothing. Those were gaps found while
 building something the plan had already decided. This is a reversal of a
@@ -312,7 +313,7 @@ promoting E from deferred to primary, and inverting which deployment leads.
 Two things survive the change unchanged and are worth naming, because they are
 what makes it affordable:
 
-- **The commercial model.** Option C's fatal flaw was perpetual *licensing*.
+- **The commercial model.** Option C's fatal flaw was perpetual _licensing_.
   Nothing here proposes that; billing stays a subscription exactly as Phase 3 §3
   decided.
 - **The tenant chokepoint.** Phase 3 §5.1's intent is preserved by keeping
@@ -329,7 +330,7 @@ answered at all — the Windows support burden is accepted, not eliminated
 **A. Promote Option E; local-first with optional cloud.** Recommended. Local
 Node deployment leads; cloud services are additive and never on the sale path;
 cloud-hosted tenants remain available in the same image for customers who prefer
-them. Phase 3 §3's *commercial* decisions are untouched. Cost: an installer, an
+them. Phase 3 §3's _commercial_ decisions are untouched. Cost: an installer, an
 auto-updater, local backups, and a permanent Windows support surface. The owner's
 remote visibility (Phase 3 §5.5) is lost until roadmap Phase 3 restores it —
 a real, time-boxed regression against a charter promise.
@@ -360,15 +361,39 @@ independent installations mergeable. Neither was designed for this and both work
 The decision that would be wrong is C: reversing Phase 3 by doing more, rather
 than by doing the deferred thing that was already scoped.
 
-### Nothing implemented
+### Nothing implemented at the time of filing
 
-By design. Phase 0 of the roadmap is this note.
+By design. Phase 0 of the commercialization roadmap is this note.
 
 ### Decision
 
-_Awaiting review._
+**Accepted, 2026-08-03 — Option A.** Local-first with optional cloud; Option E
+promoted from deferred to primary.
 
-### Suggested plan amendment if accepted
+The founder's rationale, recorded because a future session will need to know it
+was a considered reversal and not drift: local deployment is now a product
+requirement, not a preference. The architecture supports it at unusually low
+cost — ADR-3's offline outbox already supplies the "what happens during the
+upgrade" story, and UUIDv7 ids already keep installations mergeable — and the
+commercial model in Phase 3 §3 is untouched. The Windows support burden
+(objection 3) is accepted with open eyes as a standing liability, not treated as
+solved; it is carried as open question 1 in the research note and is to be
+validated against real pharmacy hardware before pharmacy #4.
+
+Two refinements were directed at the same time and are applied in the research
+note: roadmap Phases 1 and 2 merged into a single **First Paying Pharmacy**
+phase whose milestone is that a non-technical pharmacy can install and trade
+without developer tools, and an explicit design principle (§0.1) requiring every
+decision to serve the first pharmacy while remaining evolvable to the hundredth
+without an architectural rewrite.
+
+### Applied
+
+- Master-plan amendments below applied to the source phases, per the C1–C5
+  precedent (Phase 3 §2/§3/§5.1/§6, Phase 12 §1/§2/§3).
+- `docs/research/commercialization.md` — roadmap frozen; Phase 1 in progress.
+
+### Plan amendment (accepted)
 
 - **Phase 3 §2** — Option E moves from "Deferred" to the decided option; Options
   C and D keep their rejections, with a line noting which objections Option A
@@ -377,7 +402,7 @@ _Awaiting review._
   installed per pharmacy, with optional cloud services and optional cloud
   hosting, one codebase." Pricing, collection, hardware and channel unchanged.
 - **Phase 3 §5.1** — reworded: the tenant chokepoint ships from day one in every
-  install; multi-*tenancy* becomes a deployment option rather than a deployment
+  install; multi-_tenancy_ becomes a deployment option rather than a deployment
   fact.
 - **Phase 3 §6** — Option E leaves Future Considerations.
 - **Phase 12 §1** — topology gains the local Node; Railway is retained for
@@ -386,12 +411,6 @@ _Awaiting review._
   precondition; §2.1's deep-night window becomes per-installation.
 - **Phase 12 §3** — backups gain the local nightly dump; the offsite requirement
   is explicitly time-boxed to roadmap Phase 3.
-
----
-
-## Decided notes
-
-_None._
 
 ---
 

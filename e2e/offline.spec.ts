@@ -112,7 +112,7 @@ test('W2 offline: a new customer and an udhaar sale both queue, and land in orde
   // "udhaar is extended mid-rush, not pre-registered", which ADR-3 keeps
   // working by naming W2.
   const name = `Offline Customer ${Date.now()}`;
-  await page.keyboard.press('F8');
+  await page.keyboard.press('F4');
   const picker = page.getByRole('dialog', { name: 'Attach customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
@@ -136,7 +136,7 @@ test('W2 offline: a new customer and an udhaar sale both queue, and land in orde
   await expect(unsynced(page)).toBeHidden({ timeout: 20_000 });
 
   // The proof it truly reconciled: the customer and the debt are on the server.
-  await page.keyboard.press('F4');
+  await page.keyboard.press('F3');
   await expect(page).toHaveURL(/\/customers$/);
   await expect(page.getByRole('link', { name })).toBeVisible();
 });
@@ -174,7 +174,7 @@ test('W6 offline: an unknown product becomes a real line without leaving the sal
   await expect(unsynced(page)).toBeHidden({ timeout: 20_000 });
 
   // D3's guardrail: it landed flagged, so the completion queue nags for it.
-  await page.keyboard.press('F3');
+  await page.keyboard.press('F5');
   await expect(page).toHaveURL(/\/products$/);
   await expect(page.getByText(/need(s)? completing/).first()).toBeVisible();
 });

@@ -8,9 +8,10 @@
  *    extended, not after.
  *
  * One component serves both places a customer needs picking: attaching one to
- * a sale (F8 with items in the cart, W2) and finding one to settle (F8 on an
- * empty cart, W3). Type-ahead first; a name that matches nothing offers
- * "Add <name>" as the natural next step rather than a separate form.
+ * a sale (the udhaar key with items in the cart, W2) and finding one to
+ * settle (the udhaar key on an empty cart, W3). Type-ahead first; a name that
+ * matches nothing offers "Add <name>" as the natural next step rather than a
+ * separate form.
  */
 
 import { useEffect, useRef, useState } from 'react';

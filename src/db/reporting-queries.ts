@@ -13,16 +13,20 @@
 
 import 'server-only';
 
-import { desc, eq, gte, lt, ne, sql, sum } from 'drizzle-orm';
+import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
+
+import { summariseBook } from '@/domain/udhaar/position';
 
 import type { TenantScope } from './scoped';
 import {
   adjustments,
+  batches,
   cashMovements,
   payments,
   products,
   saleLineAllocations,
   saleLines,
+  saleReturnLines,
   saleReturns,
   sales,
   users,
@@ -33,9 +37,39 @@ import {
 /* ========================================================================== */
 
 export interface ThreeNumbers {
+  /**
+   * Sold, minus what came back — NET, and the only "sales" figure in the
+   * product.
+   *
+   * It used to be gross, while `reportFigures.revenuePaisa` was the identical
+   * gross query under a second name; the Day screen printed both, as "Sales
+   * today" and "Revenue", showing one number twice and inviting the owner to
+   * hunt for a difference that did not exist. Both are now net and there is
+   * one of them.
+   *
+   * Net because the question is the day's health. Selling Rs 10,000 and
+   * refunding Rs 4,000 is not a Rs 10,000 day, and a figure that says so is
+   * one the owner has to mentally correct before it means anything.
+   */
   readonly salesPaisa: number;
+  /** What was refunded in the range, so the label above can explain itself. */
+  readonly salesReturnedPaisa: number;
   readonly expectedCashPaisa: number;
-  readonly udhaarTotalPaisa: number;
+  /**
+   * Money out on the street: Σ of the balances that are OWED, floored per
+   * customer at zero. Never negative.
+   *
+   * This used to be a single netted subtraction across the whole book, which
+   * disagreed with the customers list — that screen has always floored each
+   * balance before summing, on the grounds that "a customer in credit does not
+   * offset someone else's debt, and netting them would understate the book".
+   * Both screens now use `summariseBook`, so one label cannot mean two things.
+   */
+  readonly udhaarOwedPaisa: number;
+  /** Advances customers have paid ahead. Reported beside the debt, never against it. */
+  readonly udhaarCreditPaisa: number;
+  readonly customersOwing: number;
+  readonly customersInCredit: number;
 }
 
 /**
@@ -61,7 +95,10 @@ export async function threeNumbers(
     .where(scope.scopeOf(payments, gte(payments.createdAt, from), lt(payments.createdAt, to)));
 
   const [returnsRow] = await scope.db
-    .select({ cashOut: sum(saleReturns.cashOutPaisa).as('cashOut') })
+    .select({
+      cashOut: sum(saleReturns.cashOutPaisa).as('cashOut'),
+      refunded: sql<string>`sum(${saleReturns.cashOutPaisa} + ${saleReturns.creditReducedPaisa})`,
+    })
     .from(saleReturns)
     .where(
       scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
@@ -91,20 +128,50 @@ export async function threeNumbers(
       ),
     );
 
-  const [creditExtended] = await scope.db
-    .select({ total: sum(sales.creditPaisa).as('total') })
-    .from(sales)
-    .where(scope.scopeOf(sales));
+  /*
+   * The udhaar position, PER CUSTOMER before it is summed.
+   *
+   * Grouping is the whole point. Summing the three terms globally and
+   * subtracting produces a net figure across the entire book, and one customer
+   * holding an advance then cancels another customer's debt — which is how the
+   * day summary came to report "-Rs 100 owed to you" while the customers list,
+   * which has always floored per customer, reported money outstanding.
+   *
+   * Always all-time, whatever the range: a debt is a position, not an event in
+   * a window. The Day surface labels it accordingly.
+   */
+  const [extendedRows, paidRows, reversedRows] = await Promise.all([
+    scope.db
+      .select({ customerId: sales.customerId, total: sum(sales.creditPaisa).as('total') })
+      .from(sales)
+      .where(scope.scopeOf(sales, isNotNull(sales.customerId)))
+      .groupBy(sales.customerId),
+    scope.db
+      .select({ customerId: payments.customerId, total: sum(payments.amountPaisa).as('total') })
+      .from(payments)
+      .where(scope.scopeOf(payments, isNotNull(payments.customerId)))
+      .groupBy(payments.customerId),
+    scope.db
+      .select({
+        customerId: sales.customerId,
+        total: sum(saleReturns.creditReducedPaisa).as('total'),
+      })
+      .from(saleReturns)
+      .innerJoin(sales, eq(saleReturns.saleId, sales.id))
+      .where(scope.scopeOf(saleReturns, isNotNull(sales.customerId)))
+      .groupBy(sales.customerId),
+  ]);
 
-  const [creditPaid] = await scope.db
-    .select({ total: sum(payments.amountPaisa).as('total') })
-    .from(payments)
-    .where(scope.scopeOf(payments));
+  const balances = new Map<string, number>();
+  const apply = (customerId: string | null, delta: number): void => {
+    if (customerId === null) return;
+    balances.set(customerId, (balances.get(customerId) ?? 0) + delta);
+  };
+  for (const row of extendedRows) apply(row.customerId, Number(row.total ?? 0));
+  for (const row of paidRows) apply(row.customerId, -Number(row.total ?? 0));
+  for (const row of reversedRows) apply(row.customerId, -Number(row.total ?? 0));
 
-  const [creditReversed] = await scope.db
-    .select({ total: sum(saleReturns.creditReducedPaisa).as('total') })
-    .from(saleReturns)
-    .where(scope.scopeOf(saleReturns));
+  const book = summariseBook(balances.values());
 
   const expectedCashPaisa =
     Number(salesRow?.cash ?? 0) +
@@ -113,13 +180,16 @@ export async function threeNumbers(
     Number(movementsIn?.total ?? 0) -
     Number(movementsOut?.total ?? 0);
 
+  const salesReturnedPaisa = Number(returnsRow?.refunded ?? 0);
+
   return {
-    salesPaisa: Number(salesRow?.total ?? 0),
+    salesPaisa: Number(salesRow?.total ?? 0) - salesReturnedPaisa,
+    salesReturnedPaisa,
     expectedCashPaisa,
-    udhaarTotalPaisa:
-      Number(creditExtended?.total ?? 0) -
-      Number(creditPaid?.total ?? 0) -
-      Number(creditReversed?.total ?? 0),
+    udhaarOwedPaisa: book.owedPaisa,
+    udhaarCreditPaisa: book.creditPaisa,
+    customersOwing: book.customersOwing,
+    customersInCredit: book.customersInCredit,
   };
 }
 
@@ -398,12 +468,15 @@ export async function lateSyncedInRange(
 /* ========================================================================== */
 
 export interface ReportFigures {
+  /** Sold, minus what came back. Never gross — see the note on `reportFigures`. */
   readonly revenuePaisa: number;
   readonly costPaisa: number;
   readonly marginPaisa: number;
   readonly saleCount: number;
   readonly unitsSold: number;
   readonly returnCount: number;
+  /** Refunded in the range, so the net figures can show their own adjustment. */
+  readonly returnedPaisa: number;
 }
 
 /**
@@ -412,6 +485,24 @@ export interface ReportFigures {
  * here) and pending allocations (`unit_cost_paisa` is null while pending, and
  * `sum()` skips nulls — an unresolved shortfall simply contributes no cost
  * until a purchase or count correction gives it one).
+ *
+ * And now about a third: RETURNS.
+ *
+ * Revenue and cost were both gross. `commitReturn` writes its own rows and
+ * touches neither the sale nor its allocations (correctly — ADR-1 forbids it),
+ * so a refunded sale kept contributing its full revenue and its full cost to
+ * this report forever. Margin is revenue minus cost, and removing a returned
+ * item takes away more revenue than cost — so the reported margin was strictly
+ * HIGHER than the real one.
+ *
+ * That is the exact failure Day 6 wrote a rule against when it made effective
+ * unit cost floor rather than round: "a reported margin is never better than
+ * the real one." The rule was right and this report was breaking it.
+ *
+ * Returns are subtracted in the range they HAPPENED, not the range of the sale
+ * they undo. A refund paid out of today's drawer is today's money leaving,
+ * which is already how `expectedCash` treats it — the two figures would
+ * otherwise disagree about the same event.
  */
 export async function reportFigures(
   scope: TenantScope,
@@ -443,14 +534,41 @@ export async function reportFigures(
     );
 
   const [returnsRow] = await scope.db
-    .select({ count: sql<string>`count(*)` })
+    .select({
+      count: sql<string>`count(*)`,
+      refunded: sql<string>`sum(${saleReturns.cashOutPaisa} + ${saleReturns.creditReducedPaisa})`,
+    })
     .from(saleReturns)
     .where(
       scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
     );
 
-  const revenuePaisa = Number(salesRow?.total ?? 0);
-  const costPaisa = Number(costRow?.total ?? 0);
+  /*
+   * The cost of what came back, valued at the batch it was restocked into.
+   *
+   * That batch is the one `restockToBatch` actually put the units in, so its
+   * unit cost is the cost the system really reversed — not a re-derivation from
+   * the original allocations, which could span several batches and would give a
+   * figure the inventory never used.
+   */
+  const [returnedCostRow] = await scope.db
+    .select({
+      total: sql<string>`sum(${saleReturnLines.qtyBase} * ${batches.unitCostPaisa})`,
+    })
+    .from(saleReturnLines)
+    .innerJoin(saleReturns, eq(saleReturnLines.saleReturnId, saleReturns.id))
+    .innerJoin(batches, eq(saleReturnLines.restockBatchId, batches.id))
+    .where(
+      scope.scopeOf(
+        saleReturnLines,
+        gte(saleReturns.createdAt, from),
+        lt(saleReturns.createdAt, to),
+      ),
+    );
+
+  const returnedPaisa = Number(returnsRow?.refunded ?? 0);
+  const revenuePaisa = Number(salesRow?.total ?? 0) - returnedPaisa;
+  const costPaisa = Number(costRow?.total ?? 0) - Number(returnedCostRow?.total ?? 0);
 
   return {
     revenuePaisa,
@@ -459,5 +577,6 @@ export async function reportFigures(
     saleCount: Number(salesRow?.count ?? 0),
     unitsSold: Number(unitsRow?.total ?? 0),
     returnCount: Number(returnsRow?.count ?? 0),
+    returnedPaisa,
   };
 }

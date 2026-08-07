@@ -51,7 +51,7 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(total(page)).toHaveText('35.00');
 
   // F8 with items in the cart attaches a customer (defect C5), not Settle Udhaar.
-  await page.keyboard.press('F8');
+  await page.keyboard.press('F4');
   const picker = page.getByRole('dialog', { name: 'Attach customer' });
   await expect(picker).toBeVisible();
 
@@ -112,7 +112,7 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
 
   // The cart is empty — F8 has nothing of its own to do, so it falls back to
   // the global Settle Udhaar overlay (defect C5).
-  await page.keyboard.press('F8');
+  await page.keyboard.press('F4');
   const picker = page.getByRole('dialog', { name: 'Settle udhaar' });
   await expect(picker).toBeVisible();
 
@@ -124,13 +124,38 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
   await expect(overlay).toContainText(name);
 
   await overlay.getByLabel('Amount paid').fill('50');
+
+  /*
+   * Said BEFORE it is committed, not after.
+   *
+   * Overpaying is legal and is recorded exactly as asked, but unannounced it
+   * produced the single most confusing thing in the product: a balance that
+   * appeared to move the wrong way after a payment. The rule is "never
+   * surprise", not "never allow".
+   */
+  await expect(overlay).toContainText('That is more than is owed');
+  await expect(overlay).toContainText('held as an advance');
+
   await page.keyboard.press('Enter');
 
-  await expect(overlay).toContainText('Previous balance');
-  await expect(overlay).toContainText('New balance');
-  // A brand-new customer has no debt yet; paying anyway leaves them in credit
-  // — Phase 5 invariant 3 has no floor (W3: overpayment is legal).
-  await expect(overlay).toContainText('-50.00');
+  // The slip speaks the position vocabulary: a balance is never a signed
+  // number with a minus sign, so "Previous/New balance" became "Before/Now".
+  await expect(overlay).toContainText('Before');
+  await expect(overlay).toContainText('Now');
+  /*
+   * A brand-new customer has no debt yet; paying anyway leaves them in credit.
+   * Overpayment is legal (W3 caps nothing) and the derivation still has no
+   * floor — Phase 5 invariant 3 is unchanged.
+   *
+   * What changed is how it is SAID. This used to assert "-50.00", and a
+   * balance rendered with a minus sign is exactly the thing that made the
+   * udhaar screens unreadable: "TOTAL OWED TO YOU -Rs 100.00" reads as the
+   * software having lost track of the money. The direction is now a word and
+   * the amount is always positive.
+   */
+  await expect(overlay).toContainText('advance');
+  await expect(overlay).toContainText('50.00');
+  await expect(overlay).not.toContainText('-50.00');
 
   await expect(receipt(page)).toContainText(name);
   await expect(receipt(page)).toContainText('Paid');

@@ -5,8 +5,9 @@
  * tenant's print header/footer (Phase 10 §7), fetched once per counter session
  * rather than once per surface.
  *
- * `AppShell` mounts this above every screen, so F8's Settle Udhaar (W3) can
- * mint a receipt number even when the operator never opened Sale first — the
+ * `AppShell` mounts this above every screen, so the udhaar key's Settle
+ * Udhaar (W3) can mint a receipt number even when the operator never opened
+ * Sale first — the
  * seeding this replaces used to live only in the Sale surface, which meant a
  * device that went straight to Customers had no seeded counter yet.
  */

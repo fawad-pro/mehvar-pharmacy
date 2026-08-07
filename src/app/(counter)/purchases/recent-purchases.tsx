@@ -18,6 +18,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 
+import Link from 'next/link';
+
 import { recentPurchasesAction } from './actions';
 
 /** Mirrors `PurchaseListItem`; declared here rather than imported, because a
@@ -60,7 +62,15 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
         <ul className="border-line divide-line divide-y rounded border text-sm">
           {rows.map((row) => (
             <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
-              <span className="font-medium">{row.supplierName ?? 'No supplier'}</span>
+              {/* Was a dead end: a supplier, a date and a total with nothing
+                  behind them, so "what actually came in?" had no answer. The
+                  invoice is a record you can open now, like a receipt. */}
+              <Link
+                href={`/purchases/${row.id}`}
+                className="text-green-700 font-medium hover:underline"
+              >
+                {row.supplierName ?? 'No supplier'}
+              </Link>
               {row.invoiceRef ? (
                 <span className="text-ink/60">invoice {row.invoiceRef}</span>
               ) : null}

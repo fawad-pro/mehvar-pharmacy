@@ -147,9 +147,19 @@ exception visibility.
 - **Extend the crown suite, never fork it.** Purchases (Day 6) and returns
   (Day 7) add event kinds to `applyRandomEvent`; the value is that one history
   mixes everything.
-- **Never build a verifier query with a correlated `sql` subquery.** Drizzle
-  renders the interpolated outer column unqualified, and it resolves silently
-  against the inner table. Use plain aggregates.
+- **Never build a query with a correlated `sql` subquery.** Drizzle renders
+  interpolated columns unqualified **when the outer query is a single table** —
+  `where ${saleReturns.saleId} = ${sales.id}` becomes `where "sale_id" = "id"`,
+  both bind to the inner table, and it counts zero forever without erroring.
+  Add a join to the outer query and the same expression renders correctly.
+  _Refined Day 9_: that condition is the trap's real shape, and it makes the
+  rule untestable by example — check it with one joined query and you will
+  conclude it is folklore. Both branches are pinned in
+  `db/drizzle-correlated-subquery.test.ts`. The rule stands for a sharper
+  reason than "Drizzle is broken": a correlated subquery is correct only while
+  its outer query keeps a join it does not own, so an unrelated edit can
+  silently falsify it. Use plain grouped aggregates, which depend on nothing
+  but themselves.
 
 ## Things Day 4 established
 
@@ -159,10 +169,12 @@ exception visibility.
 - **`sales` and `payments` share one receipt-number sequence** (PCN-002).
   `highestReceiptCounterAcrossReceipts` checks both tables; a writer that only
   checked `sales` would let a settlement collide with a sale's number.
-- **F8 is dispatched, never shared state.** `f8-context.tsx`'s registry is how
-  the Sale surface takes the key for itself (cart has items) without either
-  screen importing the other's internals; extend by registering a handler, not
-  by teaching `AppShell` about a new screen's state.
+- **The udhaar key is dispatched, never shared state.** `udhaar-key-context.tsx`
+  (renamed from `f8-context.tsx` on Day 16, once Udhaar itself had moved off
+  F8) is how the Sale surface takes the key for itself (cart has items)
+  without either screen importing the other's internals; extend by
+  registering a handler, not by teaching `AppShell` about a new screen's
+  state.
 - **The receipt is one shape for every receipt-producing event**
   (`ReceiptData` in `src/client/print/receipt.ts`). A settlement is a sale
   receipt with no `lines` — add a new receipt-producing event (returns, Day 7)
@@ -330,6 +342,215 @@ exception visibility.
 - **Keyboard-first is a claim about speed, not a licence to ignore the mouse.**
   The key bar is navigable now. Dismissal is per-overlay and deliberate:
   pickers dismiss on backdrop click, the payment overlay does not.
+
+## Things Day 9 established
+
+- **A place to do, a separate place to review.** `/receipts` and
+  `/purchases/[id]` are the review halves of Sale and Purchases; adjustment
+  history moved off Stock and onto Adjust. Stock browsing answers "what do I
+  have"; a log of corrections answers "what did we change" and belongs with the
+  screen that makes them. Reviewing must never enter a workflow that can change
+  something — the one control that does says so and navigates away.
+- **Two names for one query is a bug, not a presentation choice.**
+  `threeNumbers.salesPaisa` and `reportFigures.revenuePaisa` were the identical
+  SQL, printed on one screen as "Sales today" and "Revenue". There is now one
+  sales figure in the product and it is net of returns.
+- **A reported margin must never be better than the real one** — Day 6's rule,
+  which the report was breaking. `commitReturn` correctly touches neither the
+  sale nor its allocations (ADR-1), so refunded sales kept contributing full
+  revenue *and* full cost forever; since a sale earns more than it costs,
+  dropping the returned portion removes more revenue than cost and the gross
+  figure was strictly optimistic. Returns are subtracted in the range they
+  happened, matching how `expectedCash` already treats them.
+- **The key registry is only "one array" if the handler binds by meaning.** It
+  branched on the literal strings `'F8'` and `'F10'`, so reordering the bar
+  would have silently rewired what the keys did. Routeless keys now carry a
+  `dispatch` field, and `registry.test.ts` pins that every one of them has it.
+- **Ten keys with no pattern is ten things to memorise.** The bar is three
+  bands — counter (F1–F4), goods (F5–F8), owner (F9–F10) — ordered by how close
+  the task is to the customer, with a visible divider. A grouping nobody can
+  see is a comment, not a design.
+- **Six headings the owner has to total up is not a summary.** The exception
+  list is one banner naming the kinds, with the groups beneath as the answer
+  rather than the question. The empty state is a positive statement ("Nothing
+  needs a look today") because an absence reads as a missing section.
+
+## Things Day 10 established
+
+- **A pharmacy asks two questions about two medicines, and they are not the
+  same question.** `identityKey` (brand + strength + form + manufacturer)
+  answers "have I already got this?" and blocks. `equivalenceKey` (formula +
+  strength + form) answers "can I give this instead?" and only informs.
+  Merging Panadol and Paracip because they share a molecule would destroy real
+  inventory — they are alternatives a shop stocks on purpose.
+- **`875mg/125mg` and `125mg/5ml` are written identically and mean different
+  things.** Same dimension on both sides is a combination; different dimensions
+  is a concentration. Strength is parsed to integer micrograms/microlitres, not
+  compared as text, because a strength mix-up reaches a patient.
+- **Reduce for comparison, never for display.** A concentration reduced to
+  lowest terms is arithmetically identical and unreadable (`25mcg/1mcl`). The
+  parsed value keeps what the pack says (D4); `componentKey` does the reducing.
+- **A catalogue update must not need an application release.** Packs are
+  versioned data files (`domain/catalog/pack.ts`), applied idempotently on
+  identity so "run it again" is always safe advice. `format` (shape) and
+  `catalogVersion` (freshness) are separate numbers; a pack from a newer format
+  is REFUSED whole rather than partially imported.
+- **Importing a catalogue never changes a pharmacy's own products, prices or
+  stock.** Identity only, both because Phase 6 §2 says so and because a pack is
+  shared by every shop (T3).
+- **`uuidv7().slice(0, 8)` is not unique.** The first 48 bits of a v7 are a
+  millisecond timestamp, so the leading 8 hex characters change roughly once a
+  minute — two runs seconds apart produce identical "unique" values. Use the
+  tail, which is the random part.
+- **The shared-database rule has a second half.** `catalog_versions` and
+  `global_products` have no tenant column at all, so they accumulate across
+  every run, not just every test. Assert the property ("the older pack did not
+  become current"), never the value.
+
+## Things Day 11 established
+
+- **A success message that counts files is not a success message.** `db:migrate`
+  printed "Migrations applied (6 file(s))" whether it applied six or zero — the
+  number was `readdir().length`. It now names the target database and each
+  migration it actually applied, and says "already up to date" out loud.
+- **`migrate()` resolving is not evidence the schema is current.** It resolves
+  happily when it decides there is nothing to do, and that decision comes from
+  a table that can disagree with the journal (a stale `created_at` watermark is
+  enough). `assertJournalApplied` compares the journal to
+  `drizzle.__drizzle_migrations` afterwards and refuses, naming the migration.
+  Without it the symptom surfaces days later as "column does not exist" on an
+  unrelated page.
+- **PostgreSQL reports a MISSING role and a wrong password identically** —
+  `password authentication failed for user` — deliberately, so roles cannot be
+  enumerated. Anyone debugging a fresh install is therefore sent to check a
+  password that was never wrong. `db:grants` is the only thing that creates
+  `mehvar_app`, so `docker compose down -v` + migrate + seed leaves no role at
+  all.
+- **`npm run db:setup` is the supported fresh path**, one command, because the
+  three steps are not independent: grants creates the role that seed connects
+  as. `e2e:reset` and the README use it, so they cannot drift.
+- **Configure on every run, not only on create.** `db:grants` set the app role's
+  password only when creating the role, which quietly made `APP_DB_PASSWORD`
+  mean "the password to use if this role does not exist yet". Rotating it in
+  `.env` did nothing and the app failed authentication against a credential the
+  operator could see was correct.
+- **`dotenv/config` fills any variable the shell left unset.** Unsetting
+  `DATABASE_ADMIN_URL` to target a scratch database silently got `.env`'s value
+  instead — so a migration ran against a completely different database and
+  reported success. This cost a wrong diagnosis during this very session;
+  printing the target is what makes it visible.
+
+## Things Day 12 established
+
+- **A green component test proves nothing about the path to it.** Every
+  catalogue test passed while the Add Product picker found nothing on every
+  fresh install, because each test applied its OWN pack and then searched it.
+  `db:setup` never loaded the real one; the Windows installer did, and the
+  developer machine had it only because it was imported by hand while building.
+  A test that supplies its own fixture cannot notice the supply chain is
+  broken.
+- **This is the third repeat of the same mistake** (Day 8's unreachable W9, Day
+  10's unreachable global catalogue, this). The fix is a test aimed at the
+  PATH: `tests/setup-path.test.ts` reads the `db:setup` chain and names the
+  stage that went missing. Cheap, runs without a database, and catches a
+  re-omission on every run.
+- **An empty catalogue is a setup state, not a "no results" state.** Reporting
+  one as the other is what made this invisible for days: the operator was told
+  to try another spelling when no spelling would ever work. `searchCatalogAction`
+  returns `catalogLoaded` alongside the matches, and the picker says which
+  command to run.
+- **What ships to a pharmacy and what a developer gets must come from one
+  chain.** The installer applied the pack; `db:setup` did not. Both now build
+  from `seed-data.ts` and apply through `applyCatalogPack`.
+
+## Things Day 13 established
+
+- **The E2E suite had never once been run.** A build failure was reported as an
+  environment limitation and never rechecked; it was transient, and the real
+  blocker was a missing browser binary, which `PLAYWRIGHT_CHROMIUM_PATH` (already
+  supported by the config) solves. Four specs were failing — three from renames
+  and moves this work made, one from a genuine race. "Blocked by the
+  environment" is a claim with a shelf life; re-test it before repeating it.
+- **A debounced URL sync races the navigation it sits next to.** Typing a
+  receipt number schedules a `router.replace` 200ms out; clicking the result
+  inside that window pushed the detail page and the replace landed on top,
+  putting the operator back on the list. The fastest way to use the screen was
+  the one path that broke. Any screen that syncs search state to the URL must
+  cancel that sync when the operator navigates.
+- **An E2E failure after a UI change is the suite doing its job.** Three of the
+  four were labels and locations this work deliberately changed — "Running
+  udhaar total" → "Owed to you", adjustment history moving off Stock, the
+  settlement slip's "Previous/New balance" → "Before/Now". Update the spec to
+  the new intent; never weaken an assertion to make it pass.
+- **A spec asserting `-50.00` on a balance was asserting a bug.** It pinned the
+  minus sign the position vocabulary exists to remove.
+
+## Things Day 14 established
+
+- **A bootstrap command runs against databases people have been using for
+  weeks.** `db:seed` meant "create the demo pharmacy" and died on the unique
+  slug, taking `db:setup` with it and leaving the catalogue step unrun. It now
+  means "make sure the demo pharmacy exists and its catalogue is current".
+- **"Idempotent" here means the END STATE is safe to ask for again**, not that
+  the same statements can run twice. The split is deliberate: the tenant's
+  product catalogue is topped up (missing seed products added, matched on
+  `identityKey` so a differently-typed duplicate is never created, existing rows
+  never modified); sales, batches, cash movements, customers, users and devices
+  are created once and never again, because repeating them would double the
+  stock on every shelf and invent sales that never happened.
+- **`db:setup` must never be the destructive one.** `db:reset && db:setup` is
+  how a clean demo is asked for, and `setup-path.test.ts` pins that setup does
+  not itself reset.
+- **A top-up adds nothing it cannot add honestly.** New seed products arrive
+  with no opening stock; inventing batches on a database somebody has been
+  testing against would corrupt the figures they were testing.
+
+## Things Day 15 established
+
+- **A script that reaches the database loads `dotenv/config` first.** The two
+  catalogue scripts did not, so they read `.env` only when the shell already
+  exported `DATABASE_URL` and `SESSION_SECRET`. `db:setup` completed migrate,
+  grants and seed and then died in its last step — on a machine whose `.env` was
+  present and correct the whole time, which is why the report reasonably
+  suspected everything except the missing import.
+- **`catalog:build` passing told us nothing**, because it writes a file from a
+  static list and never calls `serverEnv()`. The half of a chain that needs
+  configuration is the half that must be tested with none.
+- **My own environment masked it, for the third time this month.** Day 12's
+  hand-imported pack, Day 14's already-seeded database, and now every command
+  in this session being prefixed with `export`. A clean-run reproduction
+  (`env -i PATH HOME`, `.env` as the only source) is now the standard for
+  anything on the setup path — not because Windows is different, but because a
+  developer shell is.
+- **`tests/script-env.test.ts` checks the class, not the two broken files.** It
+  walks the module graph from every npm-script entry point and requires dotenv
+  from any script that reaches `src/env`/`src/db` **or** names a variable
+  `.env.example` defines. Taking the variable list from the template means a new
+  one is covered without anyone remembering this test exists. Libraries are
+  excluded on purpose: `scripts/db/verify-all.ts` reaches the database and must
+  NOT load dotenv, because a module that reads `.env` as a side effect of being
+  imported is worse than the bug being prevented.
+
+## Things Day 16 established
+
+- **A hint that spells out a shortcut by hand can drift the moment the bar is
+  reordered.** Udhaar moved from F8 to F4 (Day 9), and `registry.test.ts`
+  pinned that the *handler* binds by dispatch meaning, but nothing pinned
+  that on-screen *text* did — the Sale surface and payment overlay kept
+  saying "F8" for months after the key moved. `keyFor(dispatch)` is now the
+  only way a hint may name a key; `hint-sourcing.test.ts` requires the four
+  known sites to call it and sweeps the rest of the source tree for the same
+  shape of bug (a dispatch key's meaning named next to a literal number)
+  reappearing anywhere else.
+- **A file named after a key is a hint that will also go stale.**
+  `f8-context.tsx` was renamed to `udhaar-key-context.tsx`, with every
+  export and comment describing the mechanism by meaning ("the udhaar key")
+  rather than by letter. The file compiling with a wrong name in it for
+  months is the same lesson as the hints, one level up.
+- **"Currently correct" is not evidence a hint is sourced correctly.** The
+  top bar's `<kbd>F10</kbd>` for Switch user, and a server action's "Press
+  F10 to switch user", were the identical bug — silent, only because that key
+  has not moved yet. Both now call `keyFor('switch-user')` too.
 
 ## Commits
 

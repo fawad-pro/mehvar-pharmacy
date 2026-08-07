@@ -8,9 +8,9 @@
  * server, never by hiding UI (Phase 12 §5).
  */
 
-import { revalidatePath } from 'next/cache';
 
 import { currentSession, scopeFor } from '@/auth/session';
+import { keyFor } from '@/client/keyboard/registry';
 import {
   addBarcode,
   createProduct,
@@ -19,9 +19,16 @@ import {
   setProductActive,
   type CatalogResult,
 } from '@/domain/catalog/writers';
-import { parsePackLevels, type ProductDraft } from '@/domain/catalog/product';
+import { globalCatalogSize, searchGlobalCatalog } from '@/db/catalog-queries';
+import {
+  parsePackLevels,
+  type CatalogSearchResult,
+  type ProductDraft,
+} from '@/domain/catalog/product';
 import { rupeesToPaisa } from '@/lib/money';
 import type { Uuid } from '@/lib/uuid';
+
+import { revalidateAfter } from '../revalidate';
 
 export type ActionState =
   { status: 'idle' } | { status: 'error'; message: string } | { status: 'saved' };
@@ -37,7 +44,9 @@ async function requireOwner() {
     return { error: 'This device needs to sign in again.' } as const;
   }
   if (session.userRole !== 'owner') {
-    return { error: 'Only the owner can change the catalog. Press F10 to switch user.' } as const;
+    return {
+      error: `Only the owner can change the catalog. Press ${keyFor('switch-user')} to switch user.`,
+    } as const;
   }
   return { session } as const;
 }
@@ -61,6 +70,7 @@ function draftFromForm(form: FormData): ProductDraft {
     mrpPaisa: mrp === '' ? null : rupeesToPaisa(Number(mrp)),
     minStockBaseUnits: minStock === '' ? null : Math.trunc(Number(minStock)),
     needsCompletion: form.get('needsCompletion') === 'on',
+    globalProductId: String(form.get('globalProductId') ?? '').trim() || null,
   };
 }
 
@@ -123,7 +133,9 @@ export async function saveProduct(
     return { status: 'error', message: messageFor(result) };
   }
 
-  revalidatePath('/products');
+  // The counter's search index reads the catalog too, so a saved product has
+  // to reach /sale as well as /products.
+  revalidateAfter('catalog');
   return { status: 'saved' };
 }
 
@@ -146,7 +158,7 @@ export async function saveBarcode(
     return { status: 'error', message: messageFor(result) };
   }
 
-  revalidatePath(`/products/${productId}`);
+  revalidateAfter('catalog');
   return { status: 'saved' };
 }
 
@@ -156,7 +168,7 @@ export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<v
     return;
   }
   await removeBarcode(scopeFor(gate.session), productId, barcodeId);
-  revalidatePath(`/products/${productId}`);
+  revalidateAfter('catalog');
 }
 
 export async function archiveProduct(productId: Uuid, isActive: boolean): Promise<void> {
@@ -165,6 +177,34 @@ export async function archiveProduct(productId: Uuid, isActive: boolean): Promis
     return;
   }
   await setProductActive(scopeFor(gate.session), productId, isActive);
-  revalidatePath('/products');
-  revalidatePath(`/products/${productId}`);
+  revalidateAfter('catalog');
+}
+
+/**
+ * Searches Mehvar's shared catalogue while a product is being added.
+ *
+ * Read-only and identity-only. It reaches `global_products`, which has no
+ * tenant column, and cross-references the caller's own catalogue purely to
+ * report what they already stock — nothing about one pharmacy can reach
+ * another through it (T3).
+ */
+export async function searchCatalogAction(term: string): Promise<CatalogSearchResult> {
+  const gate = await requireOwner();
+  if ('error' in gate) {
+    return { catalogLoaded: true, matches: [] };
+  }
+
+  const [matches, size] = await Promise.all([
+    searchGlobalCatalog(scopeFor(gate.session), term),
+    globalCatalogSize(),
+  ]);
+
+  /*
+   * The size is reported alongside the matches so the screen can tell "nothing
+   * matched" apart from "the catalogue was never loaded". They look the same to
+   * an operator and are entirely different problems — and the second one is
+   * what shipped: a fresh developer setup left `global_products` empty and the
+   * picker answered "nothing matches" to every query ever typed.
+   */
+  return { catalogLoaded: size > 0, matches };
 }

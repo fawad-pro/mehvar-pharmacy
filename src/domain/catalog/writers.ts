@@ -48,7 +48,10 @@ export async function createProduct(
   await insertProduct(scope, {
     id,
     tenantId: scope.tenantId,
-    globalProductId: null,
+    // The link to Mehvar's shared identity, when the product was added from
+    // the catalogue. Null for anything typed by hand or quick-added — most of
+    // what a Pakistani pharmacy sells is not in any catalogue.
+    globalProductId: validated.value.globalProductId,
     name: validated.value.name,
     manufacturer: validated.value.manufacturer,
     form: validated.value.form,
@@ -105,6 +108,9 @@ export async function createQuickItem(
     // price and nothing else, and pack levels are exactly the kind of thing
     // that gets guessed wrong under time pressure. Completion adds them.
     packLevels: [],
+    // A quick item comes from an empty search at the counter, so by definition
+    // it matched nothing — there is no catalogue identity to link to.
+    globalProductId: null,
     pricePaisa: input.pricePaisa,
     mrpPaisa: null,
     minStockBaseUnits: null,

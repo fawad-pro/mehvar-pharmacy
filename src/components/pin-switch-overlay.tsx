@@ -116,7 +116,15 @@ export function PinSwitchOverlay({
           ref={pinField}
           value={pin}
           inputMode="numeric"
-          autoComplete="off"
+          // A PIN is a one-time code, and saying so is what stops Chrome
+          // treating this overlay as a login form. It used to: a lone password
+          // input is enough, and Chrome answered by autofilling the username it
+          // had saved from the pairing screen into the nearest text field on
+          // the page — the product search box behind this overlay. Pressing F10
+          // appeared to type "Counter 1" into the counter, with the quick-item
+          // row offering to create a product by that name. `autoComplete="off"`
+          // is ignored on credential fields; `one-time-code` is not.
+          autoComplete="one-time-code"
           type="password"
           maxLength={PIN_LENGTH}
           onChange={(event) => {

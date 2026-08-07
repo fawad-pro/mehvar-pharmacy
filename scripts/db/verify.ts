@@ -7,60 +7,20 @@
  *
  * Read-only. Repair is a separate, deliberate act (see `repairBatches`).
  * Exits non-zero on any mismatch so it can gate a deploy.
+ *
+ * The verification itself lives in `verify-all.ts` so `ops:restore-drill` can
+ * call it against a restored scratch database without spawning this CLI.
  */
 import 'dotenv/config';
 
-import { verifyBatches } from '../../src/domain/inventory/rebuild';
-import { tenantScope } from '../../src/db/scoped';
-import { listTenantIds, anyUserId } from '../../src/db/provisioning';
+import { verifyAllTenants } from './verify-all';
 
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set.');
   }
 
-  const tenantIds = await listTenantIds();
-  if (tenantIds.length === 0) {
-    console.log('No tenants to verify.');
-    return;
-  }
-
-  let failed = false;
-
-  for (const tenantId of tenantIds) {
-    // The verifier reads; the acting user only satisfies the chokepoint's
-    // contract, which requires attribution even for reads.
-    const userId = await anyUserId(tenantId);
-    if (!userId) {
-      console.log(`${tenantId}: no users yet, skipping`);
-      continue;
-    }
-
-    const report = await verifyBatches(tenantScope({ tenantId, userId }));
-    const pending = Object.values(report.pendingByProduct).reduce((a, b) => a + b, 0);
-
-    if (report.ok) {
-      console.log(
-        `${tenantId}: ok — ${report.batchesChecked} batches agree with the records` +
-          (pending > 0 ? `, ${pending} base units pending (D2)` : ''),
-      );
-      continue;
-    }
-
-    failed = true;
-    console.error(`${tenantId}: SEV-1 — the records and the cache disagree`);
-    for (const mismatch of report.mismatches) {
-      console.error(
-        `  batch ${mismatch.batchId}: live ${mismatch.live}, records say ${mismatch.rebuilt}` +
-          ` (off by ${mismatch.difference})`,
-      );
-    }
-    for (const batchId of report.negativeBatches) {
-      console.error(`  batch ${batchId}: negative quantity — invariant 2 is broken`);
-    }
-  }
-
-  if (failed) {
+  if (!(await verifyAllTenants())) {
     process.exit(1);
   }
 }

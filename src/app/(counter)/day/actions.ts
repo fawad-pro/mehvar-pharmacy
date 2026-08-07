@@ -14,6 +14,8 @@ import {
   type CashMovementRejection,
 } from '@/domain/cash/commit-cash-movement';
 
+import { revalidateAfter } from '../revalidate';
+
 export type CashMovementOutcome = { ok: true } | { ok: false; message: string };
 
 /** I5 — name the fix, not the rule. */
@@ -46,5 +48,6 @@ export async function recordCashMovementAction(
   if (!result.ok) {
     return { ok: false, message: messageFor(result.reason) };
   }
+  revalidateAfter('money');
   return { ok: true };
 }

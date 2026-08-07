@@ -8,7 +8,7 @@ import { cart, DEMO, lastSale, openCounter, printedReceipt, search } from './sup
  * answer in one glance on a phone" (Phase 13).
  *
  * `openCounter` pairs the device as the owner (loginDevice's starting user),
- * so F5/F7/Settings are reachable here without a PIN switch first.
+ * so F9/F2/Settings are reachable here without a PIN switch first.
  */
 
 test('W4: a return finds the sale, restocks a batch, and prints a refund receipt', async ({
@@ -30,12 +30,24 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
   const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
   expect(receiptNumber).toBeTruthy();
 
-  await page.keyboard.press('F7');
-  await expect(page).toHaveURL(/\/returns$/);
+  // F2 is Receipts. The whole point of the separation is that
+  // looking at a sale and refunding it are different acts, so the walk is:
+  // find the receipt → read it → decide → start the return from it.
+  await page.keyboard.press('F2');
+  await expect(page).toHaveURL(/\/receipts$/);
 
-  await page.getByLabel('Receipt number or customer name').fill(receiptNumber!);
-  await page.getByRole('button', { name: new RegExp(receiptNumber!) }).click();
+  await page.getByLabel('Find a receipt').fill(receiptNumber!);
+  await page.getByRole('link', { name: receiptNumber! }).first().click();
+  await expect(page).toHaveURL(new RegExp(`/receipts/${receiptNumber!}$`));
 
+  // Reviewing shows what was sold without entering any workflow.
+  await expect(page.getByRole('table')).toContainText('Panadol');
+
+  // Only now, and only deliberately, does the refund path open.
+  await page.getByRole('link', { name: 'Start a return' }).click();
+  await expect(page).toHaveURL(/\/returns\?receipt=/);
+
+  // The handoff lands on the sale itself — the operator does not search twice.
   await expect(page.getByRole('table')).toContainText('Panadol');
   await page.getByLabel(/Return quantity for Panadol/).fill('1');
   await page.getByRole('button', { name: 'Confirm return' }).click();
@@ -47,7 +59,7 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
 test('W10: the three numbers, a cash movement, and the drawer count', async ({ page }) => {
   await openCounter(page);
 
-  await page.keyboard.press('F5');
+  await page.keyboard.press('F9');
   await expect(page).toHaveURL(/\/day$/);
 
   // Each label carries its own time scope, because the three numbers do not
@@ -55,7 +67,19 @@ test('W10: the three numbers, a cash movement, and the drawer count', async ({ p
   // position and is always all-time.
   await expect(page.getByText('Sales today')).toBeVisible();
   await expect(page.getByText('Cash expected in drawer')).toBeVisible();
-  await expect(page.getByText('Total owed to you')).toBeVisible();
+  await expect(page.getByText('Owed to you, all time')).toBeVisible();
+
+  // Three, and only three, at that size. "Revenue" was the same query as
+  // "Sales today" under another name, so an owner scanning the screen saw one
+  // number twice and had to work out that they were not different figures.
+  await expect(page.getByText('Revenue')).toBeHidden();
+  await expect(page.getByText('Sale count')).toBeHidden();
+
+  // And one line answering "is anything wrong?", in place of six headings the
+  // owner had to scan and total up for themselves.
+  await expect(
+    page.getByText(/Nothing needs a look today\.|thing(s)? need(s)? a look/),
+  ).toBeVisible();
 
   // Record a cash movement — an owner withdrawal.
   await page.getByLabel('Reason').selectOption('owner_withdrawal');
@@ -86,7 +110,7 @@ test('the Overall range offers no drawer count to record against a lifetime figu
   await page.goto('/day?view=overall');
 
   await expect(page.getByText('Sales, all time')).toBeVisible();
-  await expect(page.getByText('Total owed to you')).toBeVisible();
+  await expect(page.getByText('Owed to you, all time')).toBeVisible();
 
   await expect(page.getByText('Cash expected in drawer')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Record over/short' })).toBeHidden();
@@ -123,7 +147,9 @@ test('W11: the owner phone view answers the three questions in one glance', asyn
   await expect(page).toHaveURL(/\/owner$/);
   await expect(page.getByText("Today's sales")).toBeVisible();
   await expect(page.getByText('Expected cash in drawer')).toBeVisible();
-  await expect(page.getByText('Running udhaar total')).toBeVisible();
+  // Renamed with the netting fix: it is money owed TO the shop, floored per
+  // customer, and never a net figure that an advance could push negative.
+  await expect(page.getByText('Owed to you')).toBeVisible();
 
   await page.getByRole('button', { name: 'Udhaar' }).click();
   await expect(page.getByText('Rashid Sahib')).toBeVisible();

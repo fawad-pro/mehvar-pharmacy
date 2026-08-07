@@ -32,7 +32,7 @@ interface LineDraft {
   restockBatchId: string | null;
 }
 
-export function ReturnsSurface() {
+export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) {
   const receiptContext = useReceiptContext();
   const { receipt, print } = usePrintReceipt();
 
@@ -54,10 +54,31 @@ export function ReturnsSurface() {
 
   // Recent sales on mount — "search recent sales" is the default, not an
   // empty state the operator has to escape from.
+  //
+  // Unless a receipt was named. Receipts are now the place you *look* at a
+  // sale, and "Start a return" hands off from there — so arriving with a
+  // receipt number means the decision to return has already been made, and
+  // asking the operator to search for the sale they just had open would be
+  // making them do the same work twice. The handoff lands on the sale itself.
   useEffect(() => {
+    if (prefillReceipt) {
+      void findSaleForReturnAction(prefillReceipt).then((found) => {
+        const exact = found.find((row) => row.receiptNumber === prefillReceipt);
+        if (exact) {
+          void selectSale(exact);
+        } else {
+          // The number did not resolve — fall back to the normal search rather
+          // than stranding the operator on an empty screen (P2).
+          setQuery(prefillReceipt);
+          setResults(found);
+          searchRef.current?.focus();
+        }
+      });
+      return;
+    }
     search('');
     searchRef.current?.focus();
-  }, [search]);
+  }, [search, prefillReceipt]);
 
   async function selectSale(found: FoundSale): Promise<void> {
     setSale(found);

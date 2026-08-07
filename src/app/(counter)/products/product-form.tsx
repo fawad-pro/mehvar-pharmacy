@@ -11,12 +11,17 @@
 import { useActionState, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { DuplicateNotice } from '@/components/duplicate-notice';
+
 import { saveProduct, type ActionState } from './actions';
+import { CatalogPicker } from './catalog-picker';
 import { exceedsMrp, parsePackLevels } from '@/domain/catalog/product';
 import type { PackLevel } from '@/lib/quantity';
 
 export interface ProductFormValues {
   id: string | null;
+  /** Set when this product came from Mehvar's catalogue (Phase 6 §2's link). */
+  globalProductId: string | null;
   name: string;
   manufacturer: string;
   form: string;
@@ -32,10 +37,27 @@ export interface ProductFormValues {
 
 export function ProductForm({ initial }: { initial: ProductFormValues }) {
   const router = useRouter();
+
+  /*
+   * A NEW product starts at "which medicine?", not at a blank nine-field form.
+   *
+   * Editing skips the picker entirely — the medicine has already been chosen,
+   * and re-asking would be the software forgetting what it is looking at.
+   */
+  const [picking, setPicking] = useState(initial.id === null);
+  const [globalProductId, setGlobalProductId] = useState(initial.globalProductId);
   const [state, action, pending] = useActionState<ActionState, FormData>(
     saveProduct.bind(null, initial.id),
     { status: 'idle' },
   );
+
+  // Watched so the duplicate check answers while the operator types, rather
+  // than after they have saved and created the split.
+  const [name, setName] = useState(initial.name);
+  const [strength, setStrength] = useState(initial.strength);
+  const [form, setForm] = useState(initial.form);
+  const [manufacturer, setManufacturer] = useState(initial.manufacturer);
+  const [formulaText, setFormulaText] = useState(initial.formulaText);
 
   const [price, setPrice] = useState(initial.priceRupees);
   const [mrp, setMrp] = useState(initial.mrpRupees);
@@ -57,18 +79,93 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
   );
   const parsed = parsePackLevels(packLevels);
 
+  if (picking) {
+    return (
+      <CatalogPicker
+        onPick={(medicine) => {
+          setGlobalProductId(medicine.globalProductId);
+          setName(medicine.name);
+          setStrength(medicine.strength);
+          setForm(medicine.form);
+          setManufacturer(medicine.manufacturer);
+          setFormulaText(medicine.formulaText);
+          setBaseUnit(medicine.baseUnitName);
+          setPackLevels(medicine.packLevels);
+          setMrp(medicine.mrpRupees);
+          setPicking(false);
+        }}
+        onSkip={() => {
+          setPicking(false);
+        }}
+      />
+    );
+  }
+
   return (
     <form action={action} className="flex flex-col gap-5">
+      {/* The link back to Mehvar's catalogue. Hidden rather than shown as a
+          field: it is not something an operator sets, and Phase 6 §4 needs it
+          so future identity corrections can reach this product. */}
+      <input type="hidden" name="globalProductId" value={globalProductId ?? ''} />
+
+      {globalProductId ? (
+        <p className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm">
+          <span className="text-green-900 font-medium">From Mehvar&rsquo;s catalogue.</span>{' '}
+          <span className="text-ink/70">
+            The details below came with it — change any of them if your pack differs. Only the
+            selling price is yours to set.
+          </span>
+        </p>
+      ) : null}
+
       <Section title="What it is">
-        <Field name="name" label="Name" defaultValue={initial.name} required autoFocus />
-        <Field name="strength" label="Strength" hint="e.g. 500mg" defaultValue={initial.strength} />
-        <Field name="form" label="Form" hint="e.g. Tablet, Syrup" defaultValue={initial.form} />
-        <Field name="manufacturer" label="Manufacturer" defaultValue={initial.manufacturer} />
+        <Field
+          name="name"
+          label="Name"
+          value={name}
+          onChange={setName}
+          required
+          autoFocus
+        />
+        <Field
+          name="strength"
+          label="Strength"
+          hint="e.g. 500mg, 125mg/5ml, 500mg+65mg"
+          value={strength}
+          onChange={setStrength}
+        />
+        <Field
+          name="form"
+          label="Form"
+          hint="e.g. Tablet, Syrup"
+          value={form}
+          onChange={setForm}
+        />
+        <Field
+          name="manufacturer"
+          label="Manufacturer"
+          value={manufacturer}
+          onChange={setManufacturer}
+        />
         <Field
           name="formulaText"
           label="Salt / formula"
           hint="What it contains. This is how substitutes are found."
-          defaultValue={initial.formulaText}
+          value={formulaText}
+          onChange={setFormulaText}
+        />
+
+        {/* Said while it is being typed, never after saving — by then the
+            duplicate exists and its stock has started splitting. */}
+        <DuplicateNotice
+          candidate={{
+            id: initial.id,
+            name,
+            strength,
+            form,
+            manufacturer,
+            formulaText,
+          }}
         />
       </Section>
 

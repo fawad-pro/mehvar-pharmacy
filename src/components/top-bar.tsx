@@ -18,6 +18,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 
+import { keyFor } from '@/client/keyboard/registry';
 import { useSync } from '@/client/sync/provider';
 
 export function TopBar({
@@ -90,7 +91,7 @@ export function TopBar({
         >
           <span className="font-medium">{userName}</span>
           <span className="text-ink/50 text-xs capitalize">{userRole}</span>
-          <kbd className="text-ink/40 text-xs">F10</kbd>
+          <kbd className="text-ink/40 text-xs">{keyFor('switch-user')}</kbd>
         </button>
       </div>
     </header>

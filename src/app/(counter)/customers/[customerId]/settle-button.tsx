@@ -4,10 +4,10 @@
  * Record a payment from the customer's own page — W3, reached from where the
  * debt is actually being looked at.
  *
- * F8 already opens Settle Udhaar globally, but from here it would ask which
- * customer while their name and balance fill the screen. Same overlay, same
- * writer, same receipt — only the question that has already been answered is
- * skipped.
+ * The udhaar key already opens Settle Udhaar globally, but from here it would
+ * ask which customer while their name and balance fill the screen. Same
+ * overlay, same writer, same receipt — only the question that has already
+ * been answered is skipped.
  */
 
 import { useState } from 'react';

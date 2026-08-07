@@ -73,6 +73,28 @@ export default async function LoginPage({
             label="Counter name"
             hint="Names this machine in reports, e.g. Counter 1"
           />
+          {/*
+            `one-time-code`, not `off`, and not `current-password`.
+
+            This form is a device pairing, not a login: nothing here is a
+            reusable credential and none of it should ever be offered back. But
+            it LOOKS like a login to Chrome — two text fields followed by a
+            password field — so Chrome offered to save it, and saved the
+            "Counter name" as the username.
+
+            The consequence showed up on a completely different screen. Pressing
+            F10 mounts the PIN overlay, whose lone password input reads to
+            Chrome as another login form; Chrome then filled the saved username
+            into the nearest text field, which is the counter's product search
+            box. The operator saw "Counter 1" typed into the search box by
+            itself, with the quick-item row beneath it offering to create a
+            product by that name — one Enter away from a junk product in the
+            catalog.
+
+            `autoComplete="off"` does not prevent any of this; Chrome ignores it
+            on credential fields. `one-time-code` does, because a one-time code
+            is by definition not worth storing.
+          */}
           <Field
             name="pairingKey"
             label="Setup key"
@@ -80,6 +102,7 @@ export default async function LoginPage({
             // rather than in an error message afterwards (I5).
             hint="The one-time key on the sheet — not anyone’s PIN"
             type="password"
+            autoComplete="one-time-code"
           />
         </div>
 
@@ -113,12 +136,20 @@ function Field({
   label,
   hint,
   type = 'text',
+  autoComplete = 'off',
   autoFocus = false,
 }: {
   name: string;
   label: string;
   hint: string;
   type?: string;
+  /**
+   * Explicit, because `autoComplete="off"` does not stop Chrome's password
+   * manager — it has been ignored for credential-looking fields for a decade.
+   * See the note on the pairing key below; this is the field that has to opt
+   * out with a token Chrome actually honours.
+   */
+  autoComplete?: string;
   autoFocus?: boolean;
 }) {
   const hintId = `${name}-hint`;
@@ -140,7 +171,7 @@ function Field({
         type={type}
         required
         autoFocus={autoFocus}
-        autoComplete="off"
+        autoComplete={autoComplete}
         aria-describedby={hintId}
         className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
       />

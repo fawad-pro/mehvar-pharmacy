@@ -46,13 +46,58 @@ npm run hooks:install          # pre-push: typecheck + lint + tests
 cp .env.example .env           # then set SESSION_SECRET
 docker compose up -d postgres
 
-npm run db:reset && npm run db:migrate && npm run db:grants && npm run db:seed
+npm run db:setup               # migrate + grants + seed, in that order
 npm run dev
+```
+
+`db:setup` is one command on purpose. The four steps are not independent:
+`db:grants` is what CREATES the application role `mehvar_app`, and `db:seed`
+connects as it. Run them separately and it is possible to stop halfway; the
+symptom of skipping grants is not "role missing" but
+
+    password authentication failed for user "mehvar_app"
+
+because Postgres deliberately reports a non-existent role as an authentication
+failure, which sends you looking at a password that was never wrong.
+
+It also loads the bundled medicine catalogue (`catalog:seed`). Without it
+`global_products` is empty and the Add Product picker finds nothing, for every
+query — the catalogue is what makes adding a medicine a search and a price
+rather than nine typed fields.
+
+`db:setup` also brings an EXISTING development database up to date — run it
+after pulling. It is safe to repeat: if the demo pharmacy is already there it is
+kept, any seed products it is missing are added, and the medicine catalogue is
+re-applied (idempotent on medicine identity).
+
+What it deliberately does not do on a database that already has a demo pharmacy
+is re-create sales, batches, cash movements or customers. Repeating those would
+double the stock on every shelf and invent sales that never happened. For a
+clean demo, ask for one:
+
+```
+npm run db:reset && npm run db:setup
 ```
 
 `db:seed` prints the demo counter's setup key and the PINs it created.
 
-`db:reset && db:migrate && db:seed` must always produce a working demo pharmacy
+### Running the E2E suite
+
+```
+npm run e2e:reset              # db:reset + db:setup + playwright test
+```
+
+It needs a browser. Playwright downloads one on `npx playwright install`; where
+that download is blocked but a Chromium is already present, point at it instead:
+
+```
+PLAYWRIGHT_CHROMIUM_PATH=/path/to/chrome npm run e2e:reset
+```
+
+The suite runs on one worker deliberately — one database, one paired device, one
+receipt sequence. Parallel workers are counters contending for the same numbers.
+
+`db:reset && db:setup` must always produce a working demo pharmacy
 (Phase 11 §4) — the demo is a build artifact, always one command away. From
 Session 1 onward it seeds ~50 curated products with real pack structures, a
 customer with a balance, opening batches, and an open purchase draft.

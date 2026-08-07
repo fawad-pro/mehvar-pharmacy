@@ -16,6 +16,7 @@ export default async function NewProductPage() {
       <ProductForm
         initial={{
           id: null,
+          globalProductId: null,
           name: '',
           manufacturer: '',
           form: '',

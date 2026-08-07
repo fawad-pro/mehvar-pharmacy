@@ -28,7 +28,7 @@ test('device login, shell furniture, and PIN switch', async ({ page }) => {
   await expect(page.getByRole('button', { name: new RegExp(DEMO.owner) })).toBeVisible();
 
   // F2 reaches Purchases without the mouse.
-  await page.keyboard.press('F2');
+  await page.keyboard.press('F7');
   await expect(page).toHaveURL(/\/purchases$/);
 
   // Esc returns to Sale.
@@ -48,9 +48,9 @@ test('device login, shell furniture, and PIN switch', async ({ page }) => {
   await expect(overlay).toBeHidden();
   await expect(page.getByRole('button', { name: new RegExp(DEMO.salesman.name) })).toBeVisible();
 
-  // A salesman has no report access beyond the current day (Phase 5 §2), so F5
+  // A salesman has no report access beyond the current day (Phase 5 §2), so F9
   // is dimmed — visible but not permitted. The map stays put either way.
-  await expect(keyBar.getByText('F5', { exact: true })).toBeVisible();
+  await expect(keyBar.getByText('F9', { exact: true })).toBeVisible();
 });
 
 test('a wrong PIN says what to do next, without blame (I5)', async ({ page }) => {

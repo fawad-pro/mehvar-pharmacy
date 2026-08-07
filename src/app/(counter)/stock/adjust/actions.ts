@@ -16,6 +16,8 @@ import {
   commitAdjustment,
   type AdjustmentCommand,
 } from '@/domain/inventory/commit-adjustment';
+
+import { revalidateAfter } from '../../revalidate';
 import type {
   AdjustmentRejection,
   BatchOnHand,
@@ -64,5 +66,6 @@ export async function adjustStockAction(command: AdjustmentCommand): Promise<Adj
   if (!result.ok) {
     return { ok: false, message: messageFor(result.reason) };
   }
+  revalidateAfter('stock');
   return { ok: true, resolvedPendingBase: result.value.resolvedPendingBase };
 }

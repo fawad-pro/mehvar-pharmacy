@@ -20,9 +20,9 @@ import { useEffect } from 'react';
 import { BACK_KEY, GLOBAL_KEYS, HOME_ROUTE } from './registry';
 
 export interface GlobalKeyHandlers {
-  /** F8 — contextual: attach customer, or open Settle Udhaar (defect C5). */
+  /** The udhaar key — contextual: attach customer, or open Settle Udhaar (defect C5). */
   onUdhaar?: () => void;
-  /** F10 — PIN switch (ADR-7). */
+  /** The switch-user key — PIN switch (ADR-7). */
   onSwitchUser?: () => void;
   /** Esc — close the topmost overlay; returns true when one was open. */
   onEscape?: () => boolean;
@@ -52,11 +52,13 @@ export function useGlobalKeys(handlers: GlobalKeyHandlers = {}): void {
 
       event.preventDefault();
 
-      if (binding.key === 'F8') {
+      // Dispatched by MEANING, not by key name — so the bar can be reordered
+      // without silently rewiring what the keys do.
+      if (binding.dispatch === 'udhaar') {
         handlers.onUdhaar?.();
         return;
       }
-      if (binding.key === 'F10') {
+      if (binding.dispatch === 'switch-user') {
         handlers.onSwitchUser?.();
         return;
       }

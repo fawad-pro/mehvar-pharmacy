@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
+import { BalanceInline } from '@/components/balance-figure';
 import { listCustomers } from '@/db/udhaar-queries';
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
@@ -33,11 +34,19 @@ export default async function CustomersPage({
         <h1 className="text-green-900 text-2xl font-semibold">Customers</h1>
         <span className="text-ink/50 text-sm">{page.total.toLocaleString()} on the book</span>
         {/* The owner's question on this screen is the same one Day & Reports
-            answers with "Total owed to you" — showing it in both places, from
-            the same derivation, is how they learn the two agree. */}
+            answers with "Owed to you" — and the two now share `summariseBook`,
+            which is what makes showing it in both places safe. They used to
+            floor differently and label identically. */}
         {page.outstandingPaisa > 0 ? (
           <span className="text-amber numeral ml-auto text-sm font-medium">
             {formatPaisa(paisa(page.outstandingPaisa), { withSymbol: true })} owed in total
+          </span>
+        ) : null}
+        {/* Advances are never netted against the debt above, so they are stated
+            beside it rather than folded into it — and only when there are any. */}
+        {page.advancesPaisa > 0 ? (
+          <span className="text-ink/60 numeral text-sm">
+            {formatPaisa(paisa(page.advancesPaisa), { withSymbol: true })} paid in advance
           </span>
         ) : null}
       </header>
@@ -80,10 +89,10 @@ export default async function CustomersPage({
                     </Link>
                   </td>
                   <td className="text-ink/70 px-3 py-2">{item.phone ?? '—'}</td>
-                  <td
-                    className={`numeral px-3 py-2 font-medium ${item.balancePaisa > 0 ? 'text-amber' : 'text-ink/50'}`}
-                  >
-                    {formatPaisa(paisa(item.balancePaisa), { withSymbol: true })}
+                  {/* The same vocabulary as the customer page and the
+                      settlement slip — never a minus sign on a balance. */}
+                  <td className="px-3 py-2 text-right font-medium">
+                    <BalanceInline balancePaisa={item.balancePaisa} />
                   </td>
                 </tr>
               ))}

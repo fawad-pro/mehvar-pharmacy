@@ -7,7 +7,8 @@
  *    stacked large-to-small, TOTAL in the display's biggest numerals (I6)."
  *
  * Day 4 adds the payment overlay (tendered/change, split cash-credit), the
- * udhaar attach (F8, defect C5), and the printed receipt (ADR-6). Focus
+ * udhaar attach (the udhaar key, defect C5), and the printed receipt
+ * (ADR-6). Focus
  * discipline is the thing to preserve as this file grows: focus lives in
  * search (Phase 7 rule 1), returns there after every commit, and every cart
  * edit is reachable without the mouse.
@@ -22,7 +23,8 @@ import {
   resolveQuantity,
 } from '@/client/search/quantity-grammar';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
-import { useRegisterF8Handler } from '@/client/keyboard/f8-context';
+import { useRegisterUdhaarKeyHandler } from '@/client/keyboard/udhaar-key-context';
+import { keyFor } from '@/client/keyboard/registry';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import type { ReceiptData } from '@/client/print/receipt';
 import { useSync } from '@/client/sync/provider';
@@ -101,10 +103,10 @@ export function SaleSurface() {
   const { receipt, print } = usePrintReceipt();
   const { capture } = useSync();
 
-  // Defect C5: F8 belongs to Sale only while the cart has something to bill.
-  // An empty cart leaves F8 unregistered, so AppShell's Settle Udhaar fallback
-  // runs instead.
-  useRegisterF8Handler(
+  // Defect C5: the udhaar key belongs to Sale only while the cart has
+  // something to bill. An empty cart leaves it unregistered, so AppShell's
+  // Settle Udhaar fallback runs instead.
+  useRegisterUdhaarKeyHandler(
     lines.length > 0
       ? () => {
           setPickingCustomer(true);
@@ -452,7 +454,9 @@ export function SaleSurface() {
               </button>
             </div>
           ) : (
-            <p className="text-ink/40 text-xs">F8 — attach a customer for udhaar</p>
+            <p className="text-ink/40 text-xs">
+              {keyFor('udhaar')} — attach a customer for udhaar
+            </p>
           )}
 
           {/* A counter cannot number a receipt until it has heard from the

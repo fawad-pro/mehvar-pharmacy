@@ -62,6 +62,22 @@ interface SyncContextValue {
   readonly stuck: boolean;
   /** Asks the pump to try now; safe to call at any time. */
   readonly flushNow: () => void;
+  /**
+   * Bumped every time the pump lands at least one record on the server.
+   *
+   * ADR-3 deliberately separates *captured* from *written*: `capture()`
+   * resolves as soon as the record is on disk, which is what lets the counter
+   * print a receipt and keep selling through an outage. The cost is that the
+   * server-rendered screens have no idea anything happened — a settlement, a
+   * quick item or a whole sale reaches the database a moment later and every
+   * list still shows the state from before it. That is the reason so much of
+   * the product needed a manual browser refresh.
+   *
+   * So the pump announces its own success and the shell re-renders on it. This
+   * is the only signal that can be right, because it is the only place that
+   * knows the write actually landed.
+   */
+  readonly deliveredSeq: number;
 }
 
 const SyncContext = createContext<SyncContextValue>({
@@ -69,6 +85,7 @@ const SyncContext = createContext<SyncContextValue>({
   unsyncedCount: 0,
   stuck: false,
   flushNow: () => {},
+  deliveredSeq: 0,
 });
 
 /** The envelope is the outbox's business; the server is sent only the record. */
@@ -86,6 +103,7 @@ export function SyncProvider({
 }) {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [stuck, setStuck] = useState(false);
+  const [deliveredSeq, setDeliveredSeq] = useState(0);
   const receipt = useReceiptContext();
 
   // Refs rather than state: the pump reads these on every iteration, and
@@ -125,6 +143,11 @@ export function SyncProvider({
       return;
     }
     running.current = true;
+
+    // Distinct from `progressed`, which is also set by re-minting a collided
+    // receipt number — that is forward motion in the queue, but nothing has
+    // reached the database yet, so it must not trigger a re-render.
+    let landed = false;
 
     try {
       for (;;) {
@@ -174,6 +197,7 @@ export function SyncProvider({
           if (outcome.status === 'synced') {
             await removeRecord(entry.sequence);
             progressed = true;
+            landed = true;
             continue;
           }
 
@@ -205,6 +229,13 @@ export function SyncProvider({
       }
     } finally {
       running.current = false;
+
+      // Announced once per drain rather than once per record: a ten-record
+      // catch-up after an outage is one thing that happened to the screens,
+      // not ten.
+      if (landed) {
+        setDeliveredSeq((previous) => previous + 1);
+      }
 
       // Anything still queued gets a retry at the delay it actually earned,
       // rather than waiting for the next safety tick.
@@ -269,8 +300,8 @@ export function SyncProvider({
   }, [flush]);
 
   const value = useMemo<SyncContextValue>(
-    () => ({ capture, unsyncedCount, stuck, flushNow }),
-    [capture, unsyncedCount, stuck, flushNow],
+    () => ({ capture, unsyncedCount, stuck, flushNow, deliveredSeq }),
+    [capture, unsyncedCount, stuck, flushNow, deliveredSeq],
   );
 
   return <SyncContext.Provider value={value}>{children}</SyncContext.Provider>;

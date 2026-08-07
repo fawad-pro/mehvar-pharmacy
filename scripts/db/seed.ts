@@ -19,7 +19,7 @@ import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 
 import { hashPassword, hashPin } from '../../src/auth/pin';
-import { createTenant } from '../../src/db/provisioning';
+import { createTenant, findTenantBySlug } from '../../src/db/provisioning';
 import { tenantScope } from '../../src/db/scoped';
 import {
   adjustments,
@@ -36,6 +36,7 @@ import {
   users,
   type TenantSettings,
 } from '../../src/db/schema';
+import { missingFromCatalog } from '../../src/domain/catalog/identity';
 import { businessDayOf } from '../../src/lib/business-day';
 import { uuidv7 } from '../../src/lib/uuid';
 import { SEED_PRODUCTS } from './seed-data';
@@ -73,9 +74,44 @@ function expiryFor(index: number): string {
   return daysFromNow(180 + ((index * 37) % 500));
 }
 
+/**
+ * WHAT IS SAFELY REPEATABLE HERE, AND WHAT IS NOT.
+ *
+ * `db:seed` used to mean "create the demo pharmacy" and failed on the unique
+ * slug if one already existed. That made it unusable as part of `db:setup`,
+ * which is the supported way to bring a database — including a database
+ * somebody has been developing against for weeks — to the current state. One
+ * aborted step took the whole chain with it, and the catalogue step behind it
+ * never ran.
+ *
+ * So it now means "make sure the demo pharmacy exists and its catalogue is
+ * current", and the two halves are treated differently on purpose:
+ *
+ *   REPEATABLE — the tenant's product catalogue. Missing seed products are
+ *   added, matched on medicine identity so a differently-typed duplicate is
+ *   never created. Existing products are left exactly as they are: a developer
+ *   may have edited a price to test something, and silently rewriting it is the
+ *   tenant-data equivalent of the thing P8 forbids.
+ *
+ *   NOT REPEATABLE — sales, batches, cash movements, customers with balances,
+ *   users and devices. Re-running those against a live database would double
+ *   the stock on every shelf and invent sales that never happened. They are
+ *   created once, on a database that has no demo tenant, and never again.
+ *   `db:reset` is how you ask for a fresh one.
+ *
+ * The distinction is the whole design. "Idempotent" here does not mean "runs
+ * the same statements twice safely"; it means "reaching the same end state is
+ * safe to ask for repeatedly".
+ */
 async function main(): Promise<void> {
   if (!process.env.DATABASE_URL) {
     throw new Error('DATABASE_URL is not set. Copy .env.example to .env first.');
+  }
+
+  const existing = await findDemoTenant();
+  if (existing) {
+    await topUpCatalog(existing);
+    return;
   }
 
   const tenantId = uuidv7();
@@ -311,6 +347,124 @@ async function main(): Promise<void> {
       ...DEMO.salesmen.map((s) => `  ${s.name} (salesman)   ${s.pin}`),
       '',
     ].join('\n'),
+  );
+}
+
+/** The demo tenant, if this database already has one. */
+async function findDemoTenant(): Promise<{ tenantId: string; ownerId: string } | null> {
+  const tenant = await findTenantBySlug(DEMO.tenantSlug);
+  if (!tenant) return null;
+
+  /*
+   * Any owner will do as the acting user — `TenantScope` needs one to stamp
+   * `created_by`, and a catalogue top-up is attributed to whoever set the shop
+   * up. If there is no owner the database is in a state seed cannot reason
+   * about, so say that rather than invent a user.
+   */
+  const scope = tenantScope({ tenantId: tenant.id, userId: tenant.id });
+  const [owner] = await scope.db
+    .select({ id: users.id })
+    .from(users)
+    .where(scope.scopeOf(users, eq(users.role, 'owner')))
+    .limit(1);
+
+  if (!owner) {
+    throw new Error(
+      `The demo tenant exists but has no owner user. This database is in a state ` +
+        `seed cannot safely extend — use \`npm run db:reset\` to start over.`,
+    );
+  }
+
+  return { tenantId: tenant.id, ownerId: owner.id };
+}
+
+/**
+ * Adds seed products the demo pharmacy does not have yet.
+ *
+ * Matched on `identityKey` — brand + strength + form + manufacturer — rather
+ * than on name, so a product the developer typed by hand is recognised as the
+ * same medicine and not duplicated beside it. Nothing existing is modified.
+ */
+async function topUpCatalog({
+  tenantId,
+  ownerId,
+}: {
+  tenantId: string;
+  ownerId: string;
+}): Promise<void> {
+  const scope = tenantScope({ tenantId, userId: ownerId });
+
+  const mine = await scope.select(products);
+
+  const missing = missingFromCatalog(
+    SEED_PRODUCTS,
+    mine.map((row) => ({
+      name: row.name,
+      strength: row.strength,
+      form: row.form,
+      manufacturer: row.manufacturer,
+      formulaText: row.formulaText,
+    })),
+    (seed) => ({
+      name: seed.name,
+      strength: seed.strength,
+      form: seed.form,
+      manufacturer: seed.manufacturer,
+      formulaText: seed.formula,
+    }),
+  );
+
+  for (const seed of missing) {
+    const productId = uuidv7();
+    await scope.insert(products, {
+      id: productId,
+      globalProductId: null,
+      name: seed.name,
+      manufacturer: seed.manufacturer,
+      form: seed.form,
+      strength: seed.strength,
+      formulaText: seed.formula,
+      baseUnitName: seed.baseUnit,
+      packLevels: seed.packLevels,
+      defaultPricePerBaseUnit: seed.price,
+      currentMrpPerBaseUnit: seed.mrp,
+      minStockBaseUnits: seed.minStock ?? null,
+      needsCompletion: false,
+    });
+
+    if (seed.barcode) {
+      const level = seed.packLevels[0]?.name ?? seed.baseUnit;
+      await scope.insert(productBarcodes, {
+        id: uuidv7(),
+        productId,
+        barcode: seed.barcode,
+        unitLevelName: level,
+      });
+    }
+  }
+
+  console.log(
+    [
+      '',
+      `${DEMO.tenantName} (slug: ${DEMO.tenantSlug}) is already set up — keeping it.`,
+      missing.length === 0
+        ? `  Its catalogue already has all ${SEED_PRODUCTS.length} seed products.`
+        : `  Added ${missing.length} seed product(s) it was missing: ${missing
+            .map((seed) => seed.name)
+            .join(', ')}.`,
+      missing.length === 0
+        ? ''
+        : '  They arrive with no opening stock — inventing batches on a database you have',
+      missing.length === 0
+        ? ''
+        : '  been using would corrupt the figures you have been testing against.',
+      '',
+      '  Sales, batches, cash movements and customers were NOT re-created.',
+      '  For a fresh demo pharmacy: npm run db:reset && npm run db:setup',
+      '',
+    ]
+      .filter((line, index, all) => line !== '' || all[index - 1] !== '')
+      .join('\n'),
   );
 }
 
