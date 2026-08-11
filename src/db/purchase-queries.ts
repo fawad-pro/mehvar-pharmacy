@@ -262,6 +262,8 @@ export interface PurchaseDetail {
   readonly invoiceDate: string | null;
   readonly note: string | null;
   readonly receivedByName: string;
+  /** [PCN-006] What was paid to the supplier at receiving; the rest was credit. */
+  readonly cashPaidPaisa: number;
   readonly createdAt: Date;
   readonly lines: readonly PurchaseDetailLine[];
 }
@@ -291,6 +293,7 @@ export async function findPurchase(
       invoiceDate: purchases.invoiceDate,
       note: purchases.note,
       receivedByName: users.name,
+      cashPaidPaisa: purchases.cashPaidPaisa,
       createdAt: purchases.createdAt,
     })
     .from(purchases)

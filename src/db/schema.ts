@@ -363,12 +363,26 @@ export const purchases = pgTable(
     invoiceRef: text('invoice_ref'),
     invoiceDate: date('invoice_date'),
     note: text('note'),
+    /**
+     * [PCN-006] Cash paid to the supplier at receiving — the mirror of
+     * `sales.cash_paisa`. The credit the pharmacy owes for this invoice is the
+     * derived remainder (Σ line cost − this), so a fully-paid delivery leaves
+     * `cash_paid_paisa` equal to the invoice and owes nothing. Defaults to 0 so
+     * every historical purchase reads as "unpaid until proven otherwise" — but
+     * the entry screen defaults the field to the full invoice, so an ordinary
+     * cash purchase is unchanged and no existing workflow slows down.
+     */
+    cashPaidPaisa: bigint('cash_paid_paisa', { mode: 'number' }).notNull().default(0),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
     createdAt: createdAt(),
   },
-  (table) => [index('purchases_tenant_created_idx').on(table.tenantId, table.createdAt)],
+  (table) => [
+    index('purchases_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('purchases_tenant_supplier_idx').on(table.tenantId, table.supplierId),
+    check('purchases_cash_paid_nonneg', sql`${table.cashPaidPaisa} >= 0`),
+  ],
 );
 
 export const purchaseLines = pgTable(
@@ -572,6 +586,49 @@ export const payments = pgTable(
     index('payments_tenant_customer_idx').on(table.tenantId, table.customerId),
     uniqueIndex('payments_tenant_receipt_key').on(table.tenantId, table.receiptNumber),
     check('payments_amount_positive', sql`${table.amountPaisa} > 0`),
+  ],
+);
+
+/**
+ * [PCN-006] Payments the pharmacy makes to a supplier — the mirror of
+ * `payments`, which records money customers pay the pharmacy.
+ *
+ * A supplier settlement reduces what the pharmacy owes, exactly as a customer
+ * settlement reduces what a customer owes:
+ *
+ *   supplier balance = Σ (invoice cost − cash paid at receiving) − Σ these
+ *
+ * Modelled on `purchases` rather than on `payments`: purchases are online-only
+ * (ADR-3 does not sync them), carry no receipt number, and have no `origin`
+ * column, so a supplier payment does not either. Client-generated id makes the
+ * writer idempotent, the same posture `commitPurchase` already takes. An
+ * optional `purchase_id` lets a payment name the invoice it clears, without
+ * requiring it — a shop often pays a running account, not one invoice.
+ */
+export const supplierPayments = pgTable(
+  'supplier_payments',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    amountPaisa: bigint('amount_paisa', { mode: 'number' }).notNull(),
+    method: paymentMethod('method').notNull().default('cash'),
+    /** Optional: the invoice this payment is against, when the shop pays one. */
+    purchaseId: uuid('purchase_id').references(() => purchases.id),
+    note: text('note'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('supplier_payments_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('supplier_payments_tenant_supplier_idx').on(table.tenantId, table.supplierId),
+    check('supplier_payments_amount_positive', sql`${table.amountPaisa} > 0`),
   ],
 );
 
@@ -959,6 +1016,7 @@ export const EVENT_TABLES = [
   'sale_lines',
   'sale_line_allocations',
   'payments',
+  'supplier_payments',
   'sale_returns',
   'sale_return_lines',
   'adjustments',

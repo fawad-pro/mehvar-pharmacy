@@ -35,6 +35,7 @@ import { uuidv7 } from '@/lib/uuid';
 
 import { receivePurchaseAction } from './actions';
 import { RecentPurchases } from './recent-purchases';
+import { SupplierCreditPanel } from './supplier-credit-panel';
 import { SupplierPicker } from './supplier-picker';
 
 interface Received {
@@ -113,6 +114,19 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     }
   }, [pending]);
 
+  const invoiceTotal = draft.lines.reduce(
+    (sum, line) => sum + line.qtyBase * line.unitCostPaisa,
+    0,
+  );
+
+  // [PCN-006] "Paid now": empty means the whole invoice was paid (an ordinary
+  // cash purchase, unchanged). Anything less is put on the supplier's account.
+  const cashPaidPaisa =
+    draft.cashPaidText !== undefined && draft.cashPaidText.trim() !== ''
+      ? paisaFromRupeeInput(draft.cashPaidText)
+      : invoiceTotal;
+  const creditPaisa = Math.max(0, invoiceTotal - cashPaidPaisa);
+
   const command = useMemo(
     () => ({
       purchaseId: draft.purchaseId,
@@ -120,9 +134,10 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       invoiceRef: draft.invoiceRef.trim() === '' ? null : draft.invoiceRef.trim(),
       invoiceDate: draft.invoiceDate === '' ? null : draft.invoiceDate,
       note: null,
+      cashPaidPaisa,
       lines: draft.lines,
     }),
-    [draft],
+    [draft, cashPaidPaisa],
   );
 
   const warnings = useMemo(() => purchaseWarnings(command), [command]);
@@ -133,11 +148,6 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     }
     return map;
   }, [warnings]);
-
-  const invoiceTotal = draft.lines.reduce(
-    (sum, line) => sum + line.qtyBase * line.unitCostPaisa,
-    0,
-  );
 
   const focusSearch = useCallback(() => {
     setPending(null);
@@ -502,7 +512,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
         </div>
       ) : null}
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-end gap-4">
         <div>
           <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Invoice total</p>
           <p className="text-green-900 numeral text-2xl font-semibold">
@@ -513,15 +523,49 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
           </p>
         </div>
 
+        {/* [PCN-006] What was paid to the distributor now. Left blank it means
+            "paid in full" (the ordinary cash purchase); reduce it and the rest
+            becomes what the pharmacy owes this supplier — the mirror of an
+            udhaar sale. */}
+        <div className="w-40">
+          <label className="text-ink/60 mb-1 block text-xs" htmlFor="cash-paid">
+            Paid now
+          </label>
+          <input
+            id="cash-paid"
+            value={draft.cashPaidText ?? ''}
+            inputMode="decimal"
+            placeholder={(invoiceTotal / 100).toFixed(2)}
+            onChange={(event) => {
+              setDraft((current) => ({ ...current, cashPaidText: event.target.value }));
+            }}
+            className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+          />
+        </div>
+
+        {creditPaisa > 0 ? (
+          <div>
+            <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">On credit</p>
+            <p className="text-amber numeral text-2xl font-semibold">
+              {formatPaisa(paisa(creditPaisa), { withSymbol: true })}
+            </p>
+            <p className={`text-xs ${draft.supplierId ? 'text-ink/50' : 'text-amber'}`}>
+              {draft.supplierName ? `owed to ${draft.supplierName}` : 'choose a supplier'}
+            </p>
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={() => void receive()}
-          disabled={draft.lines.length === 0 || busy}
+          disabled={draft.lines.length === 0 || busy || (creditPaisa > 0 && !draft.supplierId)}
           className="bg-green-600 text-paper min-h-touch ml-auto rounded px-6 text-lg font-medium disabled:opacity-40"
         >
           {busy ? 'Receiving…' : 'Receive stock'}
         </button>
       </div>
+
+      <SupplierCreditPanel reloadKey={receivedCount} />
 
       <RecentPurchases reloadKey={receivedCount} />
 

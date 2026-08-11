@@ -47,6 +47,19 @@ export interface PurchaseCommand {
   /** ISO date. */
   readonly invoiceDate: string | null;
   readonly note: string | null;
+  /**
+   * [PCN-006] Cash paid to the supplier now, in paisa. The remainder of the
+   * invoice cost is put on the supplier's account (the mirror of an udhaar
+   * sale). Zero is a full-credit delivery; the invoice total is a full-cash
+   * one — which is what the entry screen defaults to, so the ordinary case is
+   * unchanged.
+   *
+   * **Absent means "paid in full".** A command that does not mention it owes the
+   * supplier nothing, which is exactly the pre-PCN-006 behaviour every purchase
+   * had — so existing callers need no change and a cash purchase carries no
+   * credit by default.
+   */
+  readonly cashPaidPaisa?: number;
   readonly lines: readonly PurchaseLineCommand[];
 }
 
@@ -56,7 +69,19 @@ export type PurchaseRejection =
   | 'invalid_bonus'
   | 'negative_cost'
   | 'invalid_price'
-  | 'invalid_expiry';
+  | 'invalid_expiry'
+  | 'negative_cash_paid'
+  | 'credit_without_supplier';
+
+/** The invoice's total cost — Σ line cost, bonus units free (Phase 9 §3). */
+export function invoiceCostPaisa(command: PurchaseCommand): number {
+  return command.lines.reduce((sum, line) => sum + line.qtyBase * line.unitCostPaisa, 0);
+}
+
+/** Cash paid at receiving, defaulting to the whole invoice ("paid in full"). */
+export function effectiveCashPaidPaisa(command: PurchaseCommand): number {
+  return command.cashPaidPaisa ?? invoiceCostPaisa(command);
+}
 
 /** Non-blocking observations the screen shows and the owner later reviews (T1). */
 export type PurchaseWarning =
@@ -90,6 +115,20 @@ export function validatePurchaseCommand(
     if (line.expiryDate !== null && !ISO_DATE.test(line.expiryDate)) {
       return { ok: false, reason: 'invalid_expiry', lineId: line.lineId };
     }
+  }
+
+  if (command.cashPaidPaisa !== undefined) {
+    if (!Number.isSafeInteger(command.cashPaidPaisa) || command.cashPaidPaisa < 0) {
+      return { ok: false, reason: 'negative_cash_paid' };
+    }
+  }
+
+  // Credit put on a supplier account must name the supplier, exactly as an
+  // udhaar sale must name the customer (the mirror of `sales`'
+  // `credit_requires_customer` CHECK). An overpayment (cash > invoice) is a
+  // supplier advance and is legal without this guard.
+  if (effectiveCashPaidPaisa(command) < invoiceCostPaisa(command) && command.supplierId === null) {
+    return { ok: false, reason: 'credit_without_supplier' };
   }
 
   return { ok: true };

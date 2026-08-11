@@ -41,6 +41,12 @@ export interface PurchaseDraft {
   readonly supplierName: string | null;
   readonly invoiceRef: string;
   readonly invoiceDate: string;
+  /**
+   * [PCN-006] What the operator typed into "Paid now", verbatim, so a resumed
+   * invoice keeps it. Empty/absent means "paid in full" — the field defaults to
+   * the invoice total, so an ordinary cash purchase never touches this.
+   */
+  readonly cashPaidText?: string;
   readonly lines: readonly DraftLine[];
   readonly updatedAt: string;
 }

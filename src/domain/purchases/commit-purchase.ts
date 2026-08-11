@@ -48,6 +48,7 @@ import { uuidv7, type Uuid } from '@/lib/uuid';
 import { planResolution, type ArrivedBatch } from '../inventory/resolve-pending';
 import { effectiveUnitCostPaisa, receivedQty } from './costing';
 import {
+  effectiveCashPaidPaisa,
   validatePurchaseCommand,
   type PurchaseCommand,
   type PurchaseRejection,
@@ -56,6 +57,8 @@ import {
 export {
   validatePurchaseCommand,
   purchaseWarnings,
+  invoiceCostPaisa,
+  effectiveCashPaidPaisa,
   type PurchaseCommand,
   type PurchaseLineCommand,
   type PurchaseRejection,
@@ -108,6 +111,7 @@ export async function commitPurchase(
       invoiceRef: command.invoiceRef,
       invoiceDate: command.invoiceDate,
       note: command.note,
+      cashPaidPaisa: effectiveCashPaidPaisa(command),
     });
 
     await insertPurchaseLines(
