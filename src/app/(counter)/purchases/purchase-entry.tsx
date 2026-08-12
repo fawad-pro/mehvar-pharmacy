@@ -179,6 +179,16 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       setError('Enter how many units arrived.');
       return;
     }
+    // The unit cost must be ENTERED, not merely default to zero. "Sells for" is
+    // pre-filled from the catalog and "Unit cost" is not, so a line added
+    // without it lands at zero cost — which reads as a Rs 0.00 invoice total,
+    // a margin computed against nothing, and (since PCN-006) a supplier balance
+    // that thinks the delivery was free. A genuinely free line is entered as an
+    // explicit "0"; a blank is the operator having skipped the field.
+    if (cost.trim() === '') {
+      setError('Enter what this stock cost — type 0 if it was free.');
+      return;
+    }
     const pricePaisa = paisaFromRupeeInput(price);
     if (pricePaisa <= 0) {
       setError('Enter the selling price for this stock.');
