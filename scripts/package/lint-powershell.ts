@@ -20,14 +20,10 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parsePowerShellFindings, type Finding } from './powershell-findings';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const scriptDir = join(root, 'packaging', 'windows');
-
-interface Finding {
-  file: string;
-  line: number;
-  message: string;
-}
 
 /**
  * Blank out comments, keeping line numbers intact.
@@ -273,24 +269,20 @@ function parseWithPowerShell(shell: string, files: string[]): Finding[] {
         }
       }
     }
-    $results | ConvertTo-Json -Compress -AsArray
+    # No -AsArray: it is a PowerShell 6+ switch, and the installer runs on
+    # Windows PowerShell 5.1, which rejects it outright ("A parameter cannot be
+    # found that matches parameter name 'AsArray'") and takes the whole lint
+    # step down with it. The count-dependent shape this produces (a bare object
+    # for a single finding) is normalised in parsePowerShellFindings so a lone
+    # parse error is never dropped.
+    $results | ConvertTo-Json -Compress
   `;
 
   const output = execFileSync(shell, ['-NoProfile', '-Command', script], {
     encoding: 'utf8',
-  }).trim();
-
-  if (output === '' || output === '[]') return [];
-
-  const parsed: unknown = JSON.parse(output);
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.flatMap((entry): Finding[] => {
-    if (typeof entry !== 'object' || entry === null) return [];
-    const row = entry as Record<string, unknown>;
-    if (typeof row.file !== 'string' || typeof row.message !== 'string') return [];
-    return [{ file: row.file, line: Number(row.line ?? 1), message: row.message }];
   });
+
+  return parsePowerShellFindings(output);
 }
 
 /**
