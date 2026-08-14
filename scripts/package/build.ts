@@ -32,6 +32,14 @@
  * therefore checked by nothing at all.
  */
 
+// Loaded first, before anything reads the environment: `warnIfServerActionsKeyMissing`
+// checks `process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY`, which a packager sets
+// in `.env` (the same value every release, Phase 12 §2). Without this the key is
+// only seen when the shell happens to export it, so a build from a correct `.env`
+// would warn and bake a random key anyway — the exact class `script-env.test.ts`
+// guards.
+import 'dotenv/config';
+
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
