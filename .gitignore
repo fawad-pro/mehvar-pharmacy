@@ -19,3 +19,8 @@ test-results/
 # list and the drift would be invisible until a pharmacy asked why a medicine
 # in the code is missing from its search.
 dist/catalog/
+
+# The founder's private record of which licences were issued to whom
+# (`licence:issue` appends to it). Never committed: it carries customer names
+# and live tokens.
+licences.jsonl

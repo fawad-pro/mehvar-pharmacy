@@ -30,6 +30,8 @@ import {
   revokeSession,
   setSessionUser,
 } from '@/db/auth-queries';
+import { resolveLicence } from '@/db/licence-state-queries';
+import type { LicenceState } from '@/domain/licensing/state';
 import { tenantScope, type TenantScope } from '@/db/scoped';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -48,6 +50,16 @@ export interface ActiveSession {
   readonly tenantName: string;
   readonly tenantSlug: string;
   readonly tenantSuspended: boolean;
+  /**
+   * [PCN-005] The licence tier this pharmacy is operating under.
+   *
+   * Carried the same way `tenantSuspended` is, and resolved in the same place,
+   * because it answers the same shape of question. It is NOT the same thing:
+   * suspension is the founder's deliberate hard stop and blocks login, while a
+   * lapsed licence never stops a sale. Nothing may set `tenants.status` from a
+   * licence lapse.
+   */
+  readonly licence: LicenceState;
   readonly deviceId: Uuid | null;
   readonly deviceName: string | null;
   /** The `A` in `A-1042` (Phase 9 §3). Null for owner remote sessions. */
@@ -115,12 +127,35 @@ export async function currentSession(): Promise<ActiveSession | undefined> {
     return undefined;
   }
 
+  // Memoised per tenant for a minute — see `licence-state-queries.ts`.
+  //
+  // A failure here must never cost a session, and must never RESTRICT either.
+  // An unreadable licence is our failure, not the pharmacy's: the table might
+  // be missing a grant after a migration (PCN-001's exact shape), or the
+  // database might simply have hiccupped. Restricting on that would withhold
+  // receiving from a pharmacy that has paid, because of a bug on our side.
+  //
+  // So the fallback is FULL capability and a loud log. `invalid` is reserved
+  // for a token we actually read and refused — a fact about the licence rather
+  // than a fact about our luck. Every ambiguity resolves toward the customer.
+  const licence = await resolveLicence(row.tenantId, row.userId, row.tenantSlug).catch(
+    (error: unknown) => {
+      console.error(
+        'Licence state could not be read — treating as unrestricted. ' +
+          'If this persists, run `npm run db:grants` and send a support bundle.',
+        error,
+      );
+      return undefined;
+    },
+  );
+
   return {
     sessionId: row.sessionId,
     kind: row.kind,
     tenantId: row.tenantId,
     tenantName: row.tenantName,
     tenantSlug: row.tenantSlug,
+    licence: licence?.state ?? { status: 'licensed', tier: 'full' },
     // Phase 8 §4: a tenant flag gates writes; the export endpoint stays open
     // regardless (T3 — the data is the customer's, in every payment state).
     tenantSuspended: row.tenantStatus === 'suspended',

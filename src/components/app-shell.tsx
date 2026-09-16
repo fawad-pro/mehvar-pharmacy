@@ -19,6 +19,7 @@ import { RefreshOnSync } from '@/client/sync/refresh-on-sync';
 import { ServiceWorker } from '@/client/sync/service-worker';
 
 import { KeyBar } from './key-bar';
+import { LicenceBanner, type LicenceNotice } from './licence-banner';
 import { PinSwitchOverlay, type SwitchableUser } from './pin-switch-overlay';
 import { SettleUdhaarOverlay } from './settle-udhaar-overlay';
 import { TopBar } from './top-bar';
@@ -31,6 +32,7 @@ export function AppShell({
   userName,
   userRole,
   users,
+  licence,
   children,
 }: {
   tenantId: string;
@@ -40,6 +42,7 @@ export function AppShell({
   userName: string;
   userRole: 'owner' | 'salesman';
   users: SwitchableUser[];
+  licence: LicenceNotice | null;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -106,6 +109,10 @@ export function AppShell({
               setSwitching(true);
             }}
           />
+
+          {/* Between the bar and the surface: visible without being in the way,
+              and never over the cart. */}
+          <LicenceBanner notice={licence} isOwner={userRole === 'owner'} />
 
           <UdhaarKeyProvider register={register}>
             <main className="min-h-0 flex-1 overflow-auto">{children}</main>

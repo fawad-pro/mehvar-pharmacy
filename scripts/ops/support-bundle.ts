@@ -154,10 +154,80 @@ async function verifierSection(): Promise<Section> {
   return { heading: 'Verifier (ADR-8)', lines: captured };
 }
 
+/**
+ * Licence standing, and the observation histogram (PCN-005).
+ *
+ * The histogram is the point. `system_behind` has two causes the software
+ * deliberately does not try to tell apart — a clock that was turned back, and a
+ * witness poisoned by a past fault — and these few rows are what let a person
+ * separate them: a fault is one or two rows in a strange year against hundreds
+ * in this one; a rollback is a dense, continuous run.
+ *
+ * Still no pharmacy data: dates, counts and states only.
+ */
+async function licenceSection(): Promise<Section> {
+  if (!process.env.DATABASE_URL) {
+    return { heading: 'Licence', lines: ['DATABASE_URL is not set — could not read the licence.'] };
+  }
+
+  try {
+    const [{ listTenantIds, anyUserId }, { resolveLicence }, { observationHistogram }] =
+      await Promise.all([
+        import('../../src/db/provisioning'),
+        import('../../src/db/licence-state-queries'),
+        import('../../src/db/licence-queries'),
+      ]);
+
+    const lines: string[] = [];
+    for (const tenantId of await listTenantIds()) {
+      const userId = await anyUserId(tenantId);
+      if (userId === undefined) continue;
+      const { state, clock, rebindsUsed, installationId, systemNow, businessNow } =
+        await resolveLicence(tenantId, userId, '');
+
+      lines.push(`Pharmacy:      ${state.customerName ?? tenantId}`);
+      lines.push(`State:         ${state.status}  (tier: ${state.tier})`);
+      lines.push(`Paid until:    ${state.entitlementEndsOn ?? '—'}`);
+      lines.push(`Grace until:   ${state.graceEndsOn ?? '—'}`);
+      lines.push(`Licence id:    ${state.licenceId ?? '—'}`);
+      lines.push(`Bound to:      ${installationId ?? '—'}`);
+      lines.push(`Rebinds used:  ${rebindsUsed}`);
+      lines.push(`Clock:         ${clock}`);
+      lines.push(`System time:   ${systemNow.toISOString()}`);
+      lines.push(`Effective now: ${businessNow.toISOString()}`);
+      if (state.invalidReason !== undefined) {
+        lines.push(`Refused because: ${state.invalidReason}`);
+      }
+      lines.push('');
+    }
+
+    const histogram = await observationHistogram();
+    lines.push('Clock observations (newest days, with counts):');
+    if (histogram.length === 0) {
+      lines.push('  (none recorded yet)');
+    } else {
+      for (const row of histogram) {
+        lines.push(`  ${row.day}   ${row.count}`);
+      }
+      lines.push('');
+      lines.push('  A single row in a strange year is a clock fault, and clears itself.');
+      lines.push('  A dense run of them is a clock that was actually set that way.');
+    }
+
+    return { heading: 'Licence (PCN-005)', lines };
+  } catch (caught) {
+    return {
+      heading: 'Licence (PCN-005)',
+      lines: [`Could not read: ${caught instanceof Error ? caught.message : caught}`],
+    };
+  }
+}
+
 async function main(): Promise<void> {
   const sections: Section[] = [
     machineSection(),
     installationSection(),
+    await licenceSection(),
     backupSection(),
     firstRunSection(),
     await verifierSection(),

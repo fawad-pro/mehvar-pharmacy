@@ -792,6 +792,130 @@ export const catalogProposals = pgTable(
 );
 
 /* ========================================================================== */
+/* §7 Licensing (PCN-005)                                                      */
+/*                                                                             */
+/* `licences` is tenant-scoped: a licence is bought by a pharmacy. The other    */
+/* two are tenant-FREE, because they are facts about the machine — one Node can */
+/* serve many tenants when a pharmacy is cloud-hosted, and conflating machine   */
+/* identity with business identity is what makes "the customer replaced their   */
+/* PC" an unanswerable support ticket (commercialization.md Part 1 §5).         */
+/* ========================================================================== */
+
+/**
+ * [PCN-005] Every licence token ever installed on this tenant. Append-only.
+ *
+ * In `EVENT_TABLES`, which is the point: the app role holds SELECT and INSERT
+ * and an explicit REVOKE of UPDATE and DELETE, so the record of what this
+ * pharmacy is entitled to is something the running application physically
+ * cannot rewrite or erase. ADR-1's guarantee, applied to licensing rather than
+ * bolted beside it.
+ *
+ * Renewing is a row. Rebinding is a row. Nothing updates:
+ *
+ *   - the effective licence is derived per Invariant L2 (group by `licence_id`,
+ *     newest `issued_at` within a group, then greatest `entitlement_ends_at`
+ *     across groups);
+ *   - the binding is derived per Invariant L3 (does ANY row for the effective
+ *     licence carry this machine's id);
+ *   - the rebind count is derived from the distinct installation ids.
+ *
+ * The unique index carries `issued_at` as well as tenant, licence and
+ * installation, and all four are load-bearing:
+ *
+ *   - re-pasting the SAME token on the SAME machine collapses onto the existing
+ *     row (same issued_at) — idempotent, as a paste should be;
+ *   - a RENEWAL shares its `licence_id` by design (L2 supersedes within a
+ *     licence by `issued_at`) and is usually on the same machine, so without
+ *     `issued_at` in the key it would conflict and be silently dropped — a
+ *     pharmacy that paid and could not be renewed;
+ *   - a REBIND carries the same token to a NEW machine and gets its own row.
+ */
+export const licences = pgTable(
+  'licences',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+
+    /** The signed token verbatim — re-verifiable, re-exportable, re-writable. */
+    token: text('token').notNull(),
+
+    /** Denormalised from the VERIFIED payload, so queries need no crypto. */
+    licenceId: uuid('licence_id').notNull(),
+    issuedAt: timestamp('issued_at', { withTimezone: true }).notNull(),
+    entitlementEndsAt: timestamp('entitlement_ends_at', { withTimezone: true }).notNull(),
+    tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }).notNull(),
+    graceDays: integer('grace_days').notNull(),
+    warnDays: integer('warn_days').notNull(),
+
+    /** The machine this token was verified on. Never rewritten. */
+    installationId: uuid('installation_id').notNull(),
+
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('licences_tenant_licence_installation_issued_key').on(
+      table.tenantId,
+      table.licenceId,
+      table.installationId,
+      table.issuedAt,
+    ),
+    index('licences_tenant_idx').on(table.tenantId),
+  ],
+);
+
+/**
+ * [PCN-005] Machine identity — the database half of `installation.json`.
+ *
+ * Mutable, and deliberately not an event table: `last_version` and
+ * `last_hostname` move with every release and every rename. `id` and
+ * `first_seen_at` are never updated by any writer.
+ *
+ * Its real job is that boot can **restore** the installation id when
+ * `%ProgramData%` has been cleaned, rather than minting a fresh one and
+ * silently unbinding a paying customer. It is also one of the four sources the
+ * trial anchor takes a `min()` over, which is what stops a deleted file from
+ * resetting a trial.
+ */
+export const installations = pgTable('installations', {
+  id: uuid('id').primaryKey(),
+  firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull(),
+  lastVersion: text('last_version').notNull(),
+  /** Support triage only. Never enforcement — that would be a fingerprint. */
+  lastHostname: text('last_hostname'),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * [PCN-005] The monotonic clock witness (Invariant L5). Append-only.
+ *
+ * The only anchor that advances on an IDLE installation, and therefore the only
+ * thing that can prove an entitlement has elapsed with no internet and no
+ * trading. The ledger cannot: it moves only when business moves.
+ *
+ * The rows are evidence, not verdicts. The witness is the K-th largest
+ * observation at or below any signed `clockCeiling`, so one bad reading from a
+ * failing CMOS battery cannot poison it permanently — see
+ * `domain/licensing/clock.ts` for why `max()` is the wrong reducer and cannot
+ * be repaired after the fact.
+ */
+export const clockObservations = pgTable(
+  'clock_observations',
+  {
+    id: uuid('id').primaryKey(),
+    observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
+    /** 'boot' | 'interval' — how this observation came to be taken. */
+    source: text('source').notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [index('clock_observations_observed_at_idx').on(table.observedAt)],
+);
+
+/* ========================================================================== */
 
 /**
  * Event tables, per Phase 9 §5.1 — INSERT only for the application role.
@@ -808,4 +932,7 @@ export const EVENT_TABLES = [
   'sale_return_lines',
   'adjustments',
   'cash_movements',
+  // [PCN-005] A licence history and a clock the application cannot rewrite.
+  'licences',
+  'clock_observations',
 ] as const;

@@ -105,24 +105,36 @@ export function readInstallation(env: EnvLike = process.env): InstallationRecord
  * Idempotent by design: an installer that runs twice — a repair, a reinstall
  * over the top — must not give one machine two identities. Returns the
  * existing record unchanged if there is one.
+ *
+ * `known` is the database's answer, if it has one. **Restore before minting**
+ * (PCN-005): a cleaned `%ProgramData%` on a machine whose database still
+ * remembers is an honest customer's Tuesday, and minting a fresh id there would
+ * silently unbind a paying pharmacy and reset its trial anchor. The database is
+ * the more durable half, so it wins whenever it has an answer.
  */
 export function ensureInstallation(
   installedVersion: string,
   env: EnvLike = process.env,
+  known?: Pick<InstallationRecord, 'installationId' | 'installedAt'>,
 ): InstallationRecord {
   const existing = readInstallation(env);
   if (existing !== undefined) return existing;
 
   const record: InstallationRecord = {
-    installationId: uuidv7(),
-    installedAt: new Date().toISOString(),
+    installationId: known?.installationId ?? uuidv7(),
+    installedAt: known?.installedAt ?? new Date().toISOString(),
     installedVersion,
   };
 
+  writeInstallation(record, env);
+  return record;
+}
+
+/** Writes the record. Used by `ensureInstallation` and by boot's restore path. */
+export function writeInstallation(record: InstallationRecord, env: EnvLike = process.env): void {
   const file = installationFile(env);
   mkdirSync(dirname(file), { recursive: true });
   writeFileSync(file, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
-  return record;
 }
 
 function isInstallationRecord(value: unknown): value is InstallationRecord {

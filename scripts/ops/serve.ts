@@ -24,6 +24,7 @@
  */
 import 'dotenv/config';
 
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
@@ -40,6 +41,49 @@ function serverEntryPoint(): string {
   return join(__dirname, '..', '..', 'server.js');
 }
 
+/**
+ * Licensing boot work (PCN-005), fired and forgotten.
+ *
+ * Deliberately NOT awaited before the server starts listening. Reconciliation
+ * touches the database, and a database that is slow or briefly unreachable must
+ * not delay the counter coming up — the licence question can be answered a
+ * second later, and a shop that cannot open because we were deciding about
+ * billing is the wall P2 exists to prevent.
+ *
+ * It also writes the boot clock observation, which is the anchor that lets an
+ * entitlement elapse on a machine that never trades.
+ */
+function startLicensingBoot(): void {
+  const version = process.env.npm_package_version ?? readVersionFile() ?? '0.0.0';
+
+  void import('../../src/db/licence-boot')
+    .then(({ reconcileOnBoot }) => reconcileOnBoot(version))
+    .then((report) => {
+      if (report.restoredIdentity) {
+        console.log('Licence: restored this machine’s identity from the database.');
+      }
+      if (report.tokensAdopted > 0) {
+        console.log(`Licence: adopted ${report.tokensAdopted} token(s) found on disk.`);
+      }
+      for (const problem of report.problems) {
+        console.warn(`Licence (non-fatal): ${problem}`);
+      }
+    })
+    .catch((error: unknown) => {
+      // Never fatal. The counter sells regardless of what licensing thinks.
+      console.warn('Licence boot skipped:', error instanceof Error ? error.message : error);
+    });
+}
+
+function readVersionFile(): string | undefined {
+  try {
+    const raw = readFileSync(join(__dirname, '..', '..', '..', 'VERSION'), 'utf8');
+    return (JSON.parse(raw) as { version?: string }).version;
+  } catch {
+    return undefined;
+  }
+}
+
 function main(): void {
   const entry = serverEntryPoint();
 
@@ -51,6 +95,8 @@ function main(): void {
 
   console.log(`Mehvar counter server starting on ${process.env.HOSTNAME}:${process.env.PORT}`);
   console.log(`  entry point: ${entry}`);
+
+  startLicensingBoot();
 
   // Starting the server IS requiring it: Next's standalone output listens at
   // module scope. Nothing follows, and nothing should.

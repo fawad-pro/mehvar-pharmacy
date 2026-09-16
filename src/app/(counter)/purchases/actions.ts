@@ -10,6 +10,7 @@
  * actually needs.
  */
 
+import { requireCapability } from '@/auth/capabilities';
 import { currentSession, scopeFor } from '@/auth/session';
 import {
   commitPurchase,
@@ -54,8 +55,7 @@ export async function createSupplierAction(
 }
 
 export type ReceivePurchaseOutcome =
-  | { ok: true; resolvedPendingBase: number; batchCount: number }
-  | { ok: false; message: string };
+  { ok: true; resolvedPendingBase: number; batchCount: number } | { ok: false; message: string };
 
 /** I5 — name the fix, not the rule. */
 function messageFor(reason: PurchaseRejection): string {
@@ -86,6 +86,14 @@ export async function receivePurchaseAction(
   }
   if (session.tenantSuspended) {
     return { ok: false, message: 'This pharmacy’s account is on hold. Contact support.' };
+  }
+  // [PCN-005] Receiving is off the sale path, so it is one of the four things a
+  // lapsed licence withholds. The counter keeps selling throughout; what the
+  // pharmacy loses is the ability to restock, which is visible on the Stock
+  // screen as the pending layer fills (D2) and clears itself when they pay.
+  const licensed = requireCapability(session, 'receive_stock');
+  if (!licensed.ok) {
+    return { ok: false, message: licensed.message };
   }
 
   const result = await commitPurchase(scopeFor(session), command);
