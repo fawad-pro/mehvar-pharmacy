@@ -267,6 +267,151 @@ payments.
 
 ---
 
+## PCN-005 — an expired licence may withhold more than a banner, but never a sale
+
+Session: 17 · Raised: 2026-09-16 · Status: **open — nothing implemented,
+awaiting decision**
+
+Like PCN-004 and unlike PCN-001–003, this note implements nothing. Those were
+gaps found while building something the plan had already decided. This widens a
+decision the research note made deliberately, with its reasoning recorded — so
+it stops rather than proceeding under a recommendation. The supporting analysis
+is the licensing architecture produced alongside this note.
+
+### Plan sections in tension
+
+- **`docs/research/commercialization.md` §6 (frozen, decided):** "**Never block a
+  sale.** P2 is not suspended for billing. An expired licence shows the owner a
+  banner; it does not stop the counter. Anything else makes the licensing system
+  a P2 violation."
+- **Same note, roadmap Phase 2 success criteria:** "An expired licence shows a
+  banner and **does not stop a sale**."
+- **Phase 3 §5, requirement 3:** "The service must support **restricting a
+  tenant's access on non-payment** without ever compromising that tenant's
+  ability to export their data (architecture phase); the enforcement policy
+  itself is operational and post-launch."
+- **Phase 3 §3:** "the customer's data is never held hostage — export remains
+  available regardless of payment state."
+- **P2:** "Never block a sale… every blocking moment must have a designed fast
+  path."
+- **T3:** "Full export, always available, even in suspension."
+
+### The gap
+
+Phase 3 §5 already exports a requirement for **restricting access** on
+non-payment, bounded by one thing only: export must survive. §6 later narrowed
+that restriction to a banner. Both are in the package; they do not agree on how
+much a licence may withhold.
+
+The founder now requires the product to be protected against continued use
+without authorisation, ahead of distribution to pharmacies nobody will visit.
+Under §6 as written, a pharmacy that never pays again loses a banner and nothing
+else, indefinitely. That is not a restriction, and Phase 3 §5's requirement is
+left with no implementation.
+
+The substance of §6's reasoning is not in question. Its asymmetric-risk
+argument — "a false lockout at 9am on a Monday costs the reference customer, the
+referral behind them, and the reputation that is the entire launch channel" — is
+correct, and this note preserves it **absolutely, on the sale path**. What is in
+question is whether that argument reaches the back office. It does not, on the
+plan's own terms: ADR-3 already excludes purchases, adjustments and catalogue
+edits from offline capture, and already has them "require a connection and say
+so calmly." Nobody is standing at the counter when stock is received.
+
+### Options
+
+**A. A graduated capability ladder.** Recommended. Three tiers. Selling
+(W1–W3, W6), receipt printing and data export are unconditional in **every**
+licence state, forever. Past expiry-plus-grace, the installation loses stock
+receiving (W8/W9), stock adjustment (W10), catalogue packs and auto-updates;
+reports go read-only. A lapsed pharmacy trades exactly as fast as a paid one and
+cannot restock, so value decays visibly without a customer ever being made to
+wait. Consequence: §6's "banner" sentence is widened, and the product carries a
+gating chokepoint it does not have today.
+
+**B. Banner only, exactly as §6 is written.** Zero change to the frozen note and
+zero false-lockout risk. Licensing becomes a renewal-reminder system and
+non-payment is collected socially. Consequence: Phase 3 §5's restriction
+requirement stays unimplemented, and the founder's stated requirement is not
+met. This option is not unreasonable and should not be dismissed — it is what
+the note decided, and it was decided for good reasons.
+
+**C. Read-only after grace — no new sales.** Rejected. A direct P2 violation,
+and the exact failure §6 exists to prevent. Recorded so it is not proposed later
+as the "obvious" strengthening.
+
+### Why A does not violate P2
+
+P2's test is _"name the moment this feature could stop a sale; show its escape
+hatch."_ Under A there is no such moment, by construction rather than by
+intention:
+
+- The four ADR-3 record kinds — sale, settlement, quick item, customer — are
+  ungated in every state, **asserted by kind rather than by module**. This
+  matters concretely: `createQuickItem` lives in `src/domain/catalog/writers.ts`,
+  so a gate written against "catalogue writes" would break W6's unknown-medicine
+  escape hatch _and_, because `ingestBatch` stops at the first non-`synced`
+  outcome, strand every offline sale behind it in the outbox permanently.
+- Printing is untouched (T5 — the receipt is the pharmacy's public face, and
+  nothing about our billing appears on it).
+- `/api/export` stays open in every state, as it already is for suspension
+  (T3, Phase 3 §3).
+
+A lapsed pharmacy accumulates pending-layer rows as stock drains. That is D2's
+existing visible-exception machinery doing its job, not a new nag, and Day 6's
+oldest-first resolution clears it when they pay. Nothing needs unwinding.
+
+### What A costs, honestly
+
+A capability gate is a new enforcement surface in a codebase that has one
+(`scoped.ts`) and guards it carefully. It needs the same posture: one
+chokepoint, one sweep test whose polarity defaults new actions to _needing a
+decision_, and an exemption list somebody had to write by hand.
+
+It also introduces an offline expiry clock, and with it a case the product does
+not have today: a pharmacy whose computer has the wrong date. The architecture
+resolves this without ever withholding a lapse, and accepts one bounded
+trade-off — a wrong forward clock expires a paying customer early. That is
+survivable only because of this note's own recommendation: under A the cost is
+receiving, not selling.
+
+### Recommendation
+
+**A.** Phase 3 §5's requirement is already in the package and currently has no
+implementation; A is the smallest thing that gives it one while leaving every
+sentence of P2, T3 and T5 true. B is a legitimate outcome and costs one file's
+worth of code to switch to.
+
+The decision that would be wrong is C — strengthening by doing the thing §6
+correctly forbids, rather than by finding the capabilities whose withdrawal
+costs the pharmacy nothing at the counter.
+
+### Nothing implemented at the time of filing
+
+By design, following PCN-004.
+
+### Decision
+
+_Awaiting review._
+
+### Suggested plan amendment if accepted
+
+- **`docs/research/commercialization.md` §6** — "An expired licence shows the
+  owner a banner; it does not stop the counter" becomes: "An expired licence
+  never stops the counter, never stops a receipt printing, and never closes
+  export. Past grace it withholds the capabilities that are not on the sale path
+  — receiving, adjustment, catalogue packs and updates — and says so in plain
+  words."
+- **Same note, roadmap Phase 2 success criteria** — gains the same wording.
+- **Phase 3 §5** — requirement 3 gains a pointer to the ladder as its
+  implementation, so the requirement and its answer are no longer in two
+  documents that disagree.
+
+Applied in the source sections per the C1–C5 precedent of correcting the plan
+rather than working around it downstream.
+
+---
+
 ## Decided notes
 
 ## PCN-004 — the product is to be installed in the shop, but Phase 3 decided cloud
