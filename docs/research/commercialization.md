@@ -362,8 +362,22 @@ This is already project policy — Phase 3 §5.3 is binding:
 > regardless of payment state.
 
 **Never block a sale.** P2 is not suspended for billing. An expired licence
-shows the owner a banner; it does not stop the counter. Anything else makes the
-licensing system a P2 violation.
+never stops the counter, never stops a receipt printing, and never closes
+export. Past grace it withholds the capabilities that are not on the sale path —
+receiving, adjustment, catalogue packs and updates — and says so in plain words.
+Anything that reaches the counter makes the licensing system a P2 violation.
+
+> **Amended 2026-09-16 by PCN-005 (accepted).** The original sentence read "An
+> expired licence shows the owner a banner; it does not stop the counter," which
+> left Phase 3 §5's requirement 3 — "the service must support restricting a
+> tenant's access on non-payment" — with no implementation. The asymmetric-risk
+> reasoning above is preserved **absolutely on the sale path** and is what the
+> amendment refuses to trade; what it declines to extend is that reasoning to
+> the back office, which ADR-3 already excludes from offline capture and which
+> already fails calmly. Enforcement is by capability and by ADR-3 record kind,
+> never by module: `sale`, `settlement`, `quick_item` and `customer` are ungated
+> wherever they are written. Read-only-after-grace was considered and rejected.
+> Full analysis: PCN-005 in `docs/PLAN_CHANGE_NOTES.md`.
 
 ### When each capability becomes worth introducing
 
@@ -536,13 +550,15 @@ first things §0.1 permits to be built — their problem is now real.
 
 **Steps.** Auto-updater (signed manifest on GitHub Releases; **wait for empty
 outbox**; back up before migrating; retain previous installer for rollback);
-offline-verifiable Ed25519 licence file (expiry, generous grace, banner only,
-export always available per Phase 3 §5.3); guided first-run wizard; LAN
-multi-counter; code-signed installer.
+offline-verifiable Ed25519 licence file (expiry, generous grace, the PCN-005
+capability ladder, export always available per Phase 3 §5.3); guided first-run
+wizard; LAN multi-counter; code-signed installer.
 
 **Success criteria.** A remote install updates itself across a release without
-contact. A rollback is rehearsed successfully. An expired licence shows a banner
-and **does not stop a sale**.
+contact. A rollback is rehearsed successfully. An expired licence **does not
+stop a sale**, does not stop a receipt printing, and does not close export
+(amended 2026-09-16 by PCN-005); past grace it withholds receiving, adjustment,
+catalogue packs and updates, and says which.
 
 **Dependencies.** Roadmap Phase 1. **Code-signing certificate procured** — start
 this during roadmap Phase 1; the lead time is the schedule risk, not the code.

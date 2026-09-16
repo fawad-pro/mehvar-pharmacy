@@ -43,6 +43,13 @@
       "when": 1786016079570,
       "tag": "0005_catalog_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789555671544,
+      "tag": "0006_licensing",
+      "breakpoints": true
     }
   ]
 }

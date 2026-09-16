@@ -25,8 +25,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { applyCatalogPack, currentCatalog } from '../../src/db/catalog-pack-queries';
+import { installationPermits } from '../../src/db/licence-gate-queries';
 import { closeDatabase } from '../../src/db/client';
-import { compareCatalogVersions, describeProblem, readPackJson } from '../../src/domain/catalog/pack';
+import {
+  compareCatalogVersions,
+  describeProblem,
+  readPackJson,
+} from '../../src/domain/catalog/pack';
 
 function argumentValue(flag: string): string | null {
   const index = process.argv.indexOf(flag);
@@ -80,6 +85,20 @@ async function main(): Promise<void> {
         `${existing.catalogVersion} is already applied. Re-importing is safe and will refresh it.`,
       );
     }
+  }
+
+  // [PCN-005] Catalogue updates are one of the four things a lapsed licence
+  // withholds. Nothing about selling changes — the pharmacy keeps trading on
+  // the catalogue it already has, and W6's quick item still means an unknown
+  // medicine never blocks a sale.
+  if (!(await installationPermits('catalog_pack'))) {
+    console.error(
+      'This pharmacy’s licence has lapsed, so catalogue updates are paused.\n' +
+        'Selling, printing and export are unaffected. Renew in Settings → Licence,\n' +
+        'or contact Mehvar support.',
+    );
+    await closeDatabase();
+    process.exit(1);
   }
 
   const summary = await applyCatalogPack(parsed.pack, origin);

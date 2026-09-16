@@ -35,6 +35,9 @@ const MUTABLE_TABLES = [
   'catalog_versions',
   'global_barcodes',
   'catalog_proposals',
+  // [PCN-005] Machine identity: mutable, because the version and hostname move
+  // with every release. The id and first_seen_at are never updated by a writer.
+  'installations',
 ] as const;
 
 /**

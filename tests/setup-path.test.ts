@@ -28,7 +28,7 @@
  * proves they are all *wired in*, which is the part nothing was checking.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -60,7 +60,10 @@ describe('db:setup — the one command a fresh install runs', () => {
    */
   const required: [stage: string, why: string][] = [
     ['db:migrate', 'the schema would not exist'],
-    ['db:grants', 'the application role would not exist — Postgres reports that as an auth failure'],
+    [
+      'db:grants',
+      'the application role would not exist — Postgres reports that as an auth failure',
+    ],
     ['db:seed', 'there would be no demo pharmacy to log into'],
     ['catalog:seed', 'the Add Product picker would find nothing, for every query, forever'],
   ];
@@ -127,5 +130,75 @@ describe('the paths that must not drift from db:setup', () => {
   it('the README tells people to run db:setup', () => {
     const readme = readFileSync(join(process.cwd(), 'README.md'), 'utf8');
     expect(readme).toContain('npm run db:setup');
+  });
+});
+
+/**
+ * [PCN-005] A new table must land in exactly one grant list.
+ *
+ * A table in neither gets no grant at all, so the application role cannot even
+ * SELECT it — and a table wrongly in the mutable list is an append-only claim
+ * that is quietly false. Both failures surface days later, on someone else's
+ * machine, as something that looks nothing like a missing GRANT.
+ *
+ * This is the same shape of check as the rest of this file: it reads the chain
+ * rather than exercising it, costs nothing, and names the stage that went
+ * missing.
+ */
+describe('licensing tables are granted, and granted correctly', () => {
+  const grants = readFileSync(join(process.cwd(), 'scripts', 'db', 'grants.ts'), 'utf8');
+  const schema = readFileSync(join(process.cwd(), 'src', 'db', 'schema.ts'), 'utf8');
+
+  const eventTables =
+    (/export const EVENT_TABLES = \[([\s\S]*?)\] as const;/.exec(schema)?.[1] ?? '')
+      .match(/'([a-z_]+)'/g)
+      ?.map((quoted) => quoted.replaceAll("'", '')) ?? [];
+
+  const mutableTables =
+    (/const MUTABLE_TABLES = \[([\s\S]*?)\] as const;/.exec(grants)?.[1] ?? '')
+      .match(/'([a-z_]+)'/g)
+      ?.map((quoted) => quoted.replaceAll("'", '')) ?? [];
+
+  it('found both lists — a passing empty check proves nothing', () => {
+    expect(eventTables.length).toBeGreaterThan(5);
+    expect(mutableTables.length).toBeGreaterThan(5);
+  });
+
+  for (const table of ['licences', 'clock_observations']) {
+    it(`${table} is an event table, so UPDATE and DELETE are revoked`, () => {
+      // The whole point of PCN-005's data model: the record of what a pharmacy
+      // is entitled to, and of how far time has reached, are things the running
+      // application physically cannot rewrite.
+      expect(eventTables).toContain(table);
+      expect(mutableTables).not.toContain(table);
+    });
+  }
+
+  it('installations is mutable — its version and hostname move every release', () => {
+    expect(mutableTables).toContain('installations');
+    expect(eventTables).not.toContain('installations');
+  });
+
+  it('migration 0006 exists and is in the journal', () => {
+    const dir = join(process.cwd(), 'src', 'db', 'migrations');
+    const files = readdirSync(dir).filter((name) => name.endsWith('.sql'));
+    expect(files).toContain('0006_licensing.sql');
+
+    const journal = JSON.parse(readFileSync(join(dir, 'meta', '_journal.json'), 'utf8')) as {
+      entries: Array<{ tag: string }>;
+    };
+    expect(journal.entries.map((entry) => entry.tag)).toContain('0006_licensing');
+  });
+
+  it('every migration on disk is in the journal — an orphan never runs', () => {
+    const dir = join(process.cwd(), 'src', 'db', 'migrations');
+    const onDisk = readdirSync(dir)
+      .filter((name) => name.endsWith('.sql'))
+      .map((name) => name.replace(/\.sql$/, ''))
+      .sort();
+    const journal = JSON.parse(readFileSync(join(dir, 'meta', '_journal.json'), 'utf8')) as {
+      entries: Array<{ tag: string }>;
+    };
+    expect(journal.entries.map((entry) => entry.tag).sort()).toEqual(onDisk);
   });
 });

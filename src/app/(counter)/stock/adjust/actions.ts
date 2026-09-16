@@ -10,18 +10,13 @@
  * would simply route around by asking someone else to click it.
  */
 
+import { requireCapability } from '@/auth/capabilities';
 import { currentSession, scopeFor } from '@/auth/session';
 import { batchesOnHand } from '@/db/adjustment-queries';
-import {
-  commitAdjustment,
-  type AdjustmentCommand,
-} from '@/domain/inventory/commit-adjustment';
+import { commitAdjustment, type AdjustmentCommand } from '@/domain/inventory/commit-adjustment';
 
 import { revalidateAfter } from '../../revalidate';
-import type {
-  AdjustmentRejection,
-  BatchOnHand,
-} from '@/domain/inventory/adjustment';
+import type { AdjustmentRejection, BatchOnHand } from '@/domain/inventory/adjustment';
 
 export async function batchesOnHandAction(productId: string): Promise<BatchOnHand[]> {
   const session = await currentSession();
@@ -32,8 +27,7 @@ export async function batchesOnHandAction(productId: string): Promise<BatchOnHan
 }
 
 export type AdjustOutcome =
-  | { ok: true; resolvedPendingBase: number }
-  | { ok: false; message: string };
+  { ok: true; resolvedPendingBase: number } | { ok: false; message: string };
 
 /** I5 — say what to do next. */
 function messageFor(reason: AdjustmentRejection | 'stale_batch_state'): string {
@@ -60,6 +54,11 @@ export async function adjustStockAction(command: AdjustmentCommand): Promise<Adj
   }
   if (session.tenantSuspended) {
     return { ok: false, message: 'This pharmacy’s account is on hold. Contact support.' };
+  }
+  // [PCN-005] W10 is off the sale path — see the note in purchases/actions.ts.
+  const licensed = requireCapability(session, 'adjust_stock');
+  if (!licensed.ok) {
+    return { ok: false, message: licensed.message };
   }
 
   const result = await commitAdjustment(scopeFor(session), command);

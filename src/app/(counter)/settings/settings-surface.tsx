@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 
 import type { UserListItem } from '@/db/auth-queries';
 
+import { LicenceSection } from './licence-section';
 import {
   addSalesmanAction,
   currentTenantSettingsAction,
@@ -33,6 +34,7 @@ export function SettingsSurface() {
       <ReceiptSettingsForm />
       <UsersAndPins />
       <PrinterGuide />
+      <LicenceSection />
       <ExportSection />
     </section>
   );
