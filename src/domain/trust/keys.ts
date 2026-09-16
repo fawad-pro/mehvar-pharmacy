@@ -56,10 +56,33 @@ const PRODUCTION_KEYS: Keyring = {
   // 'mehvar-2': '<spki der base64url>',   // cold spare, never used until needed
 };
 
-export const TRUST_ROOT_KEYS: Keyring = {
-  ...PRODUCTION_KEYS,
-  [DEV_KID]: DEV_PUBLIC_KEY,
-};
+/**
+ * The keys this build trusts — and the dev key is trusted **only while there is
+ * no production key.**
+ *
+ * This is the whole safety of committing the dev private half. During Stage 1
+ * there is nothing to protect: no paying pharmacy exists, and the dev key is the
+ * only way to run the chain at all. The moment a real `mehvar-1` is pasted into
+ * `PRODUCTION_KEYS`, the dev key drops out of the trusted set — so the
+ * committed, public private half can never forge a licence a real pharmacy
+ * accepts. The exposure ends automatically, at exactly the point it would start
+ * to matter, rather than depending on someone remembering to delete a line.
+ *
+ * The rule is a pure function so the security-critical branch — "dev key absent
+ * once a production key exists" — is testable today, while `PRODUCTION_KEYS` is
+ * still empty. `keys.test.ts` exercises both states.
+ */
+export function composeTrustRoot(
+  productionKeys: Keyring,
+  devKid: string,
+  devPublicKey: string,
+): Keyring {
+  return Object.keys(productionKeys).length > 0
+    ? { ...productionKeys }
+    : { [devKid]: devPublicKey };
+}
+
+export const TRUST_ROOT_KEYS: Keyring = composeTrustRoot(PRODUCTION_KEYS, DEV_KID, DEV_PUBLIC_KEY);
 
 /** Whether this build carries any key the founder actually controls privately. */
 export function hasProductionKey(keyring: Keyring = TRUST_ROOT_KEYS): boolean {

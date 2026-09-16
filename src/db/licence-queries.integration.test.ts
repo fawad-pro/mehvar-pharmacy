@@ -249,3 +249,95 @@ suite('the clock witness, against a real table', () => {
     expect(isPermissionDenied(remove)).toBe(true);
   });
 });
+
+/**
+ * The fail-open decision, exercised through the REAL resolver.
+ *
+ * `currentSession` falls back to `full` capability only when `resolveLicence`
+ * *rejects* — an operational failure (a missing grant, a database hiccup), our
+ * fault and not the pharmacy's. The security property is that no token CONTENT
+ * failure reaches that fallback: a malformed, forged, tampered, wrong-key or
+ * wrong-pharmacy token must make `resolveLicence` RETURN an `invalid`
+ * (restricted) state, never throw.
+ *
+ * These plant bad tokens directly with the owner connection, bypassing
+ * `installLicenceAction`'s verify-before-insert — the belt-and-braces the
+ * read-time re-verification exists for. Each asserts the resolver COMPLETED and
+ * returned `restricted`, which is the whole point: a completed resolve cannot
+ * hit the fail-open path.
+ */
+suite('the fail-open path admits only operational failure', () => {
+  let tenant: TestTenant;
+
+  async function plant(token: string): Promise<void> {
+    await adminQuery(
+      `INSERT INTO licences
+         (id, tenant_id, token, licence_id, issued_at, entitlement_ends_at,
+          token_expires_at, grace_days, warn_days, installation_id, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())`,
+      [
+        uuidv7(),
+        tenant.tenantId,
+        token,
+        uuidv7(),
+        new Date('2026-01-01T00:00:00Z'),
+        new Date('2027-01-01T00:00:00Z'),
+        new Date('2027-03-01T00:00:00Z'),
+        30,
+        45,
+        MACHINE_A,
+        tenant.userId,
+      ],
+    );
+  }
+
+  afterAll(async () => {
+    if (tenant !== undefined) {
+      await adminQuery('DELETE FROM licences WHERE tenant_id = $1', [tenant.tenantId]);
+      await tenant.cleanup();
+    }
+  });
+
+  it('a garbage token stored in the row resolves to restricted, not full', async () => {
+    tenant = await provisionTestTenant('failopen');
+    const { resolveLicence, forgetLicenceState } = await import('./licence-state-queries');
+
+    await plant('not-a-real-token');
+    forgetLicenceState(tenant.tenantId);
+
+    const resolved = await resolveLicence(tenant.tenantId, tenant.userId, 'failopen');
+    // Completed (did not throw) AND restricted — the two facts together are what
+    // prove the forgery cannot reach the operational fail-open.
+    expect(resolved.state.status).toBe('invalid');
+    expect(resolved.state.tier).toBe('restricted');
+  });
+
+  it('a token signed by a NON-trust-root key resolves to restricted', async () => {
+    // resolveLicence verifies against the real TRUST_ROOT_KEYS (no injected
+    // keyring), so the integration suite's own key is, correctly, untrusted.
+    const foreign = signPayload(
+      {
+        v: 1,
+        kid: KID,
+        licenceId: uuidv7(),
+        tenantSlug: 'failopen',
+        customerName: 'Forger',
+        plan: 'standard',
+        branches: 1,
+        issuedAt: '2026-01-01T00:00:00Z',
+        entitlementEndsAt: '2099-01-01T00:00:00Z',
+        expiresAt: '2099-03-01T00:00:00Z',
+        graceDays: 30,
+        warnDays: 45,
+      },
+      privateKey,
+    );
+    await plant(foreign);
+    const { resolveLicence, forgetLicenceState } = await import('./licence-state-queries');
+    forgetLicenceState(tenant.tenantId);
+
+    const resolved = await resolveLicence(tenant.tenantId, tenant.userId, 'failopen');
+    expect(resolved.state.status).toBe('invalid');
+    expect(resolved.state.tier).toBe('restricted');
+  });
+});
