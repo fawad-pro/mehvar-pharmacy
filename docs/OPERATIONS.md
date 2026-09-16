@@ -159,6 +159,107 @@ The second machine installs nothing.
    cannot collide with `A-1` — `unique(tenant_id, receipt_prefix)` has enforced
    that since Day 1 (PCN-001).
 
+## 6a. The licence
+
+Decided by PCN-005. The shape of it, in one line: **an expired licence never
+stops the counter.**
+
+| Tier            | What it means                                    | What works                                                                                                           |
+| --------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `full`          | Trial, or paid and comfortably inside the term   | Everything                                                                                                           |
+| `full` + notice | Renewal due, overdue but in grace, or unverified | Everything, plus an amber banner                                                                                     |
+| `restricted`    | Past grace, unbound, or unverifiable             | **Selling, printing and export — always.** No receiving, no stock adjustments, no catalogue updates, no auto-updates |
+
+A lapsed pharmacy trades exactly as fast as a paid one. What it loses is the
+ability to restock: stock drains, the pending layer fills where the operator can
+see it (D2), and it clears itself when they pay. Say this plainly to a customer —
+it is a better conversation than a threat, and it is what the software does.
+
+### Issuing a licence (founder)
+
+```
+npm run licence:issue -- --slug al-shifa --name "Al-Shifa Medical Store" --months 12
+```
+
+Prints one line. Send it over WhatsApp; the owner pastes it into **Settings →
+Licence**. No internet is involved at either end.
+
+A **renewal** reuses the same licence id, which is what makes it supersede
+rather than sit alongside:
+
+```
+npm run licence:issue -- --slug al-shifa --name "…" --months 12 --licence-id <id from licences.jsonl>
+```
+
+`licences.jsonl` is the founder's private record of what was issued to whom. It
+is gitignored and stays on the founder's machine.
+
+To see what the software sees, paste back what the customer pasted:
+
+```
+npm run licence:inspect -- <token>
+```
+
+### Before the first paying pharmacy
+
+> **Blocker.** No production signing key is provisioned. Tokens are currently
+> signed with a development key whose private half is committed in
+> `scripts/licence/dev-key.ts` and is therefore public — anyone with the
+> repository can forge one. `licence:issue` says so, loudly, every time.
+>
+> Run `npm run licence:keygen` **on your own machine**, twice: `mehvar-1` to
+> sign with and `mehvar-2` as a cold spare. Public halves go into
+> `TRUST_ROOT_KEYS` in `src/domain/trust/keys.ts`; private halves go to a
+> password manager and nowhere else. Never on a build agent, never in CI.
+
+### If a computer is replaced
+
+The licence reads **"registered to a different computer"** and the owner gets a
+button that moves it, up to three times a year, with no contact. Past that the
+screen asks them to send a support bundle — and the wording never accuses,
+because a pharmacy that reinstalled Windows four times is not a pirate.
+
+Note what this does and does not catch. A licence **forwarded to another
+pharmacy** is caught immediately and offline. A **cloned machine** is not: an
+honest restore after a dead disk and a deliberate copy are byte-identical
+locally, and erring toward the honest customer is the deliberate choice. Cloning
+becomes visible when the cloud activation service lands in roadmap Phase 3.
+
+### If the date on the computer is wrong
+
+This is the one licence problem that looks like a licence problem and is not.
+
+- **The date reads far in the future** (a dead CMOS battery is the usual cause):
+  the licence may expire early. Correct the date in Windows and it clears
+  itself — a single wrong reading never becomes authoritative.
+- **The date reads behind what Mehvar has recorded:** the banner says so and
+  names both dates. Two things look identical here — a clock someone turned
+  back, and a clock fault from a while ago that was never noticed — so the
+  software does not guess.
+
+**Send a support bundle.** Its Licence section carries the observation
+histogram, and that is what separates the two: a fault is one or two rows in a
+strange year against hundreds in this one; a rollback is a dense, continuous
+run. If it was a persistent fault, issue a repair licence:
+
+```
+npm run licence:issue -- --slug <slug> --licence-id <id> --months 12 \
+  --clock-ceiling 2026-09-16
+```
+
+Observations after that date are then ignored. Nothing is deleted — the record
+of what the machine believed stays exactly where it is, the same way a wrong
+sale is corrected by a compensating record rather than an edit (T2).
+
+### What never happens
+
+- Selling never stops, in any state, online or offline.
+- A receipt never carries anything about our billing. It is the pharmacy's
+  public face, not our collections channel.
+- `/api/export` is open in every licence state. The data is the customer's,
+  in every payment state (T3) — say so in the sales conversation, it is true
+  and it is checkable.
+
 ## 7. Support
 
 WhatsApp-first (Phase 12 §7). Every contact starts the same way:
@@ -207,6 +308,9 @@ stay. Removing a pharmacy's records is a separate, deliberate, manual act.
 | `npm run ops:backup`         | Take a dump now.                                           |
 | `npm run ops:restore-drill`  | Prove the newest dump restores and verifies.               |
 | `npm run ops:support-bundle` | Collect diagnostics.                                       |
+| `npm run licence:issue`      | Mint a licence for one pharmacy (see §6a).                 |
+| `npm run licence:inspect`    | Decode and verify a token. No database, no network.        |
+| `npm run licence:keygen`     | Mint a trust-root keypair. Founder's machine only.         |
 | `npm run package:build`      | Assemble the installer payload.                            |
 
 ## The medicine catalogue
@@ -272,6 +376,6 @@ base unit is deliberately left as `unit`: a distributor's "pack of 10" does not
 say whether those are tablets or sachets, and a wrong unit NAME is visible to
 the operator where a wrong factor would silently corrupt stock arithmetic.
 
-Everything imported this way lands as **reference** quality, never *verified* —
+Everything imported this way lands as **reference** quality, never _verified_ —
 verified means someone checked a real box. It goes through the same pack writer
 as everything else, so re-running an import is safe.
