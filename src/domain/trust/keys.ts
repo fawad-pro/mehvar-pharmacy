@@ -52,8 +52,8 @@ const DEV_PUBLIC_KEY = 'MCowBQYDK2VwAyEAFwq9f4diE4x-6TZJQMKeRA0-C5moOJeNL2TR05S7
  * `trust-keys.test.ts` states that plainly rather than letting it pass unnoticed.
  */
 const PRODUCTION_KEYS: Keyring = {
-  // 'mehvar-1': '<spki der base64url>',
-  // 'mehvar-2': '<spki der base64url>',   // cold spare, never used until needed
+  'mehvar-1': 'MCowBQYDK2VwAyEAhlbrSb_IyLQjt2PWHq_CcTNz8HlID0wvv0SChSjS-Uw',
+  'mehvar-2': 'MCowBQYDK2VwAyEA8GbgDwf7X7Hg9cDDdZdw2bqp7FHdPLzNqA8Oqf6rvqs',   // cold spare, never used until needed
 };
 
 /**
