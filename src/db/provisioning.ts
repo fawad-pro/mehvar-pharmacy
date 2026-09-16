@@ -104,11 +104,24 @@ export async function tenantSettings(tenantId: Uuid): Promise<TenantSettings | u
   return rows[0]?.settings;
 }
 
+/** A tenant's login slug, by id. Used by the refresh client (Stage 2). */
+export async function tenantSlugById(tenantId: Uuid): Promise<string | undefined> {
+  const rows = await globalCatalog()
+    .select({ slug: tenants.slug })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId))
+    .limit(1);
+  return rows[0]?.slug;
+}
+
 /**
  * Settings edited from the Settings screen — receipt header/footer (Phase 10
  * §2 surface 9). `tenants` carries no `tenant_id` to scope on, the same
  * reason `tenantSettings` lives here rather than behind `TenantScope`.
  */
-export async function updateTenantSettings(tenantId: Uuid, settings: TenantSettings): Promise<void> {
+export async function updateTenantSettings(
+  tenantId: Uuid,
+  settings: TenantSettings,
+): Promise<void> {
   await globalCatalog().update(tenants).set({ settings }).where(eq(tenants.id, tenantId));
 }

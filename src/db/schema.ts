@@ -915,6 +915,41 @@ export const clockObservations = pgTable(
   (table) => [index('clock_observations_observed_at_idx').on(table.observedAt)],
 );
 
+/**
+ * [Stage 2] Signed revocations. Append-only, in `EVENT_TABLES`.
+ *
+ * A revocation is a founder-signed statement, delivered by the refresh
+ * endpoint, that a licence is no longer valid. The signed token is stored
+ * verbatim and RE-VERIFIED against the trust root at read time — the columns
+ * are a query convenience, the signature is the authority (the same posture as
+ * `licences.token`). The app role can INSERT one but cannot UPDATE or DELETE
+ * it: a revocation, like everything else here, is a record of something that
+ * happened, corrected only by a superseding signed statement, never erased.
+ */
+export const revocations = pgTable(
+  'revocations',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** The signed revocation, verbatim — re-verifiable at read time. */
+    token: text('token').notNull(),
+    /** Denormalised from the VERIFIED payload, for querying without crypto. */
+    licenceId: uuid('licence_id').notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }).notNull(),
+    reason: text('reason').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex('revocations_tenant_token_key').on(table.tenantId, table.token),
+    index('revocations_tenant_licence_idx').on(table.tenantId, table.licenceId),
+  ],
+);
+
 /* ========================================================================== */
 
 /**
@@ -935,4 +970,6 @@ export const EVENT_TABLES = [
   // [PCN-005] A licence history and a clock the application cannot rewrite.
   'licences',
   'clock_observations',
+  // [Stage 2] Signed revocations — a record, never erased.
+  'revocations',
 ] as const;

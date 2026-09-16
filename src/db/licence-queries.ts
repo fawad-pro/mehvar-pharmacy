@@ -9,6 +9,7 @@ import {
   licences,
   payments,
   purchases,
+  revocations,
   saleReturns,
   sales,
   tenants,
@@ -261,4 +262,76 @@ export async function observationHistogram(
     .orderBy(desc(day))
     .limit(limit);
   return rows.map((row) => ({ day: row.day, count: Number(row.count) }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Revocations (Stage 2)                                               */
+/* ------------------------------------------------------------------ */
+
+export interface StoredRevocation {
+  readonly id: Uuid;
+  readonly token: string;
+  readonly licenceId: string;
+  readonly revokedAt: Date;
+  readonly reason: string;
+}
+
+export async function listRevocations(scope: TenantScope): Promise<StoredRevocation[]> {
+  const rows = await scope.select(revocations);
+  return rows.map((row) => ({
+    id: row.id as Uuid,
+    token: row.token,
+    licenceId: row.licenceId,
+    revokedAt: row.revokedAt,
+    reason: row.reason,
+  }));
+}
+
+/**
+ * Record a revocation. Idempotent on (tenant, token): a revocation delivered
+ * twice by the refresh endpoint collapses onto the one row. `onConflictDoNothing`
+ * because, like every event row, there is nothing to update.
+ */
+export async function insertRevocation(
+  scope: TenantScope,
+  input: {
+    readonly id: Uuid;
+    readonly token: string;
+    readonly licenceId: string;
+    readonly revokedAt: Date;
+    readonly reason: string;
+  },
+): Promise<void> {
+  await scope.db
+    .insert(revocations)
+    .values({
+      id: input.id,
+      tenantId: scope.tenantId,
+      createdBy: scope.userId,
+      token: input.token,
+      licenceId: input.licenceId,
+      revokedAt: input.revokedAt,
+      reason: input.reason,
+    })
+    .onConflictDoNothing();
+}
+
+/**
+ * The distinct installations a licence has been bound to — the activation
+ * signal (Stage 2).
+ *
+ * This is the count the refresh endpoint uses to spot a licence spread across
+ * more machines than were paid for, and it is what a human reviews when someone
+ * exceeds the self-service rebind allowance. Computed from the append-only
+ * `licences` rows — no hardware fingerprint, just "how many machines has this
+ * licence key been pasted on".
+ */
+export async function installationsForLicence(
+  scope: TenantScope,
+  licenceId: string,
+): Promise<string[]> {
+  const rows = await listLicences(scope);
+  return [
+    ...new Set(rows.filter((row) => row.licenceId === licenceId).map((row) => row.installationId)),
+  ];
 }

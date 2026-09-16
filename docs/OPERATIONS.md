@@ -260,6 +260,42 @@ sale is corrected by a compensating record rather than an edit (T2).
   in every payment state (T3) — say so in the sales conversation, it is true
   and it is checkable.
 
+### Online licence service (Stage 2, roadmap Phase 3 — off by default)
+
+Everything above works with no server. Stage 2 adds the cloud side, and it is
+dormant until `MEHVAR_LICENCE_URL` is set on a Node:
+
+- **Online refresh.** With a URL configured, the Node polls
+  `POST <url>/v1/refresh` on a six-hourly timer — never on the sale path, so a
+  slow or unreachable server never touches a single sale. It renews the licence
+  (a fresh signed token), delivers a signed revocation, or is simply ignored on
+  any error or timeout. Offline stays the normal case.
+- **Revoking a licence.** `npm run licence:revoke -- --slug <slug> --licence-id
+<id> --reason chargeback` prints a signed revocation the endpoint returns to
+  the pharmacy. It moves that licence to restricted the moment it verifies —
+  selling, printing and export are unaffected, and **it never deletes data.**
+  Silence from the server is never a revocation; only a valid signed statement
+  is. `npm run licence:inspect -- <token>` reads a revocation too.
+- **Activation / duplicate detection.** The refresh request reports how many
+  machines a licence has been pasted on (no hardware fingerprint — just the
+  count). Combined with the three-rebinds-a-year self-service limit above, that
+  is what a human reviews when a licence looks spread wider than it was sold.
+
+### Signed catalogue updates (Stage 2)
+
+A catalogue **update** that arrives from outside the application must be a signed
+file, verified against the same trust root as the licence:
+
+```
+npm run catalog:build -- --version 2026.10.1 --sign --out mehvar-2026.10.1.signed.json
+```
+
+The pharmacy imports it with `catalog:import`, which verifies the signature
+before a single medicine is read; a tampered, unsigned, unknown-key or malformed
+pack is refused. The **bundled starter** catalogue that ships inside the
+installer is the one exception — it is already covered by the code-signed
+installer, and is imported with `--trusted-local`.
+
 ## 7. Support
 
 WhatsApp-first (Phase 12 §7). Every contact starts the same way:
@@ -299,19 +335,21 @@ stay. Removing a pharmacy's records is a separate, deliberate, manual act.
 
 ## Command reference (founder, not customer)
 
-| Command                      | Purpose                                                    |
-| ---------------------------- | ---------------------------------------------------------- |
-| `npm run init`               | Provision a pharmacy. Idempotent; refuses if one exists.   |
-| `npm run db:migrate`         | Apply migrations. Forward-only, additive-safe.             |
-| `npm run db:grants`          | **Required after any migration adding a table** (PCN-001). |
-| `npm run db:verify`          | ADR-8 verifier. Non-zero exit on mismatch.                 |
-| `npm run ops:backup`         | Take a dump now.                                           |
-| `npm run ops:restore-drill`  | Prove the newest dump restores and verifies.               |
-| `npm run ops:support-bundle` | Collect diagnostics.                                       |
-| `npm run licence:issue`      | Mint a licence for one pharmacy (see §6a).                 |
-| `npm run licence:inspect`    | Decode and verify a token. No database, no network.        |
-| `npm run licence:keygen`     | Mint a trust-root keypair. Founder's machine only.         |
-| `npm run package:build`      | Assemble the installer payload.                            |
+| Command                        | Purpose                                                    |
+| ------------------------------ | ---------------------------------------------------------- |
+| `npm run init`                 | Provision a pharmacy. Idempotent; refuses if one exists.   |
+| `npm run db:migrate`           | Apply migrations. Forward-only, additive-safe.             |
+| `npm run db:grants`            | **Required after any migration adding a table** (PCN-001). |
+| `npm run db:verify`            | ADR-8 verifier. Non-zero exit on mismatch.                 |
+| `npm run ops:backup`           | Take a dump now.                                           |
+| `npm run ops:restore-drill`    | Prove the newest dump restores and verifies.               |
+| `npm run ops:support-bundle`   | Collect diagnostics.                                       |
+| `npm run licence:issue`        | Mint a licence for one pharmacy (see §6a).                 |
+| `npm run licence:inspect`      | Decode and verify a token. No database, no network.        |
+| `npm run licence:keygen`       | Mint a trust-root keypair. Founder's machine only.         |
+| `npm run licence:revoke`       | Mint a signed revocation for one licence (Stage 2).        |
+| `npm run catalog:build --sign` | Build a signed catalogue pack for distribution (Stage 2).  |
+| `npm run package:build`        | Assemble the installer payload.                            |
 
 ## The medicine catalogue
 

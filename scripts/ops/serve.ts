@@ -73,6 +73,42 @@ function startLicensingBoot(): void {
       // Never fatal. The counter sells regardless of what licensing thinks.
       console.warn('Licence boot skipped:', error instanceof Error ? error.message : error);
     });
+
+  startLicenceRefresh();
+}
+
+/**
+ * [Stage 2] Online licence refresh, on a timer — never a request handler, so no
+ * network call ever sits on the sale path. Dormant unless `MEHVAR_LICENCE_URL`
+ * is set (roadmap Phase 3); best-effort and non-fatal in every case.
+ *
+ * The interval is deliberately long: refresh is a background reconciliation, not
+ * a heartbeat the counter waits on. A shop that never comes online simply keeps
+ * trading on the licence it holds.
+ */
+function startLicenceRefresh(): void {
+  const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+  const run = (): void => {
+    void import('../../src/db/licence-refresh')
+      .then(({ refreshLicences }) => refreshLicences())
+      .then((report) => {
+        if (report.tokensAccepted > 0 || report.revocationsAccepted > 0) {
+          console.log(
+            `Licence refresh: ${report.tokensAccepted} token(s), ` +
+              `${report.revocationsAccepted} revocation(s) applied.`,
+          );
+        }
+      })
+      .catch((error: unknown) => {
+        console.warn('Licence refresh skipped:', error instanceof Error ? error.message : error);
+      });
+  };
+
+  // A short delay after boot, then on the interval. `unref()` so this timer
+  // never keeps the process alive on its own.
+  setTimeout(run, 30_000).unref();
+  setInterval(run, REFRESH_INTERVAL_MS).unref();
 }
 
 function readVersionFile(): string | undefined {

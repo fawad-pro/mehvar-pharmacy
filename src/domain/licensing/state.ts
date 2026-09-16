@@ -79,6 +79,8 @@ export type LicenceStatus =
   | 'grace'
   /** Token past `expiresAt`, entitlement still live. Never degrades. */
   | 'stale'
+  /** A valid signed revocation was received for this licence (Stage 2). */
+  | 'revoked'
   /** Past entitlement plus grace — or the trial ran out and nothing was pasted. */
   | 'lapsed'
   /** A valid licence, registered to a different installation. */
@@ -130,6 +132,9 @@ export interface EvaluateInput {
   readonly boundHere?: boolean | undefined;
   /** Set when a token was present but did not survive verification. */
   readonly invalidReason?: LicenceInvalidReason | undefined;
+  /** [Stage 2] A valid signed revocation exists for the effective licence.
+   *  Verified in the DB layer against the trust root; the evaluator stays pure. */
+  readonly revoked?: boolean | undefined;
   /** `min()` over the derived sources — see `trialAnchor` in `clock.ts`. */
   readonly trialStartedAt?: Date | undefined;
 }
@@ -158,6 +163,7 @@ const TIER_OF: Record<LicenceStatus, CapabilityTier> = {
   expiring: 'full_notice',
   grace: 'full_notice',
   stale: 'full_notice',
+  revoked: 'restricted',
   lapsed: 'restricted',
   unbound: 'restricted',
   invalid: 'restricted',
@@ -177,6 +183,19 @@ export function evaluateLicence(input: EvaluateInput): LicenceState {
 
   if (input.invalidReason !== undefined) {
     return { status: 'invalid', tier: 'restricted', invalidReason: input.invalidReason };
+  }
+
+  // A valid signed revocation is honoured immediately, regardless of dates or
+  // binding. `restricted` — which still sells, prints and exports (PCN-005);
+  // revocation stops restocking, never trading, and never deletes data.
+  if (input.revoked === true && input.effective !== undefined) {
+    const { payload } = input.effective;
+    return {
+      status: 'revoked',
+      tier: 'restricted',
+      customerName: payload.customerName,
+      licenceId: payload.licenceId,
+    };
   }
 
   if (input.effective === undefined) {

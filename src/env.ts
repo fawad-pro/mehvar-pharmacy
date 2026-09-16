@@ -25,6 +25,14 @@ const serverSchema = z.object({
 
   /** Default tenant timezone (Phase 9 §1); single-timezone country. */
   TENANT_TIME_ZONE: z.string().default('Asia/Karachi'),
+
+  /**
+   * [Stage 2] The cloud licence service (roadmap Phase 3). Unset at launch, and
+   * `refreshLicences()` is dormant while it is: a URL is what turns online
+   * refresh, renewal and revocation on. Never on the sale path — see
+   * `src/db/licence-refresh.ts`.
+   */
+  MEHVAR_LICENCE_URL: z.string().url().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverSchema>;
