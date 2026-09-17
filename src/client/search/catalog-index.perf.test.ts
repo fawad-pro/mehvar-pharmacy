@@ -270,6 +270,18 @@ describe(`a ${CATALOG_SIZE.toLocaleString()}-product catalog`, () => {
     expect(elapsed).toBeLessThan(60);
   });
 
+  it('answers a multi-term "brand + strength" query quickly', () => {
+    // The "pan 40" shape: a name term plus a short strength term, at scale. The
+    // anchor-and-verify path must not turn this into a catalog walk.
+    const queries = ['pan 40', 'pan 100', 'brufen 200', 'tab pan 25', 'panadol 5'];
+    const elapsed = medianMs(20, () => {
+      for (const query of queries) {
+        index.search(query);
+      }
+    });
+    expect(elapsed).toBeLessThan(60);
+  });
+
   it('resolves a barcode in constant time', () => {
     const code = payload.barcodes[10]?.barcode ?? '';
     expect(index.resolveBarcode(code)).toBeDefined();

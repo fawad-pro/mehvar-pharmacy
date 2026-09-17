@@ -36,6 +36,7 @@
     "lint:ps": "tsx scripts/package/lint-powershell.ts",
     "package:installer": "tsx scripts/package/build-installer.ts",
     "catalog:build": "tsx --conditions=react-server scripts/catalog/build-pack.ts",
+    "catalog:validate": "tsx --conditions=react-server scripts/catalog/validate.ts",
     "catalog:import": "tsx --conditions=react-server scripts/catalog/import-pack.ts",
     "catalog:csv": "tsx --conditions=react-server scripts/catalog/import-csv.ts",
     "licence:keygen": "tsx scripts/licence/keygen.ts",

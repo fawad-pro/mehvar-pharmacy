@@ -466,7 +466,29 @@ export async function searchGlobalCatalog(
   const trimmed = term.trim();
   if (trimmed.length < 2) return [];
 
-  const pattern = `%${trimmed}%`;
+  const pattern = `%${escapeLike(trimmed)}%`;
+
+  /*
+   * Multi-word narrowing — the picker's half of the counter's "pan 40".
+   *
+   * A brand followed by its strength or form ("pan 40", "augmentin syrup") is
+   * how a product is actually named out loud, and it must narrow rather than
+   * widen: every word has to land somewhere on the row (AND), and strength and
+   * form are searched alongside name/salt/maker so the number and the form have
+   * somewhere to match. A single word keeps the old behaviour exactly.
+   */
+  const words = trimmed.split(/\s+/).filter((word) => word.length > 0);
+  const wordMatches = words.map((word) => {
+    const wordPattern = `%${escapeLike(word)}%`;
+    return or(
+      ilike(globalProducts.name, wordPattern),
+      ilike(globalProducts.formulaText, wordPattern),
+      ilike(globalProducts.manufacturer, wordPattern),
+      ilike(globalProducts.strength, wordPattern),
+      ilike(globalProducts.form, wordPattern),
+    );
+  });
+
   const rows = await database()
     .select({
       globalProductId: globalProducts.id,
@@ -481,13 +503,7 @@ export async function searchGlobalCatalog(
       identityKey: globalProducts.identityKey,
     })
     .from(globalProducts)
-    .where(
-      or(
-        ilike(globalProducts.name, pattern),
-        ilike(globalProducts.formulaText, pattern),
-        ilike(globalProducts.manufacturer, pattern),
-      ),
-    )
+    .where(and(...wordMatches))
     /*
      * Ordered by RELEVANCE, then quality, then name.
      *
@@ -503,8 +519,10 @@ export async function searchGlobalCatalog(
      * anything.
      */
     .orderBy(
+      // Prefix relevance is judged on the FIRST word — the brand in "pan 40" —
+      // since a multi-word term never prefixes the name as a whole.
       sql`case
-            when ${globalProducts.name} ilike ${`${trimmed}%`} then 0
+            when ${globalProducts.name} ilike ${`${escapeLike(words[0] ?? trimmed)}%`} then 0
             when ${globalProducts.name} ilike ${pattern} then 1
             when ${globalProducts.formulaText} ilike ${pattern} then 2
             else 3
@@ -651,4 +669,9 @@ export async function alternativesFor(
 export async function globalCatalogSize(): Promise<number> {
   const [row] = await database().select({ total: count() }).from(globalProducts);
   return row?.total ?? 0;
+}
+
+/** Escapes a user term for use inside an ILIKE pattern, so `%` and `_` are literal. */
+function escapeLike(value: string): string {
+  return value.replace(/[%_\\]/g, (match) => `\\${match}`);
 }

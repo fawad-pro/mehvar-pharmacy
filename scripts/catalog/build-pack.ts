@@ -38,12 +38,14 @@ import { createPrivateKey, type KeyObject } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+import { STARTER_SOURCE } from '../db/catalog-data';
 import { SEED_PRODUCTS } from '../db/seed-data';
 import { DEV_PRIVATE_KEY_PKCS8_BASE64URL } from '../licence/dev-key';
 
 import { identityKey } from '../../src/domain/catalog/identity';
 import { PACK_FORMAT, readPack, type PackProduct } from '../../src/domain/catalog/pack';
 import { signPack } from '../../src/domain/catalog/signed-pack';
+import { expandStarter } from '../../src/domain/catalog/starter';
 import { DEV_KID, hasProductionKey } from '../../src/domain/trust/keys';
 
 function argumentValue(flag: string): string | null {
@@ -90,7 +92,9 @@ function main(): void {
   const sign = process.argv.includes('--sign');
   const outPath = resolve(argumentValue('--out') ?? 'dist/catalog/mehvar-catalog.json');
 
-  const products: PackProduct[] = SEED_PRODUCTS.map((seed) => ({
+  // The hand-checked head — verified tier (Phase 6 §5), with real pack structures,
+  // reference MRPs and the barcodes that were inspected against real packs.
+  const verified: PackProduct[] = SEED_PRODUCTS.map((seed) => ({
     name: seed.name,
     manufacturer: seed.manufacturer,
     formulaText: seed.formula,
@@ -105,6 +109,41 @@ function main(): void {
       ? { barcodes: [{ barcode: seed.barcode, unitLevelName: seed.baseUnit }] }
       : {}),
   }));
+
+  /*
+   * The broad body — reference tier (Phase 6 §3.1). Expanded from the molecule/
+   * brand source in `catalog-data.ts`, and given the verified head's identities
+   * as reserved so a reference row never shadows a hand-checked one. The verified
+   * head is emitted first, so within a pack it wins every collision.
+   */
+  const verifiedKeys = new Set(
+    verified.map((product) =>
+      identityKey({
+        name: product.name,
+        strength: product.strength ?? null,
+        form: product.form ?? null,
+        manufacturer: product.manufacturer ?? null,
+        formulaText: product.formulaText ?? null,
+      }),
+    ),
+  );
+  const { products: reference, categoryCounts, duplicates } = expandStarter(
+    STARTER_SOURCE,
+    verifiedKeys,
+  );
+
+  const products: PackProduct[] = [...verified, ...reference];
+
+  console.log(
+    `  head (verified): ${verified.length}   body (reference): ${reference.length}   ` +
+      `collapsed duplicates: ${duplicates}`,
+  );
+  const topCategories = Object.entries(categoryCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([name, count]) => `${name} ${count}`)
+    .join(', ');
+  console.log(`  top categories: ${topCategories}`);
 
   /*
    * Refuse to ship a pack with two entries for one medicine.
