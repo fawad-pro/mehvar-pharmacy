@@ -186,6 +186,74 @@ describe('the ladder is ordered, not just scored', () => {
   });
 });
 
+describe('multi-term search — a brand narrowed by strength or form', () => {
+  // A small catalogue with two strengths of one brand and a clashing name, so
+  // "pan 40" has something to get wrong.
+  const catalog: IndexedProduct[] = [
+    product('panto-40', 'Pantoprazole', { strength: '40mg', formulaText: 'Pantoprazole' }),
+    product('panto-20', 'Pantoprazole', { strength: '20mg', formulaText: 'Pantoprazole' }),
+    product('panadol', 'Panadol', { strength: '500mg', formulaText: 'Paracetamol' }),
+    product('zopent-40', 'Zopent', {
+      strength: '40mg',
+      formulaText: 'Pantoprazole',
+      manufacturer: 'Getz Pharma',
+    }),
+    product('panadol-syr', 'Panadol Syrup', {
+      strength: '120mg/5ml',
+      form: 'Syrup',
+      formulaText: 'Paracetamol',
+    }),
+  ];
+  const idx = CatalogIndex.build({
+    products: catalog,
+    barcodes: [],
+    stock: {},
+    syncedAt: PAYLOAD.syncedAt,
+  });
+  const found = (query: string) =>
+    idx.search(query, 25).map((h) => `${h.product.name} ${h.product.strength ?? ''}`.trim());
+
+  it('"pan 40" finds pantoprazole 40mg, not panadol and not the 20mg', () => {
+    const hits = found('pan 40');
+    expect(hits).toContain('Pantoprazole 40mg');
+    expect(hits).not.toContain('Panadol 500mg');
+    expect(hits).not.toContain('Pantoprazole 20mg');
+  });
+
+  it('"pantoprazole 40" finds every 40mg pantoprazole brand', () => {
+    const hits = found('pantoprazole 40');
+    expect(hits).toContain('Pantoprazole 40mg');
+    expect(hits).toContain('Zopent 40mg');
+    expect(hits).not.toContain('Pantoprazole 20mg');
+  });
+
+  it('"panadol syrup" narrows a brand by its form', () => {
+    expect(found('panadol syrup')).toEqual(['Panadol Syrup 120mg/5ml']);
+  });
+
+  it('"tab pan 40" tolerates the form word a salesman types first', () => {
+    expect(found('tab pan 40')).toContain('Pantoprazole 40mg');
+  });
+
+  it('every term must match — a term that matches nothing yields nothing (AND, not OR)', () => {
+    expect(found('pan zzz')).toEqual([]);
+  });
+
+  it('keeps the strongest tier for the label, so a name+strength hit reads as a name hit', () => {
+    const hit = idx.search('pantoprazole 40')[0];
+    expect(hit?.matchedOn).toBe('name');
+  });
+});
+
+describe('single strength or form as a lone query is a low-priority filter', () => {
+  it('a bare strength still resolves to the products that carry it', () => {
+    const hits = index.search('500mg', 25);
+    expect(hits.length).toBeGreaterThan(0);
+    // It never outranks a real name/prefix match — it is the lowest rung.
+    expect(hits.every((hit) => hit.tier >= MatchTier.Strength)).toBe(true);
+  });
+});
+
 describe('barcodes bypass ranking (Phase 10 §5)', () => {
   it('resolves a scanned code to one product and its unit level', () => {
     const hits = index.search('8964000101018');
