@@ -395,7 +395,11 @@ if (-not (Test-Path $CatalogPack)) {
 } else {
     try {
         Invoke-Tool -FilePath $NodeExe -Arguments @(
-            (Join-Path $BinDir 'catalog\import-pack.js'), $CatalogPack, '--origin', 'installer'
+            # --trusted-local: the bundled starter pack is built from seed-data.ts at
+            # package time and ships INSIDE this code-signed installer, so it is
+            # already covered by the installer's own trust. Catalogue UPDATES that
+            # arrive later must be signed envelopes (Stage 2, domain/catalog/signed-pack).
+            (Join-Path $BinDir 'catalog\import-pack.js'), $CatalogPack, '--origin', 'installer', '--trusted-local'
         ) -Environment @{
             DOTENV_CONFIG_PATH = $EnvFile
             DATABASE_URL       = $appUrl

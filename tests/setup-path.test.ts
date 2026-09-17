@@ -164,7 +164,7 @@ describe('licensing tables are granted, and granted correctly', () => {
     expect(mutableTables.length).toBeGreaterThan(5);
   });
 
-  for (const table of ['licences', 'clock_observations']) {
+  for (const table of ['licences', 'clock_observations', 'revocations']) {
     it(`${table} is an event table, so UPDATE and DELETE are revoked`, () => {
       // The whole point of PCN-005's data model: the record of what a pharmacy
       // is entitled to, and of how far time has reached, are things the running
@@ -188,6 +188,16 @@ describe('licensing tables are granted, and granted correctly', () => {
       entries: Array<{ tag: string }>;
     };
     expect(journal.entries.map((entry) => entry.tag)).toContain('0006_licensing');
+  });
+
+  it('migration 0007 (revocations) exists and is in the journal', () => {
+    const dir = join(process.cwd(), 'src', 'db', 'migrations');
+    const files = readdirSync(dir).filter((name) => name.endsWith('.sql'));
+    expect(files).toContain('0007_revocations.sql');
+    const journal = JSON.parse(readFileSync(join(dir, 'meta', '_journal.json'), 'utf8')) as {
+      entries: Array<{ tag: string }>;
+    };
+    expect(journal.entries.map((entry) => entry.tag)).toContain('0007_revocations');
   });
 
   it('every migration on disk is in the journal — an orphan never runs', () => {

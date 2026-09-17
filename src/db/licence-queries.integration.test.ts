@@ -14,6 +14,7 @@ import { adminQuery, isPermissionDenied } from '../../tests/db-admin';
 import { provisionTestTenant, type TestTenant } from '../../tests/fixtures';
 import {
   insertLicence,
+  installationsForLicence,
   licenceStanding,
   recentObservations,
   recordObservation,
@@ -339,5 +340,38 @@ suite('the fail-open path admits only operational failure', () => {
     const resolved = await resolveLicence(tenant.tenantId, tenant.userId, 'failopen');
     expect(resolved.state.status).toBe('invalid');
     expect(resolved.state.tier).toBe('restricted');
+  });
+});
+
+suite('activation signal — distinct installations for a licence', () => {
+  let tenant: TestTenant;
+
+  afterAll(async () => {
+    if (tenant !== undefined) {
+      await adminQuery('DELETE FROM licences WHERE tenant_id = $1', [tenant.tenantId]);
+      await tenant.cleanup();
+    }
+  });
+
+  it('counts distinct machines a licence has been pasted on — no fingerprint', async () => {
+    tenant = await provisionTestTenant('activation');
+    const licenceId = uuidv7();
+    const machines = [
+      '10000000-0000-7000-8000-000000000001',
+      '10000000-0000-7000-8000-000000000002',
+      '10000000-0000-7000-8000-000000000003',
+      '10000000-0000-7000-8000-000000000004',
+    ];
+    for (const installationId of machines) {
+      await store(tenant, payload({ licenceId }), installationId);
+    }
+    // Same token pasted again on machine 1 is not a new activation.
+    await store(tenant, payload({ licenceId }), machines[0] as string);
+
+    const found = await installationsForLicence(tenant.scope, licenceId);
+    expect(found.sort()).toEqual([...machines].sort());
+    // Four machines = three rebinds beyond the original — past the allowance of
+    // three, which is the point at which self-service stops and a human reviews.
+    expect(found.length - 1).toBeGreaterThan(3 - 1);
   });
 });

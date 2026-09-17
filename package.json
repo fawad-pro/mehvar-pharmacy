@@ -41,8 +41,9 @@
     "licence:keygen": "tsx scripts/licence/keygen.ts",
     "licence:issue": "tsx scripts/licence/issue.ts",
     "licence:inspect": "tsx scripts/licence/inspect.ts",
+    "licence:revoke": "tsx scripts/licence/revoke.ts",
     "db:setup": "npm run db:migrate && npm run db:grants && npm run db:seed && npm run catalog:seed",
-    "catalog:seed": "npm run catalog:build -- --out dist/catalog/mehvar-catalog.json && npm run catalog:import -- dist/catalog/mehvar-catalog.json --origin dev-setup"
+    "catalog:seed": "npm run catalog:build -- --out dist/catalog/mehvar-catalog.json && npm run catalog:import -- dist/catalog/mehvar-catalog.json --origin dev-setup --trusted-local"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",
