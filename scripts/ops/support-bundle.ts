@@ -187,8 +187,7 @@ async function licenceSection(): Promise<Section> {
 
       lines.push(`Pharmacy:      ${state.customerName ?? tenantId}`);
       lines.push(`State:         ${state.status}  (tier: ${state.tier})`);
-      lines.push(`Paid until:    ${state.entitlementEndsOn ?? '—'}`);
-      lines.push(`Grace until:   ${state.graceEndsOn ?? '—'}`);
+      lines.push(`Evaluation to: ${state.evaluationEndsOn ?? '— (licensed / n/a)'}`);
       lines.push(`Licence id:    ${state.licenceId ?? '—'}`);
       lines.push(`Bound to:      ${installationId ?? '—'}`);
       lines.push(`Rebinds used:  ${rebindsUsed}`);

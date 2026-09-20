@@ -28,10 +28,9 @@ import type { Uuid } from '@/lib/uuid';
  * Licensing reads and the one licence write (PCN-005).
  *
  * `licences` and `clock_observations` are event tables, so there is deliberately
- * no update or delete anywhere in this module — renewing is a row, rebinding is
- * a row, and repairing a poisoned clock is a signed `clockCeiling` rather than a
- * DELETE (Invariant L6). If a future change wants to modify one of these rows,
- * that is a design error and not a grant to widen.
+ * no update or delete anywhere in this module — re-issuing is a row and
+ * rebinding is a row. If a future change wants to modify one of these rows, that
+ * is a design error and not a grant to widen.
  *
  * Every derived figure here is computed in TypeScript from plain per-table
  * aggregates. No correlated `sql` subqueries: a correlated subquery is correct
@@ -53,7 +52,6 @@ export async function listLicences(scope: TenantScope): Promise<StoredLicence[]>
     licenceId: row.licenceId,
     token: row.token,
     issuedAt: row.issuedAt,
-    entitlementEndsAt: row.entitlementEndsAt,
     installationId: row.installationId,
     installedAt: row.createdAt,
   }));
@@ -66,7 +64,8 @@ export async function listLicences(scope: TenantScope): Promise<StoredLicence[]>
  * of its own.
  *
  * `onConflictDoNothing` rather than an upsert, because there is nothing to
- * update — the row is a record of something that happened.
+ * update — the row is a record of something that happened. The token is
+ * identity-only (PCN-006): no entitlement, expiry, grace or warn.
  */
 export async function insertLicence(
   scope: TenantScope,
@@ -75,10 +74,6 @@ export async function insertLicence(
     readonly token: string;
     readonly licenceId: string;
     readonly issuedAt: Date;
-    readonly entitlementEndsAt: Date;
-    readonly tokenExpiresAt: Date;
-    readonly graceDays: number;
-    readonly warnDays: number;
     readonly installationId: string;
   },
 ): Promise<void> {
@@ -91,10 +86,6 @@ export async function insertLicence(
       token: input.token,
       licenceId: input.licenceId,
       issuedAt: input.issuedAt,
-      entitlementEndsAt: input.entitlementEndsAt,
-      tokenExpiresAt: input.tokenExpiresAt,
-      graceDays: input.graceDays,
-      warnDays: input.warnDays,
       installationId: input.installationId,
     })
     .onConflictDoNothing();

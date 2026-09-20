@@ -9,6 +9,7 @@
  */
 
 
+import { requireCapability } from '@/auth/capabilities';
 import { currentSession, scopeFor } from '@/auth/session';
 import { keyFor } from '@/client/keyboard/registry';
 import {
@@ -49,6 +50,21 @@ async function requireOwner() {
     } as const;
   }
   return { session } as const;
+}
+
+/**
+ * Authoring a product is owner-only AND licence-gated (PCN-006 Profile C:
+ * `author_product` is withheld while restricted). Catalogue *browsing* —
+ * `searchCatalogAction` below — is not gated, so a restricted install can still
+ * look up medicine identity; only creating or editing a tenant product is new
+ * business and paused.
+ */
+async function requireAuthoring() {
+  const gate = await requireOwner();
+  if ('error' in gate) return gate;
+  const licensed = requireCapability(gate.session, 'author_product');
+  if (!licensed.ok) return { error: licensed.message } as const;
+  return gate;
 }
 
 function draftFromForm(form: FormData): ProductDraft {
@@ -118,7 +134,7 @@ export async function saveProduct(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
-  const gate = await requireOwner();
+  const gate = await requireAuthoring();
   if ('error' in gate) {
     return { status: 'error', message: gate.error };
   }
@@ -144,7 +160,7 @@ export async function saveBarcode(
   _previous: ActionState,
   form: FormData,
 ): Promise<ActionState> {
-  const gate = await requireOwner();
+  const gate = await requireAuthoring();
   if ('error' in gate) {
     return { status: 'error', message: gate.error };
   }
@@ -163,7 +179,7 @@ export async function saveBarcode(
 }
 
 export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<void> {
-  const gate = await requireOwner();
+  const gate = await requireAuthoring();
   if ('error' in gate) {
     return;
   }
@@ -172,7 +188,7 @@ export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<v
 }
 
 export async function archiveProduct(productId: Uuid, isActive: boolean): Promise<void> {
-  const gate = await requireOwner();
+  const gate = await requireAuthoring();
   if ('error' in gate) {
     return;
   }

@@ -16,11 +16,20 @@
  */
 import 'dotenv/config';
 
+import { createPrivateKey } from 'node:crypto';
+
 import { eq } from 'drizzle-orm';
 
 import { hashPassword, hashPin } from '../../src/auth/pin';
+import { insertLicence, listLicences } from '../../src/db/licence-queries';
 import { createTenant, findTenantBySlug } from '../../src/db/provisioning';
-import { tenantScope } from '../../src/db/scoped';
+import { tenantScope, type TenantScope } from '../../src/db/scoped';
+import { signPayload } from '../../src/domain/licensing/sign';
+import { LICENCE_FORMAT_VERSION } from '../../src/domain/licensing/state';
+import { DEV_KID } from '../../src/domain/trust/keys';
+import { ensureInstallation } from '../../src/lib/installation';
+import { writeLicenceFile } from '../../src/lib/licence-file';
+import { DEV_PRIVATE_KEY_PKCS8_BASE64URL } from '../licence/dev-key';
 import {
   adjustments,
   batches,
@@ -111,6 +120,9 @@ async function main(): Promise<void> {
   const existing = await findDemoTenant();
   if (existing) {
     await topUpCatalog(existing);
+    // An older dev database may predate perpetual licensing; make sure the demo
+    // is authorized on this machine rather than sitting lapsed.
+    await ensureDemoLicence(tenantScope({ tenantId: existing.tenantId, userId: existing.ownerId }));
     return;
   }
 
@@ -164,6 +176,9 @@ async function main(): Promise<void> {
     receiptPrefix: 'A',
     pairingKeyHash: await hashPassword(DEMO.pairingKey),
   });
+
+  /* -- A dev perpetual licence, so the demo is authorized out of the box ----- */
+  await ensureDemoLicence(scope);
 
   /* -- Suppliers ------------------------------------------------------------ */
   const supplierIds = await Promise.all(
@@ -348,6 +363,61 @@ async function main(): Promise<void> {
       '',
     ].join('\n'),
   );
+}
+
+/**
+ * Give the demo a dev, perpetual licence bound to THIS machine (PCN-006).
+ *
+ * The demo is a working, authorized pharmacy out of the box — a lapsed demo was
+ * the exact confusion this session started from. The licence is signed with the
+ * committed development key (never a production key), so it is forgeable and fit
+ * only for a demo, and it is bound to the machine's own installation id, so the
+ * app reads `authorized` here and a *copied* database reads `unbound` — which is
+ * the testable copy path, exactly as a real licence behaves.
+ *
+ * Idempotent: `insertLicence` is `onConflictDoNothing` on (tenant, licence,
+ * installation), and this issues nothing when the demo already holds a licence
+ * bound to this machine. Evaluation and unauthorized states stay reachable
+ * through any tenant WITHOUT a licence — every provisioned test tenant is one.
+ */
+async function ensureDemoLicence(scope: TenantScope): Promise<'issued' | 'already'> {
+  const installation = ensureInstallation('db:seed');
+  const existing = await listLicences(scope);
+  if (existing.some((row) => row.installationId === installation.installationId)) {
+    return 'already';
+  }
+
+  const devKey = createPrivateKey({
+    key: Buffer.from(DEV_PRIVATE_KEY_PKCS8_BASE64URL, 'base64url'),
+    format: 'der',
+    type: 'pkcs8',
+  });
+  const licenceId = uuidv7();
+  const issuedAt = new Date();
+  const token = signPayload(
+    {
+      v: LICENCE_FORMAT_VERSION,
+      kid: DEV_KID,
+      licenceId,
+      tenantSlug: DEMO.tenantSlug,
+      customerName: DEMO.tenantName,
+      plan: 'standard',
+      branches: 1,
+      issuedAt: issuedAt.toISOString(),
+    },
+    devKey,
+  );
+
+  await insertLicence(scope, {
+    id: uuidv7(),
+    token,
+    licenceId,
+    issuedAt,
+    installationId: installation.installationId,
+  });
+  // Kept on disk too, so a boot after a database restore refills from it.
+  writeLicenceFile(token);
+  return 'issued';
 }
 
 /** The demo tenant, if this database already has one. */

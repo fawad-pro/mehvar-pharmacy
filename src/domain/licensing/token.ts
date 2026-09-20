@@ -43,17 +43,11 @@ function isLicencePayload(value: unknown): value is LicencePayload {
     typeof c.licenceId === 'string' &&
     typeof c.tenantSlug === 'string' &&
     typeof c.customerName === 'string' &&
-    c.plan === 'standard' &&
-    typeof c.branches === 'number' &&
     typeof c.issuedAt === 'string' &&
-    typeof c.entitlementEndsAt === 'string' &&
-    typeof c.expiresAt === 'string' &&
-    typeof c.graceDays === 'number' &&
-    typeof c.warnDays === 'number' &&
-    (c.clockCeiling === undefined || typeof c.clockCeiling === 'string') &&
-    [c.issuedAt, c.entitlementEndsAt, c.expiresAt].every(
-      (d) => !Number.isNaN(Date.parse(d as string)),
-    )
+    !Number.isNaN(Date.parse(c.issuedAt)) &&
+    // Optional future metadata — present or absent, never malformed.
+    (c.plan === undefined || c.plan === 'standard') &&
+    (c.branches === undefined || typeof c.branches === 'number')
   );
 }
 

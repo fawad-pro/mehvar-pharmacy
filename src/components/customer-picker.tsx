@@ -17,7 +17,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { searchCustomersAction, type CustomerHit } from '@/app/(counter)/customers/actions';
-import { useSync } from '@/client/sync/provider';
+import { CaptureBlockedError, useSync } from '@/client/sync/provider';
 import { validateCustomerDraft } from '@/domain/udhaar/customer';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
@@ -105,8 +105,14 @@ export function CustomerPicker({
         kind: 'customer',
         payload: { id, name: validated.value.name, phone: validated.value.phone },
       });
-    } catch {
-      setError('This machine could not save the customer. Try again.');
+    } catch (error) {
+      // A restricted installation (PCN-006) may not add a new customer. Other
+      // throws mean the machine could not persist it.
+      setError(
+        error instanceof CaptureBlockedError
+          ? error.message
+          : 'This machine could not save the customer. Try again.',
+      );
       setBusy(false);
       return;
     }

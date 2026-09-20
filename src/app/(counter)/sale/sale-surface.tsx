@@ -27,7 +27,7 @@ import { useRegisterUdhaarKeyHandler } from '@/client/keyboard/udhaar-key-contex
 import { keyFor } from '@/client/keyboard/registry';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import type { ReceiptData } from '@/client/print/receipt';
-import { useSync } from '@/client/sync/provider';
+import { CaptureBlockedError, useSync } from '@/client/sync/provider';
 import type { SearchHit } from '@/client/search/catalog-index';
 import { ProductSearch } from '@/components/product-search';
 import { CustomerPicker } from '@/components/customer-picker';
@@ -230,12 +230,17 @@ export function SaleSurface() {
 
       try {
         await capture({ kind: 'sale', payload: command });
-      } catch {
+      } catch (error) {
         // The outbox refused the record, so it is not durable, so no receipt
-        // may claim it happened. This is the one failure that stops a sale, and
-        // it is a broken machine rather than a broken network.
+        // may claim it happened. Either the licence is not active (PCN-006, a
+        // deliberate refusal) or the machine could not persist it (a broken
+        // machine rather than a broken network). Both stop the sale.
         receiptContext.skipReceiptNumber(receiptNumber);
-        setError('This machine could not save the sale. Do not hand over the items — get help.');
+        setError(
+          error instanceof CaptureBlockedError
+            ? error.message
+            : 'This machine could not save the sale. Do not hand over the items — get help.',
+        );
         setBusy(false);
         return;
       }
@@ -326,15 +331,26 @@ export function SaleSurface() {
         needsCompletion: true,
       };
 
-      await capture({
-        kind: 'quick_item',
-        payload: {
-          id: product.id,
-          name: product.name,
-          pricePaisa: product.pricePaisa,
-          baseUnitName: product.baseUnitName,
-        },
-      });
+      try {
+        await capture({
+          kind: 'quick_item',
+          payload: {
+            id: product.id,
+            name: product.name,
+            pricePaisa: product.pricePaisa,
+            baseUnitName: product.baseUnitName,
+          },
+        });
+      } catch (error) {
+        // A restricted installation (PCN-006) may not create new products, and
+        // the quick item is a product. Surface the reason rather than adding a
+        // cart line for something the outbox refused to record.
+        if (error instanceof CaptureBlockedError) {
+          setError(error.message);
+          return;
+        }
+        throw error;
+      }
 
       addLocalProduct(product);
 

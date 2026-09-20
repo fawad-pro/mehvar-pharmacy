@@ -13,7 +13,6 @@ function row(over: Partial<LicenceRow> = {}): LicenceRow {
     licenceId: LICENCE_1,
     token: 'MEHVAR1.a.b',
     issuedAt: at('2026-01-01T00:00:00Z'),
-    entitlementEndsAt: at('2027-01-01T00:00:00Z'),
     installationId: MACHINE_A,
     installedAt: at('2026-01-02T00:00:00Z'),
     ...over,
@@ -21,41 +20,23 @@ function row(over: Partial<LicenceRow> = {}): LicenceRow {
 }
 
 describe('Invariant L2 — the effective licence', () => {
-  it('a renewal supersedes by issuedAt within its licence id', () => {
-    const renewal = row({
+  it('a re-issue supersedes by issuedAt within its licence id', () => {
+    const reissue = row({
       issuedAt: at('2027-01-01T00:00:00Z'),
-      entitlementEndsAt: at('2028-01-01T00:00:00Z'),
       installedAt: at('2027-01-02T00:00:00Z'),
     });
-    expect(effectiveLicenceRow([row(), renewal])).toBe(renewal);
-  });
-
-  it('a deliberate downgrade under the same licence id takes effect', () => {
-    // Shorter entitlement, later issue — the customer moved to monthly. No
-    // `supersedes` field is needed: the per-licence rule already handles it.
-    const downgrade = row({
-      issuedAt: at('2026-06-01T00:00:00Z'),
-      entitlementEndsAt: at('2026-07-01T00:00:00Z'),
-      installedAt: at('2026-06-01T00:00:00Z'),
-    });
-    expect(effectiveLicenceRow([row(), downgrade])).toBe(downgrade);
+    expect(effectiveLicenceRow([row(), reissue])).toBe(reissue);
   });
 
   it('re-pasting an older token is a no-op', () => {
-    const current = row({
-      issuedAt: at('2027-01-01T00:00:00Z'),
-      entitlementEndsAt: at('2028-01-01T00:00:00Z'),
-    });
+    const current = row({ issuedAt: at('2027-01-01T00:00:00Z') });
     expect(effectiveLicenceRow([current, row()])).toBe(current);
   });
 
-  it('an unrelated second licence never shortens a customer who paid longer', () => {
-    const longer = row({ licenceId: LICENCE_2, entitlementEndsAt: at('2029-01-01T00:00:00Z') });
-    const shorterButNewer = row({
-      issuedAt: at('2026-09-01T00:00:00Z'),
-      entitlementEndsAt: at('2026-10-01T00:00:00Z'),
-    });
-    expect(effectiveLicenceRow([longer, shorterButNewer])).toBe(longer);
+  it('across unrelated licence ids, the most recently issued wins deterministically', () => {
+    const older = row({ licenceId: LICENCE_2, issuedAt: at('2026-01-01T00:00:00Z') });
+    const newer = row({ issuedAt: at('2026-09-01T00:00:00Z') });
+    expect(effectiveLicenceRow([older, newer])).toBe(newer);
   });
 
   it('is undefined with no rows', () => {

@@ -11,6 +11,7 @@
 import { readFileSync } from 'node:fs';
 
 import { REVOCATION_PREFIX, verifyRevocation } from '../../src/domain/licensing/revocation';
+import { LICENCE_FORMAT_VERSION } from '../../src/domain/licensing/state';
 import { parseToken } from '../../src/domain/licensing/token';
 import { verifyToken } from '../../src/domain/licensing/verify';
 
@@ -52,7 +53,7 @@ function main(): void {
   if (!parsed.ok) {
     console.error(
       parsed.reason === 'format_too_new'
-        ? `This licence needs a newer Mehvar (format ${parsed.found}; this build reads 1).`
+        ? `This licence needs a newer Mehvar (format ${parsed.found}; this build reads ${LICENCE_FORMAT_VERSION}).`
         : 'That is not a readable Mehvar licence. Check it was pasted whole, in one line.',
     );
     process.exit(1);
@@ -63,15 +64,9 @@ function main(): void {
   console.log(`Pharmacy:    ${payload.customerName}  (${payload.tenantSlug})`);
   console.log(`Licence id:  ${payload.licenceId}`);
   console.log(`Signed by:   ${payload.kid}`);
-  console.log(`Issued:      ${payload.issuedAt.slice(0, 10)}`);
-  console.log(
-    `Paid until:  ${payload.entitlementEndsAt.slice(0, 10)}  (+${payload.graceDays} days grace)`,
-  );
-  console.log(`Token until: ${payload.expiresAt.slice(0, 10)}  (a notice only — never restricts)`);
-  console.log(`Warns from:  ${payload.warnDays} days out`);
-  if (payload.clockCeiling !== undefined) {
-    console.log(`Clock ceiling: ${payload.clockCeiling}`);
-  }
+  console.log(`Issued:      ${payload.issuedAt.slice(0, 10)}  (perpetual — never expires)`);
+  if (payload.plan !== undefined) console.log(`Plan:        ${payload.plan}`);
+  if (payload.branches !== undefined) console.log(`Branches:    ${payload.branches}`);
   console.log('');
 
   const verified = verifyToken(token);

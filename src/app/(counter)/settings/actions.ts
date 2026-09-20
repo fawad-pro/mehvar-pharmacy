@@ -156,12 +156,10 @@ export async function resetUserPinAction(userId: string, pin: string): Promise<S
  */
 export interface LicencePanel {
   readonly status: string;
-  readonly tier: 'full' | 'full_notice' | 'restricted';
+  readonly tier: 'full' | 'restricted';
   readonly customerName: string | null;
-  readonly entitlementEndsOn: string | null;
-  readonly graceEndsOn: string | null;
+  readonly evaluationEndsOn: string | null;
   readonly daysRemaining: number | null;
-  readonly trialEndsOn: string | null;
   readonly invalidReason: string | null;
   readonly withheld: readonly string[];
   readonly rebindsUsed: number;
@@ -212,10 +210,6 @@ export async function installLicenceAction(token: string): Promise<SettingsOutco
     token: verified.licence.token,
     licenceId: payload.licenceId,
     issuedAt: new Date(payload.issuedAt),
-    entitlementEndsAt: new Date(payload.entitlementEndsAt),
-    tokenExpiresAt: new Date(payload.expiresAt),
-    graceDays: payload.graceDays,
-    warnDays: payload.warnDays,
     installationId,
   });
 
@@ -296,10 +290,8 @@ async function buildPanel(session: ActiveSession): Promise<LicencePanel> {
     status: state.status,
     tier: state.tier,
     customerName: state.customerName ?? null,
-    entitlementEndsOn: state.entitlementEndsOn ?? null,
-    graceEndsOn: state.graceEndsOn ?? null,
+    evaluationEndsOn: state.evaluationEndsOn ?? null,
     daysRemaining: state.daysRemaining ?? null,
-    trialEndsOn: state.trialEndsOn ?? null,
     invalidReason: state.invalidReason ?? null,
     withheld: withheldBy(state.tier).map((capability) => CAPABILITY_LABELS[capability]),
     rebindsUsed: resolved.rebindsUsed,

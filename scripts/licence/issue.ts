@@ -1,12 +1,18 @@
 /**
- * `npm run licence:issue` — mint a licence for one pharmacy.
+ * `npm run licence:issue` — mint a perpetual licence for one pharmacy.
  *
- *   npm run licence:issue -- --slug al-shifa --name "Al-Shifa Medical Store" --months 12
+ *   npm run licence:issue -- --slug al-shifa --name "Al-Shifa Medical Store"
  *
  * Prints one line of text the founder sends over WhatsApp and the owner pastes
  * into Settings → Licence. Nothing here touches the database or the network:
  * issuing is a signature over a JSON payload, and at this scale a private
  * append-only file is a better ledger than a service nobody has to operate.
+ *
+ * PCN-006: the licence is **perpetual and identity-only**. There is no term,
+ * expiry, grace or warn period — a valid bound token authorizes an installation
+ * forever. `issuedAt` is kept as unforgeable support metadata and drives no
+ * capability. A re-issue shares the original `--licence-id` so Invariant L2
+ * supersedes within one licence.
  *
  * No `dotenv/config`: this reaches neither the database nor `src/env`. It reads
  * one variable, `MEHVAR_LICENCE_SIGNING_KEY`, and says so if it is missing.
@@ -16,7 +22,7 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { createPrivateKey } from 'node:crypto';
 
 import { signPayload } from '../../src/domain/licensing/sign';
-import type { LicencePayload } from '../../src/domain/licensing/state';
+import { LICENCE_FORMAT_VERSION, type LicencePayload } from '../../src/domain/licensing/state';
 import { DEV_KID, hasProductionKey } from '../../src/domain/trust/keys';
 import { uuidv7 } from '../../src/lib/uuid';
 
@@ -27,12 +33,6 @@ const LEDGER = 'licences.jsonl';
 function flag(name: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
   return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
-function addMonths(from: Date, months: number): Date {
-  const out = new Date(from);
-  out.setUTCMonth(out.getUTCMonth() + months);
-  return out;
 }
 
 /**
@@ -79,31 +79,19 @@ function main(): void {
   if (slug === undefined || name === undefined) {
     console.error(
       'Usage: npm run licence:issue -- --slug <pharmacy-slug> --name "<Customer Name>"\n' +
-        '                             [--months 12] [--grace 30] [--warn 45]\n' +
-        '                             [--licence-id <uuid>]   renew an existing subscription\n' +
-        '                             [--clock-ceiling <iso>] repair a poisoned clock witness',
+        '                             [--licence-id <uuid>]   re-issue an existing licence\n' +
+        '                             [--branches <n>]        multi-branch metadata (unenforced)\n' +
+        '                             [--kid <key-id>]        signing key id (default mehvar-1)',
     );
     process.exit(2);
     return;
   }
 
-  const months = Number(flag('months') ?? 12);
-  const graceDays = Number(flag('grace') ?? 30);
-  // A Rs 20,000 annual bill collected in cash needs more than three weeks'
-  // notice, so the default scales with the term rather than being a constant.
-  const warnDays = Number(flag('warn') ?? (months >= 12 ? 45 : 14));
-
   const issuedAt = new Date();
-  const entitlementEndsAt = addMonths(issuedAt, months);
-  // Offline issuance: the token must never be the binding constraint, because
-  // nothing renews it automatically until roadmap Phase 3's refresh endpoint.
-  const expiresAt = addMonths(entitlementEndsAt, 2);
-
   const { key, kid } = signingKey();
-  const ceiling = flag('clock-ceiling');
 
   const payload: LicencePayload = {
-    v: 1,
+    v: LICENCE_FORMAT_VERSION,
     kid,
     licenceId: flag('licence-id') ?? uuidv7(),
     tenantSlug: slug,
@@ -111,30 +99,20 @@ function main(): void {
     plan: 'standard',
     branches: Number(flag('branches') ?? 1),
     issuedAt: issuedAt.toISOString(),
-    entitlementEndsAt: entitlementEndsAt.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    graceDays,
-    warnDays,
-    ...(ceiling === undefined ? {} : { clockCeiling: new Date(ceiling).toISOString() }),
   };
 
   const token = signPayload(payload, key);
 
   console.log(`Pharmacy:   ${name}  (${slug})`);
   console.log(`Licence id: ${payload.licenceId}`);
-  console.log(
-    `Paid until: ${entitlementEndsAt.toISOString().slice(0, 10)}  (+${graceDays} days grace)`,
-  );
-  if (ceiling !== undefined) {
-    console.log(`Clock ceiling: ${payload.clockCeiling}  — repairs a poisoned witness`);
-  }
+  console.log(`Issued:     ${issuedAt.toISOString().slice(0, 10)}  (perpetual — never expires)`);
   console.log('');
   console.log(token);
   console.log('');
   console.log('Send that line to the pharmacy. They paste it into Settings → Licence.');
 
-  // A renewal shares its licence id (Invariant L2 supersedes within one), so
-  // the ledger is what tells the founder which id to renew a year from now.
+  // A re-issue shares its licence id (Invariant L2 supersedes within one), so
+  // the ledger is what tells the founder which id to re-issue against.
   try {
     appendFileSync(LEDGER, `${JSON.stringify({ ...payload, token })}\n`, 'utf8');
     console.log(`Recorded in ${LEDGER}.`);

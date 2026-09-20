@@ -10,7 +10,7 @@ import {
 import type { ActiveSession } from './session';
 
 /**
- * The licence gate — PCN-005's ladder, asked one capability at a time.
+ * The licence gate — PCN-006's Profile C, asked one capability at a time.
  *
  * Shaped like `requireOwner` in `settings/actions.ts` on purpose: a server
  * action states what it needs, and the answer is a typed result rather than a
@@ -19,15 +19,17 @@ import type { ActiveSession } from './session';
  *
  * ## What this must never gate
  *
- * `sell`, `print` and `export` are permitted in every tier and are not
+ * `settle`, `print` and `export` are permitted in every tier and are not
  * negotiable — see `domain/licensing/capabilities.ts`. More subtly, **the four
- * ADR-3 record kinds are ungated wherever they are written**, not merely in the
- * sync module (Invariant L1). `createQuickItem` lives in
- * `domain/catalog/writers.ts`, so a gate written against "catalogue writes"
- * would break W6's unknown-medicine escape hatch — and because `ingestBatch`
- * stops at the first non-synced outcome, it would strand every offline sale
- * queued behind that quick item, permanently. That is a P2 violation arriving
- * one indirection from where anyone would look for it.
+ * ADR-3 record kinds are ungated wherever they are INGESTED** (Invariant L1):
+ * a sale, settlement, quick item or customer that was already captured offline
+ * drains through the sync writer unconditionally, so a licence that lapses after
+ * capture never strands what the pharmacy already recorded. What `restricted`
+ * blocks is starting NEW business — the *capture* of a new sale, quick item,
+ * udhaar or customer — and it does so at the point of capture, never in the
+ * writer the sync path shares. A gate written against "catalogue writes" would
+ * break both W6's unknown-medicine escape hatch and the drain behind it, so the
+ * distinction is capture-vs-ingest, not screen-vs-screen.
  */
 
 export type CapabilityRefusal = {
@@ -50,9 +52,9 @@ export function requireCapability(session: ActiveSession, capability: Capability
  */
 export function refusalMessage(capability: Capability): string {
   return (
-    `${sentenceCase(CAPABILITY_LABELS[capability])} is paused until this pharmacy’s ` +
-    'licence is renewed. Selling, printing receipts and exporting your data are ' +
-    'unaffected. Open Settings → Licence, or contact Mehvar support.'
+    `${sentenceCase(CAPABILITY_LABELS[capability])} is paused until this installation’s ` +
+    'licence is activated. Settling udhaar, printing receipts and exporting your data ' +
+    'are unaffected. Open Settings → Licence, or contact Mehvar support.'
   );
 }
 

@@ -45,7 +45,12 @@ import {
   removeRecord,
   replaceRecord,
 } from './queue';
+import { CaptureBlockedError, captureBlockedFor } from './capture-policy';
 import type { CapturedRecord, OutboxRecord } from './records';
+
+// Re-exported so components that catch a blocked capture keep importing from the
+// provider they already use; the policy itself lives in the pure module.
+export { CaptureBlockedError } from './capture-policy';
 
 /** Attempts after which a record stops being "in flight" and starts being a problem (T1). */
 const STUCK_AFTER_ATTEMPTS = 5;
@@ -96,9 +101,16 @@ function deliverable(record: OutboxRecord): DeliverableRecord {
 
 export function SyncProvider({
   tenantId,
+  restricted = false,
   children,
 }: {
   tenantId: string;
+  /**
+   * PCN-006: the installation is not legitimately licensed
+   * (unauthorized/unbound/invalid/revoked), so new-business capture is withheld.
+   * Delivery of already-queued records is never affected by this.
+   */
+  restricted?: boolean;
   children: React.ReactNode;
 }) {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
@@ -267,13 +279,20 @@ export function SyncProvider({
 
   const capture = useCallback(
     async (record: CapturedRecord): Promise<void> => {
+      // PCN-006 L1 seam: a restricted installation may not start new business.
+      // Thrown before the outbox is touched, so nothing is queued and no receipt
+      // is printed — the caller treats a capture throw as "the sale did not
+      // happen" already. Settlement falls through and is captured normally.
+      if (captureBlockedFor(restricted, record.kind)) {
+        throw new CaptureBlockedError();
+      }
       // Throws if the outbox will not take it — the caller must not print a
       // receipt for a sale that is not durable.
       await enqueue(tenantId, record);
       setUnsyncedCount((current) => current + 1);
       void flush();
     },
-    [tenantId, flush],
+    [tenantId, restricted, flush],
   );
 
   useEffect(() => {

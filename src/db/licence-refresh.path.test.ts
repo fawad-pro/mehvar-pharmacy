@@ -37,12 +37,15 @@ describe('online refresh is never on the sale path', () => {
     expect(read('scripts/ops/serve.ts')).toMatch(/setInterval|setTimeout/);
   });
 
-  it('a revoked licence still permits selling, printing and export', () => {
-    // Revocation moves the licence to `restricted` — which, like every
-    // restricted state, keeps the three permanent capabilities. A revocation
-    // stops restocking, never trading, and never locks the customer's data.
-    for (const capability of ['sell', 'print', 'export'] as const) {
+  it('a revoked licence still permits settling, printing and export', () => {
+    // PCN-006 reverses PCN-005's L1: a restricted state (revocation included)
+    // now WITHHOLDS new business, `sell` among it — an unauthorized installation
+    // may not create new sales. What it always keeps is the three permanent
+    // capabilities: settling an existing udhaar, printing, and export, so no
+    // business already done and no customer data is ever locked away.
+    for (const capability of ['settle', 'print', 'export'] as const) {
       expect(permits('restricted', capability)).toBe(true);
     }
+    expect(permits('restricted', 'sell')).toBe(false);
   });
 });

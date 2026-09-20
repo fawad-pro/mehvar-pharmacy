@@ -802,19 +802,20 @@ export const catalogProposals = pgTable(
 /* ========================================================================== */
 
 /**
- * [PCN-005] Every licence token ever installed on this tenant. Append-only.
+ * [PCN-006] Every licence token ever installed on this tenant. Append-only.
  *
  * In `EVENT_TABLES`, which is the point: the app role holds SELECT and INSERT
- * and an explicit REVOKE of UPDATE and DELETE, so the record of what this
- * pharmacy is entitled to is something the running application physically
- * cannot rewrite or erase. ADR-1's guarantee, applied to licensing rather than
- * bolted beside it.
+ * and an explicit REVOKE of UPDATE and DELETE, so the record of which perpetual
+ * licence authorizes this pharmacy is something the running application
+ * physically cannot rewrite or erase. ADR-1's guarantee, applied to licensing.
  *
- * Renewing is a row. Rebinding is a row. Nothing updates:
+ * PCN-006 makes the licence perpetual and identity-only: there is no
+ * entitlement, grace, warn or token-expiry column any more. Re-issuing is a
+ * row. Rebinding is a row. Nothing updates:
  *
  *   - the effective licence is derived per Invariant L2 (group by `licence_id`,
- *     newest `issued_at` within a group, then greatest `entitlement_ends_at`
- *     across groups);
+ *     newest `issued_at` within a group, then most recently issued across
+ *     groups);
  *   - the binding is derived per Invariant L3 (does ANY row for the effective
  *     licence carry this machine's id);
  *   - the rebind count is derived from the distinct installation ids.
@@ -824,10 +825,9 @@ export const catalogProposals = pgTable(
  *
  *   - re-pasting the SAME token on the SAME machine collapses onto the existing
  *     row (same issued_at) — idempotent, as a paste should be;
- *   - a RENEWAL shares its `licence_id` by design (L2 supersedes within a
+ *   - a RE-ISSUE shares its `licence_id` by design (L2 supersedes within a
  *     licence by `issued_at`) and is usually on the same machine, so without
- *     `issued_at` in the key it would conflict and be silently dropped — a
- *     pharmacy that paid and could not be renewed;
+ *     `issued_at` in the key it would conflict and be silently dropped;
  *   - a REBIND carries the same token to a NEW machine and gets its own row.
  */
 export const licences = pgTable(
@@ -844,10 +844,6 @@ export const licences = pgTable(
     /** Denormalised from the VERIFIED payload, so queries need no crypto. */
     licenceId: uuid('licence_id').notNull(),
     issuedAt: timestamp('issued_at', { withTimezone: true }).notNull(),
-    entitlementEndsAt: timestamp('entitlement_ends_at', { withTimezone: true }).notNull(),
-    tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }).notNull(),
-    graceDays: integer('grace_days').notNull(),
-    warnDays: integer('warn_days').notNull(),
 
     /** The machine this token was verified on. Never rewritten. */
     installationId: uuid('installation_id').notNull(),
@@ -898,10 +894,10 @@ export const installations = pgTable('installations', {
  * trading. The ledger cannot: it moves only when business moves.
  *
  * The rows are evidence, not verdicts. The witness is the K-th largest
- * observation at or below any signed `clockCeiling`, so one bad reading from a
- * failing CMOS battery cannot poison it permanently — see
- * `domain/licensing/clock.ts` for why `max()` is the wrong reducer and cannot
- * be repaired after the fact.
+ * observation, so one bad reading from a failing CMOS battery cannot poison it
+ * permanently — see `domain/licensing/clock.ts` for why `max()` is the wrong
+ * reducer. Under PCN-006 this anchor exists only to police the 30-day
+ * evaluation of an unlicensed installation; an authorized licence never reads it.
  */
 export const clockObservations = pgTable(
   'clock_observations',

@@ -20,18 +20,12 @@ void otherPublic;
 
 function payload(over: Partial<LicencePayload> = {}): LicencePayload {
   return {
-    v: 1,
+    v: 2,
     kid: KID,
     licenceId: '0198a000-0000-7000-8000-000000000001',
     tenantSlug: 'al-shifa',
     customerName: 'Al-Shifa Medical Store',
-    plan: 'standard',
-    branches: 1,
     issuedAt: '2026-01-01T00:00:00Z',
-    entitlementEndsAt: '2027-01-01T00:00:00Z',
-    expiresAt: '2027-03-01T00:00:00Z',
-    graceDays: 30,
-    warnDays: 45,
     ...over,
   };
 }
@@ -57,7 +51,7 @@ describe('refusals', () => {
     const decoded = JSON.parse(
       Buffer.from(segment, 'base64url').toString('utf8'),
     ) as LicencePayload;
-    const forged = { ...decoded, entitlementEndsAt: '2099-01-01T00:00:00Z' };
+    const forged = { ...decoded, customerName: 'Someone Else' };
     const reSegment = Buffer.from(JSON.stringify(forged), 'utf8').toString('base64url');
 
     const result = verifyToken(`${prefix}.${reSegment}.${signature}`, { keyring });
@@ -83,9 +77,9 @@ describe('refusals', () => {
   });
 
   it('refuses a newer format WHOLE, rather than reading part of it', () => {
-    const token = signPayload(payload({ v: 2 }), privateKey);
+    const token = signPayload(payload({ v: 3 }), privateKey);
     expect(verifyToken(token, { keyring })).toEqual({ ok: false, reason: 'format_too_new' });
-    expect(parseToken(token)).toMatchObject({ ok: false, reason: 'format_too_new', found: 2 });
+    expect(parseToken(token)).toMatchObject({ ok: false, reason: 'format_too_new', found: 3 });
   });
 
   it('refuses junk without throwing — a crash here is a crash at the counter', () => {
@@ -95,10 +89,10 @@ describe('refusals', () => {
     }
   });
 
-  it('clamps an over-generous graceDays rather than punishing the pharmacy', () => {
-    const token = signPayload(payload({ graceDays: 9999 }), privateKey);
+  it('carries optional future metadata through untouched when present', () => {
+    const token = signPayload(payload({ plan: 'standard', branches: 3 }), privateKey);
     const result = verifyToken(token, { keyring });
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.licence.payload.graceDays).toBe(180);
+    if (result.ok) expect(result.licence.payload.branches).toBe(3);
   });
 });

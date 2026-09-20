@@ -34,7 +34,7 @@ function licencePayload(
   over: Partial<LicencePayload> = {},
 ): LicencePayload {
   return {
-    v: 1,
+    v: 2,
     kid: DEV_KID,
     licenceId,
     tenantSlug: slug,
@@ -42,10 +42,6 @@ function licencePayload(
     plan: 'standard',
     branches: 1,
     issuedAt: '2026-01-01T00:00:00Z',
-    entitlementEndsAt: '2027-01-01T00:00:00Z',
-    expiresAt: '2027-03-01T00:00:00Z',
-    graceDays: 30,
-    warnDays: 45,
     ...over,
   };
 }
@@ -58,10 +54,6 @@ async function seedLicence(tenant: TestTenant, licenceId: string): Promise<void>
     token,
     licenceId,
     issuedAt: new Date('2026-01-01T00:00:00Z'),
-    entitlementEndsAt: new Date('2027-01-01T00:00:00Z'),
-    tokenExpiresAt: new Date('2027-03-01T00:00:00Z'),
-    graceDays: 30,
-    warnDays: 45,
     installationId: MACHINE,
   });
 }
@@ -95,26 +87,22 @@ suite('online licence refresh', () => {
     expect(report.skipped).toContain('no MEHVAR_LICENCE_URL');
   });
 
-  it('accepts a valid renewal token and stores it', async () => {
+  it('accepts a valid re-issued token and stores it', async () => {
     const { tenant, slug } = await tenantWithLicence('token');
-    const renewalId = uuidv7();
-    const renewal = signPayload(
-      licencePayload(slug, renewalId, {
-        issuedAt: '2026-11-01T00:00:00Z',
-        entitlementEndsAt: '2028-01-01T00:00:00Z',
-        expiresAt: '2028-03-01T00:00:00Z',
-      }),
+    const reissueId = uuidv7();
+    const reissue = signPayload(
+      licencePayload(slug, reissueId, { issuedAt: '2026-11-01T00:00:00Z' }),
       devKey,
     );
 
     const report = await refreshLicences({
       url: 'https://licence.example',
-      post: async () => ({ token: renewal }),
+      post: async () => ({ token: reissue }),
     });
     expect(report.tokensAccepted).toBeGreaterThanOrEqual(1);
 
     const rows = await listLicences(tenant.scope);
-    expect(rows.some((r) => r.licenceId === renewalId)).toBe(true);
+    expect(rows.some((r) => r.licenceId === reissueId)).toBe(true);
   });
 
   it('sends the activation count so the server can spot a spread licence', async () => {

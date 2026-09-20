@@ -4,8 +4,8 @@ import {
   businessNow,
   clockDisagreement,
   corroboratedWitness,
+  evaluationAnchor,
   shouldObserve,
-  trialAnchor,
   WITNESS_CORROBORATION,
 } from './clock';
 
@@ -94,7 +94,7 @@ describe('corroboratedWitness — Invariant L5', () => {
   });
 });
 
-describe('businessNow — five anchors, max(), no branches', () => {
+describe('businessNow — max(), no branches', () => {
   it('takes the system clock when it leads: this is the elapse guarantee', () => {
     const now = at('2027-01-01T00:00:00Z');
     expect(businessNow({ systemNow: now, witness: at('2026-09-16T00:00:00Z') }).toISOString()).toBe(
@@ -109,14 +109,17 @@ describe('businessNow — five anchors, max(), no branches', () => {
     );
   });
 
-  it('takes a founder-signed issuedAt — every renewal re-anchors the clock', () => {
-    const issued = at('2026-09-01T00:00:00Z');
+  it('takes the installation first-seen anchor when it leads', () => {
+    const firstSeen = at('2026-09-01T00:00:00Z');
     expect(
-      businessNow({ systemNow: at('2026-01-01T00:00:00Z'), licenceIssuedAt: issued }).toISOString(),
-    ).toBe(issued.toISOString());
+      businessNow({
+        systemNow: at('2026-01-01T00:00:00Z'),
+        installationFirstSeenAt: firstSeen,
+      }).toISOString(),
+    ).toBe(firstSeen.toISOString());
   });
 
-  it('never degrades a forward clock — a clock anomaly may not withhold a lapse', () => {
+  it('never degrades a forward clock — a clock anomaly may not withhold the end of evaluation', () => {
     const wild = at('2099-03-12T00:00:00Z');
     expect(
       businessNow({ systemNow: wild, witness: at('2026-09-16T00:00:00Z') }).toISOString(),
@@ -185,11 +188,11 @@ describe('shouldObserve', () => {
   });
 });
 
-describe('trialAnchor', () => {
+describe('evaluationAnchor', () => {
   it('takes the earliest source, so deleting installation.json buys nothing', () => {
     const earliest = at('2026-09-01T00:00:00Z');
     expect(
-      trialAnchor({
+      evaluationAnchor({
         tenantCreatedAt: earliest,
         installationFirstSeenAt: at('2026-09-20T00:00:00Z'),
         earliestEvent: at('2026-09-02T00:00:00Z'),
@@ -200,6 +203,6 @@ describe('trialAnchor', () => {
 
   it('falls back only when nothing is known', () => {
     const fallback = at('2026-09-16T00:00:00Z');
-    expect(trialAnchor({ fallback }).toISOString()).toBe(fallback.toISOString());
+    expect(evaluationAnchor({ fallback }).toISOString()).toBe(fallback.toISOString());
   });
 });

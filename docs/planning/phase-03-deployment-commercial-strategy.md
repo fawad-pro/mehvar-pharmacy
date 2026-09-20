@@ -54,6 +54,17 @@ At Rs 20,000/year: 10 pharmacies ≈ Rs 200k/yr, 25 ≈ Rs 500k/yr, 50 ≈ Rs 1M
 
 ## 5. Requirements this decision exports to later phases
 
+> **Superseded in part by PCN-006 (accepted 2026-09-20).** The commercial model
+> is now a **perpetual authorization** with a **30-day unlicensed evaluation**,
+> not a subscription with expiry, renewal or grace. Items below that assume
+> subscription mechanics are read through that amendment: requirement 3's
+> non-payment restriction is now the *restricted tier* an unauthorized/unbound/
+> revoked installation falls into (new business withheld; settlement, print,
+> export, catalogue updates always available); requirement 4's "trial" is the
+> 30-day evaluation; requirement 6's subscription-payment tooling is retired.
+> The one invariant that strengthens rather than changes: the customer's data is
+> never held hostage, in any state. See PCN-006 for the authoritative model.
+
 1. Multi-tenant service from day one (architecture phase) — single-tenant-now would contradict this document.
 2. Owner data export as a V1 feature (workflows, IA phases).
 3. The service must support restricting a tenant's access on non-payment without ever compromising that tenant's ability to export their data (architecture phase); the enforcement policy itself is operational and post-launch.
