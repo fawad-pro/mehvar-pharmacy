@@ -1,15 +1,13 @@
-import { createPrivateKey } from 'node:crypto';
-
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 
 import { signRevocation, type RevocationPayload } from '@/domain/licensing/revocation';
 import { signPayload } from '@/domain/licensing/sign';
 import type { LicencePayload } from '@/domain/licensing/state';
 import { DEV_KID } from '@/domain/trust/keys';
+import type * as trustKeysModule from '@/domain/trust/keys';
 import { ensureInstallation } from '@/lib/installation';
 import { uuidv7 } from '@/lib/uuid';
 
-import { DEV_PRIVATE_KEY_PKCS8_BASE64URL } from '../../scripts/licence/dev-key';
 import { adminQuery } from '../../tests/db-admin';
 import { provisionTestTenant, type TestTenant } from '../../tests/fixtures';
 import { insertLicence, listLicences, listRevocations } from './licence-queries';
@@ -20,10 +18,43 @@ import { tenantSlugById } from './provisioning';
 const DATABASE_AVAILABLE = Boolean(process.env.DATABASE_URL);
 const suite = DATABASE_AVAILABLE ? describe : describe.skip;
 
-const devKey = createPrivateKey({
-  key: Buffer.from(DEV_PRIVATE_KEY_PKCS8_BASE64URL, 'base64url'),
-  format: 'der',
-  type: 'pkcs8',
+/**
+ * A trust-root key this suite controls, ADDED ALONGSIDE the real production
+ * keys rather than in place of them (`...actual.TRUST_ROOT_KEYS` below) — this
+ * suite must prove refresh's verify-before-store behaviour without ever being
+ * able to weaken what a real build trusts.
+ *
+ * `DEV_KID` stopped being usable for this the moment `mehvar-1`/`mehvar-2` were
+ * provisioned in `keys.ts`: `composeTrustRoot` drops the dev key from the trust
+ * root the instant any production key exists (Stage 1 → Stage 2 hand-off), so a
+ * token signed with it now fails to verify exactly like a forgery would — which
+ * is correct, deliberate product behaviour, and exactly why this suite cannot
+ * lean on it for a token it needs the real verifier to ACCEPT. `vi.hoisted` is
+ * required because `vi.mock`'s factory runs before this file's own top-level
+ * statements would otherwise have executed.
+ */
+const { testKey, TEST_KID } = await vi.hoisted(async () => {
+  // A dynamic import here, not a static one: Vitest's mock-hoisting transform
+  // rewrites this file's static imports into lazily-bound references, so a
+  // static `node:crypto` import is not yet initialized when this hoisted block
+  // runs. `import()` sidesteps that entirely.
+  const { generateKeyPairSync } = await import('node:crypto');
+  const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+  return {
+    TEST_KID: 'integration-refresh-1',
+    testKey: {
+      privateKey,
+      publicKeyB64: publicKey.export({ type: 'spki', format: 'der' }).toString('base64url'),
+    },
+  };
+});
+
+vi.mock('@/domain/trust/keys', async (importOriginal) => {
+  const actual = await importOriginal<typeof trustKeysModule>();
+  return {
+    ...actual,
+    TRUST_ROOT_KEYS: { ...actual.TRUST_ROOT_KEYS, [TEST_KID]: testKey.publicKeyB64 },
+  };
 });
 
 const MACHINE = '11111111-1111-7111-8111-111111111111';
@@ -35,7 +66,7 @@ function licencePayload(
 ): LicencePayload {
   return {
     v: 2,
-    kid: DEV_KID,
+    kid: TEST_KID,
     licenceId,
     tenantSlug: slug,
     customerName: 'Refresh Test Pharmacy',
@@ -48,7 +79,7 @@ function licencePayload(
 
 async function seedLicence(tenant: TestTenant, licenceId: string): Promise<void> {
   const slug = (await tenantSlugById(tenant.tenantId)) as string;
-  const token = signPayload(licencePayload(slug, licenceId), devKey);
+  const token = signPayload(licencePayload(slug, licenceId), testKey.privateKey);
   await insertLicence(tenant.scope, {
     id: uuidv7(),
     token,
@@ -92,7 +123,7 @@ suite('online licence refresh', () => {
     const reissueId = uuidv7();
     const reissue = signPayload(
       licencePayload(slug, reissueId, { issuedAt: '2026-11-01T00:00:00Z' }),
-      devKey,
+      testKey.privateKey,
     );
 
     const report = await refreshLicences({
@@ -123,13 +154,13 @@ suite('online licence refresh', () => {
     const { tenant, licenceId, slug } = await tenantWithLicence('revoke');
     const payload: RevocationPayload = {
       v: 1,
-      kid: DEV_KID,
+      kid: TEST_KID,
       licenceId,
       tenantSlug: slug,
       revokedAt: '2026-06-01T00:00:00Z',
       reason: 'chargeback',
     };
-    const revocation = signRevocation(payload, devKey);
+    const revocation = signRevocation(payload, testKey.privateKey);
 
     const report = await refreshLicences({
       url: 'https://licence.example',
@@ -205,13 +236,13 @@ suite('online licence refresh', () => {
     const revA = signRevocation(
       {
         v: 1,
-        kid: DEV_KID,
+        kid: TEST_KID,
         licenceId: a.licenceId,
         tenantSlug: a.slug,
         revokedAt: '2026-06-01T00:00:00Z',
         reason: 'chargeback',
       },
-      devKey,
+      testKey.privateKey,
     );
     await refreshLicences({
       url: 'https://licence.example',
