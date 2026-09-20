@@ -613,3 +613,237 @@ a note, since they are not architectural decisions and no phase constrains them:
 npm as package manager, Node 22, Vitest for unit and invariant suites, Playwright
 for the single E2E path, ESLint flat config with Prettier. They are recorded in
 `README.md` and are cheap to reverse.
+
+## PCN-006 — perpetual authorization with a 30-day unlicensed evaluation; expiry retired
+
+Session: (current) · Raised: 2026-09-19 · **Decided: 2026-09-20 — accepted (founder locked decisions 1–5)**
+**Supersedes: PCN-005** (does not modify it — PCN-005 remains the record of the
+decision this note reverses, per Phase 11 §4 / Phase 4 §7).
+
+Like PCN-004 and PCN-005, this note changes a decision rather than filling a gap.
+It is filed so implementation waits for the decision instead of proceeding under a
+recommendation. The founder locked the five decisions this note records.
+
+### The decision, in one line
+
+The offline product is **perpetually licensed**. The licence answers *"is this
+installation authorized?"* — never *"has this customer paid this period?"* A new
+**unlicensed** installation may operate as a **full evaluation for 30 days**;
+after that, without activation, it becomes **unauthorized (restricted)**. A valid,
+bound, perpetual licence makes the installation **authorized with full
+functionality indefinitely**, and the evaluation clock is never consulted again.
+There is no expiry, renewal, grace, warn period, paid-through date, or countdown
+on the authorized path.
+
+### The lifecycle
+
+    NEW / UNLICENSED INSTALLATION
+              ↓
+        30-DAY EVALUATION  (full functionality)
+              ↓
+      ┌───────┴────────┐
+   activate           no activation
+   valid licence      after 30 days
+      ↓                   ↓
+  AUTHORIZED          UNAUTHORIZED
+  (full, forever)     (restricted)
+      ↑
+      └── revocation (separate, signed, time-independent) → RESTRICTED
+
+The 30-day clock **belongs to the installation**, not to a customer, account, or
+purchased licence. It is not a trial entitlement, not a subscription, not a grace
+period, and not an expiry on the perpetual licence. Copying a *licensed* install
+to another machine yields **unbound** (restricted immediately) — it does not mint
+a fresh evaluation.
+
+### States and tiers
+
+Two capability tiers — **full** and **restricted** — across five states:
+
+| State | Definition | Tier |
+| --- | --- | --- |
+| **evaluation** | No valid bound licence, within 30 days of first use | full |
+| **authorized** | Valid signed token, bound to this installation, not revoked | full |
+| **unauthorized** | No valid bound licence, past 30 days | restricted |
+| **unbound** | Valid token, bound to a different installation (a copy) | restricted |
+| **revoked** | A valid signed revocation for this licence has been received | restricted |
+
+`invalid` (bad signature / wrong pharmacy / unknown key / unreadable / format-too-
+new) resolves to restricted as well, with its own message.
+
+### Resolution order (why the clock dies on activation)
+
+1. Valid signed **revocation** present → **revoked**. *(clock not read)*
+2. Valid signed token **bound here** → **authorized** → return. *(clock not read)*
+3. Valid token **bound elsewhere**, or token invalid → **unbound / invalid**. *(clock not read)*
+4. No valid token → read the evaluation clock: within 30 days → **evaluation**,
+   else → **unauthorized**.
+
+Authorization is decided at step 2 and returns, so an authorized installation
+never reads the evaluation clock, the witness, or the observation history.
+Activation writes the bound-licence row and invalidates the resolver cache; the
+next resolution hits step 2 and returns authorized — instantly, offline, with no
+server. Decision 1 (Profile C) and decision 2 (L1 restatement) below govern the
+restricted tier.
+
+### Capability profile (Decision 1 — Profile C)
+
+`✓ available · ✗ blocked · (read) view only`
+
+| Workflow | evaluation (≤30d) | unauthorized / unbound / revoked | authorized |
+| --- | --- | --- | --- |
+| Sales (new) | ✓ | ✗ | ✓ |
+| Quick items (W6) | ✓ | ✗ | ✓ |
+| Udhaar / credit sales (new) | ✓ | ✗ | ✓ |
+| **Settlement of EXISTING udhaar** | ✓ | **✓ (carve-out)** | ✓ |
+| **Drain already-captured offline sales (outbox)** | ✓ | **✓ (carve-out)** | ✓ |
+| Customers create/edit | ✓ | ✗ | ✓ |
+| Receiving stock / purchases | ✓ | ✗ | ✓ |
+| Stock adjustments | ✓ | ✗ | ✓ |
+| Tenant product create/edit | ✓ | ✗ | ✓ |
+| Printing | ✓ | reprint existing ✓; new follows sales | ✓ |
+| Reports | ✓ | ✓ (read) | ✓ |
+| Catalogue browse/search | ✓ | ✓ (read) | ✓ |
+| **Catalogue updates/import (signed packs)** | ✓ | **✓ (never gated)** | ✓ |
+| Settings / configuration | ✓ | licence activation ✓; rest ✗ | ✓ |
+| **Export / recovery** | ✓ | **✓ (always)** | ✓ |
+
+The two carve-outs are deliberate: an evaluator who extended real credit can still
+**collect** it and close balances, and offline sales already captured during
+evaluation can still **finish syncing** rather than stranding — neither creates
+new business, and both prevent data loss.
+
+### Decision 2 — the L1 restatement (the reversal)
+
+PCN-005 and prior invariant L1 held that the sale path is ungated **in every
+state**. That protected legitimate operation; it is now scoped to legitimate
+installations only:
+
+> **Legitimate operation is never blocked by licensing.** Evaluation and
+> authorized installations conduct normal sales, settlements, receiving,
+> adjustments and all workflows without any licence gate. **Unauthorized and
+> revoked installations may not create new business** (no new sales, credit,
+> customers, stock movements or catalogue authoring), **but their existing data
+> and already-captured transactions remain fully recoverable** — visible,
+> reportable, exportable, and (for the outbox and existing udhaar) drainable to a
+> consistent close.
+
+The mechanical guarantee behind the old L1 — that gating the sale path must never
+strand captured offline records behind a stopped outbox — is **preserved** by the
+outbox carve-out: in the restricted tier, **new capture is blocked at the counter,
+but ingest of already-captured records continues**, so nothing strands or is lost.
+
+### Catalogue update rule (unchanged intent, gate removed)
+
+Catalogue import/update is part of the perpetual product and is **never gated by
+licence state** — not by evaluation age, not by authorization, not by payment.
+The bundled catalogue loads at install; signed catalogue packs remain the trusted
+distribution mechanism, verified locally against the trust root and applied
+offline. `--trusted-local` remains a **trust/bootstrap** distinction only and
+carries no licensing meaning and confers no unauthorized-copy bypass for anything
+else. The old `catalog_pack` capability gate is removed outright.
+
+### Revocation (separate concept)
+
+Revocation is a **founder-signed, time-independent security action** (chargeback,
+confirmed piracy, leaked key). It is not evaluation end and not expiry. A revoked
+installation is treated as restricted, keeps export/recovery and read access, and
+**cannot self-clear** — only a new licence from the founder restores
+authorization. Offline, a revocation takes effect only when the signed statement
+reaches the machine; silence is never revocation. Evaluation end, licence
+authorization, and revocation are three distinct concepts and are never conflated.
+
+### The 30-day clock (Decision 3 — keep the witness, strip the subscription math)
+
+The evaluation boundary needs a trustworthy "first use" anchor and a
+rollback-resistant "now," and **only** those:
+
+- **First-use anchor** = `min(installationFirstSeenAt, earliestEvent,
+  tenantCreatedAt, earliestObservation)` — already resistant to file deletion and
+  trial reset. Retained.
+- **Rollback-resistant now** = `max(systemNow, witness, ledgerHighWater)`, where
+  the **witness is the corroborated K-th-largest clock observation**. Retained,
+  because it is what stops "set the clock back to evaluate forever."
+- **Removed:** `clockCeiling` (it existed to protect a *paying* customer from a
+  poisoned witness; authorized installs no longer read the clock, so a forward
+  clock fault can only shorten a pirate's own free evaluation — self-harm, never
+  an exploit). Also removed: the `licenceIssuedAt` clock anchor and all
+  entitlement/grace/warn arithmetic.
+
+The clock participates only in step 4 of resolution. Once authorized, it is inert.
+
+### Licence token (Decision 5 — clean v2, identity only)
+
+Move to a clean **format v2** payload. It carries identity and nothing time- or
+payment-oriented:
+
+- **Kept:** `v`, `kid`, `licenceId`, `tenantSlug`, `customerName`, `issuedAt`.
+- **Optional, retained for future metadata:** `plan`, `branches` (unused by V1
+  logic; no enforcement).
+- **Removed:** `entitlementEndsAt`, `expiresAt`, `graceDays`, `warnDays`,
+  `clockCeiling`.
+
+The token does **not** carry an installation id; the installation **binds on first
+use** (a `licences` row records this machine's id), which remains the correct and
+retained model.
+
+### Security / binding model (retained)
+
+Kept in full, because it is exactly what a perpetual anti-copy licence needs:
+Ed25519 trust root; the private signing key held outside the application, build
+and CI; signed licence tokens; installation identity (able to *restore* its id
+rather than mint a new one); licence-to-installation binding on first use;
+controlled rebinding within the existing allowance; signed revocation; signed
+catalogue packs; tenant scoping; and the data-integrity guarantees. No hardware
+fingerprinting.
+
+### What is removed from the core
+
+Statuses `licensed / expiring / grace / stale / lapsed`; tier `full_notice`; the
+`trial` concept (renamed to *evaluation*, lengthened to 30 days); all
+entitlement/grace/warn computation; `clockCeiling`; the online **renewal-token**
+path (revocation delivery may remain, dormant); and every "days remaining /
+renew" affordance on the authorized path.
+
+### Guarantees this note keeps true
+
+- **P2 (restated):** legitimate operation — evaluation and authorized — is never
+  blocked or delayed by licensing. The unauthorized/revoked restriction applies
+  only to installations that are not legitimately licensed, and even then never
+  destroys, hides, corrupts, or withholds recovery of existing data.
+- **T3 / Phase 3 §3:** full export/recovery is available in **every** state,
+  forever.
+- **T5:** printing is untouched; nothing about licensing appears on a receipt.
+
+### What this obligates in code (non-normative pointer)
+
+Token v2 and evaluator rewrite (`state.ts`); two-tier `capabilities.ts` with the
+restricted withhold set expanded to new-business writes and the two carve-outs
+excluded; conditional gating of the sale/customer/settlement/outbox paths by tier
+(the L1 restatement — highest-risk change); removal of the `catalog_pack` gate;
+trimmed clock in resolution; schema drop of the four expiry columns; banner and
+Settings→Licence rewrite (evaluation countdown; unauthorized activation prompt;
+authorized nominal, no countdown); founder tooling simplified to perpetual issue;
+`db:seed`/demo to issue a dev perpetual licence or run its evaluation; tests for
+`state`/gating/refresh rewritten (the two failing `licence-refresh` tests dissolve
+with the renewal removal).
+
+### Documents superseded or to be amended (not edited here)
+
+PCN-005 (superseded); `commercialization.md` §0 and §6 (subscription premise and
+expiry philosophy — amend to perpetual + optional Mehvar Care); phase-03 §5
+("restrict on non-payment" — retired, export survival kept); MASTER_PLAN licensing
+invariants (L1 restated as above; L5/L6 reduced from anti-expiry to
+evaluation-boundary anti-rollback; L2/L3 retained); README and any code comments
+describing licensing as subscription/expiry enforcement.
+
+### Explicitly deferred — do NOT build under this note
+
+**Mehvar Care** (optional recurring service: cloud backup, automatic updates,
+owner mobile reporting, priority support, recovery assistance) — any *time-based*
+entitlement lives there, never in the core licence; it may reuse the dormant
+signed-refresh transport and must never hold the core product, its data, or an
+already-obtained catalogue pack hostage. **Mehvar Cloud** (separate SaaS,
+own subscription) — out of scope; must not influence this offline design.
+
+### Nothing implemented at the time of filing.
