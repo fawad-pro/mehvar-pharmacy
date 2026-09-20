@@ -64,7 +64,7 @@ export default async function StockPage({
             href="/stock/adjust"
             className="border-line hover:bg-green-100 min-h-touch flex items-center rounded border px-4 text-sm"
           >
-            Adjust stock — F9
+            Adjust stock — F8
           </Link>
         </div>
       </header>

@@ -69,7 +69,7 @@ export const GLOBAL_KEYS: readonly GlobalKey[] = [
   // — About goods —————————————————————————————————————————————————
   { key: 'F5', label: 'Products', href: '/products', group: 'goods' },
   { key: 'F6', label: 'Stock', href: '/stock', group: 'goods' },
-  { key: 'F7', label: 'Purchases', href: '/purchases', group: 'goods' },
+  { key: 'F7', label: 'Receive Stock', href: '/purchases', group: 'goods' },
   { key: 'F8', label: 'Adjust', href: '/stock/adjust', group: 'goods' },
 
   // — The owner, and the device ———————————————————————————————————
