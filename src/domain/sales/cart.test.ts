@@ -8,6 +8,7 @@ import {
   isPriceOverridden,
   lineTotal,
   paisaFromRupeeInput,
+  parseDiscountInput,
   removeLine,
   splitPayment,
   updateLine,
@@ -182,5 +183,55 @@ describe('rupee input', () => {
     expect(paisaFromRupeeInput('')).toBe(0);
     expect(paisaFromRupeeInput('abc')).toBe(0);
     expect(paisaFromRupeeInput('-5')).toBe(0);
+  });
+});
+
+describe('discount input — one field, one underlying amount', () => {
+  const subtotal = paisa(10_000); // Rs 100.00
+
+  it('reads a fixed PKR amount', () => {
+    expect(parseDiscountInput('50', subtotal)).toBe(5_000);
+    expect(parseDiscountInput('12.50', subtotal)).toBe(1_250);
+  });
+
+  it('reads a percentage of the subtotal, not of any other figure', () => {
+    expect(parseDiscountInput('10%', subtotal)).toBe(1_000);
+    expect(parseDiscountInput('7%', subtotal)).toBe(700);
+  });
+
+  it('tolerates surrounding whitespace on either mode', () => {
+    expect(parseDiscountInput('  50  ', subtotal)).toBe(5_000);
+    expect(parseDiscountInput(' 10 % ', subtotal)).toBe(1_000);
+  });
+
+  it('rereading the same percentage never compounds', () => {
+    // The percentage is always of the ORIGINAL subtotal — never of a total
+    // already reduced by a previous read of the same input.
+    const first = parseDiscountInput('10%', subtotal);
+    const second = parseDiscountInput('10%', subtotal);
+    expect(first).toBe(second);
+  });
+
+  it('is zero for blank, junk, zero or negative input — never a negative discount', () => {
+    // A negative discount would be a price ABOVE the catalogue price wearing a
+    // discount's clothes, which this must never produce (Phase 5 invariant 4).
+    expect(parseDiscountInput('', subtotal)).toBe(0);
+    expect(parseDiscountInput('abc', subtotal)).toBe(0);
+    expect(parseDiscountInput('0', subtotal)).toBe(0);
+    expect(parseDiscountInput('-5', subtotal)).toBe(0);
+    expect(parseDiscountInput('-5%', subtotal)).toBe(0);
+  });
+
+  it('clamps a fixed amount bigger than the cart, same posture as cartTotals', () => {
+    expect(parseDiscountInput('500', subtotal)).toBe(10_000);
+  });
+
+  it('clamps a percentage over 100 the same way', () => {
+    expect(parseDiscountInput('150%', subtotal)).toBe(10_000);
+  });
+
+  it('is zero for an empty cart, whatever is typed', () => {
+    expect(parseDiscountInput('50', paisa(0))).toBe(0);
+    expect(parseDiscountInput('10%', paisa(0))).toBe(0);
   });
 });

@@ -149,3 +149,38 @@ export function paisaFromRupeeInput(raw: string): Paisa {
   }
   return paisa(Math.round(value * 100));
 }
+
+/**
+ * A discount entered as either a flat PKR amount ("50") or a percentage of
+ * the subtotal ("10%") — one entry field, one underlying amount
+ * (`CartTotals.invoiceDiscountPaisa`), never two parallel discount models.
+ *
+ * The percentage is taken of `subtotalPaisa` — the sum of catalogue-priced
+ * line totals `cartTotals` already computes — never of an already-discounted
+ * figure, so re-reading the same "10%" twice never compounds.
+ *
+ * Clamped to `[0, subtotalPaisa]`: a discount only ever lowers the price,
+ * never raises it. Blank, garbage, zero or negative input is zero — never a
+ * negative discount, which would be a price ABOVE the catalogue price wearing
+ * a discount's clothes — and `cartTotals` clamps the top end the same way it
+ * already clamps any other invoice discount it is handed, so a fixed amount
+ * bigger than the cart still cannot make the total negative.
+ */
+export function parseDiscountInput(raw: string, subtotalPaisa: Paisa): Paisa {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return ZERO_PAISA;
+  }
+
+  const isPercent = trimmed.endsWith('%');
+  const numeric = Number((isPercent ? trimmed.slice(0, -1) : trimmed).trim());
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return ZERO_PAISA;
+  }
+
+  const amount = isPercent
+    ? Math.round((subtotalPaisa * numeric) / 100)
+    : Math.round(numeric * 100);
+
+  return paisa(Math.max(0, Math.min(amount, subtotalPaisa)));
+}

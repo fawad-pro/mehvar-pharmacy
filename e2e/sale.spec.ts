@@ -140,3 +140,67 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
   expect(counters[1]).toBeGreaterThan(counters[0]!);
   expect(counters[2]).toBeGreaterThan(counters[1]!);
 });
+
+test('search results show the compact on-hand figure for every row', async ({ page }) => {
+  await openCounter(page);
+
+  await search(page).fill('disprin');
+  await expect(page.getByRole('option').first()).toContainText('Disprin');
+  // Regardless of level: the suite shares a database, so the exact count moves
+  // as other specs sell or receive it — only the shape is asserted here. The
+  // existing colour-coded low/zero badge (StockBadge) is untouched by this.
+  await expect(page.getByRole('option').first()).toContainText(/On hand: -?\d+/);
+});
+
+test('a fixed PKR discount reduces the total and shows in the totals rail', async ({ page }) => {
+  await openCounter(page);
+
+  // Disprin: Rs 2.50/tab, strip of 10 — one strip is Rs 25.00 (a round number
+  // that makes the arithmetic in this test readable).
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('25.00');
+
+  await page.getByLabel('Discount').fill('5');
+  await expect(page.getByText('Discount −5.00')).toBeVisible();
+  await expect(total(page)).toHaveText('20.00');
+
+  await page.keyboard.press('F12');
+  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(lastSale(page)).toContainText('20.00');
+
+  // A discount belongs to the sale it was entered for, not the next customer.
+  await expect(page.getByLabel('Discount')).toHaveValue('');
+  await expect(total(page)).toHaveText('0.00');
+});
+
+test('a percentage discount is computed off the subtotal', async ({ page }) => {
+  await openCounter(page);
+
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('25.00');
+
+  await page.getByLabel('Discount').fill('10%');
+  await expect(page.getByText('Discount −2.50')).toBeVisible();
+  await expect(total(page)).toHaveText('22.50');
+});
+
+test('a discount can never exceed the cart, and never raises the price', async ({ page }) => {
+  await openCounter(page);
+
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('25.00');
+
+  // Fat-fingering a bigger discount than the cart is worth clamps to the cart,
+  // never a negative total (same posture `cartTotals` already takes).
+  await page.getByLabel('Discount').fill('500');
+  await expect(total(page)).toHaveText('0.00');
+
+  // Junk or a negative entry is zero — never a price ABOVE the catalogue price
+  // wearing a discount's clothes.
+  await page.getByLabel('Discount').fill('-5');
+  await expect(total(page)).toHaveText('25.00');
+});
