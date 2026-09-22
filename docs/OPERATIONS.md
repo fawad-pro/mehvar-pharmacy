@@ -200,17 +200,22 @@ To see what the software sees, paste back what the customer pasted:
 npm run licence:inspect -- <token>
 ```
 
-### Before the first paying pharmacy
+### Production signing keys
 
-> **Blocker.** No production signing key is provisioned. Tokens are currently
-> signed with a development key whose private half is committed in
-> `scripts/licence/dev-key.ts` and is therefore public — anyone with the
-> repository can forge one. `licence:issue` says so, loudly, every time.
->
-> Run `npm run licence:keygen` **on your own machine**, twice: `mehvar-1` to
-> sign with and `mehvar-2` as a cold spare. Public halves go into
-> `TRUST_ROOT_KEYS` in `src/domain/trust/keys.ts`; private halves go to a
-> password manager and nowhere else. Never on a build agent, never in CI.
+**Provisioned.** `mehvar-1` (signs) and `mehvar-2` (cold spare) were minted on
+the founder's own machine with `npm run licence:keygen` and their public
+halves are in `TRUST_ROOT_KEYS` in `src/domain/trust/keys.ts`. Tokens no
+longer fall back to the development key committed in
+`scripts/licence/dev-key.ts` — that key's private half is public, so the
+moment a real key exists, `TRUST_ROOT_KEYS` drops it automatically
+(`composeTrustRoot` in `keys.ts`; `trust-keys.test.ts` asserts it). The
+private halves of `mehvar-1`/`mehvar-2` live in the founder's password
+manager and nowhere else — never a repository, never a build agent, never CI.
+
+**Rotation**, should it ever be needed (a suspected leak, for instance): sign
+with `mehvar-2` instead, mint a fresh cold spare with `npm run licence:keygen`,
+and update `TRUST_ROOT_KEYS` accordingly — a normal release, not an emergency,
+because every signed artifact already names its `kid`.
 
 ### If a computer is replaced
 

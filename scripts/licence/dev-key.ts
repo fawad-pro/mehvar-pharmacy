@@ -7,11 +7,14 @@
  * production key material on a build agent or in CI, where it would be exposed
  * the moment it existed.
  *
- * `licence:issue` prints a loud warning every time it signs with this key, and
- * `trust-keys.test.ts` states plainly that no production key is provisioned
- * yet. Provisioning one (`npm run licence:keygen`, public half into
- * `src/domain/trust/keys.ts`, private half into a password manager) is a
- * release blocker for roadmap Phase 2.
+ * `licence:issue` prints a loud warning every time it signs with this key.
+ * Production keys (`mehvar-1`, `mehvar-2`) are now provisioned in
+ * `src/domain/trust/keys.ts`, which drops this key from `TRUST_ROOT_KEYS` the
+ * moment a production key exists (`trust-keys.test.ts` asserts it) — so
+ * nothing this key signs is trusted by a real build any more. It stays
+ * committed anyway, for the same reason it always was: dev, demo and test
+ * runs that never set `MEHVAR_LICENCE_SIGNING_KEY` still need something to
+ * sign with.
  */
 
 export const DEV_PRIVATE_KEY_PKCS8_BASE64URL =

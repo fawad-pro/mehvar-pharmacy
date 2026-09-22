@@ -43,13 +43,16 @@ const DEV_PUBLIC_KEY = 'MCowBQYDK2VwAyEAFwq9f4diE4x-6TZJQMKeRA0-C5moOJeNL2TR05S7
 /**
  * Production keys, minted by the founder on the founder's own machine.
  *
- * **Provisioning these is a release blocker for roadmap Phase 2** and cannot be
- * done from a build agent or CI — the private half must never touch either.
- * `npm run licence:keygen` prints a pair; the public half goes here, the private
- * half goes to a password manager and nowhere else.
+ * **Provisioned.** `mehvar-1` signs; `mehvar-2` is the cold spare, generated at
+ * the same sitting and never used until a rotation calls for it. Both private
+ * halves live in the founder's password manager and nowhere else — never a
+ * repository, never a build agent, never CI.
  *
- * Until they are filled in, the only usable key is `dev-1`, and
- * `trust-keys.test.ts` states that plainly rather than letting it pass unnoticed.
+ * Their presence here is what makes `composeTrustRoot` drop `dev-1` from
+ * `TRUST_ROOT_KEYS` below: `trust-keys.test.ts` states plainly which branch
+ * that leaves the suite on, so a future accidental reversion (deleting these
+ * two lines) would fail loudly rather than silently re-trusting the published
+ * dev key.
  */
 const PRODUCTION_KEYS: Keyring = {
   'mehvar-1': 'MCowBQYDK2VwAyEAhlbrSb_IyLQjt2PWHq_CcTNz8HlID0wvv0SChSjS-Uw',
