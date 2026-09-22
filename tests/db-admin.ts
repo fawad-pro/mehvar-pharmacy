@@ -45,6 +45,8 @@ export async function purgeTenant(tenantId: string): Promise<void> {
     'sale_lines',
     'payments',
     'sales',
+    // Before both `purchases` and `suppliers` — it references each.
+    'supplier_payments',
     'purchase_lines',
     'purchases',
     'adjustments',

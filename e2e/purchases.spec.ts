@@ -44,6 +44,46 @@ async function addLine(
   await page.getByLabel('Unit cost').press('Enter');
 }
 
+/**
+ * Regression: the invoice total is Σ qty × unit cost, and a line added with no
+ * unit cost lands at zero — so the total silently read Rs 0.00 "even after
+ * adding a line", the margin was computed against nothing, and (since PCN-006)
+ * the supplier balance thought the delivery was free. "Sells for" is pre-filled
+ * from the catalog and "Unit cost" is not, which is what made the field so easy
+ * to skip. Adding a line now requires the cost to be entered; a genuinely free
+ * line is an explicit "0", never a blank.
+ */
+test('the invoice total reflects the cost of every entered line', async ({ page }) => {
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(PURCHASES_URL);
+
+  const invoiceTotal = page.getByText('Invoice total').locator('..');
+
+  // A line with no unit cost is refused, so the total can never be a meaningless
+  // zero behind a line that looks entered.
+  await search(page).fill('panadol');
+  await page.getByRole('option').first().click();
+  await page.getByLabel(/^Qty/).fill('100');
+  await page.getByRole('button', { name: /^Add/ }).click();
+  await expect(page.getByText(/type 0 if it was free/i)).toBeVisible();
+  await expect(invoiceTotal).toContainText('0 lines');
+
+  // With the cost entered, the line lands and the total is qty × cost.
+  await page.getByLabel('Unit cost').fill('2.80');
+  await page.getByLabel('Unit cost').press('Enter');
+  await expect(page.getByRole('table')).toContainText('Panadol');
+  await expect(invoiceTotal).toContainText('Rs 280.00');
+  await expect(invoiceTotal).toContainText('1 line');
+
+  // An explicit zero is still allowed — a free sample is a real thing, and it
+  // adds nothing to the total, which is correct.
+  await addLine(page, 'brufen', { qty: '5', cost: '0' });
+  await expect(page.getByRole('table')).toContainText('Brufen');
+  await expect(invoiceTotal).toContainText('Rs 280.00');
+  await expect(invoiceTotal).toContainText('2 lines');
+});
+
 test('W7: an invoice enters line by line, and the draft survives an interruption', async ({
   page,
 }) => {

@@ -12,6 +12,7 @@ import {
   quickItemsInRange,
   threeNumbers,
 } from '@/db/reporting-queries';
+import { supplierOwedTotal } from '@/db/supplier-queries';
 import { businessDayBounds, businessDayOf, type BusinessDay } from '@/lib/business-day';
 
 import { DaySurface } from './day-surface';
@@ -65,6 +66,7 @@ export default async function DayPage({
     lateSynced,
     figures,
     openingFloat,
+    supplierOwedPaisa,
   ] = await Promise.all([
     threeNumbers(scope, range.start, range.end),
     overridesAndDiscountsInRange(scope, range.start, range.end),
@@ -77,6 +79,9 @@ export default async function DayPage({
     // Always today's bounds, never the range: the prompt is about the drawer
     // in front of the owner right now.
     hasOpeningFloat(scope, start, end),
+    // A position, not an event in a window (like the udhaar total): what the
+    // pharmacy owes suppliers right now, whatever range is being viewed.
+    supplierOwedTotal(scope),
   ]);
 
   return (
@@ -93,6 +98,7 @@ export default async function DayPage({
       cashMovements={cashMovements}
       lateSynced={lateSynced}
       hasOpeningFloat={openingFloat}
+      supplierOwedPaisa={supplierOwedPaisa}
     />
   );
 }

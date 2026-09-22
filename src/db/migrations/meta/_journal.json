@@ -64,6 +64,13 @@
       "when": 1789869575565,
       "tag": "0008_drop_licence_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790111708134,
+      "tag": "0009_supplier_credit",
+      "breakpoints": true
     }
   ]
 }

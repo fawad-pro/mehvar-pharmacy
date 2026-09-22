@@ -17,8 +17,13 @@ import {
   type PurchaseCommand,
   type PurchaseRejection,
 } from '@/domain/purchases/commit-purchase';
+import {
+  commitSupplierPayment,
+  type SupplierPaymentRejection,
+} from '@/domain/suppliers/commit-supplier-payment';
 import { insertSupplier, listPurchases, searchSuppliers } from '@/db/purchase-queries';
-import { uuidv7 } from '@/lib/uuid';
+import { listSuppliersOwed, type SupplierBalanceItem } from '@/db/supplier-queries';
+import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
 
@@ -72,6 +77,10 @@ function messageFor(reason: PurchaseRejection): string {
       return 'Every line needs a selling price.';
     case 'invalid_expiry':
       return 'Check the expiry date — it should look like 2027-06-30.';
+    case 'negative_cash_paid':
+      return 'The amount paid now cannot be negative.';
+    case 'credit_without_supplier':
+      return 'Choose a supplier before putting an invoice on credit.';
     default:
       return 'That did not save. Check the lines and try again.';
   }
@@ -118,4 +127,63 @@ export async function recentPurchasesAction() {
     return [];
   }
   return listPurchases(scopeFor(session));
+}
+
+/* -------------------------------------------------------------------------- */
+/* [PCN-006] Supplier credit — what the pharmacy owes, and paying it down      */
+/* -------------------------------------------------------------------------- */
+
+export async function suppliersOwedAction(): Promise<SupplierBalanceItem[]> {
+  const session = await currentSession();
+  if (!session) {
+    return [];
+  }
+  return listSuppliersOwed(scopeFor(session));
+}
+
+function supplierMessageFor(reason: SupplierPaymentRejection): string {
+  switch (reason) {
+    case 'supplier_required':
+      return 'Choose the supplier being paid.';
+    case 'amount_not_positive':
+      return 'Enter an amount greater than zero.';
+    default:
+      return 'That did not save. Try again.';
+  }
+}
+
+export type SettleSupplierOutcome =
+  | { ok: true; newBalancePaisa: number }
+  | { ok: false; message: string };
+
+export async function settleSupplierAction(input: {
+  supplierId: Uuid;
+  amountPaisa: number;
+  note: string | null;
+}): Promise<SettleSupplierOutcome> {
+  const session = await currentSession();
+  if (!session) {
+    return { ok: false, message: 'This device needs to sign in again.' };
+  }
+  if (session.tenantSuspended) {
+    return { ok: false, message: 'This pharmacy’s account is on hold. Contact support.' };
+  }
+
+  const result = await commitSupplierPayment(scopeFor(session), {
+    paymentId: uuidv7(),
+    supplierId: input.supplierId,
+    amountPaisa: input.amountPaisa,
+    purchaseId: null,
+    note: input.note,
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: supplierMessageFor(result.reason) };
+  }
+
+  // The payable figure the Day screen and this panel both read is now stale
+  // (the 'purchases' area already covers /purchases and /day).
+  revalidateAfter('purchases');
+
+  return { ok: true, newBalancePaisa: result.value.newBalancePaisa };
 }

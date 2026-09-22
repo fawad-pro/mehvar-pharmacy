@@ -52,6 +52,10 @@ export default async function PurchaseDetailPage({
     0,
   );
   const bonusBase = purchase.lines.reduce((sum, line) => sum + line.bonusQtyBase, 0);
+  // [PCN-006] What was still owed to the supplier when this invoice was
+  // received. A negative would be an overpayment; clamped, since "on credit"
+  // never means the supplier owes us on a single invoice.
+  const creditPaisa = Math.max(0, totalCostPaisa - purchase.cashPaidPaisa);
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
@@ -149,6 +153,22 @@ export default async function PurchaseDetailPage({
             {formatPaisa(paisa(totalCostPaisa), { withSymbol: true })}
           </span>
         </div>
+        {/* [PCN-006] Paid vs owed — shown only when the invoice was not settled
+            in full, so an ordinary cash purchase reads exactly as before. */}
+        {creditPaisa > 0 ? (
+          <>
+            <div className="text-ink/70 flex justify-between">
+              <span>Paid now</span>
+              <span className="numeral">
+                {formatPaisa(paisa(purchase.cashPaidPaisa), { withSymbol: true })}
+              </span>
+            </div>
+            <div className="text-amber flex justify-between font-medium">
+              <span>On credit{purchase.supplierName ? ` — owed to ${purchase.supplierName}` : ''}</span>
+              <span className="numeral">{formatPaisa(paisa(creditPaisa), { withSymbol: true })}</span>
+            </div>
+          </>
+        ) : null}
         {bonusBase > 0 ? (
           <p className="text-ink/60 text-xs">
             Includes bonus stock received free — it lowers the effective cost per unit without

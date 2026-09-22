@@ -2,6 +2,48 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Sales/POS usability pass and supplier credit (Day 17)
+
+A read of the counter as a cashier sees it, then the one credit gap the product
+had. Nothing re-litigated; the base-unit model and the udhaar pattern were both
+reused, not replaced (PCN-005, PCN-006).
+
+**The counter, made legible at a glance**
+
+- **Quantity** is now the loudest cell after the name, with −/+ steppers visible
+  on every cart line so a new cashier never has to be told +/− also work. The
+  selected line spells out "+/− adjust · Tab switches unit", which is also how a
+  single tablet or a partial strip is sold — the base unit is already the
+  smallest sellable unit, so no schema change (I1, I3, W5, PCN-005).
+- **Stock** shows in the product's own unit on every search result and on the
+  selected line — a quiet figure normally, amber at the last pack, red at zero
+  (I7 kept; D2 unchanged: a shortfall is exposure, never a block).
+- **Per-line discounts** get their own cart column and an inline editor; the
+  original amount stays struck-through beside the net and prints on the receipt.
+  The fields existed end to end already (`sale_lines.line_discount_paisa`); this
+  makes them reachable and visible (T1).
+- The **F1–F10 foot rail** sits a touch taller (52px) with boxed keys and larger
+  labels — easier to read and hit, still compact (Phase 10 §1, I1).
+
+**Supplier credit — the pharmacy owes distributors too (PCN-006)**
+
+- The mirror of customer udhaar. Migration 0006 adds `purchases.cash_paid_paisa`
+  (the analogue of `sales.cash_paisa`) and the `supplier_payments` event table
+  (the analogue of `payments`); both derive rather than store the balance:
+  `Σ (invoice − paid) − Σ payments`, never authority (ADR-1, Phase 5 inv. 3).
+- Purchase entry gains one "Paid now" field, defaulting to the full invoice so a
+  cash purchase is unchanged; less puts the rest on the supplier's account and
+  asks for a supplier (the mirror of `credit_without_customer`).
+- `commitSupplierPayment` mirrors `commitSettlement` — online-only and idempotent
+  on a client id, exactly as `commitPurchase` is. The Purchases surface gains an
+  "Owed to suppliers" panel with a settle action; the Day screen gains the
+  position figure; the invoice detail shows paid vs owed.
+- Balance derivation and settlement idempotency are pinned in
+  `supplier-balance.integration.test.ts`; the pure rules in
+  `supplier-credit.test.ts` and `supplier-payment-command.test.ts`.
+- **Run `npm run db:grants` after migrating** — a new event table starts mutable
+  until granted, and `supplier_payments` must be INSERT-only (Phase 9 §5.1).
+
 ## Session 8 — Day 8, hardening: the pre-launch product review and its fixes
 
 The day the product got read as a product rather than a codebase. The full

@@ -20,228 +20,17 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parsePowerShellFindings, type Finding } from './powershell-findings';
+import {
+  checkAsciiOnly,
+  checkBlockComments,
+  checkScCreate,
+  checkScriptRootInParamBlock,
+  checkUnguardedEnvPaths,
+} from './ps-static-checks';
+
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const scriptDir = join(root, 'packaging', 'windows');
-
-interface Finding {
-  file: string;
-  line: number;
-  message: string;
-}
-
-/**
- * Blank out comments, keeping line numbers intact.
- *
- * Both kinds matter: `<# … #>` blocks as well as `#` to end of line. The rules
- * below are documented in block comments that necessarily *mention* the thing
- * they forbid — a checker that reads those as violations flags its own
- * explanation, which is how the first version of this file behaved.
- */
-function stripComments(source: string): string {
-  const withoutBlocks = source.replace(/<#[\s\S]*?#>/g, (match) =>
-    // Preserve the newlines so reported line numbers stay true.
-    '\n'.repeat((match.match(/\n/g) ?? []).length),
-  );
-  return withoutBlocks
-    .split('\n')
-    .map((line) => line.replace(/#.*$/, ''))
-    .join('\n');
-}
-
-/**
- * `$PSScriptRoot` inside a `param(...)` block.
- *
- * Parameter defaults are evaluated during binding, where `$PSScriptRoot` can
- * be empty — and `Join-Path` throws on an empty `-Path`, so the script dies
- * before its first line with an error naming `Join-Path` and nothing else.
- * This is exactly how `fetch-runtimes.ps1` failed on Windows.
- */
-function checkScriptRootInParamBlock(file: string, source: string): Finding[] {
-  const lines = stripComments(source).split('\n');
-  const findings: Finding[] = [];
-
-  let depth = 0;
-  let inParams = false;
-
-  lines.forEach((line, index) => {
-    const code = line;
-
-    if (!inParams && /^\s*param\s*\(/i.test(code)) {
-      inParams = true;
-      depth = 0;
-    }
-
-    if (inParams) {
-      if (/\$PSScriptRoot/i.test(code)) {
-        findings.push({
-          file,
-          line: index + 1,
-          message:
-            '$PSScriptRoot in a param() block — it can be empty during binding. ' +
-            'Bind the parameter empty and resolve it in the body instead.',
-        });
-      }
-
-      depth += (code.match(/\(/g) ?? []).length;
-      depth -= (code.match(/\)/g) ?? []).length;
-      if (depth <= 0 && /\)/.test(code)) inParams = false;
-    }
-  });
-
-  return findings;
-}
-
-/**
- * `Join-Path $env:SOMETHING` without a null guard.
- *
- * `Join-Path` throws on a null or empty `-Path`, and environment variables are
- * not guaranteed: `LOCALAPPDATA` and `TEMP` are unset for some service
- * accounts, and none of them exist off Windows. This class has now bitten
- * three times — `$env:LOCALAPPDATA` in `fetch-runtimes.ps1`, `$env:TEMP` in
- * `install-services.ps1`, and `$env:LOCALAPPDATA` in a `counter-shortcut.ps1`
- * parameter default — each time as an exception thrown before the script did
- * any of its own work.
- *
- * Guard the variable, or use an API that cannot return null
- * (`[System.IO.Path]::GetTempPath()`, `[Environment]::GetFolderPath(...)`).
- */
-function checkUnguardedEnvPaths(file: string, source: string): Finding[] {
-  const findings: Finding[] = [];
-
-  stripComments(source)
-    .split('\n')
-    .forEach((line, index) => {
-      const match = /Join-Path\s+\$env:(\w+)/i.exec(line);
-      if (match === null) return;
-
-      findings.push({
-        file,
-        line: index + 1,
-        message:
-          `Join-Path over $env:${match[1] ?? ''} — Join-Path throws when the variable ` +
-          'is unset. Guard it, or use an API that cannot return null.',
-      });
-    });
-
-  return findings;
-}
-
-/**
- * No non-ASCII bytes in a `.ps1`.
- *
- * This is the rule that would have prevented the second failed Windows
- * install, and it is not about tidiness.
- *
- * Windows PowerShell 5.1 — which is what `powershell.exe` is, and what the
- * installer runs — decodes a `.ps1` with no byte-order mark using the system
- * ANSI code page, NOT UTF-8. An em dash written as UTF-8 `E2 80 94` therefore
- * arrives as three ANSI characters, the last of which is U+201D. PowerShell
- * accepts curly quotes as string delimiters, so a dash inside a double-quoted
- * string CLOSES THE STRING, and the file fails to parse.
- *
- * A script that fails to parse runs no line at all. That is why the installer
- * produced no log: there was nothing wrong with the logging, and nothing the
- * script could have done, because the script never started.
- *
- * `pwsh` reads `.ps1` as UTF-8 and parses these files happily, which is
- * precisely why the earlier check passed. Verifying on the wrong runtime is
- * the same mistake as verifying on the wrong platform.
- *
- * ASCII-only is the fix that needs no BOM handling and cannot regress.
- */
-function checkAsciiOnly(file: string, source: string): Finding[] {
-  const findings: Finding[] = [];
-
-  source.split('\n').forEach((line, index) => {
-    const match = /[^\x00-\x7F]/.exec(line);
-    if (match === null) return;
-
-    const char = match[0] ?? '';
-    findings.push({
-      file,
-      line: index + 1,
-      message:
-        `non-ASCII character ${JSON.stringify(char)} (U+${(char.codePointAt(0) ?? 0)
-          .toString(16)
-          .toUpperCase()
-          .padStart(4, '0')}) at column ${match.index + 1}. ` +
-        'Windows PowerShell 5.1 reads .ps1 as ANSI, which can turn this into a ' +
-        'string delimiter and stop the whole file parsing. Use ASCII.',
-    });
-  });
-
-  return findings;
-}
-
-/**
- * Registering the counter service without WinSW.
- *
- * Two failures live here, and only the second is fatal to the approach.
- *
- * `sc.exe create ... binPath=` failed with exit 1639: Windows has no argv, so
- * PowerShell serialises the argument array back into one command-line string
- * for sc.exe to re-parse, and a value holding both spaces and quotes acquires
- * backslash-escaped quotes sc.exe's parser does not implement.
- *
- * `New-Service` fixes that — and still produces a service that cannot start. A
- * Windows service image must call `StartServiceCtrlDispatcher` and answer the
- * Service Control Manager within about thirty seconds; `node.exe` never does,
- * so the SCM kills it with 1053 however it was registered.
- *
- * WinSW is service-aware and runs node as a supervised child. Other `sc.exe`
- * verbs (`delete`) stay allowed: their arguments are literals with no spaces,
- * quotes or paths, the only shape that cannot be mangled.
- */
-function checkScCreate(file: string, source: string): Finding[] {
-  const findings: Finding[] = [];
-
-  stripComments(source)
-    .split('\n')
-    .forEach((line, index) => {
-      const scCreate =
-        /\bsc(?:\.exe)?\b/i.test(line) &&
-        /\b(create|config)\b/i.test(line) &&
-        /binPath\s*=/i.test(line);
-      const newService = /\bNew-Service\b/i.test(line);
-
-      if (!scCreate && !newService) return;
-
-      findings.push({
-        file,
-        line: index + 1,
-        message: scCreate
-          ? 'sc.exe create/config with binPath= — PowerShell re-serialises the ' +
-            'value into a command line sc.exe cannot parse (exit 1639), and the ' +
-            'resulting service could not start anyway (1053). WinSW registers ' +
-            'the service: MehvarNode.exe install.'
-          : 'New-Service registers node.exe as a service directly, which cannot ' +
-            'start: a service image must answer the SCM within ~30s and node ' +
-            'never does (1053). WinSW hosts it instead: MehvarNode.exe install.',
-      });
-    });
-
-  return findings;
-}
-
-/**
- * Block comments must be closed.
- *
- * An unterminated `<#` swallows the rest of the file, and PowerShell reports it
- * as a syntax error at the last line — nowhere near the cause.
- */
-function checkBlockComments(file: string, source: string): Finding[] {
-  const opens = (source.match(/<#/g) ?? []).length;
-  const closes = (source.match(/#>/g) ?? []).length;
-  if (opens === closes) return [];
-
-  return [
-    {
-      file,
-      line: 1,
-      message: `${opens} block comment(s) opened with <# but ${closes} closed with #>.`,
-    },
-  ];
-}
 
 /** PowerShell, if this machine has it. `pwsh` is Core; `powershell` is 5.1. */
 function findPowerShell(): string | undefined {
@@ -273,24 +62,20 @@ function parseWithPowerShell(shell: string, files: string[]): Finding[] {
         }
       }
     }
-    $results | ConvertTo-Json -Compress -AsArray
+    # No -AsArray: it is a PowerShell 6+ switch, and the installer runs on
+    # Windows PowerShell 5.1, which rejects it outright ("A parameter cannot be
+    # found that matches parameter name 'AsArray'") and takes the whole lint
+    # step down with it. The count-dependent shape this produces (a bare object
+    # for a single finding) is normalised in parsePowerShellFindings so a lone
+    # parse error is never dropped.
+    $results | ConvertTo-Json -Compress
   `;
 
   const output = execFileSync(shell, ['-NoProfile', '-Command', script], {
     encoding: 'utf8',
-  }).trim();
-
-  if (output === '' || output === '[]') return [];
-
-  const parsed: unknown = JSON.parse(output);
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.flatMap((entry): Finding[] => {
-    if (typeof entry !== 'object' || entry === null) return [];
-    const row = entry as Record<string, unknown>;
-    if (typeof row.file !== 'string' || typeof row.message !== 'string') return [];
-    return [{ file: row.file, line: Number(row.line ?? 1), message: row.message }];
   });
+
+  return parsePowerShellFindings(output);
 }
 
 /**
