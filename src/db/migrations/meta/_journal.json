@@ -57,6 +57,13 @@
       "when": 1789600541131,
       "tag": "0007_revocations",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789869575565,
+      "tag": "0008_drop_licence_expiry",
+      "breakpoints": true
     }
   ]
 }

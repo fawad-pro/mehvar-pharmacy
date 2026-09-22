@@ -2,10 +2,9 @@ import 'server-only';
 
 import {
   businessNow,
-  clockCeilingOf,
   clockDisagreement,
   corroboratedWitness,
-  trialAnchor,
+  evaluationAnchor,
   type ClockDisagreement,
 } from '@/domain/licensing/clock';
 import { evaluateLicence, type LicenceState } from '@/domain/licensing/state';
@@ -98,45 +97,63 @@ async function computeLicence(
   const licence = verified?.ok === true ? verified.licence : undefined;
   const invalidReason = verified !== undefined && !verified.ok ? verified.reason : undefined;
 
-  const [
-    observations,
-    highWater,
-    earliestEvent,
-    firstObservation,
-    tenantBirth,
-    installRow,
-    revocationRows,
-  ] = await Promise.all([
-    recentObservations(),
-    ledgerHighWaterMark(scope),
-    earliestEventAt(scope),
-    earliestObservation(),
-    tenantCreatedAt(tenantId),
-    installationId === undefined ? Promise.resolve(undefined) : findInstallation(installationId),
-    listRevocations(scope),
-  ]);
+  // PCN-006: the authorized path never reads the evaluation clock. A verified
+  // token — or a token that was present but did not verify — decides the state
+  // before any anchor is gathered. The clock exists only to end the evaluation
+  // of an installation that has *no* licence at all, so when one is present we
+  // skip the dozen aggregates entirely and there is no `businessNow` to report.
+  if (licence !== undefined || invalidReason !== undefined) {
+    // A licence is revoked iff a stored revocation for its licence id RE-VERIFIES
+    // against the trust root and is pinned to this tenant. Verified here, not
+    // trusted from the column — the same posture as the licence token. A tampered
+    // or foreign-tenant revocation simply fails to verify and is ignored, so a
+    // bad revocation can never restrict a paying pharmacy.
+    const revocationRows = licence === undefined ? [] : await listRevocations(scope);
+    const revoked =
+      licence !== undefined &&
+      revocationRows.some(
+        (row) =>
+          row.licenceId === licence.payload.licenceId &&
+          verifyRevocation(row.token, {
+            expectedTenantSlug: tenantSlug,
+            expectedLicenceId: licence.payload.licenceId,
+          }).ok,
+      );
 
-  // [Stage 2] A licence is revoked iff a stored revocation for its licence id
-  // RE-VERIFIES against the trust root and is pinned to this tenant. Verified
-  // here, not trusted from the column — the same posture as the licence token.
-  // A tampered or foreign-tenant revocation simply fails to verify and is
-  // ignored, so a bad revocation can never restrict a paying pharmacy.
-  const revoked =
-    licence !== undefined &&
-    revocationRows.some(
-      (row) =>
-        row.licenceId === licence.payload.licenceId &&
-        verifyRevocation(row.token, {
-          expectedTenantSlug: tenantSlug,
-          expectedLicenceId: licence.payload.licenceId,
-        }).ok,
-    );
+    const state = evaluateLicence({
+      now: systemNow,
+      timeZone,
+      effective: licence,
+      boundHere: licence === undefined ? undefined : standing.boundHere,
+      invalidReason,
+      revoked,
+    });
+
+    return {
+      state,
+      installationId,
+      clock: 'none',
+      rebindsUsed: standing.rebindsUsed,
+      systemNow,
+      businessNow: systemNow,
+    };
+  }
+
+  // No licence at all — the only path that consults the evaluation clock.
+  const [observations, highWater, earliestEvent, firstObservation, tenantBirth, installRow] =
+    await Promise.all([
+      recentObservations(),
+      ledgerHighWaterMark(scope),
+      earliestEventAt(scope),
+      earliestObservation(),
+      tenantCreatedAt(tenantId),
+      installationId === undefined ? Promise.resolve(undefined) : findInstallation(installationId),
+    ]);
 
   const anchors = {
     systemNow,
-    witness: corroboratedWitness(observations, { ceiling: clockCeilingOf(licence) }),
+    witness: corroboratedWitness(observations),
     ledgerHighWater: highWater,
-    licenceIssuedAt: licence === undefined ? undefined : new Date(licence.payload.issuedAt),
     installationFirstSeenAt: installRow?.firstSeenAt,
   };
 
@@ -145,11 +162,7 @@ async function computeLicence(
   const state = evaluateLicence({
     now,
     timeZone,
-    effective: licence,
-    boundHere: licence === undefined ? undefined : standing.boundHere,
-    invalidReason,
-    revoked,
-    trialStartedAt: trialAnchor({
+    evaluationStartedAt: evaluationAnchor({
       tenantCreatedAt: tenantBirth,
       installationFirstSeenAt: installRow?.firstSeenAt,
       earliestEvent,

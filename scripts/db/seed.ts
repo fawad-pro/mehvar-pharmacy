@@ -19,8 +19,14 @@ import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 
 import { hashPassword, hashPin } from '../../src/auth/pin';
+import { insertLicence, listLicences } from '../../src/db/licence-queries';
 import { createTenant, findTenantBySlug } from '../../src/db/provisioning';
-import { tenantScope } from '../../src/db/scoped';
+import { tenantScope, type TenantScope } from '../../src/db/scoped';
+import { signPayload } from '../../src/domain/licensing/sign';
+import { LICENCE_FORMAT_VERSION } from '../../src/domain/licensing/state';
+import { ensureInstallation } from '../../src/lib/installation';
+import { writeLicenceFile } from '../../src/lib/licence-file';
+import { resolveDemoSigningKey } from './demo-licence-key';
 import {
   adjustments,
   batches,
@@ -111,6 +117,13 @@ async function main(): Promise<void> {
   const existing = await findDemoTenant();
   if (existing) {
     await topUpCatalog(existing);
+    // An older dev database may predate perpetual licensing; make sure the demo
+    // is authorized on this machine rather than sitting lapsed.
+    const licenceOutcome = await ensureDemoLicence(
+      tenantScope({ tenantId: existing.tenantId, userId: existing.ownerId }),
+    );
+    const lines = licenceOutcomeLines(licenceOutcome);
+    if (lines.length > 0) console.log(lines.join('\n'));
     return;
   }
 
@@ -164,6 +177,9 @@ async function main(): Promise<void> {
     receiptPrefix: 'A',
     pairingKeyHash: await hashPassword(DEMO.pairingKey),
   });
+
+  /* -- A perpetual licence, when a real signing key is available (PCN-006) --- */
+  const licenceOutcome = await ensureDemoLicence(scope);
 
   /* -- Suppliers ------------------------------------------------------------ */
   const supplierIds = await Promise.all(
@@ -337,6 +353,7 @@ async function main(): Promise<void> {
       `  ${SEED_PRODUCTS.length} products, ${stocked} opening batches, ${supplierIds.length} suppliers`,
       `  1 customer with an udhaar balance, opening float Rs 5,000`,
       '',
+      ...licenceOutcomeLines(licenceOutcome),
       'Device login:',
       `  tenant   ${DEMO.tenantSlug}`,
       `  device   ${DEMO.deviceName}`,
@@ -348,6 +365,95 @@ async function main(): Promise<void> {
       '',
     ].join('\n'),
   );
+}
+
+/**
+ * Operator-facing lines for how the demo's licence ended up, or didn't.
+ *
+ * `skipped` is the expected, healthy state on a developer machine with no
+ * `MEHVAR_LICENCE_SIGNING_KEY` — the demo simply runs its 30-day evaluation
+ * with full functionality, so this says that plainly rather than looking like
+ * a missing step.
+ */
+function licenceOutcomeLines(outcome: 'issued' | 'already' | 'skipped'): string[] {
+  switch (outcome) {
+    case 'issued':
+      return ['Licence: issued a perpetual licence, bound to this machine.', ''];
+    case 'already':
+      return [];
+    case 'skipped':
+      return [
+        'Licence: no MEHVAR_LICENCE_SIGNING_KEY configured, so none was issued.',
+        '  The demo runs on its 30-day evaluation instead — full functionality either way.',
+        '',
+      ];
+  }
+}
+
+/**
+ * Give the demo a perpetual licence bound to THIS machine, when there is a
+ * real key to sign it with (PCN-006).
+ *
+ * The demo is a working, authorized pharmacy out of the box wherever a real
+ * signing key is available — a lapsed-looking demo was the exact confusion
+ * this session started from. Signing with the committed DEVELOPMENT key would
+ * "fix" that only in appearance: the moment `mehvar-1`/`mehvar-2` were
+ * provisioned in `domain/trust/keys.ts`, `composeTrustRoot` correctly dropped
+ * the dev key from the trust root, so a dev-signed "perpetual" licence now
+ * verifies against nothing and resolves to `invalid` forever — worse than no
+ * licence at all. `resolveDemoSigningKey` returns `null` in exactly that case,
+ * and this function's answer to `null` is to issue NOTHING and say so: an
+ * unlicensed installation already runs a fully-functional 30-day evaluation
+ * (PCN-006), which is the correct fallback, not a broken perpetual one.
+ *
+ * When a real key IS configured (`MEHVAR_LICENCE_SIGNING_KEY`, e.g. on the
+ * founder's own machine), the issued licence is bound to the machine's own
+ * installation id, so the app reads `authorized` here and a *copied* database
+ * reads `unbound` — the testable copy path, exactly as a real licence behaves.
+ *
+ * Idempotent: `insertLicence` is `onConflictDoNothing` on (tenant, licence,
+ * installation), and this issues nothing when the demo already holds a licence
+ * bound to this machine. Evaluation and unauthorized states stay reachable
+ * through any tenant WITHOUT a licence — every provisioned test tenant is one.
+ */
+async function ensureDemoLicence(scope: TenantScope): Promise<'issued' | 'already' | 'skipped'> {
+  const installation = ensureInstallation('db:seed');
+  const existing = await listLicences(scope);
+  if (existing.some((row) => row.installationId === installation.installationId)) {
+    return 'already';
+  }
+
+  const signing = resolveDemoSigningKey();
+  if (signing === null) {
+    return 'skipped';
+  }
+
+  const licenceId = uuidv7();
+  const issuedAt = new Date();
+  const token = signPayload(
+    {
+      v: LICENCE_FORMAT_VERSION,
+      kid: signing.kid,
+      licenceId,
+      tenantSlug: DEMO.tenantSlug,
+      customerName: DEMO.tenantName,
+      plan: 'standard',
+      branches: 1,
+      issuedAt: issuedAt.toISOString(),
+    },
+    signing.key,
+  );
+
+  await insertLicence(scope, {
+    id: uuidv7(),
+    token,
+    licenceId,
+    issuedAt,
+    installationId: installation.installationId,
+  });
+  // Kept on disk too, so a boot after a database restore refills from it.
+  writeLicenceFile(token);
+  return 'issued';
 }
 
 /** The demo tenant, if this database already has one. */

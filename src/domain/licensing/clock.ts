@@ -11,10 +11,14 @@
  * indefinite for any installation that simply stopped trading. The ledger cannot
  * advance when nothing happens, so it can never prove that time has passed.
  *
- * ## The five anchors
+ * ## The anchors
  *
  * `businessNow` is `max()` of all of them. No clamp, no branch, no
- * refuse-to-degrade — a clock anomaly must never withhold a lapse (decision D5).
+ * refuse-to-degrade — a clock anomaly must never withhold the end of the
+ * evaluation window (decision D5). Under PCN-006 the clock is consulted ONLY
+ * while an installation is unlicensed; an authorized licence is resolved before
+ * `businessNow` is ever read, so nothing here participates once a valid bound
+ * licence exists.
  *
  *   - `systemNow`     advances on an idle machine. The ELAPSE guarantee (D5a);
  *                     nothing else in an offline install can supply it.
@@ -22,8 +26,6 @@
  *                     trust by making it monotonic. Kills rollback.
  *   - `ledgerHighWater`  newest event row. Defence in depth if the witness table
  *                     were deleted but the sales ledger survived.
- *   - `licenceIssuedAt`  founder-signed and unforgeable, so every renewal
- *                     silently re-anchors the clock, offline, with no server.
  *   - `installationFirstSeenAt`  covers a brand-new install.
  *
  * ## Why the witness is corroborated rather than maximal
@@ -43,12 +45,12 @@
  * top-K untouched, and one above it displaces a smaller member. An attacker can
  * only add rows, so no sequence of writes can lower the witness.
  *
- * A fault that persisted long enough to be corroborated is repaired by a signed
- * `clockCeiling` in a licence token (Invariant L6) — a compensating record, T2
- * applied to time. Never by deletion.
+ * A fault that persisted long enough to be corroborated is bounded by the
+ * `ceiling` argument to `corroboratedWitness` — a compensating record, T2
+ * applied to time. Never by deletion. (Under PCN-006 the ceiling is unused in
+ * practice, since a persistent forward fault can only shorten a pirate's own
+ * free evaluation — self-harm, never an exploit — but the mechanism is kept.)
  */
-
-import type { VerifiedLicence } from './state';
 
 /**
  * How many observations must agree before a reading becomes authoritative.
@@ -80,7 +82,6 @@ export interface ClockAnchors {
   /** `max(observed_at)` is NOT this — see `corroboratedWitness`. */
   readonly witness?: Date | undefined;
   readonly ledgerHighWater?: Date | undefined;
-  readonly licenceIssuedAt?: Date | undefined;
   readonly installationFirstSeenAt?: Date | undefined;
 }
 
@@ -134,7 +135,6 @@ export function businessNow(anchors: ClockAnchors): Date {
       anchors.systemNow,
       anchors.witness,
       anchors.ledgerHighWater,
-      anchors.licenceIssuedAt,
       anchors.installationFirstSeenAt,
     ]) ?? anchors.systemNow
   );
@@ -160,7 +160,6 @@ export function clockDisagreement(
   const others = latest([
     anchors.witness,
     anchors.ledgerHighWater,
-    anchors.licenceIssuedAt,
     anchors.installationFirstSeenAt,
   ]);
   if (others === undefined) return 'none';
@@ -195,14 +194,16 @@ export function shouldObserve(input: {
 }
 
 /**
- * When the trial clock started.
+ * When the unlicensed installation's 30-day evaluation started.
  *
- * `min()` is the point, and it is what closes the trial-reset hole: deleting
- * `installation.json` does not help, because the database still remembers, and
- * the earliest event row cannot be rewritten by the application at all.
- * Resetting a trial therefore requires destroying the pharmacy's own records.
+ * `min()` is the point, and it is what closes the evaluation-reset hole:
+ * deleting `installation.json` does not help, because the database still
+ * remembers, and the earliest event row cannot be rewritten by the application
+ * at all. Resetting the evaluation therefore requires destroying the pharmacy's
+ * own records — and copying a licensed install yields `unbound`, not a fresh
+ * evaluation, so there is nothing to reset there either.
  */
-export function trialAnchor(sources: {
+export function evaluationAnchor(sources: {
   readonly tenantCreatedAt?: Date | undefined;
   readonly installationFirstSeenAt?: Date | undefined;
   readonly earliestEvent?: Date | undefined;
@@ -220,12 +221,4 @@ export function trialAnchor(sources: {
     if (best === undefined || date.getTime() < best.getTime()) best = date;
   }
   return best ?? sources.fallback;
-}
-
-/** The signed repair, read off a verified licence. Absent in every normal case. */
-export function clockCeilingOf(licence: VerifiedLicence | undefined): Date | undefined {
-  const raw = licence?.payload.clockCeiling;
-  if (raw === undefined) return undefined;
-  const parsed = new Date(raw);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }

@@ -40,11 +40,33 @@ export interface CartTotals {
   readonly lineCount: number;
 }
 
-/** Line total before invoice-level discount. Never negative. */
+/** What the line would cost with no discount at all — the discount's basis. */
+export function lineGrossPaisa(line: CartLine): Paisa {
+  return multiplyPaisa(line.unitPricePaisa, line.qtyBase);
+}
+
+/** Line total after its own discount (Phase 5 invariant 4). Never negative. */
 export function lineTotal(line: CartLine): Paisa {
-  const gross = multiplyPaisa(line.unitPricePaisa, line.qtyBase);
-  const net = subtractPaisa(gross, line.lineDiscountPaisa);
+  const net = subtractPaisa(lineGrossPaisa(line), line.lineDiscountPaisa);
   return net < 0 ? ZERO_PAISA : net;
+}
+
+/**
+ * The receipt's pre-discount Subtotal: every line's undiscounted gross,
+ * summed. `CartTotals.subtotalPaisa` is deliberately NOT this — it sums
+ * `lineTotal`, already net of each line's own discount, because that is the
+ * figure `commitSale` persists (Phase 5 invariant 4's "Σ line totals"). A
+ * receipt showing that net figure as "Subtotal" made Subtotal and TOTAL read
+ * identical whenever a line carried a discount, which is what a customer
+ * reads as "no discount was applied" even though one was.
+ */
+export function grossSubtotalPaisa(lines: readonly CartLine[]): Paisa {
+  return sumPaisa(lines.map(lineGrossPaisa));
+}
+
+/** Every line's own discount, summed — the receipt's single Discount row. */
+export function totalLineDiscountPaisa(lines: readonly CartLine[]): Paisa {
+  return sumPaisa(lines.map((line) => line.lineDiscountPaisa));
 }
 
 /**
@@ -148,4 +170,41 @@ export function paisaFromRupeeInput(raw: string): Paisa {
     return ZERO_PAISA;
   }
   return paisa(Math.round(value * 100));
+}
+
+/**
+ * A discount entered as either a flat PKR amount ("50") or a percentage
+ * ("10%") — one entry field, one underlying amount (`CartLine.lineDiscountPaisa`
+ * for a per-line discount), never two parallel discount models.
+ *
+ * `basisPaisa` is what the discount is a percentage OF, and it must be the
+ * line's undiscounted gross (`lineGrossPaisa`) — never `lineTotal`, which is
+ * already net of any EXISTING discount. Basing the percentage on the gross is
+ * what makes re-reading the same "10%" idempotent rather than compounding: a
+ * line re-priced from the SAME catalogue amount every time it is parsed.
+ *
+ * Clamped to `[0, basisPaisa]`: a discount only ever lowers the price, never
+ * raises it. Blank, garbage, zero or negative input is zero — never a
+ * negative discount, which would be a price ABOVE the catalogue price wearing
+ * a discount's clothes — and a fixed amount bigger than the line clamps to
+ * the line, the same posture `cartTotals` already takes for an invoice
+ * discount bigger than the cart.
+ */
+export function parseDiscountInput(raw: string, basisPaisa: Paisa): Paisa {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return ZERO_PAISA;
+  }
+
+  const isPercent = trimmed.endsWith('%');
+  const numeric = Number((isPercent ? trimmed.slice(0, -1) : trimmed).trim());
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return ZERO_PAISA;
+  }
+
+  const amount = isPercent
+    ? Math.round((basisPaisa * numeric) / 100)
+    : Math.round(numeric * 100);
+
+  return paisa(Math.max(0, Math.min(amount, basisPaisa)));
 }

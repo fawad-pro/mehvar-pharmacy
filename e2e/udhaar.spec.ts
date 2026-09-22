@@ -37,8 +37,13 @@ test('payment overlay: tendered above the total shows change (Phase 10 §4)', as
 
   await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Saved');
-  await expect(receipt(page)).toContainText('Change');
-  await expect(receipt(page)).toContainText('65.00');
+
+  // The change calculation is the payment screen's job (already proven above,
+  // before commit); the printed slip states what was handed over and stops
+  // there, so the customer never has to do the subtraction off a receipt.
+  await expect(receipt(page)).toContainText('Paid');
+  await expect(receipt(page)).toContainText('100.00');
+  await expect(receipt(page)).not.toContainText('Change');
 });
 
 test('W2: attaching a customer mid-sale splits cash and credit, with a mini-statement on the receipt', async ({
@@ -86,6 +91,29 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(page.locator('aside')).not.toContainText(name);
 });
 
+test('the payment overlay computes Remaining the instant tendered falls short — no separate calculator', async ({
+  page,
+}) => {
+  await openCounter(page);
+
+  // Brufen: Rs 9.00/tab, strip of 10 — one strip is Rs 90.00 (Amount Due).
+  await search(page).fill('brufen');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('90.00');
+
+  await page.keyboard.press('F12');
+  const overlay = page.getByRole('dialog', { name: 'Payment' });
+  await expect(overlay).toContainText('Amount Due');
+
+  // Amount Due Rs 90.00, tendered Rs 50.00 → Remaining Rs 40.00, shown the
+  // moment the figure is typed — before any customer is attached, before
+  // anything is committed.
+  await overlay.getByLabel('Cash tendered').fill('50');
+  await expect(overlay).toContainText('Remaining');
+  await expect(overlay).toContainText('40.00');
+  await expect(overlay).not.toContainText('Change');
+});
+
 test('credit with nobody attached is blocked at the overlay, not silently discounted', async ({
   page,
 }) => {
@@ -100,7 +128,7 @@ test('credit with nobody attached is blocked at the overlay, not silently discou
   // Tendering less than the total, with nobody attached, has nowhere to put
   // the shortfall — the overlay says so and will not commit it silently.
   await overlay.getByLabel('Cash tendered').fill('10');
-  await expect(overlay).toContainText('Attach a customer (F8) to put the rest on udhaar.');
+  await expect(overlay).toContainText('Attach a customer (F4) to put the rest on udhaar.');
   await expect(overlay.getByRole('button', { name: /Commit/ })).toBeDisabled();
 
   await overlay.getByRole('button', { name: 'Esc to cancel' }).click();

@@ -69,7 +69,7 @@ export function PaymentOverlay({
       <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
         <h2 className="text-green-900 mb-4 text-lg font-semibold">Payment</h2>
 
-        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Total</p>
+        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Amount Due</p>
         <p className="text-green-900 numeral text-total leading-none font-semibold">
           {formatPaisa(totalPaisa)}
         </p>
@@ -107,6 +107,19 @@ export function PaymentOverlay({
             {/* Phase 10 §4: change rendered enormous. */}
             <p className="text-green-900 numeral text-change leading-none font-semibold">
               {formatPaisa(split.changePaisa)}
+            </p>
+          </div>
+        ) : null}
+
+        {/* The same calculator, the other direction: tendering less than the
+            total shows the shortfall immediately, so the cashier never reaches
+            for a separate calculator to know what is short before deciding
+            what to do about it (attach a customer, or ask for more cash). */}
+        {short ? (
+          <div className="mt-3 text-center">
+            <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Remaining</p>
+            <p className="text-amber numeral text-change leading-none font-semibold">
+              {formatPaisa(split.creditPaisa)}
             </p>
           </div>
         ) : null}

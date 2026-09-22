@@ -55,7 +55,8 @@ export async function adjustStockAction(command: AdjustmentCommand): Promise<Adj
   if (session.tenantSuspended) {
     return { ok: false, message: 'This pharmacy’s account is on hold. Contact support.' };
   }
-  // [PCN-005] W10 is off the sale path — see the note in purchases/actions.ts.
+  // [PCN-006] Stock adjustment is new business a restricted installation may
+  // not do — see the note in purchases/actions.ts.
   const licensed = requireCapability(session, 'adjust_stock');
   if (!licensed.ok) {
     return { ok: false, message: licensed.message };

@@ -45,7 +45,7 @@ export default async function ProductsPage({
     <section className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-green-900 text-2xl font-semibold">Products</h1>
-        <span className="text-ink/50 text-sm">{page.total.toLocaleString()} in catalog</span>
+        <span className="text-ink/50 text-sm">{page.total.toLocaleString()} products you stock</span>
         <Link
           href="/products/new"
           className="bg-green-600 text-paper min-h-touch ml-auto flex items-center rounded px-4 font-medium"

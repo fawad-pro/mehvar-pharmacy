@@ -31,7 +31,6 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { applyCatalogPack, currentCatalog } from '../../src/db/catalog-pack-queries';
-import { installationPermits } from '../../src/db/licence-gate-queries';
 import { closeDatabase } from '../../src/db/client';
 import {
   compareCatalogVersions,
@@ -129,20 +128,11 @@ async function main(): Promise<void> {
     }
   }
 
-  // [PCN-005] Catalogue updates are one of the four things a lapsed licence
-  // withholds. Nothing about selling changes — the pharmacy keeps trading on
-  // the catalogue it already has, and W6's quick item still means an unknown
-  // medicine never blocks a sale.
-  if (!(await installationPermits('catalog_pack'))) {
-    console.error(
-      'This pharmacy’s licence has lapsed, so catalogue updates are paused.\n' +
-        'Selling, printing and export are unaffected. Renew in Settings → Licence,\n' +
-        'or contact Mehvar support.',
-    );
-    await closeDatabase();
-    process.exit(1);
-  }
-
+  // [PCN-006] Catalogue import and updates are NEVER gated by licence state.
+  // A restricted (unauthorized/unbound/revoked) installation must still receive
+  // catalogue data — keeping medicine identity current is a safety concern, not
+  // a paid feature, and the reference body must be reachable on a fresh install
+  // whose evaluation has lapsed. This is the reversal of PCN-005's gate.
   const summary = await applyCatalogPack(parsed.pack, origin);
 
   console.log(`Catalogue ${summary.catalogVersion} applied from ${origin}.`);

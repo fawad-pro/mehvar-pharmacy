@@ -4,6 +4,17 @@
 so the gate in §0 is cleared and Part 2 is being executed phase by phase.
 Roadmap Phase 1 is in progress.
 
+> **Amended by PCN-006 (accepted 2026-09-20).** The licensing model in this note
+> — a subscription with billing that "stays a subscription" (§0's objections
+> table) and the graduated capability degradation of §6 — is superseded. The
+> core product is now a **perpetual authorization**: a valid, bound licence
+> authorizes an installation forever, with no expiry, renewal or grace, and an
+> unlicensed installation runs a **30-day evaluation** before falling to a
+> **restricted** tier that withholds new business only (settlement, print,
+> export and catalogue updates always remain). Read §6 in particular through
+> PCN-006, which is authoritative. What is unchanged: the local-first deployment,
+> the identity model, and that the customer's data is never held hostage.
+
 The roadmap is frozen in the sense that matters: phase boundaries and ordering
 are settled and are not re-litigated mid-phase. What a phase learns from real
 hardware still feeds the _next_ phase's design — that is the point of sequencing
@@ -347,8 +358,15 @@ No schema change.
 
 ## 6. Licensing philosophy
 
+> **Superseded by PCN-006 (2026-09-20).** The graduated capability schedule and
+> the "renewal experience" framing below are retired: there is no renewal. A
+> perpetual licence authorizes an installation forever; an unlicensed one gets a
+> 30-day evaluation, then a restricted tier that withholds new business only.
+> The *principle* stated here survives intact and is exactly why PCN-006 keeps
+> legitimate operation unblocked — read the specifics through PCN-006.
+
 > **Licensing is a business system, not a DRM system. Optimize for the honest
-> customer's renewal experience, not for defeating a determined pirate.**
+> customer's experience, not for defeating a determined pirate.**
 
 A pirated copy in a pharmacy that was never going to pay costs nothing that was
 ever going to be collected. A false lockout at 9am on a Monday costs the

@@ -81,6 +81,23 @@ npm run db:reset && npm run db:setup
 
 `db:seed` prints the demo counter's setup key and the PINs it created.
 
+### Licensing (PCN-006)
+
+The product is **perpetually licensed**. A valid, founder-signed licence bound
+to an installation authorizes it forever — there is no expiry, renewal, grace or
+warn period. An **unlicensed** installation runs a **30-day evaluation** with
+full functionality; after that, without activation, it becomes **restricted**:
+new business is paused (new sales, quick items, new udhaar, new customers,
+receiving, adjustments, product authoring) while **settling existing udhaar,
+printing, exporting data, browsing and updating the catalogue, and activating a
+licence always keep working**. Copying a licensed install onto another machine
+reads as **unbound** (restricted), not a fresh evaluation.
+
+`db:seed` gives the demo a dev perpetual licence bound to this machine, so a
+fresh setup is authorized out of the box. Founder tooling: `npm run
+licence:issue -- --slug <slug> --name "<Name>"` mints a perpetual token;
+`npm run licence:inspect -- <token>` decodes and verifies one.
+
 ### Running the E2E suite
 
 ```

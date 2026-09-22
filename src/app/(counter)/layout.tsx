@@ -44,24 +44,22 @@ export default async function CounterLayout({ children }: { children: React.Reac
 }
 
 /**
- * The banner's data, assembled server-side (PCN-005).
+ * The banner's data, assembled server-side (PCN-006).
  *
- * `null` when the licence is healthy, so nothing renders at all. `expiring` is
- * marked owner-only: a salesman can do nothing about a renewal date, and a
- * warning they see every day is a warning nobody reads.
+ * `null` when the installation is authorized, so nothing renders at all. The
+ * `evaluation` countdown is marked owner-only: a salesman can do nothing about
+ * activating a licence, and a notice they see every day is one nobody reads.
  */
 function licenceNotice(session: ActiveSession): LicenceNotice | null {
   const { licence } = session;
-  if (licence.status === 'licensed') return null;
+  if (licence.status === 'authorized') return null;
 
   return {
     status: licence.status,
     tier: licence.tier,
-    entitlementEndsOn: licence.entitlementEndsOn ?? null,
-    graceEndsOn: licence.graceEndsOn ?? null,
-    trialEndsOn: licence.trialEndsOn ?? null,
+    evaluationEndsOn: licence.evaluationEndsOn ?? null,
     daysRemaining: licence.daysRemaining ?? null,
     withheld: withheldBy(licence.tier).map((capability) => CAPABILITY_LABELS[capability]),
-    ownerOnly: licence.status === 'expiring' || licence.status === 'trial',
+    ownerOnly: licence.status === 'evaluation',
   };
 }

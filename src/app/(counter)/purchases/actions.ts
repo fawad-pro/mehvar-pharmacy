@@ -87,10 +87,10 @@ export async function receivePurchaseAction(
   if (session.tenantSuspended) {
     return { ok: false, message: 'This pharmacy’s account is on hold. Contact support.' };
   }
-  // [PCN-005] Receiving is off the sale path, so it is one of the four things a
-  // lapsed licence withholds. The counter keeps selling throughout; what the
-  // pharmacy loses is the ability to restock, which is visible on the Stock
-  // screen as the pending layer fills (D2) and clears itself when they pay.
+  // [PCN-006] Receiving stock is new business a restricted installation may not
+  // do (Profile C). Unlike a sale it is not offline-captured, so the gate lives
+  // here on the server action. A restricted install can still settle udhaar,
+  // print, export and take catalogue updates; what it loses is restocking.
   const licensed = requireCapability(session, 'receive_stock');
   if (!licensed.ok) {
     return { ok: false, message: licensed.message };

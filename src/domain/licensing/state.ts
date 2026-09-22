@@ -8,33 +8,37 @@
  * dragging the verifier into the browser bundle. The dependency direction is
  * `verify.ts -> state.ts` and `token.ts -> state.ts`, **never the reverse**.
  *
- * Decided by PCN-005 (accepted 2026-09-16): an expired licence never stops the
- * counter, never stops a receipt printing and never closes export. What it
- * withholds is everything that is not on the sale path. `capabilities.ts` holds
- * that table; this file decides only which state the installation is in.
+ * Decided by PCN-006 (accepted 2026-09-20, supersedes PCN-005): the offline
+ * product is **perpetually licensed**. The licence answers *"is this
+ * installation authorized?"*, never *"has this customer paid this period?"*
+ * There is no expiry, renewal, grace, warn period or paid-through date. A new
+ * **unlicensed** installation runs a **30-day evaluation**; after that, without
+ * activation, it is **unauthorized (restricted)**. A valid, bound token is
+ * **authorized** with full functionality indefinitely — and that decision is
+ * reached before the evaluation clock is ever read (see the resolver in
+ * `db/licence-state-queries.ts`).
  */
 
 import { businessDayOf, DEFAULT_TIME_ZONE, type BusinessDay } from '@/lib/business-day';
 
-/** Phase 3 §3: "14-day full trial, no card." */
-export const TRIAL_DAYS = 14;
-
-/** `graceDays` is issued rather than hardcoded, but never outside these bounds. */
-export const MIN_GRACE_DAYS = 0;
-export const MAX_GRACE_DAYS = 180;
-
-/** The wire format this build understands. A newer one is refused whole. */
-export const LICENCE_FORMAT_VERSION = 1;
+/** PCN-006: an unlicensed installation may operate as an evaluation for 30 days. */
+export const EVALUATION_DAYS = 30;
 
 /**
- * What a licence token carries.
+ * The wire format this build understands. v2 is identity-only (PCN-006); the
+ * v1 subscription payload (entitlement/grace/warn/expiry) is retired. A newer
+ * one is refused whole.
+ */
+export const LICENCE_FORMAT_VERSION = 2;
+
+/**
+ * What a licence token carries — identity only.
  *
- * Two expiry fields, and the difference is the whole of finding 1:
- * `entitlementEndsAt` is the business fact (what the customer paid through) and
- * drives the capability tier; `expiresAt` is the cryptographic fact (when this
- * token should be replaced) and drives nothing but a notice. A stale token whose
- * entitlement is still live must never degrade capability, or one cloud outage
- * longer than a lease window lapses every paying pharmacy at once.
+ * Nothing time- or payment-oriented lives here any more: a perpetual licence
+ * authorizes an installation and does not expire. `issuedAt` remains, because a
+ * founder-signed issue date is a useful, unforgeable fact for support and
+ * inspection; it drives no capability. `plan` and `branches` are optional
+ * future metadata and are unused by V1 logic.
  */
 export interface LicencePayload {
   readonly v: number;
@@ -42,23 +46,12 @@ export interface LicencePayload {
   readonly licenceId: string;
   readonly tenantSlug: string;
   readonly customerName: string;
-  readonly plan: 'standard';
-  /** 1 today. The chain lever; unenforced until a chain exists (roadmap Phase 4). */
-  readonly branches: number;
-  /** ISO-8601. Also a founder-signed, unforgeable clock anchor — see `clock.ts`. */
+  /** ISO-8601 issue date. Identity/support metadata; drives no capability. */
   readonly issuedAt: string;
-  /** ISO-8601. What the customer paid through. Drives the tier. */
-  readonly entitlementEndsAt: string;
-  /** ISO-8601. When this token should be replaced. Drives only a notice. */
-  readonly expiresAt: string;
-  readonly graceDays: number;
-  readonly warnDays: number;
-  /**
-   * Optional and normally absent. Clock observations later than this are
-   * ignored — the signed repair for a witness poisoned by a persistent clock
-   * fault (Invariant L6). Only obtainable from the signing key.
-   */
-  readonly clockCeiling?: string;
+  /** Optional future metadata — no enforcement. */
+  readonly plan?: 'standard';
+  /** Optional future metadata (multi-branch) — unenforced until a chain exists. */
+  readonly branches?: number;
 }
 
 /** A payload whose signature has been checked against the trust root. */
@@ -69,30 +62,28 @@ export interface VerifiedLicence {
 }
 
 export type LicenceStatus =
-  /** No licence yet, inside the trial window. */
-  | 'trial'
-  /** Paid, comfortably inside the term. */
-  | 'licensed'
-  /** Within `warnDays` of the entitlement ending. */
-  | 'expiring'
-  /** Past the entitlement, inside `graceDays`. */
-  | 'grace'
-  /** Token past `expiresAt`, entitlement still live. Never degrades. */
-  | 'stale'
-  /** A valid signed revocation was received for this licence (Stage 2). */
-  | 'revoked'
-  /** Past entitlement plus grace — or the trial ran out and nothing was pasted. */
-  | 'lapsed'
-  /** A valid licence, registered to a different installation. */
+  /** No valid bound licence, within the 30-day evaluation window. */
+  | 'evaluation'
+  /** A valid signed token, bound to this installation, not revoked. */
+  | 'authorized'
+  /** No valid bound licence, past the 30-day evaluation. */
+  | 'unauthorized'
+  /** A valid token, but bound to a different installation (a copy). */
   | 'unbound'
-  /** Bad signature, wrong slug, unreadable, unknown key, or a newer format. */
-  | 'invalid';
+  /** A token was present but did not verify. */
+  | 'invalid'
+  /** A valid signed revocation was received for this licence (a security action). */
+  | 'revoked';
 
 export type LicenceInvalidReason =
-  'bad_signature' | 'unknown_key' | 'malformed' | 'wrong_pharmacy' | 'format_too_new';
+  | 'bad_signature'
+  | 'unknown_key'
+  | 'malformed'
+  | 'wrong_pharmacy'
+  | 'format_too_new';
 
-/** Three tiers. `capabilities.ts` says what each one permits. */
-export type CapabilityTier = 'full' | 'full_notice' | 'restricted';
+/** Two tiers. `capabilities.ts` says what each one permits. */
+export type CapabilityTier = 'full' | 'restricted';
 
 export interface LicenceState {
   readonly status: LicenceStatus;
@@ -100,43 +91,36 @@ export interface LicenceState {
   /** Present once a licence has been verified, whatever its state. */
   readonly customerName?: string;
   readonly licenceId?: string;
-  /** The business day the entitlement runs through, in tenant-local time. */
-  readonly entitlementEndsOn?: BusinessDay;
-  /** The business day the grace period runs through. */
-  readonly graceEndsOn?: BusinessDay;
-  /** Negative once the entitlement has passed. Absent during a trial. */
+  /** For `evaluation` — the business day the 30-day evaluation runs through. */
+  readonly evaluationEndsOn?: BusinessDay;
+  /** For `evaluation` — whole days remaining, never negative. */
   readonly daysRemaining?: number;
-  /** For `trial` — the business day the trial runs through. */
-  readonly trialEndsOn?: BusinessDay;
   readonly invalidReason?: LicenceInvalidReason;
-  /**
-   * True when `lapsed` was reached from an expired trial rather than from an
-   * expired licence. The tier is identical; only the words differ.
-   */
-  readonly neverLicensed?: boolean;
 }
 
 export interface EvaluateInput {
   /**
-   * `businessNow` from `clock.ts` — already reduced over its five anchors.
+   * `businessNow` from `clock.ts` — already reduced over its anchors.
    *
-   * Deliberately an input rather than `new Date()`: the whole clock model is
-   * testable only if the evaluator cannot reach for the wall clock itself.
+   * Deliberately an input rather than `new Date()`: the evaluation clock is
+   * testable only if the evaluator cannot reach for the wall clock itself. It
+   * is consulted ONLY when there is no valid bound licence.
    */
   readonly now: Date;
   readonly timeZone?: string | undefined;
-  /** The effective licence per Invariant L2, if any has ever been installed. */
+  /** The effective, signature-verified licence, if any is installed. */
   readonly effective?: VerifiedLicence | undefined;
-  /** Invariant L3 — computed by asking whether ANY row for the effective
-   *  licence id carries this machine's installation id. Never read off a row. */
+  /** Invariant L3 — whether ANY row for the effective licence carries this
+   *  machine's installation id. Never read off a single row. */
   readonly boundHere?: boolean | undefined;
   /** Set when a token was present but did not survive verification. */
   readonly invalidReason?: LicenceInvalidReason | undefined;
-  /** [Stage 2] A valid signed revocation exists for the effective licence.
-   *  Verified in the DB layer against the trust root; the evaluator stays pure. */
+  /** A valid signed revocation exists for the effective licence (verified in
+   *  the DB layer against the trust root; the evaluator stays pure). */
   readonly revoked?: boolean | undefined;
-  /** `min()` over the derived sources — see `trialAnchor` in `clock.ts`. */
-  readonly trialStartedAt?: Date | undefined;
+  /** `min()` over the derived sources — when this installation first ran
+   *  unlicensed (see `evaluationAnchor` in `clock.ts`). */
+  readonly evaluationStartedAt?: Date | undefined;
 }
 
 /** Calendar-day arithmetic on a `YYYY-MM-DD` label. Not an instant. */
@@ -152,108 +136,69 @@ export function businessDaysBetween(from: BusinessDay, to: BusinessDay): number 
   return Math.round(ms / 86_400_000);
 }
 
-export function clampGraceDays(days: number): number {
-  if (!Number.isFinite(days)) return MIN_GRACE_DAYS;
-  return Math.min(MAX_GRACE_DAYS, Math.max(MIN_GRACE_DAYS, Math.trunc(days)));
-}
-
 const TIER_OF: Record<LicenceStatus, CapabilityTier> = {
-  trial: 'full',
-  licensed: 'full',
-  expiring: 'full_notice',
-  grace: 'full_notice',
-  stale: 'full_notice',
-  revoked: 'restricted',
-  lapsed: 'restricted',
+  evaluation: 'full',
+  authorized: 'full',
+  unauthorized: 'restricted',
   unbound: 'restricted',
   invalid: 'restricted',
+  revoked: 'restricted',
 };
 
 /**
  * The evaluator. Pure, total, and never throws.
  *
- * Boundaries are compared as tenant-local business days rather than instants
- * (decision D12), so a tier can only ever change at local midnight — never
- * mid-trading-day, and never because a comparison landed on the wrong side of
- * a UTC boundary at five in the morning.
+ * Resolution order matters and is the whole of PCN-006's "the clock dies on
+ * activation": a revocation or a valid bound licence is decided **before** the
+ * evaluation clock is read, so an authorized installation never consults it.
+ * Boundaries are compared as tenant-local business days (decision D12), so the
+ * evaluation can only end at local midnight.
  */
 export function evaluateLicence(input: EvaluateInput): LicenceState {
   const timeZone = input.timeZone ?? DEFAULT_TIME_ZONE;
   const today = businessDayOf(input.now, timeZone);
 
-  if (input.invalidReason !== undefined) {
-    return { status: 'invalid', tier: 'restricted', invalidReason: input.invalidReason };
-  }
-
-  // A valid signed revocation is honoured immediately, regardless of dates or
-  // binding. `restricted` — which still sells, prints and exports (PCN-005);
-  // revocation stops restocking, never trading, and never deletes data.
+  // 1. A valid signed revocation is a deliberate security action, honoured
+  //    immediately and independently of time or binding. `restricted` — which
+  //    still settles existing udhaar, prints and exports (PCN-006).
   if (input.revoked === true && input.effective !== undefined) {
     const { payload } = input.effective;
     return {
       status: 'revoked',
-      tier: 'restricted',
+      tier: TIER_OF.revoked,
       customerName: payload.customerName,
       licenceId: payload.licenceId,
     };
   }
 
-  if (input.effective === undefined) {
-    // Never licensed. The trial runs from the derived anchor, not from a file
-    // somebody can delete — see `trialAnchor` in `clock.ts`.
-    const startedOn = businessDayOf(input.trialStartedAt ?? input.now, timeZone);
-    const trialEndsOn = addBusinessDays(startedOn, TRIAL_DAYS);
-    if (today <= trialEndsOn) {
-      return {
-        status: 'trial',
-        tier: 'full',
-        trialEndsOn,
-        daysRemaining: businessDaysBetween(today, trialEndsOn),
-      };
+  // 2/3. A verified token present. Binding is the only remaining question, and
+  //      neither branch reads the evaluation clock.
+  if (input.effective !== undefined) {
+    const { payload } = input.effective;
+    const common = { customerName: payload.customerName, licenceId: payload.licenceId } as const;
+    if (input.boundHere === false) {
+      return { status: 'unbound', tier: TIER_OF.unbound, ...common };
     }
-    return { status: 'lapsed', tier: 'restricted', trialEndsOn, neverLicensed: true };
+    return { status: 'authorized', tier: TIER_OF.authorized, ...common };
   }
 
-  const { payload, token } = input.effective;
-  void token;
-
-  const entitlementEndsOn = businessDayOf(new Date(payload.entitlementEndsAt), timeZone);
-  const graceEndsOn = addBusinessDays(entitlementEndsOn, clampGraceDays(payload.graceDays));
-  const daysRemaining = businessDaysBetween(today, entitlementEndsOn);
-
-  const common = {
-    customerName: payload.customerName,
-    licenceId: payload.licenceId,
-    entitlementEndsOn,
-    graceEndsOn,
-    daysRemaining,
-  } as const;
-
-  // Binding is asked first, deliberately. It is the machine-identity question
-  // and the cheaper fix, and the Settings panel shows the entitlement date
-  // beside it — so an owner whose licence is BOTH unbound and lapsed learns
-  // both facts at once rather than on two separate trips.
-  if (input.boundHere === false) {
-    return { status: 'unbound', tier: TIER_OF.unbound, ...common };
+  // A token was present but did not verify — a fact about the licence, kept
+  // distinct from "no licence yet".
+  if (input.invalidReason !== undefined) {
+    return { status: 'invalid', tier: TIER_OF.invalid, invalidReason: input.invalidReason };
   }
 
-  if (today > graceEndsOn) {
-    return { status: 'lapsed', tier: TIER_OF.lapsed, ...common };
+  // 4. No licence. The 30-day evaluation runs from the derived anchor, not from
+  //    a file somebody can delete (see `evaluationAnchor` in `clock.ts`).
+  const startedOn = businessDayOf(input.evaluationStartedAt ?? input.now, timeZone);
+  const evaluationEndsOn = addBusinessDays(startedOn, EVALUATION_DAYS);
+  if (today <= evaluationEndsOn) {
+    return {
+      status: 'evaluation',
+      tier: TIER_OF.evaluation,
+      evaluationEndsOn,
+      daysRemaining: Math.max(0, businessDaysBetween(today, evaluationEndsOn)),
+    };
   }
-  if (today > entitlementEndsOn) {
-    return { status: 'grace', tier: TIER_OF.grace, ...common };
-  }
-
-  // Entitlement is live from here down, so nothing below may reach `restricted`.
-  const tokenExpiresOn = businessDayOf(new Date(payload.expiresAt), timeZone);
-  if (today > tokenExpiresOn) {
-    return { status: 'stale', tier: TIER_OF.stale, ...common };
-  }
-
-  const warnFrom = addBusinessDays(entitlementEndsOn, -Math.max(0, Math.trunc(payload.warnDays)));
-  if (today >= warnFrom) {
-    return { status: 'expiring', tier: TIER_OF.expiring, ...common };
-  }
-
-  return { status: 'licensed', tier: TIER_OF.licensed, ...common };
+  return { status: 'unauthorized', tier: TIER_OF.unauthorized, evaluationEndsOn };
 }

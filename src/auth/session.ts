@@ -155,7 +155,7 @@ export async function currentSession(): Promise<ActiveSession | undefined> {
     tenantId: row.tenantId,
     tenantName: row.tenantName,
     tenantSlug: row.tenantSlug,
-    licence: licence?.state ?? { status: 'licensed', tier: 'full' },
+    licence: licence?.state ?? { status: 'authorized', tier: 'full' },
     // Phase 8 §4: a tenant flag gates writes; the export endpoint stays open
     // regardless (T3 — the data is the customer's, in every payment state).
     tenantSuspended: row.tenantStatus === 'suspended',

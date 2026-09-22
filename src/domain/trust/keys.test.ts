@@ -88,18 +88,12 @@ describe('the dev key cannot forge a production licence', () => {
     .toString('base64url');
 
   const payload: LicencePayload = {
-    v: 1,
+    v: 2,
     kid: DEV_KID,
     licenceId: '0198a000-0000-7000-8000-000000000001',
     tenantSlug: 'al-shifa',
     customerName: 'Al-Shifa Medical Store',
-    plan: 'standard',
-    branches: 1,
     issuedAt: '2026-01-01T00:00:00Z',
-    entitlementEndsAt: '2027-01-01T00:00:00Z',
-    expiresAt: '2027-03-01T00:00:00Z',
-    graceDays: 30,
-    warnDays: 45,
   };
   const devToken = signPayload(payload, devPrivate);
 

@@ -43,30 +43,23 @@ const WRITER =
 const SALE_PATH_EXEMPT = new Map<string, string>([
   [
     'sync/actions.ts',
-    'Invariant L1: the outbox delivers the four ADR-3 record kinds. Gating this ' +
-      'strands captured sales in the browser forever — P2, non-negotiable.',
+    'Invariant L1: the outbox INGESTS the four ADR-3 record kinds and stays ungated ' +
+      'so a sale captured while licensed always drains — even if the licence lapses ' +
+      'before delivery. PCN-006 blocks new business at CAPTURE (client-side), never ' +
+      'here. Gating this strands captured sales in the browser forever — P2.',
   ],
   ['sale/actions.ts', 'The sale path. P2: the counter never waits for a billing question.'],
   [
-    'customers/actions.ts',
-    'Invariant L1: `customer` is an ADR-3 record kind, written here and by the outbox.',
-  ],
-  [
-    'products/actions.ts',
-    'Invariant L1: W6 quick items are products, and a quick item is what keeps an ' +
-      'unknown medicine from blocking a sale. Editing a tenant product is also not ' +
-      'one of the four capabilities PCN-005 withholds.',
-  ],
-  [
     'returns/actions.ts',
-    'A return is a money event on the counter (W4) and prints a receipt (T5). ' +
-      'PCN-005 withholds nothing that a customer is standing in front of.',
+    'A return is a money event on the counter (W4) and prints a receipt (T5). PCN-006 ' +
+      'decision: sale returns are ALLOWED while restricted — a customer is standing ' +
+      'in front of the counter.',
   ],
   [
     'day/actions.ts',
-    'Day close is reporting plus a cash movement the owner just counted. Reports ' +
-      'go read-only in the UI under `restricted`; the drawer ritual is not one of ' +
-      'the four withheld capabilities.',
+    'Day close is reporting plus a cash movement the owner just counted. PCN-006 ' +
+      'decision: day-close cash reconciliation is ALLOWED while restricted; reports ' +
+      'go read-only in the UI, and the drawer ritual is not withheld.',
   ],
   [
     'settings/actions.ts',
@@ -169,7 +162,7 @@ describe('Invariant L1 — the ADR-3 record kinds are ungated by kind, not by mo
 
 describe('the three unconditional capabilities', () => {
   it('are permitted in every tier, including restricted', () => {
-    for (const tier of ['full', 'full_notice', 'restricted'] as const) {
+    for (const tier of ['full', 'restricted'] as const) {
       for (const capability of ALWAYS_PERMITTED) {
         expect(permits(tier, capability), `${capability} must survive ${tier}`).toBe(true);
       }

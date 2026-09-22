@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Settings → Licence (PCN-005).
+ * Settings → Licence (PCN-006).
  *
  * Reachable in **every** licence state, including `invalid` (Invariant L4). A
  * bad licence must never lock the owner out of the one screen where licences
@@ -131,13 +131,13 @@ function Standing({ panel }: { panel: LicencePanel }): React.ReactElement {
       )}
       {panel.withheld.length === 0 ? null : (
         // Amber, never red (I7): this is the caution family, alongside
-        // near-expiry and unsynced. A billing state is not an alarm.
+        // near-expiry and unsynced. An authorization state is not an alarm.
         <p className="text-amber mt-1 text-sm">
-          Paused until renewed: {panel.withheld.join(', ')}.
+          Paused until activated: {panel.withheld.join(', ')}.
         </p>
       )}
       <p className="text-ink/60 mt-1 text-sm">
-        Selling, printing receipts and exporting your data always keep working.
+        Settling udhaar, printing receipts and exporting your data always keep working.
       </p>
       {panel.clock === 'none' ? null : <ClockNotice panel={panel} />}
     </div>
@@ -168,22 +168,16 @@ function ClockNotice({ panel }: { panel: LicencePanel }): React.ReactElement {
 
 function headline(panel: LicencePanel): string {
   switch (panel.status) {
-    case 'trial':
-      return `Trial — ${panel.daysRemaining ?? 0} day(s) left, until ${panel.trialEndsOn ?? ''}.`;
-    case 'licensed':
-      return `Licensed until ${panel.entitlementEndsOn ?? ''}.`;
-    case 'expiring':
-      return `Renewal due — ${panel.daysRemaining ?? 0} day(s) left, until ${panel.entitlementEndsOn ?? ''}.`;
-    case 'grace':
-      return `Overdue since ${panel.entitlementEndsOn ?? ''}. Everything still works until ${panel.graceEndsOn ?? ''}.`;
-    case 'stale':
-      return `Licensed until ${panel.entitlementEndsOn ?? ''}. Mehvar has not been able to check in recently.`;
-    case 'lapsed':
-      return panel.entitlementEndsOn === null
-        ? 'The trial has ended.'
-        : `The licence ran out on ${panel.graceEndsOn ?? panel.entitlementEndsOn}.`;
+    case 'authorized':
+      return 'Licensed — this installation is authorized. A Mehvar licence never expires.';
+    case 'evaluation':
+      return `Evaluation — ${panel.daysRemaining ?? 0} day(s) left, until ${panel.evaluationEndsOn ?? ''}. Activate a licence any time.`;
+    case 'unauthorized':
+      return `The 30-day evaluation ended on ${panel.evaluationEndsOn ?? ''}. Paste a licence to authorize this installation.`;
     case 'unbound':
       return 'This licence is registered to a different computer.';
+    case 'revoked':
+      return 'This licence has been revoked. Contact Mehvar support.';
     default:
       return 'This licence could not be verified.';
   }

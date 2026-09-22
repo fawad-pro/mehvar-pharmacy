@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { businessNow, corroboratedWitness } from './clock';
-import { evaluateLicence, TRIAL_DAYS, type LicencePayload, type VerifiedLicence } from './state';
+import {
+  evaluateLicence,
+  EVALUATION_DAYS,
+  type LicencePayload,
+  type VerifiedLicence,
+} from './state';
 import { permits, withheldBy } from './capabilities';
 
 const DAY = 86_400_000;
@@ -11,76 +16,55 @@ function licence(over: Partial<LicencePayload> = {}): VerifiedLicence {
   return {
     token: 'MEHVAR1.stub.stub',
     payload: {
-      v: 1,
+      v: 2,
       kid: 'dev-1',
       licenceId: '0198a000-0000-7000-8000-000000000001',
       tenantSlug: 'al-shifa',
       customerName: 'Al-Shifa Medical Store',
-      plan: 'standard',
-      branches: 1,
       issuedAt: '2026-01-01T00:00:00Z',
-      entitlementEndsAt: '2027-01-01T00:00:00Z',
-      expiresAt: '2027-03-01T00:00:00Z',
-      graceDays: 30,
-      warnDays: 45,
       ...over,
     },
   };
 }
 
-describe('evaluateLicence — the ladder', () => {
-  it('is licensed comfortably inside the term', () => {
+describe('evaluateLicence — perpetual authorization (PCN-006)', () => {
+  it('a valid, bound licence is authorized with full capability', () => {
     const state = evaluateLicence({
       now: at('2026-06-01T09:00:00Z'),
       effective: licence(),
       boundHere: true,
     });
-    expect(state.status).toBe('licensed');
+    expect(state.status).toBe('authorized');
     expect(state.tier).toBe('full');
+    expect(state.customerName).toBe('Al-Shifa Medical Store');
   });
 
-  it('warns from warnDays out — 45 days, because an annual bill is cash', () => {
+  it('stays authorized forever — a far-future clock changes nothing', () => {
     const state = evaluateLicence({
-      now: at('2026-12-01T09:00:00Z'),
+      now: at('2099-06-01T09:00:00Z'),
       effective: licence(),
       boundHere: true,
     });
-    expect(state.status).toBe('expiring');
-    expect(state.tier).toBe('full_notice');
+    expect(state.status).toBe('authorized');
+    expect(state.tier).toBe('full');
+    // No expiry/renewal/countdown fields on the authorized path.
+    expect(state.evaluationEndsOn).toBeUndefined();
+    expect(state.daysRemaining).toBeUndefined();
   });
 
-  it('keeps full capability through grace', () => {
+  it('the authorized path never reads the evaluation clock', () => {
+    // Even with a witness/anchor that would put an unlicensed install years past
+    // its evaluation, a bound licence resolves to authorized before the clock.
     const state = evaluateLicence({
-      now: at('2027-01-20T09:00:00Z'),
+      now: businessNow({ systemNow: at('2099-01-01T00:00:00Z') }),
       effective: licence(),
       boundHere: true,
+      evaluationStartedAt: at('2020-01-01T00:00:00Z'),
     });
-    expect(state.status).toBe('grace');
-    expect(state.tier).toBe('full_notice');
+    expect(state.status).toBe('authorized');
   });
 
-  it('restricts past entitlement plus grace', () => {
-    const state = evaluateLicence({
-      now: at('2027-03-01T09:00:00Z'),
-      effective: licence(),
-      boundHere: true,
-    });
-    expect(state.status).toBe('lapsed');
-    expect(state.tier).toBe('restricted');
-  });
-
-  it('NEVER degrades on a stale token while the entitlement is live', () => {
-    // One cloud outage longer than a lease window must not lapse the fleet.
-    const state = evaluateLicence({
-      now: at('2026-06-01T09:00:00Z'),
-      effective: licence({ expiresAt: '2026-02-01T00:00:00Z' }),
-      boundHere: true,
-    });
-    expect(state.status).toBe('stale');
-    expect(state.tier).toBe('full_notice');
-  });
-
-  it('reports unbound before lapsed, and carries the dates for both', () => {
+  it('a valid token bound to another machine is unbound/restricted', () => {
     const state = evaluateLicence({
       now: at('2026-06-01T09:00:00Z'),
       effective: licence(),
@@ -88,185 +72,141 @@ describe('evaluateLicence — the ladder', () => {
     });
     expect(state.status).toBe('unbound');
     expect(state.tier).toBe('restricted');
-    // Both facts at once, so an owner who is unbound AND lapsed learns it in
-    // one trip rather than two.
-    expect(state.entitlementEndsOn).toBe('2027-01-01');
+    expect(state.customerName).toBe('Al-Shifa Medical Store');
   });
 
-  it('is invalid, not lapsed, when a token was present but did not verify', () => {
+  it('is invalid, not unauthorized, when a token was present but did not verify', () => {
     const state = evaluateLicence({
       now: at('2026-06-01T09:00:00Z'),
       invalidReason: 'bad_signature',
     });
     expect(state.status).toBe('invalid');
     expect(state.tier).toBe('restricted');
+    expect(state.invalidReason).toBe('bad_signature');
+  });
+
+  it('a valid signed revocation is honoured immediately, independent of time', () => {
+    const state = evaluateLicence({
+      now: at('2026-06-01T09:00:00Z'),
+      effective: licence(),
+      boundHere: true,
+      revoked: true,
+    });
+    expect(state.status).toBe('revoked');
+    expect(state.tier).toBe('restricted');
+    expect(state.licenceId).toBe('0198a000-0000-7000-8000-000000000001');
   });
 });
 
-describe('the trial', () => {
-  it('runs 14 days from the derived anchor', () => {
-    const started = at('2026-09-01T00:00:00Z');
-    const state = evaluateLicence({ now: at('2026-09-10T09:00:00Z'), trialStartedAt: started });
-    expect(state.status).toBe('trial');
-    expect(state.tier).toBe('full');
-    expect(state.trialEndsOn).toBe('2026-09-15');
-  });
-
-  it('restricts once it runs out, and says it was never licensed', () => {
+describe('the 30-day unlicensed evaluation', () => {
+  it('a fresh unlicensed install is in evaluation with full capability', () => {
     const state = evaluateLicence({
-      now: at('2026-09-30T09:00:00Z'),
-      trialStartedAt: at('2026-09-01T00:00:00Z'),
+      now: at('2026-09-01T09:00:00Z'),
+      evaluationStartedAt: at('2026-09-01T00:00:00Z'),
     });
-    expect(state.status).toBe('lapsed');
-    expect(state.neverLicensed).toBe(true);
+    expect(state.status).toBe('evaluation');
+    expect(state.tier).toBe('full');
+    expect(state.evaluationEndsOn).toBe('2026-10-01');
+    expect(state.daysRemaining).toBe(30);
   });
 
-  it('cannot be extended by rolling the clock back once events exist', () => {
+  it('is still evaluation on day 30 (the boundary is inclusive)', () => {
+    const state = evaluateLicence({
+      now: at('2026-10-01T09:00:00Z'),
+      evaluationStartedAt: at('2026-09-01T00:00:00Z'),
+    });
+    expect(state.status).toBe('evaluation');
+    expect(state.daysRemaining).toBe(0);
+  });
+
+  it('becomes unauthorized/restricted the day after the window', () => {
+    const state = evaluateLicence({
+      now: at('2026-10-02T09:00:00Z'),
+      evaluationStartedAt: at('2026-09-01T00:00:00Z'),
+    });
+    expect(state.status).toBe('unauthorized');
+    expect(state.tier).toBe('restricted');
+  });
+
+  it('cannot be extended by rolling the clock back once time has accrued', () => {
     const started = at('2026-09-01T00:00:00Z');
     const rolledBack = businessNow({
       systemNow: at('2026-09-02T00:00:00Z'),
-      ledgerHighWater: at('2026-09-30T00:00:00Z'),
+      ledgerHighWater: at('2026-10-30T00:00:00Z'),
     });
-    expect(evaluateLicence({ now: rolledBack, trialStartedAt: started }).status).toBe('lapsed');
+    expect(evaluateLicence({ now: rolledBack, evaluationStartedAt: started }).status).toBe(
+      'unauthorized',
+    );
+  });
+
+  it('the witness holds the boundary against a rolled-back system clock', () => {
+    const started = at('2026-09-01T00:00:00Z');
+    const witness = corroboratedWitness(
+      Array.from({ length: 40 }, (_, i) => new Date(at('2026-10-20T00:00:00Z').getTime() - i * 6 * 3600_000)),
+    );
+    const now = businessNow({ systemNow: at('2026-09-03T00:00:00Z'), witness });
+    expect(evaluateLicence({ now, evaluationStartedAt: started }).status).toBe('unauthorized');
   });
 });
 
-describe('the seven clock cases, end to end (§5)', () => {
-  const issued = licence();
-  const entitlementOver = at('2027-03-05T09:00:00Z');
+describe('activation transition', () => {
+  it('an unauthorized install becomes authorized the instant a bound licence is present', () => {
+    const started = at('2026-09-01T00:00:00Z');
+    const now = at('2026-11-01T09:00:00Z'); // well past evaluation
 
-  const cases: ReadonlyArray<{
-    readonly name: string;
-    readonly anchors: Parameters<typeof businessNow>[0];
-    readonly expect: 'full' | 'restricted';
-  }> = [
-    {
-      name: 'active pharmacy, normal clock, inside term',
-      anchors: {
-        systemNow: at('2026-06-01T09:00:00Z'),
-        ledgerHighWater: at('2026-06-01T08:00:00Z'),
-      },
-      expect: 'full',
-    },
-    {
-      name: 'closed several months, correct clock, term now over',
-      anchors: { systemNow: entitlementOver, ledgerHighWater: at('2026-11-01T00:00:00Z') },
-      expect: 'restricted',
-    },
-    {
-      name: 'NO ledger activity at all since issue — still elapses',
-      anchors: { systemNow: entitlementOver, licenceIssuedAt: at('2026-01-01T00:00:00Z') },
-      expect: 'restricted',
-    },
-    {
-      name: 'malicious rollback — the witness wins',
-      anchors: {
-        systemNow: at('2026-06-01T00:00:00Z'),
-        witness: corroboratedWitness(
-          Array.from(
-            { length: 40 },
-            (_, i) => new Date(entitlementOver.getTime() - i * 6 * 3600_000),
-          ),
-        ),
-      },
-      expect: 'restricted',
-    },
-    {
-      name: 'malicious clock-forward — self-harm, expires sooner',
-      anchors: { systemNow: at('2099-03-12T00:00:00Z') },
-      expect: 'restricted',
-    },
-    {
-      name: 'accidental forward spike, fixed same day — uncorroborated, absorbed',
-      anchors: {
-        systemNow: at('2026-06-01T09:00:00Z'),
-        witness: corroboratedWitness([
-          ...Array.from(
-            { length: 40 },
-            (_, i) => new Date(at('2026-06-01T09:00:00Z').getTime() - i * 6 * 3600_000),
-          ),
-          at('2099-03-12T00:00:00Z'),
-        ]),
-      },
-      expect: 'full',
-    },
-    {
-      name: 'persistent forward fault — corroborated, and it does restrict',
-      anchors: {
-        systemNow: at('2026-06-01T09:00:00Z'),
-        witness: corroboratedWitness(
-          Array.from(
-            { length: 40 },
-            (_, i) => new Date(at('2099-03-12T00:00:00Z').getTime() - i * 6 * 3600_000),
-          ),
-        ),
-      },
-      expect: 'restricted',
-    },
-  ];
+    const before = evaluateLicence({ now, evaluationStartedAt: started });
+    expect(before.status).toBe('unauthorized');
 
-  it.each(cases)('$name', ({ anchors, expect: tier }) => {
-    const state = evaluateLicence({
-      now: businessNow(anchors),
-      effective: issued,
-      boundHere: true,
-    });
-    expect(state.tier === 'restricted' ? 'restricted' : 'full').toBe(tier);
+    const after = evaluateLicence({ now, evaluationStartedAt: started, effective: licence(), boundHere: true });
+    expect(after.status).toBe('authorized');
+    expect(after.tier).toBe('full');
   });
 });
 
-describe('the elapse guarantee (D5a)', () => {
-  it('a fixed licence, no events, no connectivity, clock advanced — MUST restrict', () => {
-    // This is the assertion finding 10 existed for. It must never be weakened:
-    // if it can be made to pass with time standing still, "do not trade"
-    // becomes a licence-extension strategy.
-    const state = evaluateLicence({
-      now: businessNow({ systemNow: at('2027-06-01T09:00:00Z') }),
-      effective: licence(),
-      boundHere: true,
-    });
-    expect(state.status).toBe('lapsed');
-    expect(state.tier).toBe('restricted');
-  });
-});
-
-describe('what restricted actually costs (PCN-005)', () => {
-  it('never touches selling, printing or export — in any tier', () => {
-    for (const tier of ['full', 'full_notice', 'restricted'] as const) {
-      expect(permits(tier, 'sell')).toBe(true);
+describe('what restricted actually costs (PCN-006 Profile C)', () => {
+  it('never touches settling, printing or export — in any tier', () => {
+    for (const tier of ['full', 'restricted'] as const) {
+      expect(permits(tier, 'settle')).toBe(true);
       expect(permits(tier, 'print')).toBe(true);
       expect(permits(tier, 'export')).toBe(true);
-      // The licence is pasted in Settings, so Settings can never be the wall.
+      // The licence is activated in Settings, so Settings can never be the wall.
       expect(permits(tier, 'manage_settings')).toBe(true);
     }
   });
 
-  it('withholds exactly the four off-the-sale-path capabilities', () => {
+  it('blocks exactly the new-business capabilities when restricted', () => {
     expect([...withheldBy('restricted')].sort()).toEqual([
       'adjust_stock',
-      'auto_update',
-      'catalog_pack',
+      'author_product',
+      'manage_customer',
       'receive_stock',
+      'sell',
     ]);
-    expect(withheldBy('full_notice')).toHaveLength(0);
+    expect(withheldBy('full')).toHaveLength(0);
+  });
+
+  it('permits all new business at full tier (evaluation and authorized)', () => {
+    for (const cap of ['sell', 'receive_stock', 'adjust_stock', 'author_product', 'manage_customer'] as const) {
+      expect(permits('full', cap)).toBe(true);
+      expect(permits('restricted', cap)).toBe(false);
+    }
   });
 });
 
-describe('boundaries fall at local midnight, never mid-trading-day (D12)', () => {
-  it('holds the tier across a UTC boundary inside the Karachi business day', () => {
-    // 2026-12-31T20:00Z is 01:00 on 2027-01-01 in Karachi — the entitlement's
-    // last day. A naive UTC comparison would flip the tier mid-shift.
+describe('evaluation boundary falls at local midnight (D12)', () => {
+  it('uses the tenant time zone for the day comparison', () => {
+    // 2026-10-01T20:00Z is 01:00 on 2026-10-02 in Karachi — one day past a
+    // window ending 2026-10-01. With the Karachi zone it reads unauthorized.
     const state = evaluateLicence({
-      now: at('2026-12-31T20:00:00Z'),
-      effective: licence(),
-      boundHere: true,
+      now: at('2026-10-01T20:00:00Z'),
+      timeZone: 'Asia/Karachi',
+      evaluationStartedAt: at('2026-09-01T00:00:00Z'),
     });
-    expect(state.tier).toBe('full_notice');
-    expect(state.status).toBe('expiring');
+    expect(state.status).toBe('unauthorized');
   });
 });
 
-it('sanity: a day is a day', () => {
+it('sanity: a day is a day, and the window is 30', () => {
   expect(DAY).toBe(86_400_000);
-  expect(TRIAL_DAYS).toBe(14);
+  expect(EVALUATION_DAYS).toBe(30);
 });

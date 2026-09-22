@@ -34,9 +34,13 @@ import { tenantScope } from './scoped';
  *
  *     POST ${MEHVAR_LICENCE_URL}/v1/refresh
  *       { licenceId, tenantSlug, installationId, currentToken, nonce, activations }
- *     → 200 { token }        a fresh token, later expiresAt  — verified, then stored
+ *     → 200 { token }        a re-issued identity token       — verified, then stored
  *     → 200 { revocation }   a SIGNED revocation             — verified, then stored
  *     → anything else / timeout / network failure            — ignored, try later
+ *
+ * PCN-006: the licence is perpetual, so a returned token is a re-issue (a
+ * rebind or refreshed metadata), never a renewal that extends a paid term. The
+ * one state a server can push that changes capability is a signed revocation.
  *
  * TRUST
  *
@@ -186,10 +190,6 @@ async function applyRefreshResponse(
         token: verified.licence.token,
         licenceId: payload.licenceId,
         issuedAt: new Date(payload.issuedAt),
-        entitlementEndsAt: new Date(payload.entitlementEndsAt),
-        tokenExpiresAt: new Date(payload.expiresAt),
-        graceDays: payload.graceDays,
-        warnDays: payload.warnDays,
         installationId,
       });
       writeLicenceFile(verified.licence.token);

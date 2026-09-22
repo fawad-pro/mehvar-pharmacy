@@ -36,7 +36,7 @@ const MACHINE_B = '22222222-2222-7222-8222-222222222222';
 
 function payload(over: Partial<LicencePayload> = {}): LicencePayload {
   return {
-    v: 1,
+    v: 2,
     kid: KID,
     licenceId: uuidv7(),
     tenantSlug: 'integration',
@@ -44,10 +44,6 @@ function payload(over: Partial<LicencePayload> = {}): LicencePayload {
     plan: 'standard',
     branches: 1,
     issuedAt: '2026-01-01T00:00:00Z',
-    entitlementEndsAt: '2027-01-01T00:00:00Z',
-    expiresAt: '2027-03-01T00:00:00Z',
-    graceDays: 30,
-    warnDays: 45,
     ...over,
   };
 }
@@ -63,10 +59,6 @@ async function store(tenant: TestTenant, p: LicencePayload, installationId: stri
     token: verified.licence.token,
     licenceId: p.licenceId,
     issuedAt: new Date(p.issuedAt),
-    entitlementEndsAt: new Date(p.entitlementEndsAt),
-    tokenExpiresAt: new Date(p.expiresAt),
-    graceDays: verified.licence.payload.graceDays,
-    warnDays: p.warnDays,
     installationId,
   });
 }
@@ -126,27 +118,20 @@ suite('licence persistence', () => {
     expect(onA.boundHere).toBe(true);
   });
 
-  it('a renewal supersedes by issuedAt, and the old row stays as the audit trail', async () => {
-    const tenant = await freshTenant('renewal');
+  it('a re-issue supersedes by issuedAt, and the old row stays as the audit trail', async () => {
+    const tenant = await freshTenant('reissue');
     const licenceId = uuidv7();
     await store(tenant, payload({ licenceId }), MACHINE_A);
-    await store(
-      tenant,
-      payload({
-        licenceId,
-        issuedAt: '2027-01-01T00:00:00Z',
-        entitlementEndsAt: '2028-01-01T00:00:00Z',
-        expiresAt: '2028-03-01T00:00:00Z',
-      }),
-      MACHINE_A,
-    );
+    await store(tenant, payload({ licenceId, issuedAt: '2027-01-01T00:00:00Z' }), MACHINE_A);
 
     const standing = await licenceStanding(
       tenant.scope,
       MACHINE_A,
       new Date('2027-06-01T00:00:00Z'),
     );
-    expect(standing.effective?.entitlementEndsAt.toISOString()).toBe('2028-01-01T00:00:00.000Z');
+    // PCN-006: a perpetual licence has no entitlement date; supersession is by
+    // issuedAt alone, and the older row stays as the audit trail.
+    expect(standing.effective?.issuedAt.toISOString()).toBe('2027-01-01T00:00:00.000Z');
     expect(standing.rows.filter((r) => r.licenceId === licenceId)).toHaveLength(2);
   });
 
@@ -158,7 +143,7 @@ suite('licence persistence', () => {
     // difference between a promise and a guarantee.
     const refusal = await globalCatalog()
       .update(licences)
-      .set({ graceDays: 9999 })
+      .set({ installationId: '99999999-9999-7999-8999-999999999999' })
       .where(eq(licences.tenantId, tenant.tenantId))
       .then(
         () => null,
@@ -273,19 +258,14 @@ suite('the fail-open path admits only operational failure', () => {
   async function plant(token: string): Promise<void> {
     await adminQuery(
       `INSERT INTO licences
-         (id, tenant_id, token, licence_id, issued_at, entitlement_ends_at,
-          token_expires_at, grace_days, warn_days, installation_id, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())`,
+         (id, tenant_id, token, licence_id, issued_at, installation_id, created_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7, now())`,
       [
         uuidv7(),
         tenant.tenantId,
         token,
         uuidv7(),
         new Date('2026-01-01T00:00:00Z'),
-        new Date('2027-01-01T00:00:00Z'),
-        new Date('2027-03-01T00:00:00Z'),
-        30,
-        45,
         MACHINE_A,
         tenant.userId,
       ],
@@ -318,7 +298,7 @@ suite('the fail-open path admits only operational failure', () => {
     // keyring), so the integration suite's own key is, correctly, untrusted.
     const foreign = signPayload(
       {
-        v: 1,
+        v: 2,
         kid: KID,
         licenceId: uuidv7(),
         tenantSlug: 'failopen',
@@ -326,10 +306,6 @@ suite('the fail-open path admits only operational failure', () => {
         plan: 'standard',
         branches: 1,
         issuedAt: '2026-01-01T00:00:00Z',
-        entitlementEndsAt: '2099-01-01T00:00:00Z',
-        expiresAt: '2099-03-01T00:00:00Z',
-        graceDays: 30,
-        warnDays: 45,
       },
       privateKey,
     );

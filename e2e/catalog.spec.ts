@@ -93,7 +93,7 @@ test('the Products screen lists and edits the catalog', async ({ page }) => {
   // quick item (offline.spec.ts) creates real products by design — pinning the
   // seed's 53 here made an unrelated spec's correct behaviour look like a
   // catalog regression.
-  await expect(page.getByText(/\d+ in catalog/)).toBeVisible();
+  await expect(page.getByText(/\d+ products you stock/)).toBeVisible();
 
   await page.getByLabel('Search the catalog').fill('risek');
   await page.getByRole('button', { name: 'Search' }).click();

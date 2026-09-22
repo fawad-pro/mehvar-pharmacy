@@ -137,10 +137,6 @@ async function reconcileTokens(installationId: string): Promise<number> {
           token: verified.licence.token,
           licenceId: payload.licenceId,
           issuedAt: new Date(payload.issuedAt),
-          entitlementEndsAt: new Date(payload.entitlementEndsAt),
-          tokenExpiresAt: new Date(payload.expiresAt),
-          graceDays: payload.graceDays,
-          warnDays: payload.warnDays,
           installationId,
         });
         adopted += 1;
@@ -151,7 +147,7 @@ async function reconcileTokens(installationId: string): Promise<number> {
     // from the database on the very next boot.
     const refreshed = adopted > 0 ? await listLicences(scope) : stored;
     const newest = [...refreshed].sort(
-      (a, b) => b.entitlementEndsAt.getTime() - a.entitlementEndsAt.getTime(),
+      (a, b) => b.issuedAt.getTime() - a.issuedAt.getTime(),
     )[0];
     if (newest !== undefined && newest.token !== onDisk) {
       writeLicenceFile(newest.token);

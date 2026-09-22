@@ -9,7 +9,7 @@
 import { verifyDetached } from '@/domain/trust/signature';
 import type { Keyring } from '@/domain/trust/keys';
 
-import { clampGraceDays, type LicenceInvalidReason, type VerifiedLicence } from './state';
+import { type LicenceInvalidReason, type VerifiedLicence } from './state';
 import { parseToken } from './token';
 
 export type VerifyResult =
@@ -19,10 +19,9 @@ export type VerifyResult =
 /**
  * Verify a token, optionally against an expected pharmacy.
  *
- * `graceDays` is clamped on the way out rather than rejected: a mis-issued token
- * is the founder's slip, and refusing it outright would punish the pharmacy for
- * somebody else's typo. Clamping keeps it inside sane bounds and the licence
- * still works.
+ * A v2 payload is identity-only (PCN-006); there are no time/payment fields left
+ * to clamp. The token either verifies against the trust root and names this
+ * pharmacy, or it does not.
  */
 export function verifyToken(
   token: string,
@@ -59,7 +58,7 @@ export function verifyToken(
     ok: true,
     licence: {
       token: token.trim(),
-      payload: { ...payload, graceDays: clampGraceDays(payload.graceDays) },
+      payload,
     },
   };
 }
@@ -68,24 +67,22 @@ export function verifyToken(
  * Invariant L2 — the effective licence.
  *
  * Group by `licenceId`; within a group take the greatest `issuedAt`, tie-broken
- * by greatest `installedAt`. Across groups, take the greatest
- * `entitlementEndsAt`.
+ * by greatest `installedAt`. Across groups, take the most recently issued.
  *
  * "Newest row wins" is what this replaces, and it was wrong: every rebind writes
  * a second row carrying the SAME token and therefore the same `issuedAt`, so the
  * comparison tied — and the tie decided whether the machine read as bound.
  *
- * Two rules, and they answer every case that matters. A renewal shares its
- * `licenceId` and supersedes by `issuedAt`. A deliberate downgrade is issued
- * under the same `licenceId` and supersedes for the same reason, so no
- * `supersedes` field is needed. Re-pasting an old token is a no-op. An unrelated
- * second licence never silently shortens a customer who paid for longer.
+ * Two rules, and they answer every case that matters. A re-issue shares its
+ * `licenceId` and supersedes by `issuedAt`; re-pasting an old token is a no-op.
+ * A licence is perpetual, so there is no entitlement duration to compare — when
+ * two UNRELATED licence ids are present (unusual), the most recently issued
+ * wins, deterministically.
  */
 export interface LicenceRow {
   readonly licenceId: string;
   readonly token: string;
   readonly issuedAt: Date;
-  readonly entitlementEndsAt: Date;
   readonly installationId: string;
   readonly installedAt: Date;
 }
@@ -104,10 +101,10 @@ export function effectiveLicenceRow<T extends LicenceRow>(rows: readonly T[]): T
     }
   }
 
-  // Across groups: greatest entitlement, then greatest issue, then greatest
-  // install. The last two exist so the answer is DETERMINISTIC when two
-  // unrelated licences happen to end on the same day — an arbitrary winner
-  // decided by map iteration order is a bug waiting for a support call.
+  // Across groups: greatest issue, then greatest install. The tiebreak exists so
+  // the answer is DETERMINISTIC when two unrelated licences were issued at the
+  // same instant — an arbitrary winner decided by map iteration order is a bug
+  // waiting for a support call.
   let best: T | undefined;
   for (const row of winnerPerLicence.values()) {
     if (best === undefined || isPreferred(row, best)) best = row;
@@ -116,8 +113,6 @@ export function effectiveLicenceRow<T extends LicenceRow>(rows: readonly T[]): T
 }
 
 function isPreferred(candidate: LicenceRow, held: LicenceRow): boolean {
-  const byEntitlement = candidate.entitlementEndsAt.getTime() - held.entitlementEndsAt.getTime();
-  if (byEntitlement !== 0) return byEntitlement > 0;
   const byIssue = candidate.issuedAt.getTime() - held.issuedAt.getTime();
   if (byIssue !== 0) return byIssue > 0;
   return candidate.installedAt.getTime() > held.installedAt.getTime();

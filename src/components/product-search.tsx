@@ -273,6 +273,7 @@ function ResultRow({
           </span>
         </span>
 
+        <OnHand stockBase={hit.stockBase} product={product} />
         <StockBadge stockBase={hit.stockBase} product={product} />
 
         {/* Paisa crosses the wire as a plain number; it becomes branded again
@@ -282,6 +283,32 @@ function ResultRow({
         </span>
       </button>
     </li>
+  );
+}
+
+/**
+ * The compact "on hand" figure — every row, regardless of level.
+ *
+ * Distinct from `StockBadge` below, which is deliberately silent for a
+ * comfortable stock level (I7 — colour only with meaning). This is plain
+ * information, not a warning, so it says the same thing whether there are 3
+ * units or 300; the colour semantics stay exactly `StockBadge`'s job.
+ */
+function OnHand({
+  stockBase,
+  product,
+}: {
+  stockBase: number | null;
+  product: SearchHit['product'];
+}) {
+  if (stockBase === null) {
+    return null;
+  }
+
+  return (
+    <span className="text-ink/40 numeral shrink-0 text-xs">
+      On hand: {describeQuantity(baseQty(stockBase), product.baseUnitName, [...product.packLevels])}
+    </span>
   );
 }
 
