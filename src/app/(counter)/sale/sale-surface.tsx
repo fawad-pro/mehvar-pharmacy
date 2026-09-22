@@ -43,7 +43,6 @@ import {
   cartTotals,
   isPriceOverridden,
   lineTotal,
-  parseDiscountInput,
   removeLine,
   updateLine,
   type CartLine,
@@ -91,9 +90,6 @@ export function SaleSurface() {
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<Committed | null>(null);
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
-  /** Fixed PKR ("50") or a percentage ("10%") — one field, `parseDiscountInput`
-   *  resolves it to the one underlying `invoiceDiscountPaisa` amount. */
-  const [discountInput, setDiscountInput] = useState('');
   const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
   /** W6's pending mini-form: the typed name, plus the resolver the search awaits. */
@@ -118,18 +114,10 @@ export function SaleSurface() {
       : null,
   );
 
-  // The subtotal is independent of any invoice discount (`cartTotals` sums line
-  // totals before applying one), so it is safe to compute once and use it both
-  // to resolve a "10%" entry and to build the final, discount-aware totals.
-  const subtotalPaisa = useMemo(() => cartTotals(lines).subtotalPaisa, [lines]);
-  const discountPaisa = useMemo(
-    () => parseDiscountInput(discountInput, subtotalPaisa),
-    [discountInput, subtotalPaisa],
-  );
-  const totals = useMemo(
-    () => cartTotals(lines, discountPaisa),
-    [lines, discountPaisa],
-  );
+  // Discounts are per-line (`CartLine.lineDiscountPaisa`), so `cartTotals`
+  // needs no invoice-level discount argument — the subtotal it computes is
+  // already net of every line's own discount (`lineTotal` subtracts it).
+  const totals = useMemo(() => cartTotals(lines), [lines]);
 
   const stockByProduct = useMemo(() => {
     const stock: Record<string, number | null> = {};
@@ -296,7 +284,6 @@ export function SaleSurface() {
 
       setLines([]);
       setCustomer(null);
-      setDiscountInput('');
       setPaying(false);
       setLastSale({
         receiptNumber,
@@ -459,32 +446,10 @@ export function SaleSurface() {
             <p className="text-green-900 numeral text-total leading-none font-semibold">
               {formatPaisa(totals.totalPaisa)}
             </p>
-            {/* Phase 10 §4: "TOTAL, then discount, then item count." Shown only
-                once a discount actually applies — furniture that is always
-                there stops being read. */}
-            {totals.invoiceDiscountPaisa > 0 ? (
-              <p className="text-amber numeral mt-1 text-sm">
-                Discount −{formatPaisa(paisa(totals.invoiceDiscountPaisa))}
-              </p>
-            ) : null}
             <p className="text-ink/50 mt-1 text-sm">
               {totals.lineCount} line{totals.lineCount === 1 ? '' : 's'} · {totals.itemCount} unit
               {totals.itemCount === 1 ? '' : 's'}
             </p>
-            <label className="mt-2 block text-xs">
-              <span className="text-ink/60">Discount</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={discountInput}
-                onChange={(event) => {
-                  setDiscountInput(event.target.value);
-                }}
-                placeholder="e.g. 50 or 10%"
-                autoComplete="off"
-                className="border-line focus:border-green-600 h-touch numeral mt-1 w-full rounded border px-3 text-sm outline-none"
-              />
-            </label>
           </div>
 
           {customer ? (

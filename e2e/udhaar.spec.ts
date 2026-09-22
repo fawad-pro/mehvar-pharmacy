@@ -100,7 +100,7 @@ test('credit with nobody attached is blocked at the overlay, not silently discou
   // Tendering less than the total, with nobody attached, has nowhere to put
   // the shortfall — the overlay says so and will not commit it silently.
   await overlay.getByLabel('Cash tendered').fill('10');
-  await expect(overlay).toContainText('Attach a customer (F8) to put the rest on udhaar.');
+  await expect(overlay).toContainText('Attach a customer (F4) to put the rest on udhaar.');
   await expect(overlay.getByRole('button', { name: /Commit/ })).toBeDisabled();
 
   await overlay.getByRole('button', { name: 'Esc to cancel' }).click();

@@ -152,7 +152,7 @@ test('search results show the compact on-hand figure for every row', async ({ pa
   await expect(page.getByRole('option').first()).toContainText(/On hand: -?\d+/);
 });
 
-test('a fixed PKR discount reduces the total and shows in the totals rail', async ({ page }) => {
+test('a fixed PKR line discount reduces that line and the total, by keyboard', async ({ page }) => {
   await openCounter(page);
 
   // Disprin: Rs 2.50/tab, strip of 10 — one strip is Rs 25.00 (a round number
@@ -161,46 +161,113 @@ test('a fixed PKR discount reduces the total and shows in the totals rail', asyn
   await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('25.00');
 
-  await page.getByLabel('Discount').fill('5');
-  await expect(page.getByText('Discount −5.00')).toBeVisible();
+  // ArrowUp out of search selects the line; '%' opens its discount field.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('5');
+  await page.keyboard.press('Enter');
+
+  await expect(cart(page)).toContainText('−5.00 discount');
   await expect(total(page)).toHaveText('20.00');
+  // Focus returns to the row, not to search, after a line-level edit.
+  await expect(search(page)).not.toBeFocused();
 
   await page.keyboard.press('F12');
   await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('20.00');
 
-  // A discount belongs to the sale it was entered for, not the next customer.
-  await expect(page.getByLabel('Discount')).toHaveValue('');
+  // A discount belongs to the line it was entered on; the next sale starts
+  // with a fresh cart and nothing carries over.
   await expect(total(page)).toHaveText('0.00');
 });
 
-test('a percentage discount is computed off the subtotal', async ({ page }) => {
+test('a percentage line discount is computed off that line, not the cart', async ({ page }) => {
+  await openCounter(page);
+
+  // Two lines, so a per-line discount touching only one is actually proven.
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await search(page).fill('brufen');
+  await page.keyboard.press('Enter');
+  await expect(cart(page)).toContainText('Disprin');
+  await expect(cart(page)).toContainText('Brufen');
+
+  // ArrowUp selects the LAST line added (Brufen); apply 10% there only.
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Brufen').fill('10%');
+  await page.keyboard.press('Enter');
+
+  await expect(cart(page)).toContainText('−9.00 discount'); // 10% of Rs 90.00
+  // Disprin's row must show no discount at all.
+  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).not.toContainText('discount');
+});
+
+test('a re-typed percentage on the same line does not compound', async ({ page }) => {
   await openCounter(page);
 
   await search(page).fill('disprin');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('25.00');
+  await page.keyboard.press('ArrowUp');
 
-  await page.getByLabel('Discount').fill('10%');
-  await expect(page.getByText('Discount −2.50')).toBeVisible();
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('10%');
+  await page.keyboard.press('Enter');
+  await expect(cart(page)).toContainText('−2.50 discount'); // 10% of Rs 25.00
+
+  // Opening the field again and re-entering the SAME "10%" must land on the
+  // same Rs 2.50 — not 10% of the already-discounted Rs 22.50. The field is
+  // offered back pre-filled with the CURRENT discount ("2.5"), so it is
+  // cleared before typing, exactly as an operator retyping the value would.
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('10%');
+  await page.keyboard.press('Enter');
+  await expect(cart(page)).toContainText('−2.50 discount');
   await expect(total(page)).toHaveText('22.50');
 });
 
-test('a discount can never exceed the cart, and never raises the price', async ({ page }) => {
+test('a line discount can never exceed that line, and rejects a negative entry', async ({
+  page,
+}) => {
   await openCounter(page);
 
   await search(page).fill('disprin');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('25.00');
+  await page.keyboard.press('ArrowUp');
 
-  // Fat-fingering a bigger discount than the cart is worth clamps to the cart,
-  // never a negative total (same posture `cartTotals` already takes).
-  await page.getByLabel('Discount').fill('500');
+  // Fat-fingering a bigger discount than the line is worth clamps to the
+  // line, never a negative total (same posture `cartTotals` already takes).
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('500');
+  await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('0.00');
 
-  // Junk or a negative entry is zero — never a price ABOVE the catalogue price
-  // wearing a discount's clothes.
-  await page.getByLabel('Discount').fill('-5');
+  // Junk or a negative entry is zero — never a price ABOVE the catalogue
+  // price wearing a discount's clothes.
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('-5');
+  await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('25.00');
+  await expect(cart(page)).not.toContainText('discount');
+});
+
+test('Escape cancels an in-progress discount edit without changing anything', async ({ page }) => {
+  await openCounter(page);
+
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('10%');
+  await page.keyboard.press('Escape');
+
+  await expect(total(page)).toHaveText('25.00');
+  await expect(cart(page)).not.toContainText('discount');
+
+  // The row is still selected and usable — Escape closed the field, not the
+  // whole cart line.
+  await page.keyboard.press('+');
+  await expect(cart(page)).toContainText('2 strip');
 });

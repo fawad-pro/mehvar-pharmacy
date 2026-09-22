@@ -6,6 +6,7 @@ import {
   addToCart,
   cartTotals,
   isPriceOverridden,
+  lineGrossPaisa,
   lineTotal,
   paisaFromRupeeInput,
   parseDiscountInput,
@@ -187,51 +188,85 @@ describe('rupee input', () => {
 });
 
 describe('discount input — one field, one underlying amount', () => {
-  const subtotal = paisa(10_000); // Rs 100.00
+  const basis = paisa(10_000); // Rs 100.00 — a line's undiscounted gross
 
   it('reads a fixed PKR amount', () => {
-    expect(parseDiscountInput('50', subtotal)).toBe(5_000);
-    expect(parseDiscountInput('12.50', subtotal)).toBe(1_250);
+    expect(parseDiscountInput('50', basis)).toBe(5_000);
+    expect(parseDiscountInput('12.50', basis)).toBe(1_250);
   });
 
-  it('reads a percentage of the subtotal, not of any other figure', () => {
-    expect(parseDiscountInput('10%', subtotal)).toBe(1_000);
-    expect(parseDiscountInput('7%', subtotal)).toBe(700);
+  it('reads a percentage of the basis, not of any other figure', () => {
+    expect(parseDiscountInput('10%', basis)).toBe(1_000);
+    expect(parseDiscountInput('7%', basis)).toBe(700);
   });
 
   it('tolerates surrounding whitespace on either mode', () => {
-    expect(parseDiscountInput('  50  ', subtotal)).toBe(5_000);
-    expect(parseDiscountInput(' 10 % ', subtotal)).toBe(1_000);
+    expect(parseDiscountInput('  50  ', basis)).toBe(5_000);
+    expect(parseDiscountInput(' 10 % ', basis)).toBe(1_000);
   });
 
   it('rereading the same percentage never compounds', () => {
-    // The percentage is always of the ORIGINAL subtotal — never of a total
-    // already reduced by a previous read of the same input.
-    const first = parseDiscountInput('10%', subtotal);
-    const second = parseDiscountInput('10%', subtotal);
+    // The percentage is always of the SAME basis passed in — never of a
+    // figure already reduced by a previous read of the same input.
+    const first = parseDiscountInput('10%', basis);
+    const second = parseDiscountInput('10%', basis);
     expect(first).toBe(second);
   });
 
   it('is zero for blank, junk, zero or negative input — never a negative discount', () => {
     // A negative discount would be a price ABOVE the catalogue price wearing a
     // discount's clothes, which this must never produce (Phase 5 invariant 4).
-    expect(parseDiscountInput('', subtotal)).toBe(0);
-    expect(parseDiscountInput('abc', subtotal)).toBe(0);
-    expect(parseDiscountInput('0', subtotal)).toBe(0);
-    expect(parseDiscountInput('-5', subtotal)).toBe(0);
-    expect(parseDiscountInput('-5%', subtotal)).toBe(0);
+    expect(parseDiscountInput('', basis)).toBe(0);
+    expect(parseDiscountInput('abc', basis)).toBe(0);
+    expect(parseDiscountInput('0', basis)).toBe(0);
+    expect(parseDiscountInput('-5', basis)).toBe(0);
+    expect(parseDiscountInput('-5%', basis)).toBe(0);
   });
 
-  it('clamps a fixed amount bigger than the cart, same posture as cartTotals', () => {
-    expect(parseDiscountInput('500', subtotal)).toBe(10_000);
+  it('clamps a fixed amount bigger than the line, same posture as cartTotals', () => {
+    expect(parseDiscountInput('500', basis)).toBe(10_000);
   });
 
   it('clamps a percentage over 100 the same way', () => {
-    expect(parseDiscountInput('150%', subtotal)).toBe(10_000);
+    expect(parseDiscountInput('150%', basis)).toBe(10_000);
   });
 
-  it('is zero for an empty cart, whatever is typed', () => {
+  it('is zero when there is nothing to discount, whatever is typed', () => {
     expect(parseDiscountInput('50', paisa(0))).toBe(0);
     expect(parseDiscountInput('10%', paisa(0))).toBe(0);
+  });
+});
+
+describe('a per-line discount, applied through a real cart line', () => {
+  it('lineGrossPaisa is the basis a percentage is taken of — not lineTotal', () => {
+    // 10 tab at Rs 3.50 = Rs 35.00 gross, with no discount yet.
+    const undiscounted = line();
+    expect(lineGrossPaisa(undiscounted)).toBe(3_500);
+    expect(lineTotal(undiscounted)).toBe(3_500);
+
+    // Apply "10%" once: discount = 350, total = 3_150.
+    const discounted = { ...undiscounted, lineDiscountPaisa: parseDiscountInput('10%', lineGrossPaisa(undiscounted)) };
+    expect(discounted.lineDiscountPaisa).toBe(350);
+    expect(lineTotal(discounted)).toBe(3_150);
+
+    // Re-reading "10%" a second time, from the SAME line, must land on the
+    // same 350 — not 10% of 3_150 (315), which would be the compounding bug
+    // `lineGrossPaisa` (not `lineTotal`) as the basis exists to prevent.
+    const rereadDiscount = parseDiscountInput('10%', lineGrossPaisa(discounted));
+    expect(rereadDiscount).toBe(350);
+  });
+
+  it('a fixed-amount line discount reduces only that line, via the existing field', () => {
+    const lines = [line({ lineId: 'a' }), line({ lineId: 'b', qtyBase: baseQty(4) })];
+    const discounted = updateLine(lines, 'a', {
+      lineDiscountPaisa: parseDiscountInput('5', lineGrossPaisa(lines[0]!)),
+    });
+
+    expect(lineTotal(discounted[0]!)).toBe(3_000); // 3_500 − 500
+    expect(lineTotal(discounted[1]!)).toBe(1_400); // untouched
+
+    const totals = cartTotals(discounted);
+    expect(totals.subtotalPaisa).toBe(3_000 + 1_400);
+    expect(totals.invoiceDiscountPaisa).toBe(0); // no invoice-level discount
   });
 });

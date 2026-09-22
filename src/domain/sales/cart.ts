@@ -40,10 +40,14 @@ export interface CartTotals {
   readonly lineCount: number;
 }
 
-/** Line total before invoice-level discount. Never negative. */
+/** What the line would cost with no discount at all — the discount's basis. */
+export function lineGrossPaisa(line: CartLine): Paisa {
+  return multiplyPaisa(line.unitPricePaisa, line.qtyBase);
+}
+
+/** Line total after its own discount (Phase 5 invariant 4). Never negative. */
 export function lineTotal(line: CartLine): Paisa {
-  const gross = multiplyPaisa(line.unitPricePaisa, line.qtyBase);
-  const net = subtractPaisa(gross, line.lineDiscountPaisa);
+  const net = subtractPaisa(lineGrossPaisa(line), line.lineDiscountPaisa);
   return net < 0 ? ZERO_PAISA : net;
 }
 
@@ -151,22 +155,24 @@ export function paisaFromRupeeInput(raw: string): Paisa {
 }
 
 /**
- * A discount entered as either a flat PKR amount ("50") or a percentage of
- * the subtotal ("10%") — one entry field, one underlying amount
- * (`CartTotals.invoiceDiscountPaisa`), never two parallel discount models.
+ * A discount entered as either a flat PKR amount ("50") or a percentage
+ * ("10%") — one entry field, one underlying amount (`CartLine.lineDiscountPaisa`
+ * for a per-line discount), never two parallel discount models.
  *
- * The percentage is taken of `subtotalPaisa` — the sum of catalogue-priced
- * line totals `cartTotals` already computes — never of an already-discounted
- * figure, so re-reading the same "10%" twice never compounds.
+ * `basisPaisa` is what the discount is a percentage OF, and it must be the
+ * line's undiscounted gross (`lineGrossPaisa`) — never `lineTotal`, which is
+ * already net of any EXISTING discount. Basing the percentage on the gross is
+ * what makes re-reading the same "10%" idempotent rather than compounding: a
+ * line re-priced from the SAME catalogue amount every time it is parsed.
  *
- * Clamped to `[0, subtotalPaisa]`: a discount only ever lowers the price,
- * never raises it. Blank, garbage, zero or negative input is zero — never a
+ * Clamped to `[0, basisPaisa]`: a discount only ever lowers the price, never
+ * raises it. Blank, garbage, zero or negative input is zero — never a
  * negative discount, which would be a price ABOVE the catalogue price wearing
- * a discount's clothes — and `cartTotals` clamps the top end the same way it
- * already clamps any other invoice discount it is handed, so a fixed amount
- * bigger than the cart still cannot make the total negative.
+ * a discount's clothes — and a fixed amount bigger than the line clamps to
+ * the line, the same posture `cartTotals` already takes for an invoice
+ * discount bigger than the cart.
  */
-export function parseDiscountInput(raw: string, subtotalPaisa: Paisa): Paisa {
+export function parseDiscountInput(raw: string, basisPaisa: Paisa): Paisa {
   const trimmed = raw.trim();
   if (trimmed === '') {
     return ZERO_PAISA;
@@ -179,8 +185,8 @@ export function parseDiscountInput(raw: string, subtotalPaisa: Paisa): Paisa {
   }
 
   const amount = isPercent
-    ? Math.round((subtotalPaisa * numeric) / 100)
+    ? Math.round((basisPaisa * numeric) / 100)
     : Math.round(numeric * 100);
 
-  return paisa(Math.max(0, Math.min(amount, subtotalPaisa)));
+  return paisa(Math.max(0, Math.min(amount, basisPaisa)));
 }

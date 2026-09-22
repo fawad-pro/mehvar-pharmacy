@@ -9,12 +9,24 @@
  *
  * Every edit is keyboard-reachable, because I1 means the hands never leave the
  * keys during a sale. The mouse works too; it is just never required.
+ *
+ * A per-line DISCOUNT is the same posture: '%' on the selected line opens a
+ * small inline field, fixed PKR ("50") or percentage ("10%"), that resolves
+ * through `parseDiscountInput` into `CartLine.lineDiscountPaisa` — the one
+ * discount model, never a parallel one. Nothing about it is a new screen or
+ * a new workflow; it is one more in-place edit beside qty and unit level.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { nextUnitLevel, resolveQuantity } from '@/client/search/quantity-grammar';
-import { isPriceOverridden, lineTotal, type CartLine } from '@/domain/sales/cart';
+import {
+  isPriceOverridden,
+  lineGrossPaisa,
+  lineTotal,
+  parseDiscountInput,
+  type CartLine,
+} from '@/domain/sales/cart';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 import { describeQuantity, unitLevels } from '@/lib/quantity';
@@ -42,6 +54,11 @@ export function CartTable({
   onPay,
 }: CartTableProps) {
   const container = useRef<HTMLTableSectionElement>(null);
+  /** The one line, if any, with its discount field open — never more than one. */
+  const [editingDiscount, setEditingDiscount] = useState<{
+    lineId: string;
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     if (selectedLineId === null) {
@@ -51,6 +68,47 @@ export function CartTable({
       ?.querySelector<HTMLTableRowElement>(`[data-line-id="${selectedLineId}"]`)
       ?.focus();
   }, [selectedLineId]);
+
+  function focusRow(lineId: string): void {
+    container.current?.querySelector<HTMLTableRowElement>(`[data-line-id="${lineId}"]`)?.focus();
+  }
+
+  function commitDiscount(line: CartLine): void {
+    const text = editingDiscount?.lineId === line.lineId ? editingDiscount.text : '';
+    setEditingDiscount(null);
+    onChange(line.lineId, { lineDiscountPaisa: parseDiscountInput(text, lineGrossPaisa(line)) });
+    focusRow(line.lineId);
+  }
+
+  /**
+   * Closes the field without applying anything. Safe to call from `onBlur`
+   * even after `commitDiscount` already closed it (Enter's own refocus of the
+   * row blurs this input too) — the guard makes that a no-op rather than a
+   * second, redundant refocus.
+   */
+  function cancelDiscount(line: CartLine): void {
+    setEditingDiscount((current) => {
+      if (current?.lineId !== line.lineId) {
+        return current;
+      }
+      focusRow(line.lineId);
+      return null;
+    });
+  }
+
+  function discountKeyDown(event: React.KeyboardEvent<HTMLInputElement>, line: CartLine): void {
+    // Never let a keystroke meant for this text field also reach the row's
+    // own handler — Backspace/Delete would otherwise remove the whole line
+    // while the operator is just editing a number.
+    event.stopPropagation();
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitDiscount(line);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      cancelDiscount(line);
+    }
+  }
 
   if (lines.length === 0) {
     return (
@@ -110,6 +168,18 @@ export function CartTable({
       case 'Backspace': {
         event.preventDefault();
         onRemove(line.lineId);
+        break;
+      }
+      case '%': {
+        // Opens the same small field whether the line already carries a
+        // discount or not; a discount already on the line is offered back in
+        // rupees as the starting text, so adjusting it re-reads as one edit
+        // rather than a fresh guess at what was there.
+        event.preventDefault();
+        setEditingDiscount({
+          lineId: line.lineId,
+          text: line.lineDiscountPaisa > 0 ? (line.lineDiscountPaisa / 100).toString() : '',
+        });
         break;
       }
       case ' ': {
@@ -185,17 +255,49 @@ export function CartTable({
                     {stock !== null && stock <= 0 ? 'not in stock' : 'more than in stock'}
                   </span>
                 ) : null}
+                {/* The result, in plain rupees — never the "10%" that produced
+                    it, since only the resolved paisa amount is kept (one
+                    discount model, T1's "visible to the owner"). */}
+                {line.lineDiscountPaisa > 0 ? (
+                  <span className="text-green-700 ml-2 text-xs">
+                    −{formatPaisa(paisa(line.lineDiscountPaisa))} discount
+                  </span>
+                ) : null}
               </td>
               <td className="px-3 py-1.5">
                 {/* W5: always natural language, never database thinking. */}
                 {describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels])}
                 {selected ? (
                   <span className="text-ink/40 ml-2 text-xs">
-                    +/− · Tab {line.enteredUnitLevel} · Del
+                    +/− · Tab {line.enteredUnitLevel} · % disc · Del
                   </span>
                 ) : null}
               </td>
-              <td className="numeral px-3 py-1.5">{formatPaisa(paisa(line.unitPricePaisa))}</td>
+              <td className="numeral px-3 py-1.5 text-right">
+                {editingDiscount?.lineId === line.lineId ? (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    aria-label={`Discount for ${line.name}`}
+                    autoFocus
+                    value={editingDiscount.text}
+                    onChange={(event) => {
+                      setEditingDiscount({ lineId: line.lineId, text: event.target.value });
+                    }}
+                    onKeyDown={(event) => {
+                      discountKeyDown(event, line);
+                    }}
+                    onBlur={() => {
+                      cancelDiscount(line);
+                    }}
+                    placeholder="e.g. 50 or 10%"
+                    autoComplete="off"
+                    className="numeral border-line focus:border-green-600 w-full rounded border px-1.5 py-0.5 text-right text-sm outline-none"
+                  />
+                ) : (
+                  formatPaisa(paisa(line.unitPricePaisa))
+                )}
+              </td>
               <td className="numeral px-3 py-1.5 font-medium">{formatPaisa(lineTotal(line))}</td>
             </tr>
           );
