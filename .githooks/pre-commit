@@ -1,0 +1,68 @@
+#!/bin/sh
+#
+# Pre-commit gate — private-key guard.
+#
+# scripts/licence/dev-key.ts commits a PRIVATE Ed25519 key on purpose (it is
+# public and secures nothing — see that file). A PRODUCTION private key must
+# never follow the same path: `npm run licence:keygen` only ever prints one to
+# stdout, and .gitignore already excludes the obvious filenames (*.key, *.pem,
+# *-signing-key*) — but a filename pattern cannot catch a key pasted into a
+# file that doesn't match one, or embedded inline in a script during a
+# debugging session. This checks CONTENT, not names, so it holds regardless of
+# what the file is called.
+#
+# Looks only at ADDED lines in the staged diff, so it never re-flags the
+# already-committed dev key sitting unchanged in the tree, and it skips two
+# files entirely: scripts/licence/dev-key.ts, whose whole job is to carry a
+# real one, and this script itself, which has to spell out the pattern in
+# full to look for it.
+#
+# Enable once per clone:  npm run hooks:install
+# Bypass in a genuine emergency:  git commit --no-verify
+#
+# Deliberately no `set -e`: grep exits 1 on "no match", which is the expected,
+# common case here, not an error — a script that treats it as one would abort
+# before checking the next file, or (worse) before running the final check
+# that actually blocks the commit.
+
+ALLOWED_FILES="scripts/licence/dev-key.ts .githooks/pre-commit"
+
+# The fixed ASN.1/OID header every Ed25519 PKCS8 private key starts with,
+# base64url-encoded — identical across every such key regardless of the
+# actual private bytes, so it matches a real key without needing to know it.
+ED25519_PKCS8_PREFIX='MC4CAQAwBQYDK2VwBCIEI'
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+found=0
+
+for file in $staged_files; do
+  skip=0
+  for allowed in $ALLOWED_FILES; do
+    if [ "$file" = "$allowed" ]; then
+      skip=1
+    fi
+  done
+  if [ "$skip" -eq 1 ]; then
+    continue
+  fi
+
+  added_lines=$(git diff --cached -U0 -- "$file" | grep -E '^\+' | grep -vE '^\+\+\+')
+
+  if [ -n "$added_lines" ] && echo "$added_lines" | grep -q "$ED25519_PKCS8_PREFIX"; then
+    echo "pre-commit: refused — $file adds what looks like an Ed25519 private key"
+    found=1
+  fi
+
+  if [ -n "$added_lines" ] && echo "$added_lines" | grep -qE -- '-----BEGIN (RSA |EC |)PRIVATE KEY-----'; then
+    echo "pre-commit: refused — $file adds a PEM private key block"
+    found=1
+  fi
+done
+
+if [ "$found" -ne 0 ]; then
+  echo ""
+  echo "  A private key belongs in a password manager, never a commit."
+  echo "  If this is a false positive, use: git commit --no-verify"
+  echo ""
+  exit 1
+fi
