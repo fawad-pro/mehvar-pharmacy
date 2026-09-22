@@ -5,6 +5,7 @@ import { baseQty, paisa } from '@/lib/branded';
 import {
   addToCart,
   cartTotals,
+  grossSubtotalPaisa,
   isPriceOverridden,
   lineGrossPaisa,
   lineTotal,
@@ -12,6 +13,7 @@ import {
   parseDiscountInput,
   removeLine,
   splitPayment,
+  totalLineDiscountPaisa,
   updateLine,
   type CartLine,
 } from './cart';
@@ -268,5 +270,43 @@ describe('a per-line discount, applied through a real cart line', () => {
     const totals = cartTotals(discounted);
     expect(totals.subtotalPaisa).toBe(3_000 + 1_400);
     expect(totals.invoiceDiscountPaisa).toBe(0); // no invoice-level discount
+  });
+});
+
+describe('the receipt figures — gross Subtotal and the summed Discount row', () => {
+  it('no-discount sale: gross subtotal equals the total, and there is nothing to discount', () => {
+    const lines = [line({ lineId: 'a' }), line({ lineId: 'b', qtyBase: baseQty(4) })];
+
+    expect(grossSubtotalPaisa(lines)).toBe(3_500 + 1_400);
+    expect(totalLineDiscountPaisa(lines)).toBe(0);
+    expect(grossSubtotalPaisa(lines)).toBe(cartTotals(lines).totalPaisa);
+  });
+
+  it('discounted sale: gross subtotal is what the customer would have paid before any discount', () => {
+    const lines = [
+      line({ lineId: 'a', lineDiscountPaisa: paisa(500) }), // Rs 35.00 gross, Rs 5.00 off
+      line({ lineId: 'b', qtyBase: baseQty(4) }), // Rs 14.00 gross, no discount
+    ];
+
+    // Subtotal is the GROSS figure — never lowered by a line's own discount,
+    // which is exactly the bug this guards: `cartTotals.subtotalPaisa` sums
+    // `lineTotal` (already net), so a receipt built from it showed Subtotal
+    // and TOTAL as the identical number whenever a line was discounted.
+    expect(grossSubtotalPaisa(lines)).toBe(3_500 + 1_400);
+    expect(totalLineDiscountPaisa(lines)).toBe(500);
+
+    // Correctness: Amount Due (TOTAL) must equal Subtotal minus the Discount
+    // row, exactly — the identity the receipt now depends on.
+    const amountDue = cartTotals(lines).totalPaisa;
+    expect(grossSubtotalPaisa(lines) - totalLineDiscountPaisa(lines)).toBe(amountDue);
+    expect(amountDue).toBe(3_500 - 500 + 1_400);
+  });
+
+  it('sums every line’s discount into one Discount row, not per line', () => {
+    const lines = [
+      line({ lineId: 'a', lineDiscountPaisa: paisa(200) }),
+      line({ lineId: 'b', qtyBase: baseQty(4), lineDiscountPaisa: paisa(100) }),
+    ];
+    expect(totalLineDiscountPaisa(lines)).toBe(300);
   });
 });

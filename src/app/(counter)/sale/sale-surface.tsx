@@ -41,9 +41,11 @@ import { validateSaleCommand, type SaleRejection } from '@/domain/sales/sale-com
 import {
   addToCart,
   cartTotals,
+  grossSubtotalPaisa,
   isPriceOverridden,
   lineTotal,
   removeLine,
+  totalLineDiscountPaisa,
   updateLine,
   type CartLine,
 } from '@/domain/sales/cart';
@@ -266,8 +268,14 @@ export function SaleSurface() {
           quantityLabel: describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels]),
           amountPaisa: lineTotal(line),
         })),
-        subtotalPaisa: soldTotals.subtotalPaisa,
-        discountPaisa: soldTotals.invoiceDiscountPaisa,
+        // The receipt's Subtotal is the GROSS figure — before any line's own
+        // discount — never `soldTotals.subtotalPaisa`, which sums `lineTotal`
+        // (already net) and made Subtotal read identical to TOTAL whenever a
+        // line was discounted. Discount is every line's own discount summed
+        // into the one row the receipt shows (no invoice-level discount UI
+        // exists any more, so `soldTotals.invoiceDiscountPaisa` is always 0).
+        subtotalPaisa: grossSubtotalPaisa(soldLines),
+        discountPaisa: totalLineDiscountPaisa(soldLines),
         totalPaisa: soldTotals.totalPaisa,
         cashPaisa: split.cashPaisa,
         tenderedPaisa: split.tenderedPaisa,

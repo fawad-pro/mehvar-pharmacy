@@ -52,6 +52,24 @@ export function lineTotal(line: CartLine): Paisa {
 }
 
 /**
+ * The receipt's pre-discount Subtotal: every line's undiscounted gross,
+ * summed. `CartTotals.subtotalPaisa` is deliberately NOT this — it sums
+ * `lineTotal`, already net of each line's own discount, because that is the
+ * figure `commitSale` persists (Phase 5 invariant 4's "Σ line totals"). A
+ * receipt showing that net figure as "Subtotal" made Subtotal and TOTAL read
+ * identical whenever a line carried a discount, which is what a customer
+ * reads as "no discount was applied" even though one was.
+ */
+export function grossSubtotalPaisa(lines: readonly CartLine[]): Paisa {
+  return sumPaisa(lines.map(lineGrossPaisa));
+}
+
+/** Every line's own discount, summed — the receipt's single Discount row. */
+export function totalLineDiscountPaisa(lines: readonly CartLine[]): Paisa {
+  return sumPaisa(lines.map((line) => line.lineDiscountPaisa));
+}
+
+/**
  * T1 — a price the operator changed is visible to the owner as an override.
  * Derived by comparison rather than trusted from a flag the UI sets.
  */

@@ -57,22 +57,22 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           ) : null}
           {receipt.discountPaisa ? <Row label="Discount" amountPaisa={-receipt.discountPaisa} /> : null}
           {receipt.totalPaisa !== undefined ? (
-            <Row label="TOTAL" amountPaisa={receipt.totalPaisa} bold />
+            <Row label="Amount Due" amountPaisa={receipt.totalPaisa} bold />
           ) : null}
 
+          {/* No change/remaining arithmetic on the printed slip — that
+              calculator lives on the payment screen. The receipt states what
+              was paid, full stop (Phase 10 §7's own body: "…payment =
+              cash/tendered/change or udhaar split" is the SCREEN's job; this
+              is the paper). */}
           {receipt.creditPaisa ? (
             <>
               {receipt.cashPaisa ? <Row label="Cash" amountPaisa={receipt.cashPaisa} /> : null}
               <Row label="Udhaar" amountPaisa={receipt.creditPaisa} />
             </>
-          ) : (
-            <>
-              {receipt.tenderedPaisa !== undefined ? (
-                <Row label="Tendered" amountPaisa={receipt.tenderedPaisa} />
-              ) : null}
-              {receipt.changePaisa ? <Row label="Change" amountPaisa={receipt.changePaisa} /> : null}
-            </>
-          )}
+          ) : receipt.tenderedPaisa !== undefined ? (
+            <Row label="Paid" amountPaisa={receipt.tenderedPaisa} />
+          ) : null}
         </>
       ) : null}
 

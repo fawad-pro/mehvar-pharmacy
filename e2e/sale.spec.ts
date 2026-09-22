@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
 
-import { cart, lastSale, openCounter, search, total } from './support/counter';
+import {
+  cart,
+  lastSale,
+  openCounter,
+  printedReceipt as receipt,
+  search,
+  total,
+} from './support/counter';
 
 /**
  * Day 3's "done when": "a keyboard-only cash sale commits, stock derives
@@ -180,6 +187,57 @@ test('a fixed PKR line discount reduces that line and the total, by keyboard', a
   // A discount belongs to the line it was entered on; the next sale starts
   // with a fresh cart and nothing carries over.
   await expect(total(page)).toHaveText('0.00');
+});
+
+test('a no-discount receipt: Subtotal equals Amount Due, with no Discount row', async ({
+  page,
+}) => {
+  await openCounter(page);
+
+  await search(page).fill('panadol');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('35.00');
+
+  await page.keyboard.press('F12');
+  await page.keyboard.press('Enter'); // exact tender — no change, no udhaar
+
+  await expect(receipt(page)).toContainText('Subtotal');
+  await expect(receipt(page)).toContainText('Amount Due');
+  await expect(receipt(page)).not.toContainText('Discount');
+  // Both figures are the SAME number: nothing was discounted.
+  const text = (await receipt(page).textContent()) ?? '';
+  expect(text.match(/35\.00/g)?.length).toBeGreaterThanOrEqual(2);
+});
+
+test('a discounted receipt: Subtotal is the pre-discount gross, Discount is the amount taken off, Amount Due is net', async ({
+  page,
+}) => {
+  await openCounter(page);
+
+  // Disprin: Rs 2.50/tab, strip of 10 — one strip is Rs 25.00 gross.
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('%');
+  await page.getByLabel('Discount for Disprin').fill('5');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('20.00');
+
+  await page.keyboard.press('F12');
+  await page.keyboard.press('Enter'); // exact tender against the discounted total
+
+  // This is the bug this guards: before the fix, Subtotal was built from the
+  // already-discounted line total, so it read the same as Amount Due (20.00)
+  // and the customer had no way to see a discount was ever applied.
+  await expect(receipt(page)).toContainText('Subtotal');
+  await expect(receipt(page)).toContainText('25.00'); // gross, before the discount
+  await expect(receipt(page)).toContainText('Discount');
+  await expect(receipt(page)).toContainText('-5.00'); // the amount taken off
+  await expect(receipt(page)).toContainText('Amount Due');
+  await expect(receipt(page)).toContainText('20.00'); // net — what was actually charged
+  // Amount Due must equal Subtotal minus Discount, and the paper never asks
+  // the customer to do that arithmetic themselves.
+  await expect(receipt(page)).not.toContainText('Change');
 });
 
 test('a percentage line discount is computed off that line, not the cart', async ({ page }) => {

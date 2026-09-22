@@ -45,10 +45,20 @@ export default async function ReceiptDetailPage({
   const heading =
     receipt.kind === 'sale' ? 'Sale' : receipt.kind === 'settlement' ? 'Payment' : 'Return';
 
+  const lineGross = (line: { qtyBase: number; unitPricePaisa: number }) =>
+    line.qtyBase * line.unitPricePaisa;
   const lineTotal = (line: { qtyBase: number; unitPricePaisa: number; lineDiscountPaisa: number }) =>
-    line.qtyBase * line.unitPricePaisa - line.lineDiscountPaisa;
+    lineGross(line) - line.lineDiscountPaisa;
 
-  const subtotalPaisa = (receipt.lines ?? []).reduce((sum, line) => sum + lineTotal(line), 0);
+  // Subtotal is the GROSS figure — before any line's own discount — never a
+  // sum of `lineTotal`, which is already net. Summing net totals made
+  // "Subtotal" print the identical number as "Total" whenever a line carried
+  // a discount, the same bug the live receipt had (sale-surface.tsx).
+  const subtotalPaisa = (receipt.lines ?? []).reduce((sum, line) => sum + lineGross(line), 0);
+  const lineDiscountTotalPaisa = (receipt.lines ?? []).reduce(
+    (sum, line) => sum + line.lineDiscountPaisa,
+    0,
+  );
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
@@ -182,8 +192,14 @@ export default async function ReceiptDetailPage({
         {receipt.kind === 'sale' ? (
           <>
             <Line label="Subtotal" amountPaisa={subtotalPaisa} />
-            {receipt.invoiceDiscountPaisa ? (
-              <Line label="Invoice discount" amountPaisa={-receipt.invoiceDiscountPaisa} />
+            {/* One row for every discount that reduced this sale — the sum of
+                each line's own discount, plus any invoice-level discount an
+                older record might carry (the UI no longer writes one). */}
+            {lineDiscountTotalPaisa + (receipt.invoiceDiscountPaisa ?? 0) > 0 ? (
+              <Line
+                label="Discount"
+                amountPaisa={-(lineDiscountTotalPaisa + (receipt.invoiceDiscountPaisa ?? 0))}
+              />
             ) : null}
             <Line label="Total" amountPaisa={receipt.totalPaisa ?? 0} bold />
             {receipt.cashPaisa ? <Line label="Cash" amountPaisa={receipt.cashPaisa} /> : null}
