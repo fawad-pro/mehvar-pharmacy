@@ -517,6 +517,15 @@ export async function searchGlobalCatalog(
      * Verified before reference within a tier, because a verified entry
      * carries the hand-checked pack structure that makes picking it worth
      * anything.
+     *
+     * Spelled as an explicit CASE, not `desc(globalProducts.quality)`: a
+     * Postgres enum sorts by its DECLARED label order, not alphabetically, and
+     * `catalogQuality` is declared `['verified', 'reference']` (schema.ts) —
+     * so ascending already puts verified first, and `desc()` silently inverted
+     * it, putting reference first instead. The name of the function reads
+     * like the fix but is exactly backwards for this column, which is why the
+     * bug survived: it looked right. An explicit CASE never depends on how the
+     * enum happens to be declared.
      */
     .orderBy(
       // Prefix relevance is judged on the FIRST word — the brand in "pan 40" —
@@ -527,7 +536,7 @@ export async function searchGlobalCatalog(
             when ${globalProducts.formulaText} ilike ${pattern} then 2
             else 3
           end`,
-      desc(globalProducts.quality),
+      sql`case when ${globalProducts.quality} = 'verified' then 0 else 1 end`,
       globalProducts.name,
     )
     .limit(limit);
