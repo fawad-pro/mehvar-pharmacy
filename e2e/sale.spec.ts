@@ -167,7 +167,7 @@ test('a fixed PKR line discount reduces that line and the total, by keyboard', a
   await page.getByLabel('Discount for Disprin').fill('5');
   await page.keyboard.press('Enter');
 
-  await expect(cart(page)).toContainText('−5.00 discount');
+  await expect(cart(page)).toContainText('−5.00');
   await expect(total(page)).toHaveText('20.00');
   // Focus returns to the row, not to search, after a line-level edit.
   await expect(search(page)).not.toBeFocused();
@@ -199,9 +199,39 @@ test('a percentage line discount is computed off that line, not the cart', async
   await page.getByLabel('Discount for Brufen').fill('10%');
   await page.keyboard.press('Enter');
 
-  await expect(cart(page)).toContainText('−9.00 discount'); // 10% of Rs 90.00
-  // Disprin's row must show no discount at all.
-  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).not.toContainText('discount');
+  await expect(cart(page)).toContainText('−9.00'); // 10% of Rs 90.00
+  // Disprin's row must show no discount at all — the empty-state dash.
+  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).toContainText('—');
+  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).not.toContainText('−');
+});
+
+test('the Discount column is clickable, no keyboard shortcut required', async ({ page }) => {
+  await openCounter(page);
+
+  await search(page).fill('disprin');
+  await page.keyboard.press('Enter');
+  await expect(total(page)).toHaveText('25.00');
+
+  // A first-time salesman who has never learned '%' can still find the
+  // control: the empty cell itself is a button.
+  await cart(page).getByRole('button', { name: '—' }).click();
+  await page.getByLabel('Discount for Disprin').fill('10%');
+  await page.keyboard.press('Enter');
+
+  await expect(cart(page)).toContainText('−2.50');
+  await expect(total(page)).toHaveText('22.50');
+
+  // Re-opening by clicking the now-filled cell offers the current value
+  // pre-selected (auto-select on focus), so typing over it replaces rather
+  // than appending — no manual clearing needed.
+  await cart(page).getByRole('button', { name: '−2.50' }).click();
+  const field = page.getByLabel('Discount for Disprin');
+  await expect(field).toHaveValue('2.5');
+  await field.pressSequentially('5');
+  await page.keyboard.press('Enter');
+
+  await expect(cart(page)).toContainText('−5.00');
+  await expect(total(page)).toHaveText('20.00');
 });
 
 test('a re-typed percentage on the same line does not compound', async ({ page }) => {
@@ -214,7 +244,7 @@ test('a re-typed percentage on the same line does not compound', async ({ page }
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText('−2.50 discount'); // 10% of Rs 25.00
+  await expect(cart(page)).toContainText('−2.50'); // 10% of Rs 25.00
 
   // Opening the field again and re-entering the SAME "10%" must land on the
   // same Rs 2.50 — not 10% of the already-discounted Rs 22.50. The field is
@@ -223,7 +253,7 @@ test('a re-typed percentage on the same line does not compound', async ({ page }
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText('−2.50 discount');
+  await expect(cart(page)).toContainText('−2.50');
   await expect(total(page)).toHaveText('22.50');
 });
 
@@ -249,7 +279,7 @@ test('a line discount can never exceed that line, and rejects a negative entry',
   await page.getByLabel('Discount for Disprin').fill('-5');
   await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('25.00');
-  await expect(cart(page)).not.toContainText('discount');
+  await expect(cart(page)).toContainText('—');
 });
 
 test('Escape cancels an in-progress discount edit without changing anything', async ({ page }) => {
@@ -264,7 +294,7 @@ test('Escape cancels an in-progress discount edit without changing anything', as
   await page.keyboard.press('Escape');
 
   await expect(total(page)).toHaveText('25.00');
-  await expect(cart(page)).not.toContainText('discount');
+  await expect(cart(page)).toContainText('—');
 
   // The row is still selected and usable — Escape closed the field, not the
   // whole cart line.

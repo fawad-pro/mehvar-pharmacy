@@ -64,13 +64,32 @@ export function CartTable({
     if (selectedLineId === null) {
       return;
     }
+    // Selecting a line while its discount field is open (e.g. a mouse click
+    // on the Discount cell selects the row AND opens the editor in the same
+    // event) must not steal focus back to the row — that would blur the
+    // input and close the editor it just opened.
+    if (editingDiscount?.lineId === selectedLineId) {
+      return;
+    }
     container.current
       ?.querySelector<HTMLTableRowElement>(`[data-line-id="${selectedLineId}"]`)
       ?.focus();
-  }, [selectedLineId]);
+  }, [selectedLineId, editingDiscount]);
 
   function focusRow(lineId: string): void {
     container.current?.querySelector<HTMLTableRowElement>(`[data-line-id="${lineId}"]`)?.focus();
+  }
+
+  function openDiscountEditor(line: CartLine): void {
+    // Opens the same small field whether the line already carries a discount
+    // or not; a discount already on the line is offered back in rupees as the
+    // starting text, so adjusting it re-reads as one edit rather than a fresh
+    // guess at what was there.
+    onSelect(line.lineId);
+    setEditingDiscount({
+      lineId: line.lineId,
+      text: line.lineDiscountPaisa > 0 ? (line.lineDiscountPaisa / 100).toString() : '',
+    });
   }
 
   function commitDiscount(line: CartLine): void {
@@ -171,15 +190,8 @@ export function CartTable({
         break;
       }
       case '%': {
-        // Opens the same small field whether the line already carries a
-        // discount or not; a discount already on the line is offered back in
-        // rupees as the starting text, so adjusting it re-reads as one edit
-        // rather than a fresh guess at what was there.
         event.preventDefault();
-        setEditingDiscount({
-          lineId: line.lineId,
-          text: line.lineDiscountPaisa > 0 ? (line.lineDiscountPaisa / 100).toString() : '',
-        });
+        openDiscountEditor(line);
         break;
       }
       case ' ': {
@@ -216,6 +228,7 @@ export function CartTable({
           <th className="px-3 py-2 text-left font-medium">Item</th>
           <th className="px-3 py-2 text-left font-medium">Quantity</th>
           <th className="px-3 py-2 text-right font-medium">Price</th>
+          <th className="px-3 py-2 text-right font-medium">Discount</th>
           <th className="px-3 py-2 text-right font-medium">Amount</th>
         </tr>
       </thead>
@@ -255,14 +268,6 @@ export function CartTable({
                     {stock !== null && stock <= 0 ? 'not in stock' : 'more than in stock'}
                   </span>
                 ) : null}
-                {/* The result, in plain rupees — never the "10%" that produced
-                    it, since only the resolved paisa amount is kept (one
-                    discount model, T1's "visible to the owner"). */}
-                {line.lineDiscountPaisa > 0 ? (
-                  <span className="text-green-700 ml-2 text-xs">
-                    −{formatPaisa(paisa(line.lineDiscountPaisa))} discount
-                  </span>
-                ) : null}
               </td>
               <td className="px-3 py-1.5">
                 {/* W5: always natural language, never database thinking. */}
@@ -274,6 +279,9 @@ export function CartTable({
                 ) : null}
               </td>
               <td className="numeral px-3 py-1.5 text-right">
+                {formatPaisa(paisa(line.unitPricePaisa))}
+              </td>
+              <td className="numeral px-3 py-1.5 text-right">
                 {editingDiscount?.lineId === line.lineId ? (
                   <input
                     type="text"
@@ -281,6 +289,9 @@ export function CartTable({
                     aria-label={`Discount for ${line.name}`}
                     autoFocus
                     value={editingDiscount.text}
+                    onFocus={(event) => {
+                      event.currentTarget.select();
+                    }}
                     onChange={(event) => {
                       setEditingDiscount({ lineId: line.lineId, text: event.target.value });
                     }}
@@ -295,7 +306,28 @@ export function CartTable({
                     className="numeral border-line focus:border-green-600 w-full rounded border px-1.5 py-0.5 text-right text-sm outline-none"
                   />
                 ) : (
-                  formatPaisa(paisa(line.unitPricePaisa))
+                  <button
+                    type="button"
+                    onMouseDown={(event) => {
+                      // Clicking this cell must not first move focus to the
+                      // button — that fires a focus event on the row before
+                      // the click's own state update, and the two together
+                      // can race with the effect that syncs row focus,
+                      // closing the editor the same click just opened it.
+                      event.preventDefault();
+                    }}
+                    onClick={() => {
+                      openDiscountEditor(line);
+                    }}
+                    className={[
+                      'w-full text-right',
+                      line.lineDiscountPaisa > 0 ? 'text-green-700' : 'text-ink/30',
+                    ].join(' ')}
+                  >
+                    {line.lineDiscountPaisa > 0
+                      ? `−${formatPaisa(paisa(line.lineDiscountPaisa))}`
+                      : '—'}
+                  </button>
                 )}
               </td>
               <td className="numeral px-3 py-1.5 font-medium">{formatPaisa(lineTotal(line))}</td>
