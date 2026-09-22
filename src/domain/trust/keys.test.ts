@@ -43,14 +43,15 @@ describe('the trust root', () => {
   });
 
   /**
-   * Not `expect(hasProductionKey()).toBe(true)`, because that would fail today
-   * and a red suite teaches people to ignore red suites. This states the
-   * position instead: the only key this build carries is one whose private half
-   * is published, and shipping to a paying pharmacy on it is not a thing to do.
-   *
-   * Provisioning `mehvar-1` and `mehvar-2` (npm run licence:keygen) is a release
-   * blocker for roadmap Phase 2, and flipping this assertion is how it gets
-   * closed.
+   * Not `expect(hasProductionKey()).toBe(true)`, because a hardcoded direction
+   * teaches people to ignore what actually shipped. This states the position
+   * instead, so the suite tells the truth in either state: unprovisioned, the
+   * only key this build carries is one whose private half is published, and
+   * shipping to a paying pharmacy on it would be forgeable by anyone with the
+   * repository; provisioned (as it is now — `mehvar-1`/`mehvar-2` were minted
+   * on the founder's own machine, per PRODUCTION_KEYS in `keys.ts`), the dev
+   * key must have dropped out of the trust root, or the whole bargain in
+   * `keys.ts` failed silently.
    */
   it('states plainly whether a production key has been provisioned', () => {
     if (!hasProductionKey()) {
