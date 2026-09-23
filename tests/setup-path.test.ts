@@ -146,7 +146,7 @@ describe('the paths that must not drift from db:setup', () => {
  * missing.
  */
 describe('licensing tables are granted, and granted correctly', () => {
-  const grants = readFileSync(join(process.cwd(), 'scripts', 'db', 'grants.ts'), 'utf8');
+  const grants = readFileSync(join(process.cwd(), 'scripts', 'db', 'grants-apply.ts'), 'utf8');
   const schema = readFileSync(join(process.cwd(), 'src', 'db', 'schema.ts'), 'utf8');
 
   const eventTables =

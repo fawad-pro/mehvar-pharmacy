@@ -13,11 +13,19 @@
  * separately from the live one and drops it afterwards. It never writes to the
  * pharmacy's own database — a drill that could damage the thing it protects
  * would not be run often enough to be worth having.
+ *
+ * `pg_restore --no-acl` (below) strips every GRANT along with the dump, so a
+ * freshly restored database is readable by its owner and by no one else — the
+ * application connects as a separate, non-owning role (PCN-001) that would be
+ * locked out entirely. Re-applying grants here, before verifying, is what
+ * makes a pass mean "the application can use this restore", not just "the
+ * owner that ran pg_restore can".
  */
 import 'dotenv/config';
 
 import { join } from 'node:path';
 
+import { applyGrants } from '../db/grants-apply';
 import { backupDir, latestBackup } from '../../src/lib/backup';
 
 import { run } from './run';
@@ -64,6 +72,15 @@ async function main(): Promise<void> {
     throw new Error('DATABASE_ADMIN_URL (or DATABASE_URL) is not set.');
   }
 
+  // The APP role's own connection string, captured before DATABASE_URL is
+  // overridden further down — re-pointed at the scratch database so the
+  // final verification queries it AS THE APPLICATION WOULD, not as the owner
+  // that ran pg_restore.
+  const appUrl = process.env.DATABASE_URL;
+  if (!appUrl) {
+    throw new Error('DATABASE_URL is not set.');
+  }
+
   const directory = backupDir();
   const newest = latestBackup(directory);
   if (newest === undefined) {
@@ -76,6 +93,7 @@ async function main(): Promise<void> {
   const dump = join(directory, newest);
   const maintenanceUrl = withDatabase(adminUrl, 'postgres');
   const scratchUrl = withDatabase(adminUrl, SCRATCH_DB);
+  const scratchAppUrl = withDatabase(appUrl, SCRATCH_DB);
 
   console.log(`Drilling ${newest} into ${SCRATCH_DB}…\n`);
 
@@ -89,17 +107,24 @@ async function main(): Promise<void> {
       quiet: true,
     });
 
+    // Re-grant before verifying anything: --no-acl means the app role has
+    // nothing yet, and a verify step run as the owner would never notice.
+    process.env.DATABASE_ADMIN_URL = scratchUrl;
+    await applyGrants();
+
     /*
-     * Point the database client at the scratch database BEFORE importing
-     * anything that reaches it. `src/db/client.ts` builds its pool lazily from
-     * `serverEnv()`, which caches on first read — so the override has to be in
-     * place before the first import, and the import has to be dynamic.
+     * Point the database client at the scratch database, AS THE APPLICATION
+     * ROLE, BEFORE importing anything that reaches it. `src/db/client.ts`
+     * builds its pool lazily from `serverEnv()`, which caches on first read —
+     * so the override has to be in place before the first import, and the
+     * import has to be dynamic.
      *
      * Getting this wrong would not fail loudly. It would verify the LIVE
-     * database, pass, and prove nothing about the dump.
+     * database, pass, and prove nothing about the dump — or verify the
+     * scratch database as its OWNER, passing even if the application role
+     * could not read a single row of it.
      */
-    process.env.DATABASE_URL = scratchUrl;
-    process.env.DATABASE_ADMIN_URL = scratchUrl;
+    process.env.DATABASE_URL = scratchAppUrl;
 
     const { verifyAllTenants } = await import('../db/verify-all');
     verified = await verifyAllTenants();
