@@ -221,8 +221,20 @@ function main(): void {
      *                       because $ErrorActionPreference = 'Stop' turned
      *                       psql's own diagnostics into a terminating error
      *                       before the exit code could be read.
+     *   config              every upgrade regenerated .env from a template,
+     *                       deleting the shop's own settings (its USB backup
+     *                       drive among them) without a word.
+     *   pre-update-backup   an update took no backup at all; the script that
+     *                       now decides whether Setup may continue must
+     *                       neither block a first install nor wave an upgrade
+     *                       through unprotected.
      */
-    for (const name of ['service-descriptor.tests.ps1', 'verify-checks.tests.ps1']) {
+    for (const name of [
+      'service-descriptor.tests.ps1',
+      'verify-checks.tests.ps1',
+      'config.tests.ps1',
+      'pre-update-backup.tests.ps1',
+    ]) {
       const suite = join(scriptDir, name);
       if (!existsSync(suite)) continue;
       try {

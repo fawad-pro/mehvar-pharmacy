@@ -118,6 +118,13 @@ safe, and it is why updates need no maintenance window.
 **Point `MEHVAR_BACKUP_DIR` at a USB drive or a second physical disk.** A backup
 on the same disk as the database survives a mistake; it does not survive the
 disk. Set it in `C:\ProgramData\Mehvar\.env` and restart the Mehvar Node service.
+Settings added to `.env` survive updates: Setup rewrites only the keys it owns
+(database credentials, paths, `PORT`) and logs any it corrected, by name.
+
+**Every update backs up first.** Before Setup replaces a single file, it dumps
+the database to `C:\ProgramData\Mehvar\backups\pre-update\`; if that dump
+cannot be taken, Setup stops with nothing changed. Nightly retention never
+prunes that folder. To drill one, point `MEHVAR_BACKUP_DIR` at it for the run.
 
 > **Known gap, and it is deliberate.** Phase 12 §3 requires an offsite copy —
 > "one provider failure must not take the backups with the database." Roadmap

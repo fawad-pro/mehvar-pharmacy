@@ -48,6 +48,7 @@ import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 import { npmInvocation } from './npm-command';
+import { assertNoEnvFiles, stripEnvFiles } from './payload-env';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const out = join(root, 'dist', 'package');
@@ -224,6 +225,13 @@ async function main(): Promise<void> {
   step('Copying the standalone server');
   cpSync(standalone, join(out, 'app'), { recursive: true });
 
+  // Standalone carries this machine's `.env*` along, and Next would load them
+  // at every pharmacy. See payload-env.ts.
+  const stripped = stripEnvFiles(join(out, 'app'));
+  if (stripped.length > 0) {
+    console.log(`  removed ${stripped.join(', ')} (the build machine's, never the shop's)`);
+  }
+
   /*
    * The two directories `standalone` deliberately omits. Without them the
    * server starts, serves HTML, and 404s every stylesheet and script — which
@@ -278,6 +286,8 @@ async function main(): Promise<void> {
    */
   step('Building the starter catalogue');
   runNpm(['run', 'catalog:build', '--', '--out', join(out, 'catalog', 'starter.json')]);
+
+  assertNoEnvFiles(join(out, 'app'));
 
   writeFileSync(
     join(out, 'VERSION'),

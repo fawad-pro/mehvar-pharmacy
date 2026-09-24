@@ -20,6 +20,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { findIscc } from './iscc-location';
+import { assertNoEnvFiles } from './payload-env';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const payload = join(root, 'dist', 'package');
@@ -87,6 +88,9 @@ function main(): void {
   }
 
   assertPayloadComplete();
+  // A payload assembled by an older build.ts, or copied around by hand, can
+  // still hold the build machine's .env. ISCC would package it silently.
+  assertNoEnvFiles(join(payload, 'app'));
 
   const { path: iscc, searched } = findIscc({ env: process.env, exists: existsSync });
   if (iscc === undefined) {

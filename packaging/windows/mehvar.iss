@@ -53,7 +53,17 @@ UninstallDisplayName={#AppName}
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignoreversion recursesubdirs createallsubdirs
+; Never installed: extracted to {tmp} by PrepareToInstall, which backs up the
+; database before a single file is replaced. lib-verify.ps1 goes with it
+; (Invoke-Native); it is also installed normally, below. FIRST in [Files] on
+; purpose: with SolidCompression, ExtractTemporaryFile on an entry listed after
+; the payload has to decompress the whole payload to reach it.
+Source: "{#ScriptsDir}pre-update-backup.ps1"; DestDir: "{tmp}"; Flags: dontcopy
+Source: "{#ScriptsDir}lib-verify.ps1";        DestDir: "{tmp}"; Flags: dontcopy
+; Excludes: the build machine's .env must never ship (scripts/package/payload-env.ts).
+; package:build strips it and package:installer refuses a payload holding one;
+; this is the last layer, because Next loads app\.env at startup on the shop machine.
+Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env,.env.*"
 Source: "{#PayloadDir}\migrations\*"; DestDir: "{app}\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; The starter catalogue. Not skipifsourcedoesntexist: a payload built without
 ; one is a broken build, and a pharmacy opening on an empty catalogue starts
@@ -65,6 +75,8 @@ Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignore
 Source: "{#PayloadDir}\winsw\*";      DestDir: "{app}\winsw";      Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\VERSION";      DestDir: "{app}";            Flags: ignoreversion
 Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{app}\packaging"; Flags: ignoreversion
+; install-services.ps1 dot-sources this too: it merges .env rather than rewriting it.
+Source: "{#ScriptsDir}lib-config.ps1";        DestDir: "{app}\packaging"; Flags: ignoreversion
 ; verify-install.ps1 dot-sources this. Shipping one without the other kills the
 ; whole verification step at its first line.
 Source: "{#ScriptsDir}lib-verify.ps1";        DestDir: "{app}\packaging"; Flags: ignoreversion
@@ -72,6 +84,14 @@ Source: "{#ScriptsDir}install-services.ps1";  DestDir: "{app}\packaging"; Flags:
 Source: "{#ScriptsDir}verify-install.ps1";    DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}counter-shortcut.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}uninstall-services.ps1";DestDir: "{app}\packaging"; Flags: ignoreversion
+
+[InstallDelete]
+; Installers before scripts/package/payload-env.ts shipped the BUILD machine's
+; .env as {app}\app\.env, and [Files] never deletes -- so without this an
+; upgraded shop would keep it forever, and Next loads it at every start. Runs
+; after PrepareToInstall's backup and before the new files are copied.
+Type: files; Name: "{app}\app\.env"
+Type: files; Name: "{app}\app\.env.*"
 
 [Dirs]
 Name: "{commonappdata}\Mehvar"; Permissions: admins-full
@@ -233,10 +253,9 @@ begin
       Result := Result + Lines[Index] + #13#10;
 end;
 
-function PowerShellArgs(ScriptName, Extra: String): String;
+function PowerShellArgs(ScriptPath, Extra: String): String;
 begin
-  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\')
-    + ScriptName + '" ' + Extra;
+  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" ' + Extra;
 end;
 
 { Run PowerShell with EVERY stream redirected to a file.
@@ -246,15 +265,19 @@ end;
   never runs a line, so its own logging is irrelevant; the only record of why
   is what powershell.exe printed to stderr. That used to go to a hidden window
   and vanish. Now it lands in a file Setup reads back. }
-function RunPowerShellLogged(ScriptName, Extra, ConsoleLog: String; var Output: String): Integer;
+{ Takes a full path: the pre-update backup runs from {tmp}, before anything is
+  installed under {app}. }
+function RunPowerShellFileLogged(ScriptPath, Extra, ConsoleLog: String; var Output: String): Integer;
 var
   ResultCode: Integer;
   Command: String;
+  ScriptName: String;
 begin
+  ScriptName := ExtractFileName(ScriptPath);
   DeleteFile(ConsoleLog);
 
   Command := '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') + '" '
-    + PowerShellArgs(ScriptName, Extra) + ' > "' + ConsoleLog + '" 2>&1"';
+    + PowerShellArgs(ScriptPath, Extra) + ' > "' + ConsoleLog + '" 2>&1"';
 
   AppendLog('run: cmd.exe ' + Command);
 
@@ -276,9 +299,64 @@ begin
   Result := ResultCode;
 end;
 
+{ The scripts install-services.ps1 and friends, installed under {app}\packaging. }
+function RunPowerShellLogged(ScriptName, Extra, ConsoleLog: String; var Output: String): Integer;
+begin
+  Result := RunPowerShellFileLogged(ExpandConstant('{app}\packaging\') + ScriptName, Extra,
+    ConsoleLog, Output);
+end;
+
 function ShellQuote(Value: String): String;
 begin
   Result := '"' + Value + '"';
+end;
+
+{ ------------------------------------------------------------------------
+  Backup before update.
+
+  Inno calls this after the operator clicks Install and BEFORE any file is
+  replaced; install-services.ps1 migrates the schema later still. So the dump
+  pre-update-backup.ps1 takes is of the installation exactly as it stands.
+
+  A non-empty result stops Setup on the Preparing to Install page with nothing
+  changed. That is the point: the upgrade test found an update that took no
+  backup at all, so a failed migration would have cost everything since the
+  last 02:30 job. If a pharmacy's records exist and cannot be backed up, the
+  update does not happen. On a first install there is no database, the script
+  says so, and this returns '' at once.
+
+  Both scripts are Flags: dontcopy entries -- extracted to {tmp} for this and
+  never installed -- because nothing under {app} can be trusted to be current
+  yet, and on a first install nothing is there at all.
+  ------------------------------------------------------------------------ }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Output: String;
+  ConsoleLog: String;
+begin
+  Result := '';
+  ConsoleLog := LogDir() + '\pre-update-backup-console.log';
+
+  AppendLog('=== Mehvar {#AppVersion}: backing up before changing anything ===');
+  ExtractTemporaryFile('lib-verify.ps1');
+  ExtractTemporaryFile('pre-update-backup.ps1');
+
+  ResultCode := RunPowerShellFileLogged(ExpandConstant('{tmp}\pre-update-backup.ps1'),
+      '-InstallDir ' + ShellQuote(ExpandConstant('{app}')) +
+      ' -DataDir '   + ShellQuote(ExpandConstant('{commonappdata}\Mehvar')),
+      ConsoleLog, Output);
+
+  if ResultCode <> 0 then
+  begin
+    AppendLog('PRE-UPDATE BACKUP FAILED. Setup stopped before changing anything.');
+    Result :=
+      'Mehvar could not back up this pharmacy''s records, so Setup has stopped' + #13#10 +
+      'before changing anything. The installed version is untouched and keeps' + #13#10 +
+      'working.' + #13#10 + #13#10 +
+      Output + #13#10 +
+      LogAdvice();
+  end;
 end;
 
 { One line of install-status.txt, which install-services.ps1 writes. }
