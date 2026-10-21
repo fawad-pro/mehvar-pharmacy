@@ -552,6 +552,22 @@ exception visibility.
   F10 to switch user", were the identical bug — silent, only because that key
   has not moved yet. Both now call `keyFor('switch-user')` too.
 
+## Things Day 19 established
+
+- **Never renumber a migration that has run anywhere.** drizzle knows an
+  applied migration only by its journal `when`; a cherry-picked migration with
+  a regenerated `when` is a NEW migration to every database that ran the
+  original. That is what broke `0009_supplier_credit` on databases that had
+  run it as `0006_supplier_credit`. A colliding number on a branch is resolved
+  before it runs anywhere, or by keeping the original `when`.
+- **If one is renumbered anyway, register it in the same commit**
+  (`scripts/db/renumbered-migrations.ts`). The database's row for the former
+  `when` is proof only while its hash equals the current file's, so the file is
+  never edited afterwards; `renumbered-migrations.test.ts` fails if it is.
+- **"Already exists" in a migration is a history question, not a DDL one.** The
+  tempting fix was `IF NOT EXISTS` in 0009, which would also have hidden every
+  future drift. The answer was in `git log` and the recorded hash.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

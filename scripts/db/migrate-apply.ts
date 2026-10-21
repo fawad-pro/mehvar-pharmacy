@@ -14,9 +14,20 @@
  * which sits at the same depth whether it runs from `scripts/db/` in a
  * checkout or is bundled into `app/bin/db/` or `app/bin/ops/` in the package.
  */
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Pool } from 'pg';
@@ -30,6 +41,12 @@ import {
   type AppliedMigration,
   type JournalEntry,
 } from './migration-status';
+import {
+  describeRepair,
+  planRenumberRepairs,
+  type RecordedRow,
+  type RenumberRepair,
+} from './renumbered-migrations';
 
 /** A directory that exists and holds at least one `.sql` file. */
 function looksLikeMigrations(candidate: string): boolean {
@@ -73,10 +90,18 @@ export async function applyMigrations(url: string): Promise<void> {
   const pool = new Pool({ connectionString: url });
   try {
     const before = compareJournal(journal, await readApplied(pool));
+    const repaired = await recordRenumbered(pool, folder, journal);
     await migrate(drizzle(pool), { migrationsFolder: folder });
     const after = compareJournal(journal, await readApplied(pool));
 
-    console.log(describeRun(target, before, after));
+    console.log(
+      describeRun(
+        target,
+        before,
+        after,
+        repaired.map((repair) => repair.entry.tag),
+      ),
+    );
 
     /*
      * The check the old success message stood in for.
@@ -90,6 +115,112 @@ export async function applyMigrations(url: string): Promise<void> {
     assertJournalApplied(target, after);
   } finally {
     await pool.end();
+  }
+}
+
+/**
+ * Records migrations this database already ran under an earlier number, so
+ * drizzle does not run them again. See `renumbered-migrations.ts` for the
+ * history and the rule; this is only the part that touches the database.
+ *
+ * Everything that would refuse is checked before anything changes. Then, for
+ * each repair in journal order: migrate up to the entry BEFORE it — drizzle
+ * runs only what is newer than the newest recorded row, so a database whose
+ * newest row is the branch's (dated 2026-08-11) still needs licensing's
+ * 0006-0008 run first — and add the row drizzle would have written. No
+ * existing row is changed.
+ */
+async function recordRenumbered(
+  pool: Pool,
+  folder: string,
+  journal: readonly JournalEntry[],
+): Promise<readonly RenumberRepair[]> {
+  if (journal.length === 0) return [];
+
+  // drizzle's own reading of the folder, so the hashes are the ones it records.
+  const hashes = new Map(
+    readMigrationFiles({ migrationsFolder: folder }).map((meta) => [meta.folderMillis, meta.hash]),
+  );
+  const hashed = journal.map((entry) => ({ ...entry, hash: hashes.get(entry.when) ?? '' }));
+  const plan = planRenumberRepairs(hashed, await readRecorded(pool));
+
+  const refusals = [...plan.refusals];
+  for (const repair of plan.repairs) {
+    if (!(await evidencePresent(pool, repair))) refusals.push(missingEvidence(repair));
+  }
+  if (refusals.length > 0) throw new Error(refusals.join('\n\n'));
+
+  for (const repair of plan.repairs) {
+    const index = journal.findIndex((entry) => entry.when === repair.entry.when);
+    await migrateEntries(pool, folder, journal.slice(0, index));
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query<{ present: boolean }>(
+        `SELECT (${repair.renumbered.evidence}) AS present`,
+      );
+      if (rows[0]?.present !== true) throw new Error(missingEvidence(repair));
+      await client.query(
+        `INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+         SELECT $1, $2::bigint
+          WHERE NOT EXISTS (SELECT 1 FROM drizzle.__drizzle_migrations WHERE created_at = $2::bigint)`,
+        [repair.entry.hash, String(repair.entry.when)],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    console.log(describeRepair(repair));
+  }
+
+  return plan.repairs;
+}
+
+async function evidencePresent(pool: Pool, repair: RenumberRepair): Promise<boolean> {
+  const { rows } = await pool.query<{ present: boolean }>(
+    `SELECT (${repair.renumbered.evidence}) AS present`,
+  );
+  return rows[0]?.present === true;
+}
+
+function missingEvidence(repair: RenumberRepair): string {
+  const { entry, renumbered } = repair;
+  return [
+    `${entry.tag} is recorded as applied under ${renumbered.formerTag}, but what it`,
+    'creates is not all present, so the database has been changed by hand since.',
+    'Nothing has been changed. Take a backup and have this database looked at.',
+  ].join('\n');
+}
+
+/**
+ * drizzle's migrate, over only these journal entries: the same folder,
+ * staged with a shortened journal. A no-op when they are all recorded.
+ */
+async function migrateEntries(
+  pool: Pool,
+  folder: string,
+  entries: readonly JournalEntry[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const raw = JSON.parse(readFileSync(join(folder, 'meta', '_journal.json'), 'utf8')) as {
+    entries: Array<{ tag: string }>;
+  };
+  const tags = new Set(entries.map((entry) => entry.tag));
+  const staged = mkdtempSync(join(tmpdir(), 'mehvar-migrate-'));
+  try {
+    mkdirSync(join(staged, 'meta'));
+    for (const tag of tags) copyFileSync(join(folder, `${tag}.sql`), join(staged, `${tag}.sql`));
+    writeFileSync(
+      join(staged, 'meta', '_journal.json'),
+      JSON.stringify({ ...raw, entries: raw.entries.filter((entry) => tags.has(entry.tag)) }),
+    );
+    await migrate(drizzle(pool), { migrationsFolder: staged });
+  } finally {
+    rmSync(staged, { recursive: true, force: true });
   }
 }
 
@@ -128,11 +259,15 @@ function readJournal(folder: string): JournalEntry[] {
  * migrated, which is the normal first run.
  */
 async function readApplied(pool: Pool): Promise<AppliedMigration[]> {
+  return (await readRecorded(pool)).map((row) => ({ createdAt: row.createdAt }));
+}
+
+async function readRecorded(pool: Pool): Promise<RecordedRow[]> {
   try {
-    const { rows } = await pool.query<{ created_at: string }>(
-      'SELECT created_at FROM drizzle.__drizzle_migrations ORDER BY created_at',
+    const { rows } = await pool.query<{ created_at: string; hash: string }>(
+      'SELECT created_at, hash FROM drizzle.__drizzle_migrations ORDER BY created_at',
     );
-    return rows.map((row) => ({ createdAt: Number(row.created_at) }));
+    return rows.map((row) => ({ createdAt: Number(row.created_at), hash: row.hash }));
   } catch {
     return [];
   }

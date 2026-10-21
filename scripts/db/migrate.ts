@@ -24,5 +24,11 @@ async function main(): Promise<void> {
 
 main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error);
+  // drizzle wraps the database's own error, and its message is only the failed
+  // query. The reason ("relation ... already exists") is in the cause; without
+  // it the 0009 failure printed a CREATE TABLE and no explanation.
+  if (error instanceof Error && error.cause instanceof Error) {
+    console.error(`\nCause: ${error.cause.message}`);
+  }
   process.exit(1);
 });

@@ -85,6 +85,21 @@ describe('describing what the run did', () => {
     expect(message).not.toContain('0000_first');
   });
 
+  it('does not report a migration it only recorded as applied', () => {
+    // renumbered-migrations.ts: recorded because it already ran, not re-run.
+    const before = compareJournal(journal, [{ createdAt: 100 }]);
+    const after = compareJournal(journal, [
+      { createdAt: 100 },
+      { createdAt: 200 },
+      { createdAt: 300 },
+    ]);
+    const message = describeRun('demo on localhost', before, after, ['0001_second']);
+
+    expect(message).toContain('applied 1 migration(s); recorded 1');
+    expect(message).toContain('+ 0002_third');
+    expect(message).not.toContain('+ 0001_second');
+  });
+
   it('always names the database, so "which one did that touch?" is never a question', () => {
     const state = compareJournal(journal, []);
     expect(describeRun('mehvar_pharmacy on localhost:5432', state, state)).toContain(

@@ -2,6 +2,41 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Migration 0009 on databases that ran supplier credit early (Day 19)
+
+`db:migrate` failed on databases that had run supplier credit from its original
+branch: 0009 tried to create `supplier_payments` again, the batch rolled back,
+0010 never ran, and the Day screen crashed on `purchases.credit_tracked`.
+
+**Root cause.** Supplier credit was written as migration `0006_supplier_credit`
+(a79e57d, journal `when` 1786460433684) on a branch that diverged from main.
+Main had since taken 0006–0008 for licensing, so the work was cherry-picked as
+`0009_supplier_credit` with a regenerated `when` (1790111708134). The SQL is
+byte-identical (git blob 408d5e0a, SHA-256 7f6808b1…). drizzle recognises an
+applied migration only by its `when`, so on any database that had run the
+branch, 0009 looked new and re-ran its `CREATE TABLE`. On a database that had
+not met main yet, licensing 0006–0008 rolled back with it.
+
+**Fix.** `scripts/db/renumbered-migrations.ts` registers the renumbering, and
+`applyMigrations` records 0009 as applied when, and only when, the database
+recorded the former `when` with the current file's hash and its objects are
+present. It first migrates up to 0008, so licensing still runs. It adds one
+row and changes no existing row. A former-number row with a different hash is
+refused before anything changes. No migration file was edited and no `when`
+moved. Restore, the restore drill and the packaged installer all migrate
+through `applyMigrations`, so they inherit the fix. `db:migrate` now also prints
+the database's own error (`Cause: relation … already exists`); drizzle's
+message alone was the bare query.
+
+- Historical purchases keep PCN-007's decided semantics: every purchase that
+  existed when 0010 ran is untracked, including ones recorded on the branch.
+- Tests: `tests/renumbered-migration.integration.test.ts` rebuilds the affected
+  database from the branch's journal with trading on it, in both histories (seen
+  failing before the fix). It asserts every record and row version unchanged,
+  the schema identical to a fresh install, and a second run a no-op. A hash
+  mismatch is refused. `tests/renumbered-migrations.test.ts` pins the
+  registry's hash to the file.
+
 ## Session — Release hardening for the first pharmacy (Day 18)
 
 The installer, upgrade, recovery and diagnostics paths, closed against a real
