@@ -48,14 +48,14 @@ export interface PurchaseCommand {
   readonly invoiceDate: string | null;
   readonly note: string | null;
   /**
-   * [PCN-006] Cash paid to the supplier now, in paisa. The remainder of the
+   * [PCN-007] Cash paid to the supplier now, in paisa. The remainder of the
    * invoice cost is put on the supplier's account (the mirror of an udhaar
    * sale). Zero is a full-credit delivery; the invoice total is a full-cash
    * one — which is what the entry screen defaults to, so the ordinary case is
    * unchanged.
    *
    * **Absent means "paid in full".** A command that does not mention it owes the
-   * supplier nothing, which is exactly the pre-PCN-006 behaviour every purchase
+   * supplier nothing, which is exactly the pre-PCN-007 behaviour every purchase
    * had — so existing callers need no change and a cash purchase carries no
    * credit by default.
    */

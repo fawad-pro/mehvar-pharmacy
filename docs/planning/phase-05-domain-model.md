@@ -89,7 +89,9 @@ Cash placed into or taken out of the drawer outside of sales: opening float, own
 
 ## 6. Explicitly out of the model (V1)
 
-Prescriptions and clinical data; supplier balances/payables; expenses beyond drawer cash movements; loyalty, pricing tiers, or customer data beyond name+phone; multi-branch stock; purchase orders (a low-stock *list* exists; ordering happens on WhatsApp as it does today); inter-pharmacy anything.
+Prescriptions and clinical data; expenses beyond drawer cash movements; loyalty, pricing tiers, or customer data beyond name+phone; multi-branch stock; purchase orders (a low-stock *list* exists; ordering happens on WhatsApp as it does today); inter-pharmacy anything.
+
+*Amended by PCN-007:* supplier payables are **in** the model. What a pharmacy owes a supplier is a derived position — Σ (invoice cost − cash paid at receiving) over purchases whose payment was recorded, minus Σ supplier payments — the mirror of a customer balance (invariant 3), never stored as authority. Purchases entered before supplier credit existed have no recorded payment and owe nothing.
 
 ## 7. Exports to later phases
 

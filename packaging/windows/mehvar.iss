@@ -60,6 +60,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 ; the payload has to decompress the whole payload to reach it.
 Source: "{#ScriptsDir}pre-update-backup.ps1"; DestDir: "{tmp}"; Flags: dontcopy
 Source: "{#ScriptsDir}lib-verify.ps1";        DestDir: "{tmp}"; Flags: dontcopy
+; Also extracted by PrepareToInstall, after the backup: stops the services so
+; no file is locked and the old application never runs against a new schema.
+Source: "{#ScriptsDir}stop-services.ps1";     DestDir: "{tmp}"; Flags: dontcopy
+Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{tmp}"; Flags: dontcopy
 ; Excludes: the build machine's .env must never ship (scripts/package/payload-env.ts).
 ; package:build strips it and package:installer refuses a payload holding one;
 ; this is the last layer, because Next loads app\.env at startup on the shop machine.
@@ -126,9 +130,36 @@ var
   { Set if SaveStringToFile ever fails, so a failure dialog never points at a
     log that does not exist. }
   LogUnwritable: Boolean;
+  { True when PrepareToInstall stopped the services for this run, and
+    install-services.ps1 has not yet been started to bring them back. Read by
+    DeinitializeSetup so a cancelled or failed copy never leaves the shop with
+    no counter. }
+  ServicesStopped: Boolean;
+  PostInstallStarted: Boolean;
+  { Decided once, when the wizard opens -- see IsExistingPharmacy. }
+  ExistingPharmacy: Boolean;
+
+{ An installed pharmacy already exists on this machine. installation.json is
+  written by init.js only once a pharmacy has been created, and nothing deletes
+  it -- unlike first-run.txt, which holds the pairing key and owner password in
+  plain text and which a careful shop removes after pairing. }
+function IsExistingPharmacy(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{commonappdata}\Mehvar\installation.json'));
+end;
+
+{ An upgrade or repair keeps the pharmacy, its name and its owner PIN exactly as
+  they are (init.js does nothing when one exists). Asking for them again would
+  let an owner believe a new PIN had been set when it had not. }
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := ExistingPharmacy and ((PageID = ShopPage.ID) or (PageID = PinPage.ID));
+end;
 
 procedure InitializeWizard;
 begin
+  ExistingPharmacy := IsExistingPharmacy();
+
   { Everything `mehvar init` needs, asked once, in the installer, because there
     is no wizard in the product for roadmap Phase 1 — the Settings screen
     already covers the rest. }
@@ -265,8 +296,8 @@ end;
   never runs a line, so its own logging is irrelevant; the only record of why
   is what powershell.exe printed to stderr. That used to go to a hidden window
   and vanish. Now it lands in a file Setup reads back. }
-{ Takes a full path: the pre-update backup runs from {tmp}, before anything is
-  installed under {app}. }
+{ Takes a full path: the pre-update backup runs from Setup's temporary folder,
+  before anything is installed in the application folder. }
 function RunPowerShellFileLogged(ScriptPath, Extra, ConsoleLog: String; var Output: String): Integer;
 var
   ResultCode: Integer;
@@ -299,7 +330,8 @@ begin
   Result := ResultCode;
 end;
 
-{ The scripts install-services.ps1 and friends, installed under {app}\packaging. }
+{ The scripts install-services.ps1 and friends, installed in the application
+  folder's packaging subfolder. }
 function RunPowerShellLogged(ScriptName, Extra, ConsoleLog: String; var Output: String): Integer;
 begin
   Result := RunPowerShellFileLogged(ExpandConstant('{app}\packaging\') + ScriptName, Extra,
@@ -325,9 +357,10 @@ end;
   update does not happen. On a first install there is no database, the script
   says so, and this returns '' at once.
 
-  Both scripts are Flags: dontcopy entries -- extracted to {tmp} for this and
-  never installed -- because nothing under {app} can be trusted to be current
-  yet, and on a first install nothing is there at all.
+  Both scripts are Flags: dontcopy entries -- extracted to Setup's temporary
+  folder for this and never installed -- because nothing in the application
+  folder can be trusted to be current yet, and on a first install nothing is
+  there at all.
   ------------------------------------------------------------------------ }
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
@@ -356,6 +389,43 @@ begin
       'working.' + #13#10 + #13#10 +
       Output + #13#10 +
       LogAdvice();
+    Exit;
+  end;
+
+  { Backed up; now stop the services. Windows will not overwrite a running
+    node.exe, MehvarNode.exe or postgres.exe, and the old application must not
+    be serving while the schema migrates. If one will not stop, stop-services.ps1
+    has already started again whatever it stopped. }
+  ExtractTemporaryFile('lib-service.ps1');
+  ExtractTemporaryFile('stop-services.ps1');
+  ResultCode := RunPowerShellFileLogged(ExpandConstant('{tmp}\stop-services.ps1'), '',
+      LogDir() + '\stop-services-console.log', Output);
+  if ResultCode <> 0 then
+  begin
+    AppendLog('STOPPING SERVICES FAILED. Setup stopped before changing anything.');
+    Result :=
+      'Mehvar''s services could not be stopped for the update, so Setup has' + #13#10 +
+      'stopped before changing anything. The installed version keeps working.' + #13#10 + #13#10 +
+      Output + #13#10 +
+      LogAdvice();
+    Exit;
+  end;
+  ServicesStopped := True;
+end;
+
+{ Setup is exiting. If it stopped the services and never reached
+  install-services.ps1 -- cancelled during the copy, or the copy failed -- start
+  them again: the update did not happen, and the counter must not stay down
+  because of it. Best effort; both services also start with Windows. }
+procedure DeinitializeSetup();
+var
+  ResultCode: Integer;
+begin
+  if ServicesStopped and not PostInstallStarted then
+  begin
+    AppendLog('Setup ended before provisioning; starting the services it had stopped.');
+    Exec(ExpandConstant('{sys}\sc.exe'), 'start MehvarPostgres', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\sc.exe'), 'start MehvarNode', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   end;
 end;
 
@@ -393,6 +463,17 @@ begin
   Result := ProvisioningOk and FileExists(ExpandConstant('{commonappdata}\Mehvar\first-run.txt'));
 end;
 
+{ What a provisioning failure means for the shop's records. }
+function UpgradeFailureAdvice(): String;
+begin
+  if ExistingPharmacy then
+    Result := 'The pharmacy''s records were backed up before anything changed, to' + #13#10 +
+              ExpandConstant('{commonappdata}\Mehvar\backups\pre-update') + '.' + #13#10 +
+              'Run Setup again; do not delete anything.' + #13#10
+  else
+    Result := 'Nothing has been lost, and no pharmacy data was created.' + #13#10;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -407,6 +488,7 @@ begin
 
   DataDir := ExpandConstant('{commonappdata}\Mehvar');
   ConsoleLog := LogDir() + '\install-console.log';
+  PostInstallStarted := True;
   ProvisioningOk := False;
   ChecksOk := True;
 
@@ -448,7 +530,7 @@ begin
       'Setup could not finish configuring Mehvar.' + #13#10 + #13#10 +
       'Failed at:  ' + Step + #13#10 +
       'Reason:' + #13#10 + Detail + #13#10 + #13#10 +
-      'Nothing has been lost, and no pharmacy data was created.' + #13#10 +
+      UpgradeFailureAdvice() +
       LogAdvice();
 
     AppendLog('PROVISIONING FAILED at: ' + Step);
@@ -533,11 +615,12 @@ Filename: "powershell.exe"; \
 ; app\ carries the server, node_modules and the compiled bin\ scripts.
 Type: filesandordirs; Name: "{app}\app"
 
-; The three .cmd wrappers are written by install-services.ps1 at post-install,
+; The .cmd wrappers are written by install-services.ps1 at post-install,
 ; not installed by Setup — so Setup does not know to remove them, and without
-; these lines an uninstall leaves {app} behind holding three orphaned files.
+; these lines an uninstall leaves {app} behind holding orphaned files.
 Type: files; Name: "{app}\mehvar-backup.cmd"
 Type: files; Name: "{app}\mehvar-support.cmd"
+Type: files; Name: "{app}\mehvar-restore.cmd"
 
 ; WinSW's service host, descriptor and its own logs, all written post-install.
 Type: files; Name: "{app}\MehvarNode.exe"

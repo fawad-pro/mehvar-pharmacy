@@ -127,7 +127,7 @@ export function DaySurface({
   cashMovements: CashMovementExceptionRow[];
   lateSynced: LateSyncedRow[];
   hasOpeningFloat: boolean;
-  /** [PCN-006] What the pharmacy owes suppliers — a position, always all-time. */
+  /** [PCN-007] What the pharmacy owes suppliers — a position, always all-time. */
   supplierOwedPaisa: number;
 }) {
   const isToday = day === today;
@@ -279,7 +279,7 @@ export function DaySurface({
           {figures.saleCount} sale{figures.saleCount === 1 ? '' : 's'} →
         </Link>
         <span>{figures.unitsSold.toLocaleString()} units sold</span>
-        {/* [PCN-006] The payable position — the mirror of "Owed to you". Shown
+        {/* [PCN-007] The payable position — the mirror of "Owed to you". Shown
             only when the shop is actually carrying supplier credit, so a
             cash-only pharmacy never reads a permanent "Rs 0.00" it learns to
             ignore. Paid down from the Purchases screen. */}

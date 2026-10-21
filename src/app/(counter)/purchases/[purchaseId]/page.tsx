@@ -52,10 +52,14 @@ export default async function PurchaseDetailPage({
     0,
   );
   const bonusBase = purchase.lines.reduce((sum, line) => sum + line.bonusQtyBase, 0);
-  // [PCN-006] What was still owed to the supplier when this invoice was
+  // [PCN-007] What was still owed to the supplier when this invoice was
   // received. A negative would be an overpayment; clamped, since "on credit"
   // never means the supplier owes us on a single invoice.
-  const creditPaisa = Math.max(0, totalCostPaisa - purchase.cashPaidPaisa);
+  // Untracked (entered before supplier credit existed): nothing was recorded
+  // about payment, so nothing is shown as owed.
+  const creditPaisa = purchase.creditTracked
+    ? Math.max(0, totalCostPaisa - purchase.cashPaidPaisa)
+    : 0;
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
@@ -153,7 +157,7 @@ export default async function PurchaseDetailPage({
             {formatPaisa(paisa(totalCostPaisa), { withSymbol: true })}
           </span>
         </div>
-        {/* [PCN-006] Paid vs owed — shown only when the invoice was not settled
+        {/* [PCN-007] Paid vs owed — shown only when the invoice was not settled
             in full, so an ordinary cash purchase reads exactly as before. */}
         {creditPaisa > 0 ? (
           <>
@@ -164,11 +168,21 @@ export default async function PurchaseDetailPage({
               </span>
             </div>
             <div className="text-amber flex justify-between font-medium">
-              <span>On credit{purchase.supplierName ? ` — owed to ${purchase.supplierName}` : ''}</span>
-              <span className="numeral">{formatPaisa(paisa(creditPaisa), { withSymbol: true })}</span>
+              <span>
+                On credit{purchase.supplierName ? ` — owed to ${purchase.supplierName}` : ''}
+              </span>
+              <span className="numeral">
+                {formatPaisa(paisa(creditPaisa), { withSymbol: true })}
+              </span>
             </div>
           </>
         ) : null}
+        {purchase.creditTracked ? null : (
+          <p className="text-ink/60 text-xs">
+            Payment not recorded — this invoice was entered before Mehvar tracked supplier credit,
+            so it is not counted in what is owed to suppliers.
+          </p>
+        )}
         {bonusBase > 0 ? (
           <p className="text-ink/60 text-xs">
             Includes bonus stock received free — it lowers the effective cost per unit without

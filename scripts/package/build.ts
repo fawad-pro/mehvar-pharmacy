@@ -66,6 +66,7 @@ const OPS_ENTRYPOINTS = [
   'scripts/catalog/import-pack.ts',
   'scripts/ops/backup.ts',
   'scripts/ops/restore-drill.ts',
+  'scripts/ops/restore.ts',
   'scripts/ops/support-bundle.ts',
   // The service entry point WinSW runs. Bundled so `dotenv` is compiled in.
   'scripts/ops/serve.ts',
@@ -155,6 +156,43 @@ function assertWindowsNativeModules(): void {
 }
 
 /**
+ * Put the Windows argon2 binary IN THE PAYLOAD, and prove it is there.
+ *
+ * `assertWindowsNativeModules` checks the build machine's node_modules, which
+ * is necessary and not sufficient: Next traces the binary for the platform the
+ * build RUNS on, so a payload assembled anywhere but Windows carried only the
+ * Linux builds of @node-rs/argon2 — and the installed counter would have failed
+ * at the first PIN hash, on the login screen. Found by listing a real payload.
+ * Copying the Windows package beside the traced one is all @node-rs/argon2
+ * needs: it requires `@node-rs/argon2-win32-x64-msvc` by name at runtime.
+ */
+function bundleWindowsNativeModules(): void {
+  const names = ['@node-rs/argon2-win32-x64-msvc', '@node-rs/argon2-win32-arm64-msvc'];
+  for (const name of names) {
+    const source = join(root, 'node_modules', name);
+    const target = join(out, 'app', 'node_modules', name);
+    if (existsSync(source) && !existsSync(target)) cpSync(source, target, { recursive: true });
+  }
+  const present = names.filter((name) =>
+    existsSync(
+      join(
+        out,
+        'app',
+        'node_modules',
+        name,
+        `${name.split('/')[1]?.replace('argon2-', 'argon2.')}.node`,
+      ),
+    ),
+  );
+  if (present.length === 0) {
+    throw new Error(
+      'The payload has no Windows build of @node-rs/argon2 (app/node_modules/@node-rs/argon2-win32-*),\n' +
+        'so the installed counter would fail at the first PIN hash. See assertWindowsNativeModules.',
+    );
+  }
+}
+
+/**
  * Every external must actually be in the payload we just assembled.
  *
  * `external` is a promise that Node will find the module at runtime. Nothing
@@ -192,6 +230,57 @@ function runNpm(args: string[]): void {
   });
 
   execFileSync(command, resolved, { cwd: root, stdio: 'inherit', shell });
+}
+
+/**
+ * What VERSION records: enough to name the exact source a pharmacy runs.
+ *
+ * Every build used to be `0.0.0`, indistinguishable from every other, so a
+ * support bundle could not say which release a shop was on. The commit makes
+ * it exact, and `.dirty` says when the tree had uncommitted changes — a build
+ * nobody can reproduce, which a release must not be. MEHVAR_BUILD_COMMIT
+ * stands in where there is no git checkout (an exported tree in CI).
+ */
+function buildIdentity(): {
+  version: string;
+  build: string;
+  commit: string;
+  dirty: boolean;
+  builtAt: string;
+} {
+  const version = packageVersion();
+  const git = (args: string[]): string =>
+    execFileSync('git', args, {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+
+  let commit = process.env.MEHVAR_BUILD_COMMIT?.trim() ?? '';
+  let dirty = false;
+  if (commit === '') {
+    try {
+      commit = git(['rev-parse', '--short=12', 'HEAD']);
+      dirty = git(['status', '--porcelain']) !== '';
+    } catch {
+      throw new Error(
+        'Cannot read the git commit, so this build could not be identified. Build from a git\n' +
+          'checkout, or set MEHVAR_BUILD_COMMIT to the commit the tree was exported from.',
+      );
+    }
+  }
+  if (dirty) {
+    console.warn(
+      '\n  ⚠ The tree has uncommitted changes: VERSION is marked .dirty. Do not ship it.\n',
+    );
+  }
+  return {
+    version,
+    build: `${version}+${commit}${dirty ? '.dirty' : ''}`,
+    commit,
+    dirty,
+    builtAt: new Date().toISOString(),
+  };
 }
 
 function packageVersion(): string {
@@ -271,6 +360,7 @@ async function main(): Promise<void> {
   });
 
   assertExternalsArePresent();
+  bundleWindowsNativeModules();
 
   step('Copying migrations');
   cpSync(join(root, 'src', 'db', 'migrations'), join(out, 'migrations'), { recursive: true });
@@ -289,11 +379,7 @@ async function main(): Promise<void> {
 
   assertNoEnvFiles(join(out, 'app'));
 
-  writeFileSync(
-    join(out, 'VERSION'),
-    `${JSON.stringify({ version: packageVersion(), builtAt: new Date().toISOString() }, null, 2)}\n`,
-    'utf8',
-  );
+  writeFileSync(join(out, 'VERSION'), `${JSON.stringify(buildIdentity(), null, 2)}\n`, 'utf8');
 
   console.log(`\n  Package assembled at ${out}`);
   console.log('  Next: packaging/windows/fetch-runtimes.ps1, then compile mehvar.iss.\n');

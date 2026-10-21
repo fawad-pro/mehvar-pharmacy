@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 
 import { findIscc } from './iscc-location';
 import { assertNoEnvFiles } from './payload-env';
+import { parseRelease } from '../../src/lib/release';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const payload = join(root, 'dist', 'package');
@@ -106,7 +107,25 @@ function main(): void {
     );
   }
 
-  const version = packageVersion();
+  // The payload's own identity, so the .exe, Add/Remove Programs and the
+  // support bundle all name the same build.
+  const release = parseRelease(readFileSync(join(payload, 'VERSION'), 'utf8'));
+  if (release === undefined) {
+    throw new Error('dist/package/VERSION is unreadable. Run npm run package:build again.');
+  }
+  if (release.build.endsWith('.dirty') && process.env.MEHVAR_ALLOW_DIRTY_BUILD !== '1') {
+    throw new Error(
+      `The payload is ${release.build}: built from a tree with uncommitted changes, so nobody\n` +
+        'could rebuild what it contains. Commit, rebuild, then compile. (MEHVAR_ALLOW_DIRTY_BUILD=1\n' +
+        'overrides, for a rehearsal that will never reach a pharmacy.)',
+    );
+  }
+  const version = release.build;
+  if (release.version !== packageVersion()) {
+    throw new Error(
+      `The payload was built as ${release.version}, but package.json says ${packageVersion()}. Rebuild it.`,
+    );
+  }
   console.log(`\n  Compiling with ${iscc}`);
   console.log(`  Version ${version}\n`);
 

@@ -14,6 +14,11 @@
  * pharmacy's own database — a drill that could damage the thing it protects
  * would not be run often enough to be worth having.
  *
+ * A dump restores into the schema it was taken under, which may be older than
+ * the installed version, so the drill migrates it first — the same step a real
+ * recovery onto a new machine takes (OPERATIONS.md, "Replacing the counter
+ * PC").
+ *
  * `pg_restore --no-acl` (below) strips every GRANT along with the dump, so a
  * freshly restored database is readable by its owner and by no one else — the
  * application connects as a separate, non-owning role (PCN-001) that would be
@@ -25,25 +30,15 @@ import 'dotenv/config';
 
 import { join } from 'node:path';
 
-import { applyGrants } from '../db/grants-apply';
+import { applyGrants, assertEventTablesImmutable } from '../db/grants-apply';
+import { applyMigrations } from '../db/migrate-apply';
 import { backupDir, latestBackup } from '../../src/lib/backup';
 
+import { withDatabase } from './database-url';
 import { run } from './run';
 
 /** Distinct enough that no live database could collide with it. */
 const SCRATCH_DB = 'mehvar_restore_drill';
-
-/**
- * Swap the database name in a connection URL, keeping credentials and host.
- *
- * The drill connects to `postgres` to create and drop the scratch database,
- * then to the scratch database itself to verify it.
- */
-export function withDatabase(url: string, database: string): string {
-  const parsed = new URL(url);
-  parsed.pathname = `/${database}`;
-  return parsed.toString();
-}
 
 async function psql(url: string, statement: string): Promise<void> {
   await run('psql', [url, '-v', 'ON_ERROR_STOP=1', '-c', statement], { quiet: true });
@@ -107,10 +102,23 @@ async function main(): Promise<void> {
       quiet: true,
     });
 
+    /*
+     * Migrate BEFORE granting. A dump is a snapshot of the schema it was taken
+     * under: one from before migration 0009 has no `supplier_payments`, and the
+     * grants (which name every current table) failed on it, so every backup
+     * older than the installed version was reported as sev-1. Restoring it
+     * into the CURRENT schema is also exactly what a real recovery does.
+     */
+    await applyMigrations(scratchUrl);
+
     // Re-grant before verifying anything: --no-acl means the app role has
     // nothing yet, and a verify step run as the owner would never notice.
     process.env.DATABASE_ADMIN_URL = scratchUrl;
     await applyGrants();
+
+    // Access through the application role, both halves: it can read (the
+    // verifier below runs as it) and it cannot rewrite history (this).
+    await assertEventTablesImmutable(scratchAppUrl);
 
     /*
      * Point the database client at the scratch database, AS THE APPLICATION

@@ -161,3 +161,24 @@ function Update-EnvFile {
     Write-EnvFile -Path $Path -Lines $merge.Lines
     return $merge
 }
+
+<#
+.SYNOPSIS
+    Mask credentials in a line before it is written to the install log.
+
+.DESCRIPTION
+    The install log recorded every child command line -- including
+    `psql postgresql://mehvar:<owner password>@localhost:5433/...` -- and init's
+    "Pairing key" and "Owner pass" lines, and the support bundle then carried
+    its tail over WhatsApp. The same rules as src/lib/redact.ts, which redacts
+    the bundle itself: keep the shape of the line, drop the secret.
+#>
+function Protect-LogText {
+    param([AllowEmptyString()] [string] $Text)
+
+    if ([string]::IsNullOrEmpty($Text)) { return $Text }
+    $masked = $Text -replace '(\b[a-zA-Z][a-zA-Z0-9+.-]*://[^:/@\s]+:)[^@\s]+@', '$1<redacted>@'
+    $masked = $masked -creplace '\b([A-Z0-9_]*(?:PASSWORD|SECRET|TOKEN|KEY)[A-Z0-9_]*\s*=\s*)\S+', '$1<redacted>'
+    $masked = $masked -replace '\b(Pairing key|Setup key|Owner pass(?:word)?)(:?\s+)\S+', '$1$2<redacted>'
+    return $masked
+}

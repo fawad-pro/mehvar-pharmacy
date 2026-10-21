@@ -626,8 +626,8 @@ recommendation. The founder locked the five decisions this note records.
 
 ### The decision, in one line
 
-The offline product is **perpetually licensed**. The licence answers *"is this
-installation authorized?"* — never *"has this customer paid this period?"* A new
+The offline product is **perpetually licensed**. The licence answers _"is this
+installation authorized?"_ — never _"has this customer paid this period?"_ A new
 **unlicensed** installation may operate as a **full evaluation for 30 days**;
 after that, without activation, it becomes **unauthorized (restricted)**. A valid,
 bound, perpetual licence makes the installation **authorized with full
@@ -642,17 +642,18 @@ on the authorized path.
         30-DAY EVALUATION  (full functionality)
               ↓
       ┌───────┴────────┐
-   activate           no activation
-   valid licence      after 30 days
-      ↓                   ↓
-  AUTHORIZED          UNAUTHORIZED
-  (full, forever)     (restricted)
-      ↑
-      └── revocation (separate, signed, time-independent) → RESTRICTED
+
+activate no activation
+valid licence after 30 days
+↓ ↓
+AUTHORIZED UNAUTHORIZED
+(full, forever) (restricted)
+↑
+└── revocation (separate, signed, time-independent) → RESTRICTED
 
 The 30-day clock **belongs to the installation**, not to a customer, account, or
 purchased licence. It is not a trial entitlement, not a subscription, not a grace
-period, and not an expiry on the perpetual licence. Copying a *licensed* install
+period, and not an expiry on the perpetual licence. Copying a _licensed_ install
 to another machine yields **unbound** (restricted immediately) — it does not mint
 a fresh evaluation.
 
@@ -660,22 +661,22 @@ a fresh evaluation.
 
 Two capability tiers — **full** and **restricted** — across five states:
 
-| State | Definition | Tier |
-| --- | --- | --- |
-| **evaluation** | No valid bound licence, within 30 days of first use | full |
-| **authorized** | Valid signed token, bound to this installation, not revoked | full |
-| **unauthorized** | No valid bound licence, past 30 days | restricted |
-| **unbound** | Valid token, bound to a different installation (a copy) | restricted |
-| **revoked** | A valid signed revocation for this licence has been received | restricted |
+| State            | Definition                                                   | Tier       |
+| ---------------- | ------------------------------------------------------------ | ---------- |
+| **evaluation**   | No valid bound licence, within 30 days of first use          | full       |
+| **authorized**   | Valid signed token, bound to this installation, not revoked  | full       |
+| **unauthorized** | No valid bound licence, past 30 days                         | restricted |
+| **unbound**      | Valid token, bound to a different installation (a copy)      | restricted |
+| **revoked**      | A valid signed revocation for this licence has been received | restricted |
 
 `invalid` (bad signature / wrong pharmacy / unknown key / unreadable / format-too-
 new) resolves to restricted as well, with its own message.
 
 ### Resolution order (why the clock dies on activation)
 
-1. Valid signed **revocation** present → **revoked**. *(clock not read)*
-2. Valid signed token **bound here** → **authorized** → return. *(clock not read)*
-3. Valid token **bound elsewhere**, or token invalid → **unbound / invalid**. *(clock not read)*
+1. Valid signed **revocation** present → **revoked**. _(clock not read)_
+2. Valid signed token **bound here** → **authorized** → return. _(clock not read)_
+3. Valid token **bound elsewhere**, or token invalid → **unbound / invalid**. _(clock not read)_
 4. No valid token → read the evaluation clock: within 30 days → **evaluation**,
    else → **unauthorized**.
 
@@ -690,23 +691,23 @@ restricted tier.
 
 `✓ available · ✗ blocked · (read) view only`
 
-| Workflow | evaluation (≤30d) | unauthorized / unbound / revoked | authorized |
-| --- | --- | --- | --- |
-| Sales (new) | ✓ | ✗ | ✓ |
-| Quick items (W6) | ✓ | ✗ | ✓ |
-| Udhaar / credit sales (new) | ✓ | ✗ | ✓ |
-| **Settlement of EXISTING udhaar** | ✓ | **✓ (carve-out)** | ✓ |
-| **Drain already-captured offline sales (outbox)** | ✓ | **✓ (carve-out)** | ✓ |
-| Customers create/edit | ✓ | ✗ | ✓ |
-| Receiving stock / purchases | ✓ | ✗ | ✓ |
-| Stock adjustments | ✓ | ✗ | ✓ |
-| Tenant product create/edit | ✓ | ✗ | ✓ |
-| Printing | ✓ | reprint existing ✓; new follows sales | ✓ |
-| Reports | ✓ | ✓ (read) | ✓ |
-| Catalogue browse/search | ✓ | ✓ (read) | ✓ |
-| **Catalogue updates/import (signed packs)** | ✓ | **✓ (never gated)** | ✓ |
-| Settings / configuration | ✓ | licence activation ✓; rest ✗ | ✓ |
-| **Export / recovery** | ✓ | **✓ (always)** | ✓ |
+| Workflow                                          | evaluation (≤30d) | unauthorized / unbound / revoked      | authorized |
+| ------------------------------------------------- | ----------------- | ------------------------------------- | ---------- |
+| Sales (new)                                       | ✓                 | ✗                                     | ✓          |
+| Quick items (W6)                                  | ✓                 | ✗                                     | ✓          |
+| Udhaar / credit sales (new)                       | ✓                 | ✗                                     | ✓          |
+| **Settlement of EXISTING udhaar**                 | ✓                 | **✓ (carve-out)**                     | ✓          |
+| **Drain already-captured offline sales (outbox)** | ✓                 | **✓ (carve-out)**                     | ✓          |
+| Customers create/edit                             | ✓                 | ✗                                     | ✓          |
+| Receiving stock / purchases                       | ✓                 | ✗                                     | ✓          |
+| Stock adjustments                                 | ✓                 | ✗                                     | ✓          |
+| Tenant product create/edit                        | ✓                 | ✗                                     | ✓          |
+| Printing                                          | ✓                 | reprint existing ✓; new follows sales | ✓          |
+| Reports                                           | ✓                 | ✓ (read)                              | ✓          |
+| Catalogue browse/search                           | ✓                 | ✓ (read)                              | ✓          |
+| **Catalogue updates/import (signed packs)**       | ✓                 | **✓ (never gated)**                   | ✓          |
+| Settings / configuration                          | ✓                 | licence activation ✓; rest ✗          | ✓          |
+| **Export / recovery**                             | ✓                 | **✓ (always)**                        | ✓          |
 
 The two carve-outs are deliberate: an evaluator who extended real credit can still
 **collect** it and close balances, and offline sales already captured during
@@ -759,12 +760,12 @@ The evaluation boundary needs a trustworthy "first use" anchor and a
 rollback-resistant "now," and **only** those:
 
 - **First-use anchor** = `min(installationFirstSeenAt, earliestEvent,
-  tenantCreatedAt, earliestObservation)` — already resistant to file deletion and
+tenantCreatedAt, earliestObservation)` — already resistant to file deletion and
   trial reset. Retained.
 - **Rollback-resistant now** = `max(systemNow, witness, ledgerHighWater)`, where
   the **witness is the corroborated K-th-largest clock observation**. Retained,
   because it is what stops "set the clock back to evaluate forever."
-- **Removed:** `clockCeiling` (it existed to protect a *paying* customer from a
+- **Removed:** `clockCeiling` (it existed to protect a _paying_ customer from a
   poisoned witness; authorized installs no longer read the clock, so a forward
   clock fault can only shorten a pirate's own free evaluation — self-harm, never
   an exploit). Also removed: the `licenceIssuedAt` clock anchor and all
@@ -791,7 +792,7 @@ retained model.
 
 Kept in full, because it is exactly what a perpetual anti-copy licence needs:
 Ed25519 trust root; the private signing key held outside the application, build
-and CI; signed licence tokens; installation identity (able to *restore* its id
+and CI; signed licence tokens; installation identity (able to _restore_ its id
 rather than mint a new one); licence-to-installation binding on first use;
 controlled rebinding within the existing allowance; signed revocation; signed
 catalogue packs; tenant scoping; and the data-integrity guarantees. No hardware
@@ -800,7 +801,7 @@ fingerprinting.
 ### What is removed from the core
 
 Statuses `licensed / expiring / grace / stale / lapsed`; tier `full_notice`; the
-`trial` concept (renamed to *evaluation*, lengthened to 30 days); all
+`trial` concept (renamed to _evaluation_, lengthened to 30 days); all
 entitlement/grace/warn computation; `clockCeiling`; the online **renewal-token**
 path (revocation delivery may remain, dormant); and every "days remaining /
 renew" affordance on the authorized path.
@@ -840,10 +841,82 @@ describing licensing as subscription/expiry enforcement.
 ### Explicitly deferred — do NOT build under this note
 
 **Mehvar Care** (optional recurring service: cloud backup, automatic updates,
-owner mobile reporting, priority support, recovery assistance) — any *time-based*
+owner mobile reporting, priority support, recovery assistance) — any _time-based_
 entitlement lives there, never in the core licence; it may reuse the dormant
 signed-refresh transport and must never hold the core product, its data, or an
 already-obtained catalogue pack hostage. **Mehvar Cloud** (separate SaaS,
 own subscription) — out of scope; must not influence this offline design.
 
 ### Nothing implemented at the time of filing.
+
+---
+
+## PCN-007 — supplier credit was built without a note, and its migration turned purchase history into debt
+
+Session: release hardening (Day 18) · Raised: 2026-10-21 · Status: decided
+
+**Plan sections in tension.** Phase 5 §6, _Explicitly out of the model (V1)_:
+"supplier balances/payables". T4: "Any derived figure — a balance, a total, a
+stock count — can be expanded into the transactions that produced it." T2:
+"Corrections, not erasures." ADR-1: append-only records, derived truth.
+
+**The contradiction or gap.** Two things, the second caused by the first.
+
+1. Supplier credit (Day 17: `purchases.cash_paid_paisa`, `supplier_payments`,
+   "Owed to suppliers") is a payables feature, which Phase 5 §6 excludes, and no
+   note was ever filed for it. Its code and CHANGELOG cite "PCN-006", which is
+   the licensing note; the CHANGELOG also calls its migration 0006 (it is 0009).
+2. Migration 0009 added `cash_paid_paisa` with `DEFAULT 0 NOT NULL`. Every
+   purchase that already existed was entered with no "Paid now" field, so its 0
+   is a default, not a fact — and every one read as owed in full. The upgrade
+   rehearsal (a populated pre-0009 install upgraded to 0009) showed "Owed to
+   suppliers Rs 2,131,851.60" on the Day screen: the shop's entire purchase
+   history, presented as debt. The only way to clear it in the product was to
+   record supplier payments that never happened, which ADR-1 then makes
+   permanent. A figure that cannot be expanded into real transactions breaks T4.
+
+**Options.**
+
+- **A. Edit 0009 in place** to add the column nullable. Correct for databases
+  that have not run it; databases that have (development, test installs) keep
+  the old shape. drizzle matches migrations by timestamp, not content, so
+  nothing would notice — schema drift between installs, silently. Rejected.
+- **B. Backfill in a new migration**: `UPDATE purchases SET … WHERE
+cash_paid_paisa = 0`. Cannot tell a historical 0 from a purchase genuinely
+  recorded as fully on credit since, and it rewrites rows of an event table.
+  Against ADR-1 and T2.
+- **C. Record what is actually known** (implemented, uncommitted): migration
+  0010 adds `purchases.credit_tracked boolean`, added with `DEFAULT false` and
+  then switched to `DEFAULT true`. Every row that existed reads false through
+  PostgreSQL's stored default — no row is rewritten, no payment invented — and
+  every purchase recorded since reads true. Balances count tracked purchases
+  only; an untracked invoice's detail page says its payment was not recorded.
+  Forward-only, survives dump and restore. Cost: on a database that already ran
+  0009 AND recorded credit purchases before 0010 (development and test installs
+  only; no pharmacy has run 0009), those purchases also become untracked.
+- **D. Withdraw supplier credit** until a payables decision is made: revert the
+  Day 17 feature. Honours Phase 5 §6 as written; loses a feature already built
+  and tested.
+- (Not proposed: an owner-entered opening balance per supplier, for debt that
+  genuinely predates tracking. A future feature, if the owner wants it.)
+
+**Recommendation.** C, and decide (1) explicitly: either amend Phase 5 §6 to
+admit supplier payables (this note becomes their decision of record, with its
+number, and the code's "[PCN-006]" labels are corrected to it) or choose D.
+C is safe under either: it only makes the existing feature stop inventing debt.
+
+**Decision.** 2026-10-21, the owner: **keep supplier credit**, adopt **C**,
+and reconcile the plan. Supplier payables are admitted to the model; this note
+is their decision of record. (The implementing session's note on why C: it
+stops the feature inventing debt without rewriting any record.)
+
+**Applied.** On `claude/epic-euler-jdspyu`, in the release-hardening commit
+that numbers this note: Phase 5 §6 amended (payables in, derived like a
+customer balance) and Phase 9 §3 amended (`purchases.cash_paid_paisa`,
+`purchases.credit_tracked`, `supplier_payments`); migration
+`0010_supplier_credit_tracked` with `schema.ts`, `supplier-queries.ts`,
+`purchase-queries.ts`, the purchase detail page and `commit-purchase.ts`; the
+supplier-credit code's "[PCN-006]" labels corrected to PCN-007 (licensing's
+own PCN-006 citations untouched) and the CHANGELOG's "migration 0006"
+corrected to 0009. Tests: `supplier-balance.integration.test.ts`,
+`tests/supplier-credit-migration.integration.test.ts`.

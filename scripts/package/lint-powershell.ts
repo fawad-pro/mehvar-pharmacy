@@ -24,6 +24,7 @@ import { parsePowerShellFindings, type Finding } from './powershell-findings';
 import {
   checkAsciiOnly,
   checkBlockComments,
+  checkInnoCommentBraces,
   checkScCreate,
   checkScriptRootInParamBlock,
   checkUnguardedEnvPaths,
@@ -205,6 +206,7 @@ function main(): void {
       readFileSync(join(scriptDir, 'install-services.ps1'), 'utf8'),
     );
     findings.push(...checkInnoSetupScript(issName, issSource, wrappers));
+    findings.push(...checkInnoCommentBraces(issName, issSource));
     findings.push(...checkDotSourcedLibrariesAreShipped(issSource, sources));
   }
 
@@ -228,12 +230,17 @@ function main(): void {
      *                       now decides whether Setup may continue must
      *                       neither block a first install nor wave an upgrade
      *                       through unprotected.
+     *   services            Setup replaced files under running services and
+     *                       migrated beneath the old application; it now
+     *                       stops both first, and must put them back if one
+     *                       refuses.
      */
     for (const name of [
       'service-descriptor.tests.ps1',
       'verify-checks.tests.ps1',
       'config.tests.ps1',
       'pre-update-backup.tests.ps1',
+      'services.tests.ps1',
     ]) {
       const suite = join(scriptDir, name);
       if (!existsSync(suite)) continue;

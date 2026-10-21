@@ -77,8 +77,7 @@ export interface PurchaseCommitted {
 }
 
 export type PurchaseResult =
-  | { ok: true; value: PurchaseCommitted }
-  | { ok: false; reason: PurchaseRejection; lineId?: Uuid };
+  { ok: true; value: PurchaseCommitted } | { ok: false; reason: PurchaseRejection; lineId?: Uuid };
 
 export async function commitPurchase(
   scope: TenantScope,
@@ -112,6 +111,8 @@ export async function commitPurchase(
       invoiceDate: command.invoiceDate,
       note: command.note,
       cashPaidPaisa: effectiveCashPaidPaisa(command),
+      // Recorded through "Paid now", so it counts toward what is owed.
+      creditTracked: true,
     });
 
     await insertPurchaseLines(
@@ -176,8 +177,7 @@ export async function commitPurchase(
         allocationId: resolution.allocationId,
         batchId: resolution.batchId,
         unitCostPaisa: resolution.unitCostPaisa,
-        purchaseLineId:
-          batchRows.find((row) => row.id === resolution.batchId)?.sourceId ?? null,
+        purchaseLineId: batchRows.find((row) => row.id === resolution.batchId)?.sourceId ?? null,
         adjustmentId: null,
       });
 
@@ -219,7 +219,9 @@ export async function commitPurchase(
 
 export class StaleAllocationError extends Error {
   constructor(allocationId: string) {
-    super(`Pending allocation ${allocationId} changed under a locked read; the purchase was not received.`);
+    super(
+      `Pending allocation ${allocationId} changed under a locked read; the purchase was not received.`,
+    );
     this.name = 'StaleAllocationError';
   }
 }

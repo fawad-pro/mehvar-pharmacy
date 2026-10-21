@@ -1,11 +1,15 @@
 /**
- * [PCN-006] Supplier balance and settlement queries — the mirror of the udhaar
+ * [PCN-007] Supplier balance and settlement queries — the mirror of the udhaar
  * side in `udhaar-queries.ts`.
  *
  * A supplier balance is the money the pharmacy owes a distributor, derived and
  * never stored as authority, exactly like a customer balance (ADR-1):
  *
  *   balance = Σ (invoice cost − cash paid at receiving) − Σ supplier payments
+ *
+ * over TRACKED purchases only (`purchases.credit_tracked`). A purchase entered
+ * before supplier credit existed has no recorded payment — its cash-paid 0 is
+ * a column default, not a fact — so it contributes nothing to what is owed.
  *
  * The first two terms come from `purchases` (cash paid) joined to
  * `purchase_lines` (the invoice cost, bonus units free); the third from
@@ -32,12 +36,24 @@ export async function supplierBalance(scope: TenantScope, supplierId: Uuid): Pro
     })
     .from(purchases)
     .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
-    .where(scope.scopeOf(purchases, eq(purchases.supplierId, supplierId)));
+    .where(
+      scope.scopeOf(
+        purchases,
+        eq(purchases.supplierId, supplierId),
+        eq(purchases.creditTracked, true),
+      ),
+    );
 
   const [cashPaid] = await scope.db
     .select({ total: sum(purchases.cashPaidPaisa).as('total') })
     .from(purchases)
-    .where(scope.scopeOf(purchases, eq(purchases.supplierId, supplierId)));
+    .where(
+      scope.scopeOf(
+        purchases,
+        eq(purchases.supplierId, supplierId),
+        eq(purchases.creditTracked, true),
+      ),
+    );
 
   const [paid] = await scope.db
     .select({ total: sum(supplierPayments.amountPaisa).as('total') })
@@ -57,7 +73,7 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
       })
       .from(purchases)
       .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
-      .where(scope.scopeOf(purchases))
+      .where(scope.scopeOf(purchases, eq(purchases.creditTracked, true)))
       .groupBy(purchases.supplierId),
     scope.db
       .select({
@@ -65,7 +81,7 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
         total: sum(purchases.cashPaidPaisa).as('total'),
       })
       .from(purchases)
-      .where(scope.scopeOf(purchases))
+      .where(scope.scopeOf(purchases, eq(purchases.creditTracked, true)))
       .groupBy(purchases.supplierId),
     scope.db
       .select({

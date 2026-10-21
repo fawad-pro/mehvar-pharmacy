@@ -71,6 +71,13 @@
       "when": 1790111708134,
       "tag": "0009_supplier_credit",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792587620514,
+      "tag": "0010_supplier_credit_tracked",
+      "breakpoints": true
     }
   ]
 }

@@ -119,7 +119,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     0,
   );
 
-  // [PCN-006] "Paid now": empty means the whole invoice was paid (an ordinary
+  // [PCN-007] "Paid now": empty means the whole invoice was paid (an ordinary
   // cash purchase, unchanged). Anything less is put on the supplier's account.
   const cashPaidPaisa =
     draft.cashPaidText !== undefined && draft.cashPaidText.trim() !== ''
@@ -182,7 +182,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     // The unit cost must be ENTERED, not merely default to zero. "Sells for" is
     // pre-filled from the catalog and "Unit cost" is not, so a line added
     // without it lands at zero cost — which reads as a Rs 0.00 invoice total,
-    // a margin computed against nothing, and (since PCN-006) a supplier balance
+    // a margin computed against nothing, and (since PCN-007) a supplier balance
     // that thinks the delivery was free. A genuinely free line is entered as an
     // explicit "0"; a blank is the operator having skipped the field.
     if (cost.trim() === '') {
@@ -533,7 +533,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
           </p>
         </div>
 
-        {/* [PCN-006] What was paid to the distributor now. Left blank it means
+        {/* [PCN-007] What was paid to the distributor now. Left blank it means
             "paid in full" (the ordinary cash purchase); reduce it and the rest
             becomes what the pharmacy owes this supplier — the mirror of an
             udhaar sale. */}

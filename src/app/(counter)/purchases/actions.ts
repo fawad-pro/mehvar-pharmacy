@@ -130,7 +130,7 @@ export async function recentPurchasesAction() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* [PCN-006] Supplier credit — what the pharmacy owes, and paying it down      */
+/* [PCN-007] Supplier credit — what the pharmacy owes, and paying it down      */
 /* -------------------------------------------------------------------------- */
 
 export async function suppliersOwedAction(): Promise<SupplierBalanceItem[]> {

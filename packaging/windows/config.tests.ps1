@@ -207,6 +207,17 @@ try {
     Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+Write-Host 'Masking the install log:'
+Assert-True 'drops the password from a psql connection URL, keeps the user and host' (
+    (Protect-LogText 'run: psql.exe postgresql://mehvar:Abc123xyz@localhost:5433/postgres -v ON_ERROR_STOP=1') -eq
+    'run: psql.exe postgresql://mehvar:<redacted>@localhost:5433/postgres -v ON_ERROR_STOP=1')
+Assert-True "masks init's one-time credentials" (
+    (Protect-LogText '   | Pairing key  gtud-jfcb-rj4x') -eq '   | Pairing key  <redacted>' -and
+    (Protect-LogText '   | Owner pass   jcsk-t26s-nbwf') -eq '   | Owner pass   <redacted>')
+Assert-True 'masks a secret-named setting' ((Protect-LogText 'APP_DB_PASSWORD=hunter2') -eq 'APP_DB_PASSWORD=<redacted>')
+Assert-True 'leaves an ordinary line exactly as it was' (
+    (Protect-LogText '   kept the shop''s own settings: MEHVAR_BACKUP_DIR') -eq '   kept the shop''s own settings: MEHVAR_BACKUP_DIR')
+
 if ($script:Failures -gt 0) {
     Write-Host "`n  $($script:Failures) config assertion(s) FAILED."
     exit 1

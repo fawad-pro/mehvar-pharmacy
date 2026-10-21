@@ -364,7 +364,7 @@ export const purchases = pgTable(
     invoiceDate: date('invoice_date'),
     note: text('note'),
     /**
-     * [PCN-006] Cash paid to the supplier at receiving — the mirror of
+     * [PCN-007] Cash paid to the supplier at receiving — the mirror of
      * `sales.cash_paisa`. The credit the pharmacy owes for this invoice is the
      * derived remainder (Σ line cost − this), so a fully-paid delivery leaves
      * `cash_paid_paisa` equal to the invoice and owes nothing. Defaults to 0 so
@@ -373,6 +373,17 @@ export const purchases = pgTable(
      * cash purchase is unchanged and no existing workflow slows down.
      */
     cashPaidPaisa: bigint('cash_paid_paisa', { mode: 'number' }).notNull().default(0),
+    /**
+     * [PCN-007] Whether this purchase's payment was RECORDED. A purchase
+     * entered before supplier credit existed had no "Paid now" field: its
+     * `cash_paid_paisa` is the column default 0, not a fact, and counting it
+     * made every historical invoice read as owed. Migration 0010 adds this column so every row that
+     * already exists reads false — PostgreSQL's stored default, no row
+     * rewritten — and every purchase recorded since reads true. Supplier
+     * balances count only tracked purchases. Nothing is backfilled: no payment
+     * is invented and no historical row is altered.
+     */
+    creditTracked: boolean('credit_tracked').notNull().default(true),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -590,7 +601,7 @@ export const payments = pgTable(
 );
 
 /**
- * [PCN-006] Payments the pharmacy makes to a supplier — the mirror of
+ * [PCN-007] Payments the pharmacy makes to a supplier — the mirror of
  * `payments`, which records money customers pay the pharmacy.
  *
  * A supplier settlement reduces what the pharmacy owes, exactly as a customer

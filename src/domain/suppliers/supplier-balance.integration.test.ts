@@ -1,5 +1,5 @@
 /**
- * [PCN-006] Supplier balance and settlement — transaction semantics against a
+ * [PCN-007] Supplier balance and settlement — transaction semantics against a
  * real database, the payable mirror of `commit-settlement.integration.test.ts`.
  *
  * Balance derivation and idempotency are both properties of what lands in
@@ -15,8 +15,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { commitPurchase, type PurchaseCommand } from '@/domain/purchases/commit-purchase';
 import { commitSupplierPayment } from '@/domain/suppliers/commit-supplier-payment';
-import { supplierBalance } from '@/db/supplier-queries';
-import { suppliers } from '@/db/schema';
+import { balancesBySupplier, supplierBalance } from '@/db/supplier-queries';
+import { purchaseLines, purchases, suppliers } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import {
@@ -124,6 +124,60 @@ suite('supplier credit against Postgres', () => {
     }
     // 28,000 − 8,000, and the replay did not subtract twice.
     expect(await supplierBalance(tenant.scope, supplierId)).toBe(20_000);
+  });
+
+  /**
+   * A purchase entered before supplier credit existed. Migration 0009 gave it
+   * cash_paid_paisa = 0 by default and every such invoice read as owed in full
+   * — the "Owed to suppliers" figure became the shop's whole purchase history.
+   * Migration 0010 marks those rows untracked; this is one, written exactly as
+   * that history looks (0 paid, credit_tracked false).
+   */
+  async function historicalPurchase(): Promise<void> {
+    const purchaseId = uuidv7();
+    await tenant.scope.insert(purchases, {
+      id: purchaseId,
+      supplierId,
+      invoiceRef: 'BEFORE-SUPPLIER-CREDIT',
+      invoiceDate: null,
+      note: null,
+      cashPaidPaisa: 0,
+      creditTracked: false,
+    });
+    await tenant.scope.insert(purchaseLines, {
+      id: uuidv7(),
+      purchaseId,
+      productId: product.id,
+      qtyBase: 100,
+      bonusQtyBase: 0,
+      unitCostPaisa: 280,
+      expiryDate: null,
+      batchNumber: null,
+      mrpAtReceivingPaisa: null,
+      priceAtReceivingPaisa: 500,
+    });
+  }
+
+  it('a purchase from before supplier credit owes nothing — its 0 paid was a default, not a fact', async () => {
+    await historicalPurchase();
+    expect(await supplierBalance(tenant.scope, supplierId)).toBe(0);
+    expect((await balancesBySupplier(tenant.scope))[supplierId] ?? 0).toBe(0);
+  });
+
+  it('history does not hide real credit recorded since', async () => {
+    await historicalPurchase();
+    await commitPurchase(tenant.scope, purchase({ cashPaidPaisa: 8_000 }));
+    // Only the tracked invoice counts: 28,000 − 8,000.
+    expect(await supplierBalance(tenant.scope, supplierId)).toBe(20_000);
+    expect((await balancesBySupplier(tenant.scope))[supplierId]).toBe(20_000);
+  });
+
+  it('a purchase recorded now is tracked, even when paid in full', async () => {
+    const command = purchase();
+    const result = await commitPurchase(tenant.scope, command);
+    expect(result.ok).toBe(true);
+    const row = (await tenant.scope.select(purchases)).find((p) => p.id === command.purchaseId);
+    expect(row?.creditTracked).toBe(true);
   });
 
   it('overpayment leaves an advance (a negative balance)', async () => {

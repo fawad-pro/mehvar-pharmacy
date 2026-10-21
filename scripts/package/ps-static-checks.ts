@@ -214,3 +214,57 @@ export function checkBlockComments(file: string, source: string): Finding[] {
     },
   ];
 }
+
+/**
+ * `mehvar.iss` [Code]: a `{` inside a `{ ... }` comment.
+ *
+ * Pascal brace comments do not nest, and Inno constants are written in braces,
+ * so a comment that mentions `{tmp}` or `{app}` ends at that constant's `}` and
+ * the rest of the sentence is compiled as code. ISCC then stops with
+ * "'BEGIN' expected" on a line that looks perfectly fine. It shipped in the
+ * pre-update backup's comments and was caught only by compiling under Wine,
+ * which most checkouts cannot do; this is the check that can run everywhere.
+ *
+ * Strings are skipped (`ExpandConstant('{app}')` is correct code), as are `//`
+ * comments, which end at the line.
+ */
+export function checkInnoCommentBraces(file: string, source: string): Finding[] {
+  const start = source.indexOf('[Code]');
+  if (start < 0) return [];
+  const code = source.replace(/\r\n/g, '\n');
+  const lineOf = (index: number): number => code.slice(0, index).split('\n').length;
+
+  const findings: Finding[] = [];
+  let i = code.indexOf('[Code]');
+  while (i < code.length) {
+    const c = code[i];
+    if (c === "'") {
+      // A Pascal string ends at the next lone quote ('' is an escaped quote).
+      let j = i + 1;
+      while (j < code.length && code[j] !== '\n') {
+        if (code[j] === "'" && code[j + 1] !== "'") break;
+        j += code[j] === "'" ? 2 : 1;
+      }
+      i = j + 1;
+    } else if (code.startsWith('//', i)) {
+      const eol = code.indexOf('\n', i);
+      i = eol < 0 ? code.length : eol;
+    } else if (c === '{') {
+      const close = code.indexOf('}', i + 1);
+      const inner = code.indexOf('{', i + 1);
+      if (inner >= 0 && (close < 0 || inner < close)) {
+        findings.push({
+          file,
+          line: lineOf(inner),
+          message:
+            'A `{` inside a { } comment: Pascal comments do not nest, so the comment ends at the ' +
+            "next `}` and the rest compiles as code. Write the constant's meaning in words.",
+        });
+      }
+      i = close < 0 ? code.length : close + 1;
+    } else {
+      i += 1;
+    }
+  }
+  return findings;
+}

@@ -1,5 +1,5 @@
 /**
- * [PCN-006] Pure rules for a supplier payment — the payable mirror of the
+ * [PCN-007] Pure rules for a supplier payment — the payable mirror of the
  * settlement draft rules.
  */
 

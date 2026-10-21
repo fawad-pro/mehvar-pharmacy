@@ -35,7 +35,8 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 
 ## 3. Event tables (append-only)
 
-**purchases** — id, tenant_id, supplier_id, invoice_ref, invoice_date, note, created_by/at.
+**purchases** — id, tenant_id, supplier_id, invoice_ref, invoice_date, note, cash_paid_paisa, credit_tracked, created_by/at.
+*PCN-007: `cash_paid_paisa` is what was paid at receiving; the remainder is owed to the supplier. `credit_tracked` is false for every purchase entered before supplier credit existed (no payment was recorded; migration 0010 marks them by stored default, rewriting no row) — those owe nothing.*
 **purchase_lines** — id, tenant_id, purchase_id, product_id, qty_base, bonus_qty_base, unit_cost_paisa (per base unit; bonus units carry zero cost by derivation, not by column), expiry_date, batch_number (nullable), mrp_at_receiving_paisa, price_at_receiving_paisa.
 *Each line materializes a batch (§4).*
 
@@ -48,6 +49,9 @@ CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 *The D1/D2 mechanism: server-side FEFO writes one row per consumed batch (ADR-5); `batch_id NULL` rows are the pending layer, plus resolved_by (nullable FK to the purchase_line or adjustment that later resolved it) and resolved_at. Pending rows are the only "mutable" business rows in the system, and only their resolution fields may be set — once, forward-only.*
 
 **payments** — id (client-generated), tenant_id, customer_id, amount_paisa, method (`cash`), sale_id (nullable: set when part of a sale commit; standalone = settlement W3), origin, client_committed_at, created_by/at.
+
+**supplier_payments** — id, tenant_id, supplier_id, amount_paisa, method (`cash`), purchase_id (nullable), note, created_by/at.
+*PCN-007: the payable mirror of `payments`. A supplier balance is derived: Σ (line cost − cash paid) over tracked purchases − Σ supplier payments.*
 
 **sale_returns** — id, tenant_id, sale_id, cash_out_paisa, credit_reduced_paisa, reason_note, created_by/at.
 **sale_return_lines** — id, tenant_id, sale_return_id, sale_line_id, qty_base, restock_batch_id (nullable — known source batch or write-off).

@@ -20,11 +20,12 @@
  */
 import 'dotenv/config';
 
-import { randomBytes } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { hashPassword, hashPin } from '../../src/auth/pin';
+import { generatePairingKey } from '../../src/auth/pairing-key';
+import { currentRelease } from '../../src/lib/release';
 import { isWellFormedPin, PIN_LENGTH } from '../../src/auth/pin-policy';
 import { createTenant, listTenantIds } from '../../src/db/provisioning';
 import { tenantScope } from '../../src/db/scoped';
@@ -45,21 +46,6 @@ interface InitInput {
   address: string | undefined;
   phone: string | undefined;
   timeZone: string;
-}
-
-/**
- * A pairing key the founder reads aloud once and the counter never types again.
- *
- * Generated rather than chosen: it is entered exactly once, at setup, so there
- * is nothing to remember and no reason to let a weak one be picked. Hyphenated
- * because it gets dictated over a phone.
- */
-function generatePairingKey(): string {
-  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
-  const groups = [0, 1, 2].map(() =>
-    Array.from(randomBytes(4), (byte) => alphabet[byte % alphabet.length]).join(''),
-  );
-  return groups.join('-');
 }
 
 function required(name: string, value: string | undefined): string {
@@ -94,8 +80,6 @@ async function main(): Promise<void> {
     throw new Error('DATABASE_URL is not set. The installer writes it; check the service config.');
   }
 
-  const input = readInput(process.env);
-
   /*
    * Idempotence guard. An installer that runs twice — a repair, a reinstall
    * over the top — must not create a second pharmacy beside the first. Every
@@ -109,6 +93,11 @@ async function main(): Promise<void> {
     console.log('To start over, the database must be reset deliberately — init will not do it.');
     return;
   }
+
+  // Read only once there is a pharmacy to create. An upgrade or repair skips
+  // the wizard's shop and PIN pages, so these arrive empty — and must not fail
+  // a run that has nothing to do with them.
+  const input = readInput(process.env);
 
   const tenantId = uuidv7();
   const ownerId = uuidv7();
@@ -152,7 +141,10 @@ async function main(): Promise<void> {
     pairingKeyHash: await hashPassword(pairingKey),
   });
 
-  const installation = ensureInstallation(process.env.npm_package_version ?? 'unknown');
+  // The installed build, from the payload's VERSION file. It used to be
+  // npm_package_version, which the installer (running node directly) never
+  // sets — so every real installation recorded "unknown".
+  const installation = ensureInstallation(currentRelease().build);
 
   /*
    * The counter needs the slug and the pairing key exactly once, and the person

@@ -2,6 +2,63 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Release hardening for the first pharmacy (Day 18)
+
+The installer, upgrade, recovery and diagnostics paths, closed against a real
+compiled installer (Inno Setup 6.4.3 under Wine) and a populated
+upgrade-and-recovery rehearsal. One plan change decided (PCN-007); nothing else
+re-litigated.
+
+**Installer: back up first, keep the shop's settings, ship no secrets**
+
+- Every upgrade and repair dumps the database to `backups\pre-update\` from
+  `PrepareToInstall`, before a file is replaced; if a pharmacy exists and
+  cannot be backed up, Setup stops with nothing changed.
+- `.env` is merged, not regenerated: installer-owned keys are rewritten (logged
+  by name), the shop's own settings are kept verbatim.
+- The build machine's `.env` never enters the payload (stripped, refused,
+  excluded), and an upgrade deletes the copy older installers left.
+- The payload now carries the Windows argon2 binary whatever machine built it;
+  a Linux-built payload had none and would have failed at the first PIN.
+
+**A safe upgrade lifecycle**
+
+- Setup stops `MehvarNode` then `MehvarPostgres` after the backup and before
+  replacing files, puts them back if one refuses, and restarts them if Setup
+  ends before provisioning. `install-services.ps1` stops the application again
+  before migrating.
+- Step 9 proves the pharmacy from the database; `first-run.txt` (plaintext
+  credentials) is no longer required, and nothing recreates it.
+- Upgrades skip the shop-name and PIN pages; `init` decides "a pharmacy exists"
+  before reading them.
+- `lint:ps` catches a `{constant}` inside a Pascal `{ }` comment, which broke the
+  compile and had shipped in the pre-update backup's own comments.
+
+**Restore and recovery**
+
+- The restore drill migrates a restored dump before granting, so backups taken
+  before an update drill clean; it also proves the application role is refused
+  UPDATE and DELETE on every event table.
+- `ops:restore` / `mehvar-restore.cmd` replaces a dead counter PC: it proves the
+  backup in a scratch database, keeps the database it replaces, and issues a
+  one-time pairing key on screen. See OPERATIONS.md, "Replacing the counter PC".
+
+**Supplier credit, admitted to the plan and corrected (PCN-007)**
+
+- Phase 5 §6 no longer excludes supplier payables; the Day 17 feature now
+  has its decision of record. Its code cited PCN-006 (licensing); relabelled.
+- Migration 0010 adds `purchases.credit_tracked`: purchases from before
+  supplier credit read untracked through PostgreSQL's stored default — no row
+  rewritten, no payment invented — and no longer count as owed.
+
+**Release identity and diagnostics**
+
+- VERSION records `<version>+<commit>[.dirty]`; the server, `init`, the support
+  bundle and the installer's name all use it. `package:installer` refuses a
+  `.dirty` payload.
+- The support bundle redacts credentials from every section, and the install
+  log masks them at the source.
+
 ## Session — Sales/POS usability pass and supplier credit (Day 17)
 
 A read of the counter as a cashier sees it, then the one credit gap the product
@@ -25,9 +82,9 @@ reused, not replaced (PCN-005, PCN-006).
 - The **F1–F10 foot rail** sits a touch taller (52px) with boxed keys and larger
   labels — easier to read and hit, still compact (Phase 10 §1, I1).
 
-**Supplier credit — the pharmacy owes distributors too (PCN-006)**
+**Supplier credit — the pharmacy owes distributors too (PCN-007)**
 
-- The mirror of customer udhaar. Migration 0006 adds `purchases.cash_paid_paisa`
+- The mirror of customer udhaar. Migration 0009 adds `purchases.cash_paid_paisa`
   (the analogue of `sales.cash_paisa`) and the `supplier_payments` event table
   (the analogue of `payments`); both derive rather than store the balance:
   `Σ (invoice − paid) − Σ payments`, never authority (ADR-1, Phase 5 inv. 3).

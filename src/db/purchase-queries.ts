@@ -109,10 +109,7 @@ export interface PurchaseListItem {
 }
 
 /** Recent purchases for the Purchases list (Phase 10 §2 surface 4). */
-export async function listPurchases(
-  scope: TenantScope,
-  limit = 50,
-): Promise<PurchaseListItem[]> {
+export async function listPurchases(scope: TenantScope, limit = 50): Promise<PurchaseListItem[]> {
   const rows = await scope.db
     .select({
       id: purchases.id,
@@ -262,8 +259,10 @@ export interface PurchaseDetail {
   readonly invoiceDate: string | null;
   readonly note: string | null;
   readonly receivedByName: string;
-  /** [PCN-006] What was paid to the supplier at receiving; the rest was credit. */
+  /** [PCN-007] What was paid to the supplier at receiving; the rest was credit. */
   readonly cashPaidPaisa: number;
+  /** False for a purchase entered before supplier credit: payment not recorded. */
+  readonly creditTracked: boolean;
   readonly createdAt: Date;
   readonly lines: readonly PurchaseDetailLine[];
 }
@@ -294,6 +293,7 @@ export async function findPurchase(
       note: purchases.note,
       receivedByName: users.name,
       cashPaidPaisa: purchases.cashPaidPaisa,
+      creditTracked: purchases.creditTracked,
       createdAt: purchases.createdAt,
     })
     .from(purchases)

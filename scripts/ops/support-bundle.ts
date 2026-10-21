@@ -30,6 +30,8 @@ import { join } from 'node:path';
 
 import { backupDir, latestBackup } from '../../src/lib/backup';
 import { installationDir, readInstallation } from '../../src/lib/installation';
+import { redactSecrets } from '../../src/lib/redact';
+import { currentRelease } from '../../src/lib/release';
 
 interface Section {
   heading: string;
@@ -65,10 +67,13 @@ function installationSection(): Section {
     if (record === undefined) {
       return ['No installation record — `npm run init` has not run on this machine.'];
     }
+    const running = currentRelease();
     return [
+      `Running:      ${running.build}`,
+      `Built:        ${running.builtAt ?? '(not a packaged build)'}`,
       `Installation: ${record.installationId}`,
       `Installed:    ${record.installedAt}`,
-      `Version:      ${record.installedVersion}`,
+      `First build:  ${record.installedVersion}`,
       `Data dir:     ${installationDir()}`,
     ];
   });
@@ -241,10 +246,12 @@ async function main(): Promise<void> {
 
   const stream = createWriteStream(target, 'utf8');
   stream.write('Mehvar support bundle\n');
-  stream.write('Contains no sales, customer, price or stock data.\n');
+  stream.write('Contains no sales, customer, price or stock data, and credentials are redacted.\n');
   for (const section of sections) {
     stream.write(`\n\n=== ${section.heading} ===\n\n`);
-    stream.write(section.lines.join('\n'));
+    // Every section, not only the logs: a bundle travels over WhatsApp, and no
+    // credential that reached any line on this machine should travel with it.
+    stream.write(redactSecrets(section.lines.join('\n')));
   }
   stream.write('\n');
   stream.end();

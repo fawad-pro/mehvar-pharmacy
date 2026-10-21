@@ -1,5 +1,5 @@
 /**
- * [PCN-006] `commitSupplierPayment` — the one transaction for paying a
+ * [PCN-007] `commitSupplierPayment` — the one transaction for paying a
  * supplier, the payable mirror of `commitSettlement`.
  *
  * Online-only and idempotent on the client id, exactly like `commitPurchase`:

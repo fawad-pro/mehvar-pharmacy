@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * [PCN-006] Owed to suppliers — the payable mirror of the customers-owing list.
+ * [PCN-007] Owed to suppliers — the payable mirror of the customers-owing list.
  *
  * "Money customers owe us" has had a home since Day 4; "money we owe our
  * distributors" had none, so a pharmacy running on supplier credit could not

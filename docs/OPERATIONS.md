@@ -138,9 +138,11 @@ prunes that folder. To drill one, point `MEHVAR_BACKUP_DIR` at it for the run.
 npm run ops:restore-drill
 ```
 
-Restores the newest dump into a scratch database, runs the ADR-8 verifier,
-confirms Phase 5 §5 invariants, drops the scratch database. Never touches the
-live one.
+Restores the newest dump into a scratch database, migrates it to the installed
+schema (a dump from before an update restores into the schema it was taken
+under), re-applies grants, proves the application role can read it and cannot
+rewrite its event tables, runs the ADR-8 verifier as that role, and drops the
+scratch database. Never touches the live one.
 
 The drill closes its own database connection before the drop, and forces the
 drop past anything else still attached. Without the first of those it used to
@@ -151,6 +153,38 @@ reads like a backup problem and is not one.
 Phase 12 §3: **once before the first paying customer, then quarterly.** An
 untested backup is not a backup, and a drill you have not run is a claim, not a
 fact.
+
+### Replacing the counter PC
+
+When the main machine dies, its records live in the newest backup — on the USB
+drive if `MEHVAR_BACKUP_DIR` points there, which is why section 5 says it should.
+
+1. **Install Mehvar on the new PC** with the normal installer. Any shop name and
+   PIN will do; this pharmacy is about to be replaced.
+2. **Copy the newest `mehvar-….dump`** from the USB drive onto the new PC.
+3. **Restore it**, from an Administrator command prompt:
+   ```
+   "C:\Program Files\Mehvar\mehvar-restore.cmd" E:\MehvarBackups\mehvar-….dump --replace
+   ```
+   The counter service is stopped for the swap and started again afterwards.
+   The backup is restored into a scratch database first, migrated to this
+   version's schema, granted, checked for immutability and verified as the
+   application role. Only then does it replace the live database, which is
+   **kept** (renamed `mehvar_pharmacy_replaced_<time>`) and also dumped to
+   `backups\pre-restore\`. If anything fails, the live database is unchanged.
+4. **Set up the counter** with the pharmacy code, counter name and setup key
+   the restore printed. The key is shown once and saved nowhere; the old one no
+   longer works, and the fresh install's `first-run.txt` (which described the
+   placeholder pharmacy) is removed. If a backup ever holds more than one
+   pharmacy, the restore stops and asks for `--pharmacy <code>`.
+5. **Log in with the owner's existing PIN** — it came back with the records.
+6. **Move the licence**: Settings → Licence says it is registered to a different
+   computer; press the button (self-service, up to three times a year — §6a).
+7. **Run the restore drill** (above) once the nightly backup has run, and check
+   the support bundle's verifier section reads OK.
+
+A second counter on the LAN keeps its own session and needs nothing, provided
+the new PC has the old one's address (set a reserved address on the router).
 
 ## 6. Adding a second counter
 
