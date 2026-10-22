@@ -920,3 +920,199 @@ supplier-credit code's "[PCN-006]" labels corrected to PCN-007 (licensing's
 own PCN-006 citations untouched) and the CHANGELOG's "migration 0006"
 corrected to 0009. Tests: `supplier-balance.integration.test.ts`,
 `tests/supplier-credit-migration.integration.test.ts`.
+
+---
+
+## PCN-008 — automatic FEFO sells expired batches first
+
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided
+
+**Plan sections in tension.** Phase 5 §4, D1: "Sales consume stock from the
+earliest-expiry batch first, automatically. The salesman sees the price, not
+the batch." P2: "Never block a sale." T1: "The owner sees everything; the
+system forgets nothing." W12 manages near-expiry stock before it expires; no
+section says what a sale does with stock that already has.
+
+**The contradiction or gap.** Earliest-expiry-first is exactly the wrong order
+once a batch is past its date: an expired batch is always the earliest, so it is
+always consumed first. `lockBatchesForProducts` (`src/db/sales-queries.ts`)
+orders by `expiry_date ASC` with no filter, `allocate` (`domain/inventory/
+allocation.ts`) consumes in that order, and nothing on the Sale screen mentions
+expiry. A pharmacy holding one expired strip and one good box sells the expired
+strip, silently, and nothing records that it happened. Selling expired medicine
+is a patient-safety matter and an offence; D1 never contemplated it.
+
+**Options.**
+
+- **A. Block the sale** when only expired stock remains. Safe, but contradicts
+  P2, and the shelf may hold stock the system does not know about (D2).
+- **B. Require the owner's PIN** to sell expired stock. A permission wall in the
+  middle of a sale (Phase 7 cross-cutting rule 2), at a counter where the owner
+  is often absent.
+- **C. Skip expired batches when picking stock automatically; if only expired
+  stock remains, warn plainly, naming the expiry, and record an exception.**
+  The salesman decides, the owner sees it.
+- **D. Leave D1 as written.** Rejected: the current behaviour is the defect.
+
+**Recommendation.** C. It keeps P2 (nothing is blocked), makes the dangerous
+case loud at the moment it happens and visible afterwards (T1), and changes
+nothing for the ordinary case.
+
+**Decision.** 2026-10-22, the owner: **C**.
+
+**What C means, precisely** (the implementation contract):
+
+1. A batch is expired when its `expiry_date` is before the current business day
+   in the tenant's time zone. A batch with no expiry is never expired.
+2. Automatic allocation consumes unexpired batches first, in D1's order; then
+   expired batches; then the pending layer (D2). Expired stock is consumed only
+   when nothing unexpired is left, never ahead of it.
+3. Before commit, the Sale screen warns when a line would be met from expired
+   stock, naming the expiry date, in plain words (I5). The warning never blocks
+   payment.
+4. Every allocation against an expired batch appears in the owner's daily view
+   as its own exception kind, attributed like every other (T1, W10).
+5. Offline (ADR-3/5): the warning uses the counter's local snapshot; the
+   exception is derived from the allocation the server actually made, so an
+   offline sale cannot dodge it.
+
+**Applied.** Not yet. Amend Phase 5 §4 D1 and W1's failure moments and W10's
+exception list, then implement with tests: allocation order (unexpired before
+expired before pending), the exception in the day view, and the stock-rebuild
+suite generating expired batches.
+
+---
+
+## PCN-009 — purchases cannot be corrected, and distributor returns do not reduce what is owed
+
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided
+
+**Plan sections in tension.** Phase 5 §3, Adjustment: "Adjustments are the
+only non-sale, non-purchase path by which stock moves." T2: "Mistakes are
+reversed by compensating entries that reference what they fix." ADR-1:
+append-only records. W8 handles "return to distributor" as a reason-coded
+adjustment. PCN-007: a supplier balance is Σ tracked invoice cost − cash paid −
+supplier payments.
+
+**The contradiction or gap.**
+
+1. **A wrongly entered purchase has no correction.** `count_correction` can put
+   the stock right, but not the purchase: a mistyped unit cost distorts margin
+   for every unit sold from that batch, and a mistyped quantity or cost
+   overstates or understates what the shop owes that supplier, permanently. T2
+   promises a compensating entry; none exists.
+2. **A distributor return reduces stock but not the payable.** Before PCN-007
+   there was no payable to reduce. Since PCN-007 there is, and a return recorded
+   as an adjustment leaves the supplier balance overstated by the value
+   returned.
+
+**Options.**
+
+- **A. Edit the purchase rows.** Rejected: ADR-1, T2, and the app role cannot
+  update event tables.
+- **B. Two compensating records.** A _purchase correction_ referencing the
+  original purchase line (quantity change and/or corrected unit cost, with a
+  reason), and a _supplier return_ (supplier, batch, quantity, credit value).
+- **C. Reverse whole purchases and re-enter them.** One record kind, but a
+  reversal of a partly sold batch drives it below zero and loses the batch's
+  identity, and a one-line typo costs a twenty-line re-entry.
+- **D. Document the limits and wait.** The margin and payable errors are
+  silent, which is what T4 exists to prevent.
+
+**Recommendation.** B.
+
+- **Purchase correction.** Owner-only, online-only (like supplier payments).
+  A quantity change moves that line's batch through ADR-8's sanctioned stock
+  functions; a reduction larger than the batch still holds is refused, with
+  the plain advice to record a count correction instead. A cost correction is
+  applied by derivation, never by editing `batches` or allocations: reports and
+  supplier balances read the corrected cost, and allocations made afterwards use
+  it too. Supplier balances use the corrected invoice value.
+- **Supplier return.** Records supplier, batch, quantity and a credit value
+  defaulting to quantity × that batch's effective unit cost (editable). Reduces
+  stock like an adjustment and reduces the supplier balance. Existing
+  `distributor_return` adjustments stay readable; new returns use this record.
+- Both are keyboard-driven, listed in the owner's daily view (T1), and become
+  event kinds in the stock-rebuild suite.
+
+**Decision.** 2026-10-22, the owner: adopt the recommendation (**B**).
+
+**Applied.** Not yet. Needs: Phase 5 §3 and §5 invariant 1, Phase 9 §3
+(two event tables, INSERT-only grants), W7/W8 amended; migration; the supplier
+balance formula and `listSuppliersOwed` updated with a ledger-sums-to-balance
+test; the day-view exceptions; stock-rebuild suite coverage. Open implementation
+question, to settle in that session: how a cost correction meets allocations
+that already snapshot `unit_cost_paisa` (a derived "effective cost" per batch
+read by both reports and new allocations is the expected answer).
+
+---
+
+## PCN-010 — reconcile the plan with local-first and the pilot
+
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided (amendments not yet applied)
+
+**Plan sections in tension.** The gap audit (2026-10-22) compared the master
+plan with the code after PCN-004 (local-first), PCN-006 (perpetual licence) and
+PCN-007 (supplier payables):
+
+- **Payables.** PCN-007 admitted supplier payables, but the consolidated
+  master plan still excludes them: Phase 2 "What We Are NOT Building" ("Supplier
+  accounting / payables ledger"), Phase 5 §2 Supplier ("No payables"), Phase 5
+  §6 ("supplier balances/payables"), and Phase 13 §6's ledger. PCN-007 amended
+  `docs/planning/phase-05` but not `MASTER_PLAN.md`, which is authoritative.
+- **Phase 12** still describes a cloud deployment: Railway configuration,
+  Sentry and uptime alerting, TLS at the platform, a nightly verifier nothing
+  schedules. None of it exists for a local install.
+- **Phase 13 §3** is the original build week, now history; there is no
+  pilot-readiness plan.
+- **Phase 3 §3/§5** keeps subscription, 14-day-trial and Rs 2,000/month wording
+  that PCN-006 superseded.
+- **W11** promises the owner's view "from anywhere"; it is LAN-only. **W1**
+  promises "drawer opens"; nothing opens a drawer. **Phase 13 §2** targets a
+  1,500–3,000-product verified catalogue head; 138 are verified.
+- **OPERATIONS.md** says counters are added in Settings (there is no such
+  section) and that 58 mm receipts work (the print CSS is 80 mm only).
+
+**The contradiction or gap.** The authoritative plan no longer describes the
+product being piloted, and decisions the pilot depends on were never recorded.
+
+**Options.** A. Apply the amendments below to the master plan, the phase files
+and OPERATIONS.md. B. Leave the plan as is and rely on PCNs. Rejected: the
+plan wins every disagreement (CLAUDE.md), so a stale plan is a wrong spec.
+
+**Recommendation.** A.
+
+**Decision.** 2026-10-22, the owner, recorded for the pilot:
+
+1. **Customer.** Neighbourhood pharmacies, mostly not tech-literate. Setup,
+   opening stock and training are founder-done; development continues in
+   parallel with the pilot.
+2. **One counter** for the pilot. Multi-counter (a LAN, wired or Wi-Fi; no
+   internet needed) follows later and needs: a way to add counters, a session
+   that works over LAN HTTP, a refreshing search index, and a concurrency test.
+3. **Remote owner access is LAN-only in V1.** W11 is restated accordingly; the
+   cloud route stays in roadmap Phase 3.
+4. **Updates are installer-based through the pilot.** The in-app updater stays
+   deferred to roadmap Phase 2. The running version is shown in the app and a
+   one-page update procedure is written.
+5. **Backups are local and/or to a USB drive.** The backup folder is set from
+   Settings and the last successful backup is visible to the owner; offsite
+   backup stays in roadmap Phase 3.
+6. **Tenders are cash and udhaar.** Digital wallets (JazzCash, Easypaisa) are
+   the next tender type, soon after the pilot starts.
+7. **Prescriptions and controlled-drug registers stay out of V1**, as a
+   conscious exclusion rather than an oversight. The product makes no
+   regulatory-compliance claim. A product-level "scheduled drug" flag remains
+   possible later if a regulator or customer requires it.
+8. Expired stock: PCN-008. Purchase corrections and supplier returns: PCN-009.
+
+Open, not decided here: pilot pricing (free fixed-term pilot with written terms
+and a founding price was recommended), and remote screen-share support for
+non-technical shops (Phase 12 §7 currently excludes remote-control software).
+
+**Applied.** Not yet. Amendments, in one session: Phase 2 and Phase 5 §2/§6 and
+Phase 13 §6 brought in line with PCN-007; Phase 3 §3/§5 trimmed to PCN-006;
+Phase 12 rewritten for a local install (logs and support bundle, nightly
+verifier beside the backup, backup visibility, LAN security, installer update
+procedure); Phase 13 §3 replaced by a pilot-readiness plan and post-pilot
+roadmap; W1, W11 and Phase 13 §2 restated; OPERATIONS.md corrected.
