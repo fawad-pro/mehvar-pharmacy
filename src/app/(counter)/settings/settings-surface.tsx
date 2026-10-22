@@ -7,6 +7,10 @@
 
 import { useEffect, useState } from 'react';
 
+import { testReceipt } from '@/client/print/receipt';
+import { usePrintReceipt } from '@/client/print/use-print-receipt';
+import { useReceiptContext } from '@/client/receipt/receipt-context';
+import { ReceiptView } from '@/components/receipt-view';
 import type { UserListItem } from '@/db/auth-queries';
 
 import { LicenceSection } from './licence-section';
@@ -41,6 +45,7 @@ export function SettingsSurface() {
 }
 
 function ReceiptSettingsForm() {
+  const receiptContext = useReceiptContext();
   const [settings, setSettings] = useState<ReceiptSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
@@ -64,6 +69,11 @@ function ReceiptSettingsForm() {
     setBusy(true);
     setDone(null);
     const outcome = await updateReceiptSettingsAction(settings);
+    // The counter holds these settings for the whole session; without this
+    // the change took effect only after a restart.
+    if (outcome.ok) {
+      await receiptContext?.reload();
+    }
     setBusy(false);
     setDone(outcome.ok ? 'Saved.' : outcome.message);
   }
@@ -283,17 +293,44 @@ function UsersAndPins() {
 }
 
 function PrinterGuide() {
+  const receiptContext = useReceiptContext();
+  const { receipt, print } = usePrintReceipt();
+
   return (
     <div className="border-line rounded border p-4">
       <h2 className="text-green-900 mb-2 font-medium">Printer setup</h2>
       <ol className="text-ink/70 list-inside list-decimal space-y-1 text-sm">
-        <li>Connect the receipt printer and set it as the default printer.</li>
+        <li>
+          Connect the receipt printer and set it as the Windows default printer — not
+          &ldquo;Microsoft Print to PDF&rdquo;, which saves a file instead of printing.
+        </li>
         <li>
           Launch the browser with kiosk printing so a receipt prints silently:{' '}
           <code className="bg-green-100/60 rounded px-1">--kiosk-printing</code>.
         </li>
-        <li>Print a test sale (F1) and confirm the receipt number and totals line up.</li>
+        <li>Print a test receipt and check that it comes out of the receipt printer.</li>
       </ol>
+      <button
+        type="button"
+        onClick={() => {
+          if (!receiptContext) {
+            return;
+          }
+          print(
+            testReceipt({
+              tenantHeaderLines: receiptContext.tenantHeaderLines,
+              tenantFooterLine: receiptContext.tenantFooterLine,
+              salesmanName: receiptContext.salesmanName,
+              now: new Date(),
+            }),
+          );
+        }}
+        disabled={!receiptContext}
+        className="border-line hover:bg-green-100 min-h-touch mt-3 rounded border px-5 font-medium disabled:opacity-40"
+      >
+        Print test receipt
+      </button>
+      {receipt ? <ReceiptView receipt={receipt} /> : null}
     </div>
   );
 }

@@ -91,6 +91,28 @@ Assert-True 'the inconclusive message does not claim immutability was proved' `
     ((Get-ImmutabilityMessage -Verdict 'inconclusive' -ExitCode 2 -Output 'Connection refused') -match 'proves nothing')
 
 # ---------------------------------------------------------------------------
+# The default printer. --kiosk-printing sends receipts to it without a dialog;
+# a PDF "printer" there turned every receipt into a downloaded file.
+# ---------------------------------------------------------------------------
+
+Assert-True 'Microsoft Print to PDF as the default is warned about, by name' `
+    ((Get-DefaultPrinterWarning -PrinterName 'Microsoft Print to PDF') -match 'Microsoft Print to PDF')
+
+Assert-True 'the XPS writer, OneNote and Fax are warned about too' `
+    ($null -ne (Get-DefaultPrinterWarning -PrinterName 'Microsoft XPS Document Writer') -and
+     $null -ne (Get-DefaultPrinterWarning -PrinterName 'OneNote (Desktop)') -and
+     $null -ne (Get-DefaultPrinterWarning -PrinterName 'Fax'))
+
+Assert-True 'no default printer at all is warned about' `
+    ((Get-DefaultPrinterWarning -PrinterName '') -match 'No default printer')
+
+Assert-Equal 'a thermal receipt printer as the default needs no warning' `
+    $null (Get-DefaultPrinterWarning -PrinterName 'BlackCopper BC-85AC')
+
+Assert-True 'the warning says what to do next' `
+    ((Get-DefaultPrinterWarning -PrinterName 'Microsoft Print to PDF') -match 'Print test receipt')
+
+# ---------------------------------------------------------------------------
 # Invoke-Native. Run for real against a command that exits non-zero AND writes
 # to stderr, with both terminating-error mechanisms armed -- the exact
 # conditions under which the old code threw before reading its exit code.

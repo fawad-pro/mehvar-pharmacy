@@ -149,3 +149,32 @@ function Get-ImmutabilityMessage {
     return 'UPDATE on sales failed, but NOT for lack of privilege, so it proves nothing. ' +
            "psql exit $ExitCode. Output: $Output"
 }
+
+<#
+.SYNOPSIS
+    What to tell the installer about the default printer, or $null if nothing.
+
+.DESCRIPTION
+    The counter prints with Chrome's --kiosk-printing, which sends every receipt
+    to the default printer without a dialog. With no receipt printer as the
+    default, Windows usually defaults to "Microsoft Print to PDF", and every
+    receipt then becomes a PDF file instead of paper -- which is exactly what
+    the spare-laptop test did. A warning, never a failure: a shop may be
+    installed before its printer arrives.
+
+    Pure: the printer's name in, a sentence or $null out.
+#>
+function Get-DefaultPrinterWarning {
+    param([AllowNull()] [AllowEmptyString()] [string] $PrinterName)
+
+    $advice = 'Set the receipt printer as the Windows default (and turn off "Let Windows ' +
+              'manage my default printer"), then use Settings -> Print test receipt.'
+
+    if ([string]::IsNullOrWhiteSpace($PrinterName)) {
+        return "No default printer is set, so receipts cannot print. $advice"
+    }
+    if ($PrinterName -match 'PDF|XPS|OneNote|Fax') {
+        return "The default printer is ""$PrinterName"", which saves a file instead of printing a receipt. $advice"
+    }
+    return $null
+}

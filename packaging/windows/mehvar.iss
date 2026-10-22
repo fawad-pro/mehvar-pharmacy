@@ -551,7 +551,15 @@ begin
       ' -DataDir '   + ShellQuote(DataDir),
       LogDir() + '\verify-console.log', Output);
 
-  if ResultCode <> 0 then
+  { Exit 2: every check passed, but the default printer will not print
+    receipts (verify-install.ps1). Said once, plainly; not a failure. }
+  if ResultCode = 2 then
+  begin
+    AppendLog('Post-install checks passed with a printer warning.');
+    MsgBox('Mehvar is installed and verified, but receipts will not print yet.' + #13#10 + #13#10 +
+      Output, mbInformation, MB_OK);
+  end
+  else if ResultCode <> 0 then
   begin
     { ProvisioningOk stays True. This machine HAS Mehvar on it: the database,
       both services and the pharmacy record all exist. What did not pass is the

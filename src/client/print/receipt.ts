@@ -47,3 +47,30 @@ export interface ReceiptData {
   /** D2: sold more than the system had on hand — shown so it is never silent. */
   readonly pendingNote?: string;
 }
+
+/** What a test receipt is numbered: never a number from the device's sequence. */
+export const TEST_RECEIPT_NUMBER = 'TEST';
+
+/**
+ * A receipt that checks the printer, not a sale — Settings' "Print test
+ * receipt" (Phase 12 §6 step 2). It carries the shop's own header and footer,
+ * so the owner sees what a customer will get, and it is numbered
+ * {@link TEST_RECEIPT_NUMBER}, so printing it never consumes a receipt number.
+ */
+export function testReceipt(input: {
+  tenantHeaderLines: readonly string[];
+  tenantFooterLine: string;
+  salesmanName: string;
+  now: Date;
+}): ReceiptData {
+  return {
+    receiptNumber: TEST_RECEIPT_NUMBER,
+    dateTime: input.now,
+    salesmanName: input.salesmanName,
+    tenantHeaderLines: input.tenantHeaderLines,
+    tenantFooterLine: input.tenantFooterLine,
+    lines: [{ name: 'Test receipt — not a sale', quantityLabel: '1', amountPaisa: 0 }],
+    subtotalPaisa: 0,
+    totalPaisa: 0,
+  };
+}
