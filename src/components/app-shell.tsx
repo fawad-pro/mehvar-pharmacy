@@ -92,7 +92,7 @@ export function AppShell({
     // Both providers wrap the whole shell, not just the surface: the top bar's
     // unsynced badge (ADR-3) reads the sync context, and Settle Udhaar (W3)
     // captures through it from outside any page.
-    <ReceiptContextProvider tenantId={tenantId}>
+    <ReceiptContextProvider tenantId={tenantId} salesmanName={userName}>
       <SyncProvider tenantId={tenantId} restricted={licence?.tier === 'restricted'}>
         <ServiceWorker />
         {/* Every screen re-reads when the outbox lands a record — see the

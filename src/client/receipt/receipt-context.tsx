@@ -32,9 +32,17 @@ const ReceiptContext = createContext<ReceiptContextValue | null>(null);
 
 export function ReceiptContextProvider({
   tenantId,
+  salesmanName,
   children,
 }: {
   tenantId: string;
+  /**
+   * Whoever is acting now, from the session. The context is fetched once, so
+   * the name it carried was whoever was acting when the counter opened — the
+   * owner, for a freshly opened counter — and every receipt after a PIN switch
+   * still printed it. The shell re-renders with the new name on every switch.
+   */
+  salesmanName: string;
   children: React.ReactNode;
 }) {
   const [context, setContext] = useState<SaleContext | null>(null);
@@ -131,13 +139,14 @@ export function ReceiptContextProvider({
     }
     return {
       ...context,
+      salesmanName,
       nextReceiptNumber: () => nextReceiptNumber(tenantId, context.receiptPrefix),
       skipReceiptNumber: (taken: string) => {
         skipReceiptNumber(tenantId, context.receiptPrefix, taken);
       },
       reload,
     };
-  }, [context, tenantId, reload]);
+  }, [context, tenantId, salesmanName, reload]);
 
   return <ReceiptContext.Provider value={value}>{children}</ReceiptContext.Provider>;
 }

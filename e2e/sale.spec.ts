@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   cart,
+  DEMO,
   lastSale,
   openCounter,
   printedReceipt as receipt,
@@ -358,4 +359,30 @@ test('Escape cancels an in-progress discount edit without changing anything', as
   // whole cart line.
   await page.keyboard.press('+');
   await expect(cart(page)).toContainText('2 strip');
+});
+
+test('the receipt names whoever is selling, after a PIN switch', async ({ page }) => {
+  // The receipt context used to capture the acting user's name once, when the
+  // counter opened as the owner, so every receipt for the rest of the session
+  // named the owner however many times the PIN switch moved the counter on.
+  // The sale itself was always attributed correctly; only the paper was wrong.
+  await openCounter(page);
+
+  await page.keyboard.press('F10');
+  const overlay = page.getByRole('dialog', { name: 'Switch user' });
+  await overlay.getByRole('button', { name: new RegExp(DEMO.salesman.name) }).click();
+  await overlay.getByLabel('PIN').fill(DEMO.salesman.pin);
+  await overlay.getByRole('button', { name: 'Switch' }).click();
+  await expect(overlay).toBeHidden();
+  await expect(page.getByRole('button', { name: new RegExp(DEMO.salesman.name) })).toBeVisible();
+
+  await search(page).fill('panadol');
+  await expect(page.getByRole('option').first()).toContainText('Panadol');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('F12');
+  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+
+  await expect(receipt(page)).toContainText(DEMO.salesman.name);
 });
