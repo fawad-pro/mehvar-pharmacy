@@ -568,6 +568,26 @@ exception visibility.
   tempting fix was `IF NOT EXISTS` in 0009, which would also have hidden every
   future drift. The answer was in `git log` and the recorded hash.
 
+## Things Day 20 established
+
+- **Earliest-expiry-first is wrong the day a batch expires.** An expired batch
+  is always the earliest, so FEFO alone sells it first. `planAllocation` takes
+  the business day as a required argument (PCN-008); forgetting it is exactly
+  how the bug looked.
+- **A test date chosen as "the future" is a time bomb.** Two tests went red the
+  day PCN-008 landed because `2026-09-01` had quietly become the past. Use
+  dates that stay on their side of today (`2020-…`, `2030-…`), or pin today.
+- **A correction records the figures it leaves behind** (PCN-009:
+  `effective_unit_cost_paisa`, `invoice_delta_paisa`), so readers sum rather
+  than replay history. Reports value allocations at the latest corrected cost;
+  nothing else had to learn about corrections.
+- **A new event table has three homes**: `EVENT_TABLES` (grants), the test
+  purge (`tests/db-admin.ts`), and the export. The export was missed once
+  (`supplier_payments`); `export-coverage.test.ts` now pins it.
+- **The E2E suite runs against a developer's database without a reset.** A
+  spec that needs a shortfall or an expired batch sizes it from the current
+  catalog payload, never from the seed; warm-up lists every routed key.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

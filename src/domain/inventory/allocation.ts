@@ -6,6 +6,9 @@
  *   D2: "Stock may go negative; sales are never blocked. Consumption is
  *        recorded against a *pending layer*, and the discrepancy surfaces in the
  *        owner's daily view."
+ *   PCN-008: expired batches are consumed only when nothing unexpired is left.
+ *        Earliest-expiry-first alone would always reach for an expired batch
+ *        first, because an expired batch is always the earliest.
  *
  * Planning is separated from writing on purpose. The rule that decides which
  * batch a tablet came from is the single most consequential piece of arithmetic
@@ -67,7 +70,20 @@ export function fefoOrder(a: BatchAvailability, b: BatchAvailability): number {
 }
 
 /**
+ * PCN-008: expired when the expiry date is before the business day. A batch
+ * with no expiry never expires. Both are ISO dates, so text order is date order.
+ */
+export function isExpired(batch: Pick<BatchAvailability, 'expiryDate'>, today: string): boolean {
+  return batch.expiryDate !== null && batch.expiryDate < today;
+}
+
+/**
  * Plans consumption of `qtyBase` from the batches on hand.
+ *
+ * Unexpired batches first, in FEFO order; then expired ones, in FEFO order
+ * (PCN-008); then the pending layer. `today` is the business day (ISO date) and
+ * is required, because forgetting it is exactly how expired stock was sold
+ * first.
  *
  * Never fails and never returns short: any quantity the batches cannot cover
  * becomes one pending allocation, because P2 says the sale proceeds and D2 says
@@ -76,12 +92,17 @@ export function fefoOrder(a: BatchAvailability, b: BatchAvailability): number {
 export function planAllocation(
   available: readonly BatchAvailability[],
   qtyBase: BaseQty,
+  today: string,
 ): AllocationPlan {
   if (qtyBase <= 0) {
     return { allocations: [], pendingQtyBase: 0 };
   }
 
-  const ordered = [...available].filter((batch) => batch.qtyRemainingBase > 0).sort(fefoOrder);
+  const inStock = [...available].filter((batch) => batch.qtyRemainingBase > 0);
+  const ordered = [
+    ...inStock.filter((batch) => !isExpired(batch, today)).sort(fefoOrder),
+    ...inStock.filter((batch) => isExpired(batch, today)).sort(fefoOrder),
+  ];
 
   const allocations: PlannedAllocation[] = [];
   let outstanding: number = qtyBase;

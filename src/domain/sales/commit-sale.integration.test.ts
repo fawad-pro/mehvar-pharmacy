@@ -160,11 +160,11 @@ suite('commitSale against Postgres', () => {
 
   it('consumes earliest-expiry first, across batches (D1)', async () => {
     const soon = await addOpeningStock(tenant.scope, panadol.id, 20, {
-      expiryDate: '2026-09-01',
+      expiryDate: '2030-09-01',
       unitCostPaisa: 200,
     });
     const later = await addOpeningStock(tenant.scope, panadol.id, 100, {
-      expiryDate: '2027-09-01',
+      expiryDate: '2031-09-01',
       unitCostPaisa: 300,
     });
 
@@ -185,7 +185,7 @@ suite('commitSale against Postgres', () => {
       expiryDate: null,
     });
     const perishable = await addOpeningStock(tenant.scope, panadol.id, 50, {
-      expiryDate: '2026-10-01',
+      expiryDate: '2030-10-01',
     });
 
     await commitSale(
@@ -197,6 +197,43 @@ suite('commitSale against Postgres', () => {
     const [nonPerish] = await tenant.scope.select(batches, eq(batches.id, nonPerishable));
     expect(perish?.qtyRemainingBase).toBe(30);
     expect(nonPerish?.qtyRemainingBase).toBe(50);
+  });
+
+  it('skips an expired batch, though its expiry is the earliest (PCN-008)', async () => {
+    const expired = await addOpeningStock(tenant.scope, panadol.id, 50, {
+      expiryDate: '2020-01-01',
+    });
+    const good = await addOpeningStock(tenant.scope, panadol.id, 50, {
+      expiryDate: '2030-01-01',
+    });
+
+    await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 20)], cashPaisa: 7_000 }),
+    );
+
+    const [expiredBatch] = await tenant.scope.select(batches, eq(batches.id, expired));
+    const [goodBatch] = await tenant.scope.select(batches, eq(batches.id, good));
+    expect(expiredBatch?.qtyRemainingBase).toBe(50);
+    expect(goodBatch?.qtyRemainingBase).toBe(30);
+  });
+
+  it('sells expired stock rather than block, once nothing unexpired is left (PCN-008)', async () => {
+    const good = await addOpeningStock(tenant.scope, panadol.id, 5, { expiryDate: '2030-01-01' });
+    const expired = await addOpeningStock(tenant.scope, panadol.id, 50, {
+      expiryDate: '2020-01-01',
+    });
+
+    const result = await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 20)], cashPaisa: 7_000 }),
+    );
+    expect(result.ok).toBe(true);
+
+    const [goodBatch] = await tenant.scope.select(batches, eq(batches.id, good));
+    const [expiredBatch] = await tenant.scope.select(batches, eq(batches.id, expired));
+    expect(goodBatch?.qtyRemainingBase).toBe(0);
+    expect(expiredBatch?.qtyRemainingBase).toBe(35);
   });
 
   it('creates a pending allocation on shortfall instead of refusing (D2, P2)', async () => {

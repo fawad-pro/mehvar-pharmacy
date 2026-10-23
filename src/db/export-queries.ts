@@ -24,6 +24,7 @@ import {
   payments,
   productBarcodes,
   products,
+  purchaseCorrections,
   purchaseLines,
   purchases,
   saleLineAllocations,
@@ -31,6 +32,8 @@ import {
   saleReturnLines,
   saleReturns,
   sales,
+  supplierPayments,
+  supplierReturns,
   suppliers,
   users,
 } from './schema';
@@ -58,6 +61,9 @@ export async function tenantDataExport(scope: TenantScope): Promise<ExportTable[
     returnLinesRows,
     adjustmentsRows,
     cashMovementsRows,
+    supplierPaymentsRows,
+    purchaseCorrectionsRows,
+    supplierReturnsRows,
   ] = await Promise.all([
     scope.select(users),
     scope.select(products),
@@ -75,6 +81,11 @@ export async function tenantDataExport(scope: TenantScope): Promise<ExportTable[
     scope.select(saleReturnLines),
     scope.select(adjustments),
     scope.select(cashMovements),
+    // [PCN-007/PCN-009] The rest of the supplier ledger: without these an
+    // exported supplier balance could not be reproduced from the export (T3, T4).
+    scope.select(supplierPayments),
+    scope.select(purchaseCorrections),
+    scope.select(supplierReturns),
   ]);
 
   return [
@@ -97,5 +108,8 @@ export async function tenantDataExport(scope: TenantScope): Promise<ExportTable[
     { name: 'sale_return_lines', rows: returnLinesRows },
     { name: 'adjustments', rows: adjustmentsRows },
     { name: 'cash_movements', rows: cashMovementsRows },
+    { name: 'supplier_payments', rows: supplierPaymentsRows },
+    { name: 'purchase_corrections', rows: purchaseCorrectionsRows },
+    { name: 'supplier_returns', rows: supplierReturnsRows },
   ];
 }

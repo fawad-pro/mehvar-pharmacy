@@ -17,6 +17,7 @@ import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or, sql } from 'driz
 
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
 import type { CatalogSuggestion } from '@/domain/catalog/product';
+import { businessDayOf } from '@/lib/business-day';
 import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
@@ -55,7 +56,15 @@ export interface CatalogSnapshot {
   removedProductIds: string[];
   removedBarcodes: string[];
   stock: Record<string, number>;
+  /** PCN-008: expired stock on hand, for the counter's warning. */
+  expired: Record<string, ExpiredStock>;
   syncedAt: string;
+}
+
+/** Base units on hand in expired batches, and the earliest of their expiry dates. */
+export interface ExpiredStock {
+  qtyBase: number;
+  expiryDate: string;
 }
 
 /**
@@ -94,6 +103,7 @@ export async function catalogSnapshot(scope: TenantScope, since?: Date): Promise
     // explicit list is reserved for Day 6, when unlink lands on the UI.
     removedBarcodes: [],
     stock: await stockByProduct(scope),
+    expired: await expiredStockByProduct(scope, businessDayOf(new Date())),
     syncedAt: new Date().toISOString(),
   };
 }
@@ -120,6 +130,40 @@ export async function stockByProduct(scope: TenantScope): Promise<Record<string,
     stock[row.productId] = Number(row.total);
   }
   return stock;
+}
+
+/**
+ * PCN-008: what part of each product's stock is past its expiry on `today`.
+ *
+ * Allocation reaches these batches only when nothing unexpired is left, so the
+ * counter can say, before payment, that a line will be met from expired stock
+ * and name the date. Products with no expired stock on hand are absent.
+ */
+export async function expiredStockByProduct(
+  scope: TenantScope,
+  today: string,
+): Promise<Record<string, ExpiredStock>> {
+  const rows = await scope.db
+    .select({
+      productId: batches.productId,
+      total: sql<string>`sum(${batches.qtyRemainingBase})`,
+      earliest: sql<string>`min(${batches.expiryDate})::text`,
+    })
+    .from(batches)
+    .where(
+      scope.scopeOf(
+        batches,
+        gt(batches.qtyRemainingBase, 0),
+        sql`${batches.expiryDate} < ${today}::date`,
+      ),
+    )
+    .groupBy(batches.productId);
+
+  const expired: Record<string, ExpiredStock> = {};
+  for (const row of rows) {
+    expired[row.productId] = { qtyBase: Number(row.total), expiryDate: row.earliest };
+  }
+  return expired;
 }
 
 function toIndexProduct(row: typeof products.$inferSelect): IndexProductRow {

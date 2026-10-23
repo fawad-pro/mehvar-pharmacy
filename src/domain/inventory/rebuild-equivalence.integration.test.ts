@@ -41,6 +41,10 @@ import { eq } from 'drizzle-orm';
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
 import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
 import { commitPurchase } from '@/domain/purchases/commit-purchase';
+import { commitPurchaseCorrection } from '@/domain/purchases/commit-purchase-correction';
+import { correctedLine } from '@/domain/purchases/purchase-correction';
+import { commitSupplierReturn } from '@/domain/suppliers/commit-supplier-return';
+import { balancesBySupplier, supplierBalance } from '@/db/supplier-queries';
 import { commitAdjustment } from '@/domain/inventory/commit-adjustment';
 import { commitReturn } from '@/domain/sales/commit-return';
 import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
@@ -51,10 +55,16 @@ import {
   batches,
   customers,
   payments,
+  purchaseCorrections,
+  purchaseLines,
+  purchases,
   saleLineAllocations,
   saleLines,
   saleReturns,
   sales,
+  supplierPayments,
+  supplierReturns,
+  suppliers,
 } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -79,6 +89,14 @@ const SEED = Number(process.env.REBUILD_SEED ?? 20260730);
 const HISTORIES = Number(process.env.REBUILD_HISTORIES ?? 4);
 const EVENTS_PER_HISTORY = Number(process.env.REBUILD_EVENTS ?? 40);
 
+/**
+ * Expiry dates for generated batches. One is always in the past and one is
+ * absent, so every history mixes expired, unexpired and non-perishable stock:
+ * PCN-008 changed the order sales consume them in, and the rebuild has to
+ * agree whatever that order is.
+ */
+const EXPIRY_CHOICES = ['2020-01-01', '2030-01-01', '2030-06-01', null] as const;
+
 interface World {
   tenant: TestTenant;
   products: TestProduct[];
@@ -98,6 +116,8 @@ interface World {
    * payments share one sequence (PCN-002), so both draw from this counter.
    */
   receiptCounter: number;
+  /** [PCN-009] One distributor per history, so returns have someone to credit. */
+  supplierId: Uuid;
 }
 
 /**
@@ -117,6 +137,9 @@ const observed = {
   /** Returns that actually gave credit back — the ledger's third term. */
   creditReducingReturns: 0,
   cashMovementsCommitted: 0,
+  /** [PCN-009] Corrections and supplier returns that actually committed. */
+  correctionsCommitted: 0,
+  supplierReturnsCommitted: 0,
 };
 
 /**
@@ -146,7 +169,7 @@ async function applyRandomEvent(world: World): Promise<void> {
         // the blended-cost path gets exercised constantly rather than rarely.
         bonusQtyBase: random() < 0.3 ? between(random, 1, 5) : 0,
         unitCostPaisa: between(random, 100, 500),
-        expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
+        expiryDate: pick(random, EXPIRY_CHOICES),
         batchNumber: random() < 0.5 ? `B-${between(random, 1, 9999)}` : null,
         mrpAtReceivingPaisa: null,
         priceAtReceivingPaisa: product.pricePaisa,
@@ -154,13 +177,17 @@ async function applyRandomEvent(world: World): Promise<void> {
     });
     observed.schemeLines += lines.filter((line) => line.bonusQtyBase > 0).length;
 
+    // Most invoices name the history's distributor, and some are bought on
+    // credit, so supplier balances and supplier returns have real history.
+    const withSupplier = random() < 0.7;
     const received = await commitPurchase(tenant.scope, {
       purchaseId: uuidv7(),
-      supplierId: null,
+      supplierId: withSupplier ? world.supplierId : null,
       invoiceRef: `INV-${world.receiptCounter}`,
       invoiceDate: null,
       note: null,
       lines,
+      ...(withSupplier && random() < 0.4 ? { cashPaidPaisa: 0 } : {}),
     });
     if (received.ok) {
       observed.resolvedPendingBase += received.value.resolvedPendingBase;
@@ -183,7 +210,7 @@ async function applyRandomEvent(world: World): Promise<void> {
       note: null,
       unitCostPaisa: between(random, 100, 500),
       pricePerBaseUnitPaisa: product.pricePaisa,
-      expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
+      expiryDate: pick(random, EXPIRY_CHOICES),
       batchNumber: null,
     });
     if (corrected.ok) {
@@ -363,6 +390,70 @@ async function applyRandomEvent(world: World): Promise<void> {
     return;
   }
 
+  if (roll < 0.6) {
+    // [PCN-009] A purchase correction: the cost, the quantity or the bonus of a
+    // received line, stated as what the line should have said. Reductions can
+    // exceed what the batch still holds, and are then refused.
+    const received = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.source === 'purchase_line',
+    );
+    if (received.length === 0) {
+      return;
+    }
+    const batch = pick(random, received);
+    const [line] = await tenant.scope.select(purchaseLines, eq(purchaseLines.id, batch.sourceId));
+    if (!line) {
+      return;
+    }
+    const current = correctedLine(
+      line,
+      await tenant.scope.select(
+        purchaseCorrections,
+        eq(purchaseCorrections.purchaseLineId, line.id),
+      ),
+    );
+    const which = random();
+    const committed = await commitPurchaseCorrection(tenant.scope, {
+      correctionId: uuidv7(),
+      purchaseLineId: line.id as Uuid,
+      qtyBase:
+        which < 0.4 ? Math.max(0, current.qtyBase + between(random, -15, 15)) : current.qtyBase,
+      bonusQtyBase:
+        which >= 0.4 && which < 0.6
+          ? Math.max(0, current.bonusQtyBase + between(random, -3, 3))
+          : current.bonusQtyBase,
+      unitCostPaisa: which >= 0.6 ? between(random, 100, 500) : current.unitCostPaisa,
+      note: 'generated correction',
+    });
+    if (committed.ok && !committed.value.alreadyCommitted) {
+      observed.correctionsCommitted += 1;
+    }
+    return;
+  }
+
+  if (roll < 0.64) {
+    // [PCN-009] Goods back to the distributor, from a batch that arrived on one
+    // of its invoices — the credit reduces what is owed.
+    const stocked = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.source === 'purchase_line' && batch.qtyRemainingBase > 0,
+    );
+    if (stocked.length === 0) {
+      return;
+    }
+    const batch = pick(random, stocked);
+    const committed = await commitSupplierReturn(tenant.scope, {
+      returnId: uuidv7(),
+      batchId: batch.id as Uuid,
+      qtyBase: between(random, 1, Math.min(batch.qtyRemainingBase, 10)),
+      creditPaisa: between(random, 0, 3_000),
+      note: null,
+    });
+    if (committed.ok) {
+      observed.supplierReturnsCommitted += 1;
+    }
+    return;
+  }
+
   // A cash sale. Quantities deliberately overshoot available stock sometimes,
   // so the pending layer is exercised rather than assumed.
   const lineCount = between(random, 1, 3);
@@ -429,6 +520,38 @@ async function assertInvariants(world: World, label: string): Promise<void> {
         ),
     );
   }
+
+  /* [PCN-009] The supplier balance, recomputed from the raw rows — tracked
+     invoices as corrected, less cash paid, supplier payments and the credit for
+     goods sent back — must equal both the one-supplier figure and the
+     all-suppliers expansion (Day 8: a figure and its expansion are one thing). */
+  const tracked = (await tenant.scope.select(purchases)).filter(
+    (row) => row.supplierId === world.supplierId && row.creditTracked,
+  );
+  const trackedIds = new Set(tracked.map((row) => row.id));
+  const trackedLines = (await tenant.scope.select(purchaseLines)).filter((row) =>
+    trackedIds.has(row.purchaseId),
+  );
+  const trackedLineIds = new Set(trackedLines.map((row) => row.id));
+  const expectedOwed =
+    trackedLines.reduce((sum, row) => sum + row.qtyBase * row.unitCostPaisa, 0) +
+    (await tenant.scope.select(purchaseCorrections))
+      .filter((row) => trackedLineIds.has(row.purchaseLineId))
+      .reduce((sum, row) => sum + row.invoiceDeltaPaisa, 0) -
+    tracked.reduce((sum, row) => sum + row.cashPaidPaisa, 0) -
+    (await tenant.scope.select(supplierPayments))
+      .filter((row) => row.supplierId === world.supplierId)
+      .reduce((sum, row) => sum + row.amountPaisa, 0) -
+    (await tenant.scope.select(supplierReturns))
+      .filter((row) => row.supplierId === world.supplierId)
+      .reduce((sum, row) => sum + row.creditPaisa, 0);
+  expect(await supplierBalance(tenant.scope, world.supplierId), `${label}: supplier balance`).toBe(
+    expectedOwed,
+  );
+  expect(
+    (await balancesBySupplier(tenant.scope))[world.supplierId] ?? 0,
+    `${label}: supplier balances expansion`,
+  ).toBe(expectedOwed);
 
   /* Invariant 2 — batch quantity ≥ 0; the pending layer is the only construct
      that may represent unresolved negative consumption. */
@@ -626,6 +749,13 @@ suite('rebuild equivalence — randomized histories', () => {
         );
       }
 
+      const supplierId = uuidv7();
+      await tenant.scope.insert(suppliers, {
+        id: supplierId,
+        name: `Distributor ${uuidv7().slice(-6)}`,
+        phone: null,
+      });
+
       const world: World = {
         tenant,
         products,
@@ -634,6 +764,7 @@ suite('rebuild equivalence — randomized histories', () => {
         issued: [],
         issuedPayments: [],
         receiptCounter: 0,
+        supplierId,
       };
 
       for (let event = 0; event < EVENTS_PER_HISTORY; event += 1) {
@@ -726,6 +857,12 @@ suite('rebuild equivalence — randomized histories', () => {
       'no return ever reduced credit — the ledger/balance invariant proved nothing',
     ).toBeGreaterThan(0);
     expect(observed.cashMovementsCommitted, 'no cash movement was ever committed').toBeGreaterThan(
+      0,
+    );
+    expect(observed.correctionsCommitted, 'no purchase correction ever committed').toBeGreaterThan(
+      0,
+    );
+    expect(observed.supplierReturnsCommitted, 'no supplier return ever committed').toBeGreaterThan(
       0,
     );
   });

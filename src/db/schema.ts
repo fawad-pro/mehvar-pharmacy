@@ -334,6 +334,7 @@ export const batches = pgTable(
      * Derivation contract (Phase 9 §4):
      *   qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments
      *                   + Σ restocked returns
+     *                   + Σ purchase-correction deltas − Σ supplier returns  [PCN-009]
      * The rebuild/verifier routine recomputes and compares; a mismatch is sev-1.
      */
     qtyRemainingBase: integer('qty_remaining_base').notNull(),
@@ -640,6 +641,100 @@ export const supplierPayments = pgTable(
     index('supplier_payments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('supplier_payments_tenant_supplier_idx').on(table.tenantId, table.supplierId),
     check('supplier_payments_amount_positive', sql`${table.amountPaisa} > 0`),
+  ],
+);
+
+/**
+ * [PCN-009] A compensating correction to one received purchase line (T2).
+ *
+ * The purchase line stays exactly as it was entered; this row says what it
+ * should have said. Quantity deltas move the line's batch through ADR-8's
+ * guarded functions, so `batches.qty_remaining` and the verifier agree. Two
+ * figures are recorded as they stood after this correction, so readers never
+ * have to replay the history: `effective_unit_cost_paisa` (the batch's cost per
+ * received unit, bonus included — reports value every allocation from the batch
+ * at the latest one) and `invoice_delta_paisa` (how much this correction moved
+ * the invoice's value — supplier balances add it).
+ */
+export const purchaseCorrections = pgTable(
+  'purchase_corrections',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    purchaseLineId: uuid('purchase_line_id')
+      .notNull()
+      .references(() => purchaseLines.id),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => batches.id),
+    /** Change to the invoiced (paid-for) quantity, in base units. */
+    qtyDeltaBase: integer('qty_delta_base').notNull().default(0),
+    /** Change to the free bonus quantity, in base units. */
+    bonusDeltaBase: integer('bonus_delta_base').notNull().default(0),
+    /** The corrected invoiced cost per base unit, when the cost was wrong. */
+    correctedUnitCostPaisa: bigint('corrected_unit_cost_paisa', { mode: 'number' }),
+    effectiveUnitCostPaisa: bigint('effective_unit_cost_paisa', { mode: 'number' }).notNull(),
+    invoiceDeltaPaisa: bigint('invoice_delta_paisa', { mode: 'number' }).notNull(),
+    note: text('note').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('purchase_corrections_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('purchase_corrections_line_idx').on(table.tenantId, table.purchaseLineId),
+    index('purchase_corrections_batch_idx').on(table.tenantId, table.batchId),
+    check(
+      'purchase_corrections_changes_something',
+      sql`${table.qtyDeltaBase} <> 0 OR ${table.bonusDeltaBase} <> 0 OR ${table.correctedUnitCostPaisa} IS NOT NULL`,
+    ),
+    check(
+      'purchase_corrections_cost_nonneg',
+      sql`${table.correctedUnitCostPaisa} IS NULL OR ${table.correctedUnitCostPaisa} >= 0`,
+    ),
+    check('purchase_corrections_note_present', sql`length(trim(${table.note})) > 0`),
+  ],
+);
+
+/**
+ * [PCN-009] Goods sent back to the distributor, with the credit the supplier
+ * gives for them. Stock leaves the named batch (as a distributor-return
+ * adjustment did), and the credit reduces what the pharmacy owes the supplier
+ * (which an adjustment could not, once PCN-007 introduced a payable).
+ */
+export const supplierReturns = pgTable(
+  'supplier_returns',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => batches.id),
+    qtyBase: integer('qty_base').notNull(),
+    creditPaisa: bigint('credit_paisa', { mode: 'number' }).notNull(),
+    note: text('note'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('supplier_returns_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('supplier_returns_tenant_supplier_idx').on(table.tenantId, table.supplierId),
+    index('supplier_returns_batch_idx').on(table.tenantId, table.batchId),
+    check('supplier_returns_qty_positive', sql`${table.qtyBase} > 0`),
+    check('supplier_returns_credit_nonneg', sql`${table.creditPaisa} >= 0`),
   ],
 );
 
@@ -1028,6 +1123,9 @@ export const EVENT_TABLES = [
   'sale_line_allocations',
   'payments',
   'supplier_payments',
+  // [PCN-009] Compensating records for purchases and goods sent back.
+  'purchase_corrections',
+  'supplier_returns',
   'sale_returns',
   'sale_return_lines',
   'adjustments',

@@ -129,6 +129,15 @@ export function SaleSurface() {
     return stock;
   }, [lines, index]);
 
+  // PCN-008: the warning before payment, from the same snapshot as stock.
+  const expiredByProduct = useMemo(() => {
+    const expired: Record<string, { qtyBase: number; expiryDate: string } | null> = {};
+    for (const line of lines) {
+      expired[line.productId] = index?.expiredOf(line.productId) ?? null;
+    }
+    return expired;
+  }, [lines, index]);
+
   const focusSearch = useCallback(() => {
     setSelectedLineId(null);
     searchRef.current?.focus();
@@ -433,6 +442,7 @@ export function SaleSurface() {
             lines={lines}
             selectedLineId={selectedLineId}
             stockByProduct={stockByProduct}
+            expiredByProduct={expiredByProduct}
             onSelect={setSelectedLineId}
             onChange={(lineId, patch) => {
               setLines((current) => updateLine(current, lineId, patch));
@@ -481,9 +491,7 @@ export function SaleSurface() {
               </button>
             </div>
           ) : (
-            <p className="text-ink/40 text-xs">
-              {keyFor('udhaar')} — attach a customer for udhaar
-            </p>
+            <p className="text-ink/40 text-xs">{keyFor('udhaar')} — attach a customer for udhaar</p>
           )}
 
           {/* A counter cannot number a receipt until it has heard from the

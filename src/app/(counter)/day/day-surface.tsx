@@ -66,6 +66,18 @@ interface ReturnExceptionRow {
   createdAt: Date;
 }
 
+/** PCN-008 — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface ExpiredSaleRow {
+  allocationId: string;
+  receiptNumber: string;
+  productName: string;
+  qtyBase: number;
+  baseUnitName: string;
+  expiryDate: string;
+  byName: string;
+  createdAt: Date;
+}
+
 interface QuickItemRow {
   productId: string;
   name: string;
@@ -78,6 +90,31 @@ interface AdjustmentExceptionRow {
   qtyBaseDelta: number;
   reason: string;
   note: string | null;
+  byName: string;
+  createdAt: Date;
+}
+
+/** [PCN-009] — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface PurchaseCorrectionExceptionRow {
+  id: string;
+  purchaseId: string;
+  productName: string;
+  qtyDeltaBase: number;
+  bonusDeltaBase: number;
+  costCorrected: boolean;
+  invoiceDeltaPaisa: number;
+  note: string;
+  byName: string;
+  createdAt: Date;
+}
+
+interface SupplierReturnExceptionRow {
+  id: string;
+  productName: string;
+  supplierName: string;
+  qtyBase: number;
+  baseUnitName: string;
+  creditPaisa: number;
   byName: string;
   createdAt: Date;
 }
@@ -108,8 +145,11 @@ export function DaySurface({
   figures,
   overrides,
   returns,
+  expiredSold,
   quickItems,
   adjustments,
+  corrections,
+  supplierReturns,
   cashMovements,
   lateSynced,
   hasOpeningFloat,
@@ -122,8 +162,14 @@ export function DaySurface({
   figures: ReportFigures;
   overrides: OverrideRow[];
   returns: ReturnExceptionRow[];
+  /** PCN-008: sold from a batch already past its expiry date. */
+  expiredSold: ExpiredSaleRow[];
   quickItems: QuickItemRow[];
   adjustments: AdjustmentExceptionRow[];
+  /** [PCN-009] Corrections to received invoices. */
+  corrections: PurchaseCorrectionExceptionRow[];
+  /** [PCN-009] Goods sent back to suppliers. */
+  supplierReturns: SupplierReturnExceptionRow[];
   cashMovements: CashMovementExceptionRow[];
   lateSynced: LateSyncedRow[];
   hasOpeningFloat: boolean;
@@ -136,10 +182,13 @@ export function DaySurface({
   const needsOpeningFloat = isDrawerDay && !hasOpeningFloat;
 
   const exceptionCount =
+    expiredSold.length +
     overrides.length +
     returns.length +
     quickItems.length +
     adjustments.length +
+    corrections.length +
+    supplierReturns.length +
     cashMovements.length +
     lateSynced.length;
 
@@ -252,10 +301,13 @@ export function DaySurface({
       <AttentionBanner
         count={exceptionCount}
         parts={[
+          [expiredSold.length, 'expired sale'],
           [overrides.length, 'discount'],
           [returns.length, 'return'],
           [quickItems.length, 'quick item'],
           [adjustments.length, 'adjustment'],
+          [corrections.length, 'purchase correction'],
+          [supplierReturns.length, 'return to supplier'],
           [cashMovements.length, 'cash movement'],
           [lateSynced.length, 'synced late'],
         ]}
@@ -315,6 +367,21 @@ export function DaySurface({
       <div>
         {exceptionCount > 0 ? (
           <div className="flex flex-col gap-4">
+            {/* PCN-008. First, because it is the one that can reach a patient. */}
+            <ExceptionGroup title="Expired stock sold" rows={expiredSold} empty={false}>
+              {expiredSold.map((row) => (
+                <Row key={row.allocationId}>
+                  <span className="font-medium">{row.productName}</span>
+                  <span className="numeral text-amber ml-2">
+                    {row.qtyBase} {row.baseUnitName}
+                  </span>
+                  <span className="text-amber ml-2">expired {row.expiryDate}</span>
+                  <span className="text-ink/60 ml-2">{row.receiptNumber}</span>
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
             <ExceptionGroup title="Discounts and overrides" rows={overrides} empty={false}>
               {overrides.map((row) => (
                 <Row key={row.saleLineId}>
@@ -349,6 +416,48 @@ export function DaySurface({
                 <Row key={row.productId}>
                   <span className="font-medium">{row.name}</span>
                   <span className="text-ink/50 ml-auto text-xs">needs completing</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
+            <ExceptionGroup title="Purchase corrections" rows={corrections} empty={false}>
+              {corrections.map((row) => (
+                <Row key={row.id}>
+                  <Link
+                    href={`/purchases/${row.purchaseId}`}
+                    className="font-medium hover:underline"
+                  >
+                    {row.productName}
+                  </Link>
+                  <span className="text-ink/60 ml-2">
+                    {[
+                      row.qtyDeltaBase !== 0
+                        ? `qty ${row.qtyDeltaBase > 0 ? '+' : ''}${row.qtyDeltaBase}`
+                        : null,
+                      row.bonusDeltaBase !== 0
+                        ? `bonus ${row.bonusDeltaBase > 0 ? '+' : ''}${row.bonusDeltaBase}`
+                        : null,
+                      row.costCorrected ? 'cost corrected' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <span className="text-ink/50 ml-2 truncate">{row.note}</span>
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
+            <ExceptionGroup title="Returns to suppliers" rows={supplierReturns} empty={false}>
+              {supplierReturns.map((row) => (
+                <Row key={row.id}>
+                  <span className="font-medium">{row.productName}</span>
+                  <span className="numeral text-amber ml-2">
+                    -{row.qtyBase} {row.baseUnitName}
+                  </span>
+                  <span className="text-ink/60 ml-2">to {row.supplierName}</span>
+                  <span className="numeral ml-2">credit {formatPaisa(paisa(row.creditPaisa))}</span>
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>

@@ -35,6 +35,8 @@ export interface CartTableProps {
   lines: readonly CartLine[];
   selectedLineId: string | null;
   stockByProduct: Readonly<Record<string, number | null>>;
+  /** PCN-008: expired stock on hand per product, from the index snapshot. */
+  expiredByProduct?: Readonly<Record<string, { qtyBase: number; expiryDate: string } | null>>;
   onSelect: (lineId: string | null) => void;
   onChange: (lineId: string, patch: Partial<CartLine>) => void;
   onRemove: (lineId: string) => void;
@@ -47,6 +49,7 @@ export function CartTable({
   lines,
   selectedLineId,
   stockByProduct,
+  expiredByProduct = {},
   onSelect,
   onChange,
   onRemove,
@@ -238,6 +241,12 @@ export function CartTable({
           const stock = stockByProduct[line.productId] ?? null;
           // D2: the line proceeds; the chip is exposure, not a block.
           const short = stock !== null && stock < line.qtyBase;
+          // PCN-008: allocation reaches expired batches only after every
+          // unexpired one, so the line touches expired stock exactly when it
+          // asks for more than the unexpired part. Warned, never blocked.
+          const expired = expiredByProduct[line.productId] ?? null;
+          const fromExpired =
+            expired !== null && stock !== null && line.qtyBase > stock - expired.qtyBase;
 
           return (
             <tr
@@ -262,6 +271,14 @@ export function CartTable({
                 <span className="font-medium">{line.name}</span>
                 {isPriceOverridden(line) ? (
                   <span className="text-amber ml-2 text-xs">price changed</span>
+                ) : null}
+                {fromExpired ? (
+                  <span className="text-amber ml-2 text-xs font-medium" role="alert">
+                    {expired !== null && stock !== null && stock - expired.qtyBase <= 0
+                      ? 'only expired stock left'
+                      : 'part from expired stock'}{' '}
+                    — expired {expired?.expiryDate}
+                  </span>
                 ) : null}
                 {short ? (
                   <span className="text-amber ml-2 text-xs">

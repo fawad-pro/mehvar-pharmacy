@@ -2,6 +2,11 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
+import {
+  batchesForPurchase,
+  correctionsForPurchase,
+  supplierReturnsForBatches,
+} from '@/db/correction-queries';
 import { findPurchase } from '@/db/purchase-queries';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
@@ -33,10 +38,22 @@ export default async function PurchaseDetailPage({
   }
 
   const { purchaseId } = await params;
-  const purchase = await findPurchase(scopeFor(session), purchaseId);
+  const scope = scopeFor(session);
+  const purchase = await findPurchase(scope, purchaseId);
   if (!purchase) {
     notFound();
   }
+  // [PCN-009] What has been corrected or sent back since, shown beside the
+  // invoice as entered — never instead of it (T2).
+  const [corrections, lineBatches] = await Promise.all([
+    correctionsForPurchase(scope, purchaseId),
+    batchesForPurchase(scope, purchaseId),
+  ]);
+  const returns = await supplierReturnsForBatches(
+    scope,
+    lineBatches.map((batch) => batch.batchId),
+  );
+  const correctedDeltaPaisa = corrections.reduce((sum, row) => sum + row.invoiceDeltaPaisa, 0);
 
   /*
    * Invoiced cost, not effective cost.
@@ -58,7 +75,7 @@ export default async function PurchaseDetailPage({
   // Untracked (entered before supplier credit existed): nothing was recorded
   // about payment, so nothing is shown as owed.
   const creditPaisa = purchase.creditTracked
-    ? Math.max(0, totalCostPaisa - purchase.cashPaidPaisa)
+    ? Math.max(0, totalCostPaisa + correctedDeltaPaisa - purchase.cashPaidPaisa)
     : 0;
 
   return (
@@ -152,11 +169,21 @@ export default async function PurchaseDetailPage({
 
       <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-4 text-sm">
         <div className="flex justify-between font-semibold">
-          <span>Invoice total</span>
+          <span>Invoice total{correctedDeltaPaisa !== 0 ? ' as entered' : ''}</span>
           <span className="numeral">
             {formatPaisa(paisa(totalCostPaisa), { withSymbol: true })}
           </span>
         </div>
+        {/* [PCN-009] The corrected figure sits beneath the entered one, so the
+            paper invoice and the correction can both be checked against it. */}
+        {correctedDeltaPaisa !== 0 ? (
+          <div className="flex justify-between font-semibold">
+            <span>Invoice total as corrected</span>
+            <span className="numeral">
+              {formatPaisa(paisa(totalCostPaisa + correctedDeltaPaisa), { withSymbol: true })}
+            </span>
+          </div>
+        ) : null}
         {/* [PCN-007] Paid vs owed — shown only when the invoice was not settled
             in full, so an ordinary cash purchase reads exactly as before. */}
         {creditPaisa > 0 ? (
@@ -190,6 +217,62 @@ export default async function PurchaseDetailPage({
           </p>
         ) : null}
       </div>
+
+      {corrections.length > 0 || returns.length > 0 ? (
+        <div className="border-line rounded border p-4 text-sm">
+          <h2 className="text-green-900 mb-2 font-medium">Corrections and returns</h2>
+          <ul className="divide-line divide-y">
+            {corrections.map((row) => (
+              <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
+                <span className="font-medium">{row.productName}</span>
+                <span className="text-ink/70">
+                  {[
+                    row.qtyDeltaBase !== 0
+                      ? `quantity ${row.qtyDeltaBase > 0 ? '+' : ''}${row.qtyDeltaBase}`
+                      : null,
+                    row.bonusDeltaBase !== 0
+                      ? `bonus ${row.bonusDeltaBase > 0 ? '+' : ''}${row.bonusDeltaBase}`
+                      : null,
+                    row.correctedUnitCostPaisa !== null
+                      ? `cost now ${formatPaisa(paisa(row.correctedUnitCostPaisa))}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                <span className="text-ink/50">“{row.note}”</span>
+                <span className="text-ink/40 ml-auto text-xs">
+                  {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
+                </span>
+              </li>
+            ))}
+            {returns.map((row) => (
+              <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
+                <span className="font-medium">{row.productName}</span>
+                <span className="text-ink/70">
+                  {row.qtyBase} {row.baseUnitName} returned to {row.supplierName}, credit{' '}
+                  {formatPaisa(paisa(row.creditPaisa))}
+                </span>
+                {row.note ? <span className="text-ink/50">“{row.note}”</span> : null}
+                <span className="text-ink/40 ml-auto text-xs">
+                  {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* The one control on this review page that changes something, and it
+          says so and goes elsewhere to do it (Day 9). Owner-only. */}
+      {session.userRole === 'owner' ? (
+        <Link
+          href={`/purchases/${purchaseId}/correct`}
+          className="text-green-700 self-start text-sm hover:underline"
+        >
+          Correct this invoice or return goods to the supplier →
+        </Link>
+      ) : null}
     </section>
   );
 }

@@ -78,6 +78,13 @@
       "when": 1792587620514,
       "tag": "0010_supplier_credit_tracked",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792713514119,
+      "tag": "0011_purchase_corrections",
+      "breakpoints": true
     }
   ]
 }

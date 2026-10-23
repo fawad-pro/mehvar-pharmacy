@@ -6,6 +6,9 @@
  * never stored as authority, exactly like a customer balance (ADR-1):
  *
  *   balance = Σ (invoice cost − cash paid at receiving) − Σ supplier payments
+ *             + Σ purchase-correction invoice deltas − Σ supplier-return credit
+ *             [PCN-009: a corrected invoice owes its corrected value, and goods
+ *             sent back reduce what is owed by the credit the supplier gave]
  *
  * over TRACKED purchases only (`purchases.credit_tracked`). A purchase entered
  * before supplier credit existed has no recorded payment — its cash-paid 0 is
@@ -24,7 +27,14 @@ import 'server-only';
 import { eq, sql, sum } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
-import { purchaseLines, purchases, supplierPayments, suppliers } from './schema';
+import {
+  purchaseCorrections,
+  purchaseLines,
+  purchases,
+  supplierPayments,
+  supplierReturns,
+  suppliers,
+} from './schema';
 
 import type { Uuid } from '@/lib/uuid';
 
@@ -60,12 +70,36 @@ export async function supplierBalance(scope: TenantScope, supplierId: Uuid): Pro
     .from(supplierPayments)
     .where(scope.scopeOf(supplierPayments, eq(supplierPayments.supplierId, supplierId)));
 
-  return Number(lineCost?.total ?? 0) - Number(cashPaid?.total ?? 0) - Number(paid?.total ?? 0);
+  const [corrected] = await scope.db
+    .select({ total: sum(purchaseCorrections.invoiceDeltaPaisa).as('total') })
+    .from(purchaseCorrections)
+    .innerJoin(purchaseLines, eq(purchaseLines.id, purchaseCorrections.purchaseLineId))
+    .innerJoin(purchases, eq(purchases.id, purchaseLines.purchaseId))
+    .where(
+      scope.scopeOf(
+        purchaseCorrections,
+        eq(purchases.supplierId, supplierId),
+        eq(purchases.creditTracked, true),
+      ),
+    );
+
+  const [returned] = await scope.db
+    .select({ total: sum(supplierReturns.creditPaisa).as('total') })
+    .from(supplierReturns)
+    .where(scope.scopeOf(supplierReturns, eq(supplierReturns.supplierId, supplierId)));
+
+  return (
+    Number(lineCost?.total ?? 0) -
+    Number(cashPaid?.total ?? 0) -
+    Number(paid?.total ?? 0) +
+    Number(corrected?.total ?? 0) -
+    Number(returned?.total ?? 0)
+  );
 }
 
 /** Every named supplier's balance in one round of queries — avoids N+1. */
 export async function balancesBySupplier(scope: TenantScope): Promise<Record<string, number>> {
-  const [lineCosts, cashPaid, paid] = await Promise.all([
+  const [lineCosts, cashPaid, paid, corrected, returned] = await Promise.all([
     scope.db
       .select({
         supplierId: purchases.supplierId,
@@ -91,6 +125,24 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
       .from(supplierPayments)
       .where(scope.scopeOf(supplierPayments))
       .groupBy(supplierPayments.supplierId),
+    scope.db
+      .select({
+        supplierId: purchases.supplierId,
+        total: sum(purchaseCorrections.invoiceDeltaPaisa).as('total'),
+      })
+      .from(purchaseCorrections)
+      .innerJoin(purchaseLines, eq(purchaseLines.id, purchaseCorrections.purchaseLineId))
+      .innerJoin(purchases, eq(purchases.id, purchaseLines.purchaseId))
+      .where(scope.scopeOf(purchaseCorrections, eq(purchases.creditTracked, true)))
+      .groupBy(purchases.supplierId),
+    scope.db
+      .select({
+        supplierId: supplierReturns.supplierId,
+        total: sum(supplierReturns.creditPaisa).as('total'),
+      })
+      .from(supplierReturns)
+      .where(scope.scopeOf(supplierReturns))
+      .groupBy(supplierReturns.supplierId),
   ]);
 
   const balances: Record<string, number> = {};
@@ -101,6 +153,8 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
   for (const row of lineCosts) apply(row.supplierId, Number(row.total ?? 0));
   for (const row of cashPaid) apply(row.supplierId, -Number(row.total ?? 0));
   for (const row of paid) apply(row.supplierId, -Number(row.total ?? 0));
+  for (const row of corrected) apply(row.supplierId, Number(row.total ?? 0));
+  for (const row of returned) apply(row.supplierId, -Number(row.total ?? 0));
   return balances;
 }
 

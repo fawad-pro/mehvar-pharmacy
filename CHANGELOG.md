@@ -2,6 +2,45 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Expired stock, purchase corrections, supplier returns (Day 20)
+
+PCN-008 and PCN-009 applied; the E2E suite made to pass against a database it
+has run on before.
+
+**Expired stock is the last stock a sale reaches (PCN-008)**
+
+- Earliest-expiry-first always reached for an expired batch first. Allocation
+  now consumes unexpired batches first, then expired, then the pending layer.
+- The cart warns "only expired stock left" / "part from expired stock", naming
+  the expiry, before payment. Never a block (P2).
+- The Day screen lists "Expired stock sold" first, derived from the allocations
+  the server actually made, so an offline sale cannot dodge it.
+
+**Purchases can be corrected; goods can go back for credit (PCN-009)**
+
+- Migration 0011: `purchase_corrections` and `supplier_returns`, both
+  INSERT-only for the app role. Compensating records: the purchase line is
+  never edited.
+- A correction states what the line should have said (quantity, bonus, unit
+  cost, a reason). Quantity changes move the batch; a corrected cost values
+  every unit sold from that batch, including units sold before the correction.
+  A reduction larger than the batch still holds is refused.
+- A supplier return removes stock from a batch and subtracts the supplier's
+  credit from what is owed.
+- The stock verifier, supplier balances and margin all count both. The invoice
+  page shows the corrected total beside the entered one; the forms live on
+  `/purchases/[id]/correct`, owner-only. Both acts appear on the Day screen.
+- The data export now includes `supplier_payments` (missing since PCN-007) and
+  both new tables, pinned by `tests/export-coverage.test.ts`.
+
+**E2E without a reset**
+
+- The warm-up compiles every route a function key reaches, not only the
+  opening ones; `/receipts` and `/purchases` failed on their first key press.
+- Specs that receive stock size their quantities from what the system holds
+  now, so the suite passes against a developer database without
+  `npm run e2e:reset`.
+
 ## Session — Migration 0009 on databases that ran supplier credit early (Day 19)
 
 `db:migrate` failed on databases that had run supplier credit from its original

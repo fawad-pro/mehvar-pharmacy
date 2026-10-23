@@ -288,6 +288,36 @@ describe('stock is advisory and separate', () => {
     // D2: a zero-stock line still sells. The badge says so; it never blocks.
     expect(index.search('brufen')[0]?.stockBase).toBe(0);
   });
+
+  it('carries expired stock for the counter’s warning, and none where there is none (PCN-008)', () => {
+    const withExpired = CatalogIndex.build({
+      ...PAYLOAD,
+      expired: { augmentin: { qtyBase: 6, expiryDate: '2026-09-30' } },
+    });
+    expect(withExpired.expiredOf('augmentin')).toEqual({ qtyBase: 6, expiryDate: '2026-09-30' });
+    expect(withExpired.expiredOf('panadol')).toBeNull();
+    // A catalog cached before the field existed still builds.
+    expect(index.expiredOf('augmentin')).toBeNull();
+  });
+
+  it('replaces expired stock whole on refresh, and reads an absent field as none', () => {
+    const delta = {
+      products: [],
+      removedProductIds: [],
+      barcodes: [],
+      removedBarcodes: [],
+      stock: PAYLOAD.stock,
+      syncedAt: '2026-07-31T00:00:00.000Z',
+    };
+    const before = { ...PAYLOAD, expired: { augmentin: { qtyBase: 6, expiryDate: '2026-09-30' } } };
+    expect(applyDelta(before, delta).expired).toEqual({});
+    expect(
+      applyDelta(before, {
+        ...delta,
+        expired: { panadol: { qtyBase: 2, expiryDate: '2026-01-31' } },
+      }).expired,
+    ).toEqual({ panadol: { qtyBase: 2, expiryDate: '2026-01-31' } });
+  });
 });
 
 describe('edges that must not throw at a counter (P2)', () => {

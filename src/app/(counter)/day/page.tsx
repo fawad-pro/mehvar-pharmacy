@@ -8,6 +8,9 @@ import {
   lateSyncedInRange,
   overridesAndDiscountsInRange,
   reportFigures,
+  expiredStockSoldInRange,
+  purchaseCorrectionsInRange,
+  supplierReturnsInRange,
   returnsInRange,
   quickItemsInRange,
   threeNumbers,
@@ -60,8 +63,11 @@ export default async function DayPage({
     numbers,
     overrides,
     returns,
+    expiredSold,
     quickItems,
     adjustments,
+    corrections,
+    supplierReturns,
     cashMovements,
     lateSynced,
     figures,
@@ -71,8 +77,11 @@ export default async function DayPage({
     threeNumbers(scope, range.start, range.end),
     overridesAndDiscountsInRange(scope, range.start, range.end),
     returnsInRange(scope, range.start, range.end),
+    expiredStockSoldInRange(scope, range.start, range.end),
     quickItemsInRange(scope, range.start, range.end),
     adjustmentsInRange(scope, range.start, range.end),
+    purchaseCorrectionsInRange(scope, range.start, range.end),
+    supplierReturnsInRange(scope, range.start, range.end),
     cashMovementsExceptionInRange(scope, range.start, range.end),
     lateSyncedInRange(scope, range.start, range.end),
     reportFigures(scope, range.start, range.end),
@@ -93,8 +102,11 @@ export default async function DayPage({
       figures={figures}
       overrides={overrides}
       returns={returns}
+      expiredSold={expiredSold}
       quickItems={quickItems}
       adjustments={adjustments}
+      corrections={corrections}
+      supplierReturns={supplierReturns}
       cashMovements={cashMovements}
       lateSynced={lateSynced}
       hasOpeningFloat={openingFloat}
