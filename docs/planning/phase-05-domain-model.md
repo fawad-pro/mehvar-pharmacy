@@ -44,7 +44,7 @@ A quantity of a product that arrived together: batch number (as printed, optiona
 A name and a phone number attached to a debt (charter boundary). Exists only to make udhaar recordable. Balance is derived, never stored.
 
 ### Supplier
-A name on purchase entries, for "what did I buy from whom" visibility. No payables, no accounting (charter boundary).
+A name on purchase entries, for "what did I buy from whom" visibility — and, since PCN-007 (applied to this section by PCN-010), what the pharmacy owes them: a derived position (tracked invoices as corrected − cash paid − supplier payments − supplier-return credit), never stored. No accounting beyond that (charter boundary).
 
 ## 3. Event records
 
@@ -61,14 +61,14 @@ Money received from a customer independent of a new sale — the udhaar settleme
 References the original sale (whole or lines). Restores stock (to the batch it came from when known), records cash returned or credit reduced. A compensating record, not an edit (T2).
 
 ### Adjustment
-Stock change with a mandatory coded reason: damage, expiry write-off, return to distributor, count correction, opening stock. Attributed and visible in the owner's daily view (T1). Adjustments are the only non-sale, non-purchase path by which stock moves.
+Stock change with a mandatory coded reason: damage, expiry write-off, return to distributor, count correction, opening stock. Attributed and visible in the owner's daily view (T1). Adjustments are the only non-sale, non-purchase path by which stock moves — together, since 2026-10-22 (PCN-009), with two compensating records: a *purchase correction* (what a received line should have said: quantity, bonus, unit cost, with a reason) and a *supplier return* (goods sent back from a batch, with the credit the supplier gives, which reduces what is owed).
 
 ### Cash Movement
 Cash placed into or taken out of the drawer outside of sales: opening float, owner withdrawal, small expense with a note ("chai, rickshaw"). Included because without it the drawer never reconciles and the owner's "today's cash" number becomes fiction — a small entity that protects a headline promise. Not an expense-management feature (boundary holds); just drawer honesty.
 
 ## 4. Key semantic decisions
 
-**D1. Automatic FEFO consumption.** Sales consume stock from the earliest-expiry batch first, automatically. The salesman sees the price, not the batch. When two batches carry different prices, the sale line uses the consuming batch's price and shows it plainly — the price ambiguity moment (Phase 1 §5) resolves by rule, not by conversation. Owner can review batch-price transitions in the daily view.
+**D1. Automatic FEFO consumption.** Sales consume stock from the earliest-expiry batch first, automatically — among batches that have not yet expired. *(Amended 2026-10-22 by PCN-008: expired batches are consumed only when nothing unexpired is left; the counter warns, naming the expiry, before payment, and the sale is an exception in the owner's daily view. Never blocked, P2.)* The salesman sees the price, not the batch. When two batches carry different prices, the sale line uses the consuming batch's price and shows it plainly — the price ambiguity moment (Phase 1 §5) resolves by rule, not by conversation. Owner can review batch-price transitions in the daily view.
 
 **D2. Stock may go negative; sales are never blocked.** When the shelf has it and the system doesn't (unentered purchase, count drift), the sale proceeds (P2), consumption is recorded against a *pending layer*, and the discrepancy surfaces in the owner's daily view for reconciliation. When the missing purchase is later entered or a count correction made, pending consumption resolves against real batches. Negative stock is a visible exception state, never a silent one.
 
@@ -80,7 +80,7 @@ Cash placed into or taken out of the drawer outside of sales: opening float, own
 
 ## 5. Invariants
 
-1. Product stock (base units) = Σ purchases + Σ positive adjustments − Σ sales − Σ negative adjustments − Σ returns-to-distributor + Σ sale returns. Always derivable, never stored as authority.
+1. Product stock (base units) = Σ purchases + Σ positive adjustments − Σ sales − Σ negative adjustments − Σ returns-to-distributor + Σ sale returns ± Σ purchase-correction quantity deltas − Σ supplier returns (PCN-009). Always derivable, never stored as authority.
 2. Batch quantity ≥ 0; the pending layer is the only construct that may represent unresolved negative consumption, and it is always visible.
 3. Customer balance = Σ credit extended − Σ payments − Σ credit reversals. Never stored as authority.
 4. Sale total = Σ line totals − invoice discount; cash + credit split = total, exactly.
@@ -89,9 +89,9 @@ Cash placed into or taken out of the drawer outside of sales: opening float, own
 
 ## 6. Explicitly out of the model (V1)
 
-Prescriptions and clinical data; expenses beyond drawer cash movements; loyalty, pricing tiers, or customer data beyond name+phone; multi-branch stock; purchase orders (a low-stock *list* exists; ordering happens on WhatsApp as it does today); inter-pharmacy anything.
+Prescriptions and clinical data, including controlled-drug registers (PCN-010); expenses beyond drawer cash movements; loyalty, pricing tiers, or customer data beyond name+phone; multi-branch stock; purchase orders (a low-stock *list* exists; ordering happens on WhatsApp as it does today); inter-pharmacy anything.
 
-*Amended by PCN-007:* supplier payables are **in** the model. What a pharmacy owes a supplier is a derived position — Σ (invoice cost − cash paid at receiving) over purchases whose payment was recorded, minus Σ supplier payments — the mirror of a customer balance (invariant 3), never stored as authority. Purchases entered before supplier credit existed have no recorded payment and owe nothing.
+*Amended by PCN-007:* supplier payables are **in** the model. What a pharmacy owes a supplier is a derived position — Σ (invoice cost − cash paid at receiving) over purchases whose payment was recorded, minus Σ supplier payments — the mirror of a customer balance (invariant 3), never stored as authority. Purchases entered before supplier credit existed have no recorded payment and owe nothing. *Since PCN-009* the position also adds each correction's invoice delta and subtracts supplier-return credit.
 
 ## 7. Exports to later phases
 

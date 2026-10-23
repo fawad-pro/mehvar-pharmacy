@@ -25,24 +25,29 @@ How the product is deployed, how it is priced, how money is collected, and how h
 
 **D. On-premise, annual support fee (the MARS model).** MARS proves the *billing* model works, but MARS carries an installed base and support infrastructure built over years. For us it inherits every liability of C except revenue durability. The correct lesson from MARS is its fee framing, not its deployment. Rejected as deployment; adopted as pricing psychology.
 
-**E. Hybrid: cloud product with an optional local install.** Deferred, not rejected. One codebase can support it later (containerized local deployment) if a segment demands it — likely chains with compliance concerns, not V1 independents. Offering it in V1 doubles operational surface for a customer who hasn't asked yet. Goes to Future Considerations.
+**E. Hybrid: cloud product with an optional local install.** **Adopted — see the amendment note below.** Originally deferred, not rejected: one codebase can support it later (containerized local deployment) if a segment demands it. Offering it in V1 doubles operational surface for a customer who hasn't asked yet.
+
+> **Amended 2026-08-03 by PCN-004 (accepted).** A customer asked. Option E is promoted from deferred to primary and the deployment decision in §3 is inverted: local-first, with cloud services additive and cloud hosting optional. Options C and D keep their rejections — the flaw in C was perpetual *licensing*, and the subscription model in §3 is unchanged. Of C's five objections, PCN-004 answers "one-time revenue", "updates never reach the field" and (with a delay) "owner's remote visibility"; it answers "piracy" by declining the frame; and it **accepts "support liability on aging Windows machines" as a standing liability rather than claiming to solve it.** Full analysis: `docs/research/commercialization.md`.
 
 **F. Freemium.** Rejected for V1. Moneypex markets "free" aggressively; competing there races to the bottom with a funded competitor. Our channel (personal network, demo-led) doesn't need a free tier to generate leads. A time-limited trial delivers the same risk reversal without training the market that the product is free.
 
 ## 3. Decision
 
-**Deployment: cloud, single multi-tenant service, browser-based, one codebase.** This is the only deployment a solo founder can operate at near-zero marginal support cost, and it is the only one that delivers the owner's-phone visibility and the survives-a-dead-PC data guarantee. The cloud trust objection is met head-on in sales posture: the pitch leads with what cloud gives the *owner* (check your shop from anywhere; your records outlive any machine; disputes settled by showing the screen) and the product backs it with owner-controlled data export from day one — the data is theirs, demonstrably.
+**Deployment (amended 2026-08-03, PCN-004): local-first — a single-tenant Node installed per pharmacy, with optional cloud services and optional cloud hosting, one codebase.** Internet is never required to sell. Cloud is always additive and never on the path of a sale.
 
-**Pricing: one plan, two cadences, annual-led — set as an initial V1 target, not a permanent decision.**
-- Target: **Rs 2,000/month**, or **Rs 20,000/year** (two months free — the closer in every demo)
-- No setup fee (market norm; violating it loses demos)
-- 14-day full trial, no card, assisted setup included
-- One plan in V1. Tiering (multi-terminal, multi-branch) is future revenue, not launch complexity.
-- These numbers are validated during the first reference-customer deployments — willingness to pay, cadence preference, and renewal behavior are the evidence. The *structure* (one plan, two cadences, annual-led, no setup fee) is the strategy; the figures are the opening position.
+**Commercial model (amended 2026-09-20, PCN-006): perpetual authorization, not subscription.** A valid, founder-signed licence bound to an installation authorizes it forever — no expiry, renewal, grace or warn period. An unlicensed installation runs a 30-day evaluation, then falls to a restricted tier that withholds new business only (settlement, printing, export and catalogue updates always remain). The subscription framing in the options and requirements below (§2 Option C, §4, §5, and the "trial"/"renewal" language throughout Phase 3 and Phase 8 §invariants) is superseded; read those through PCN-006, which is authoritative on licensing. The trust promise is unchanged and strengthened: legitimate operation is never blocked, and the customer's data is never held hostage in any state.
+
+The trust argument inverts with the deployment: the pitch now leads with "your data never leaves your shop", and owner-controlled export from day one still backs it — the data is theirs, demonstrably. The owner's-phone visibility and the survives-a-dead-PC guarantee are **restored by cloud services in roadmap Phase 3**, and are in deficit until then; that regression is accepted and time-boxed, not waved away.
+
+_Superseded text (retained for the record):_ "Deployment: cloud, single multi-tenant service, browser-based, one codebase. This is the only deployment a solo founder can operate at near-zero marginal support cost, and it is the only one that delivers the owner's-phone visibility and the survives-a-dead-PC data guarantee."
+
+**Pricing (amended 2026-10-22, PCN-010, applying PCN-006): a one-time licence fee per installation; the figure is not yet set.** It is set from the first pilots, against the market anchor above. No setup fee (market norm). The 30-day evaluation (PCN-006) replaces the trial. One plan in V1; multi-counter and multi-branch tiers are future revenue. The pilot's own terms — a free fixed-term pilot with written terms and a founding price was recommended — are open (PCN-010).
+
+_Superseded text (retained for the record):_ "Target: Rs 2,000/month, or Rs 20,000/year … 14-day full trial, no card … The structure (one plan, two cadences, annual-led, no setup fee) is the strategy."
 
 Positioning at Pharma Pro parity is deliberate: we price as a peer and win on the five-minute experience gap, not on discount. Underpricing signals inferiority in a trust purchase.
 
-**Collection:** annual invoices collected at renewal; monthly via bank transfer / JazzCash / Easypaisa with automated reminders and a grace period. Non-payment handling is an operational policy decided post-launch, bound by one non-negotiable outcome: the customer's data is never held hostage — export remains available regardless of payment state. This is both ethics and the strongest possible answer to the cloud-trust objection.
+**Collection (amended 2026-10-22, PCN-010):** the licence fee is paid once, by bank transfer, JazzCash or Easypaisa, and the founder issues the licence (`licence:issue`). No reminders or renewals exist to automate. Bound by the same non-negotiable outcome: the customer's data is never held hostage — export remains available in every licence state.
 
 **Hardware: recommend, don't sell.** Publish a tested hardware list (PC minimums, 80mm thermal printer models, USB scanners) and a one-page setup guide. Carrying hardware inventory adds capital risk and support scope for margin that isn't ours to chase. The channel partner may source hardware at his own margin if he wishes; the software company stays a software company.
 
@@ -54,27 +59,16 @@ At Rs 20,000/year: 10 pharmacies ≈ Rs 200k/yr, 25 ≈ Rs 500k/yr, 50 ≈ Rs 1M
 
 ## 5. Requirements this decision exports to later phases
 
-> **Superseded in part by PCN-006 (accepted 2026-09-20).** The commercial model
-> is now a **perpetual authorization** with a **30-day unlicensed evaluation**,
-> not a subscription with expiry, renewal or grace. Items below that assume
-> subscription mechanics are read through that amendment: requirement 3's
-> non-payment restriction is now the *restricted tier* an unauthorized/unbound/
-> revoked installation falls into (new business withheld; settlement, print,
-> export, catalogue updates always available); requirement 4's "trial" is the
-> 30-day evaluation; requirement 6's subscription-payment tooling is retired.
-> The one invariant that strengthens rather than changes: the customer's data is
-> never held hostage, in any state. See PCN-006 for the authoritative model.
-
-1. Multi-tenant service from day one (architecture phase) — single-tenant-now would contradict this document.
+1. **The tenant chokepoint ships from day one in every install** (architecture phase). Amended 2026-08-03 by PCN-004: the *isolation mechanism* is universal; multi-*tenancy* is a deployment option rather than a deployment fact. `src/db/scoped.ts` costs nothing at runtime in a single-tenant install and is what keeps one codebase serving both homes — a single-tenant build that dropped it would contradict this document.
 2. Owner data export as a V1 feature (workflows, IA phases).
-3. The service must support restricting a tenant's access on non-payment without ever compromising that tenant's ability to export their data (architecture phase); the enforcement policy itself is operational and post-launch.
-4. Trial-to-paid needs no data migration — trial data becomes production data (architecture phase).
-5. Mobile-usable owner reporting (IA phase) — the phone dashboard is part of what the price buys.
-6. Payment tracking for subscriptions is founder-side tooling and may be manual at launch; do not build billing automation into V1.
+3. The service must support restricting a tenant's access on non-payment without ever compromising that tenant's ability to export their data (architecture phase); the enforcement policy itself is operational and post-launch. **Implemented 2026-09-16 by PCN-005 (accepted)** as the graduated capability ladder: selling, receipt printing and export are unconditional in every licence state, and past grace the restriction falls on receiving, stock adjustment, catalogue packs and automatic updates, with reports read-only. This requirement and `docs/research/commercialization.md` §6 previously disagreed about how much a licence may withhold; §6 is amended to match.
+4. Evaluation-to-licensed needs no data migration — the evaluation's data is the production data (architecture phase; amended by PCN-010 for PCN-006's evaluation).
+5. Mobile-usable owner reporting (IA phase) — the phone dashboard is part of what the price buys. In V1 it is reached on the shop's own network (PCN-010).
+6. Licence issuing is founder-side tooling (`licence:issue`); do not build billing automation into V1 (amended by PCN-010; there are no subscriptions to track).
 
 ## 6. Future Considerations
 
-- Local/containerized deployment for chains or compliance-driven customers (Option E)
+- ~~Local/containerized deployment for chains or compliance-driven customers (Option E)~~ — **adopted 2026-08-03 by PCN-004**; no longer a future consideration. See §2 Option E and §3.
 - FBR digital invoicing as a paid add-on when customers cross Tier-1 thresholds
 - Multi-branch tier; multi-terminal pricing
 - Hardware bundle partnership if channel volume justifies it

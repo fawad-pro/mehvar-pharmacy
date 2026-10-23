@@ -59,12 +59,16 @@ CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 **adjustments** — id, tenant_id, product_id, batch_id (nullable), qty_base_delta (signed), reason (`damage | expiry_writeoff | distributor_return | count_correction | opening_stock`), note, created_by/at.
 *Positive opening/count deltas materialize batches (§4).*
 
+**purchase_corrections** — id (client-generated), tenant_id, purchase_line_id, batch_id, qty_delta_base, bonus_delta_base, corrected_unit_cost_paisa (nullable), effective_unit_cost_paisa, invoice_delta_paisa, note (required), created_by/at.
+**supplier_returns** — id (client-generated), tenant_id, supplier_id (the batch's invoice supplier), product_id, batch_id, qty_base, credit_paisa, note, created_by/at.
+*PCN-009: compensating records, never edits. A correction states what the line should have said; its deltas move the batch through ADR-8's guarded functions, `effective_unit_cost_paisa` values every allocation from the batch in reports, and `invoice_delta_paisa` adds to the supplier balance. A supplier return removes stock and subtracts its credit from the supplier balance.*
+
 **cash_movements** — id, tenant_id, direction (`in | out`), amount_paisa, reason (`opening_float | owner_withdrawal | expense | over_short`), note, created_by/at.
 
 ## 4. Batches
 
 **batches** — id, tenant_id, product_id, source (`purchase_line | adjustment`), source_id, batch_number (nullable), expiry_date (nullable only for non-perishables), unit_cost_paisa, price_per_base_unit_paisa, qty_received_base, **qty_remaining_base** (the single ADR-8 transactional cache), created_at.
-Derivation contract: qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments + Σ restocked returns. The rebuild/verifier routine (ADR-8) recomputes and compares; mismatch alerts.
+Derivation contract: qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments + Σ restocked returns + Σ purchase-correction deltas (quantity + bonus) − Σ supplier returns (PCN-009). The rebuild/verifier routine (ADR-8) recomputes and compares; mismatch alerts.
 FEFO order: expiry_date ASC NULLS LAST, created_at ASC.
 
 ## 5. Enforcement

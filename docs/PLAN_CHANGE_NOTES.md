@@ -925,7 +925,7 @@ corrected to 0009. Tests: `supplier-balance.integration.test.ts`,
 
 ## PCN-008 — automatic FEFO sells expired batches first
 
-Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided, applied
 
 **Plan sections in tension.** Phase 5 §4, D1: "Sales consume stock from the
 earliest-expiry batch first, automatically. The salesman sees the price, not
@@ -976,16 +976,24 @@ nothing for the ordinary case.
    exception is derived from the allocation the server actually made, so an
    offline sale cannot dodge it.
 
-**Applied.** Not yet. Amend Phase 5 §4 D1 and W1's failure moments and W10's
-exception list, then implement with tests: allocation order (unexpired before
-expired before pending), the exception in the day view, and the stock-rebuild
-suite generating expired batches.
+**Applied.** 2026-10-22, uncommitted on `claude/epic-euler-jdspyu`. Phase 5 §4
+D1, W1's failure moments and W10's exception list amended (master plan and
+phase files). `planAllocation` takes the business day and orders unexpired
+batches before expired ones before the pending layer; `commitSale` passes the
+day the sale lands. The catalog payload carries expired stock per product, and
+the cart warns "only expired stock left" / "part from expired stock", naming the
+expiry, never blocking. The Day screen lists "Expired stock sold" first, derived
+from the allocations the server made (`expiredStockSoldInRange`). Tests:
+`allocation.test.ts` (seen failing against the old order),
+`commit-sale.integration.test.ts`, `reporting-queries.integration.test.ts`,
+`catalog-index.test.ts`, the stock-rebuild suite (expiry choices now always
+include a past date), `e2e/expiry.spec.ts`.
 
 ---
 
 ## PCN-009 — purchases cannot be corrected, and distributor returns do not reduce what is owed
 
-Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided, applied
 
 **Plan sections in tension.** Phase 5 §3, Adjustment: "Adjustments are the
 only non-sale, non-purchase path by which stock moves." T2: "Mistakes are
@@ -1037,19 +1045,39 @@ supplier payments.
 
 **Decision.** 2026-10-22, the owner: adopt the recommendation (**B**).
 
-**Applied.** Not yet. Needs: Phase 5 §3 and §5 invariant 1, Phase 9 §3
-(two event tables, INSERT-only grants), W7/W8 amended; migration; the supplier
-balance formula and `listSuppliersOwed` updated with a ledger-sums-to-balance
-test; the day-view exceptions; stock-rebuild suite coverage. Open implementation
-question, to settle in that session: how a cost correction meets allocations
-that already snapshot `unit_cost_paisa` (a derived "effective cost" per batch
-read by both reports and new allocations is the expected answer).
+**Applied.** 2026-10-22, uncommitted on `claude/epic-euler-jdspyu`. Phase 5 §3
+and §5 invariant 1, Phase 9 §3/§4 and W7/W8 amended (master plan and phase
+files). Migration `0011_purchase_corrections` adds `purchase_corrections` and
+`supplier_returns`, both in `EVENT_TABLES` (INSERT-only for the app role).
+Writers `commitPurchaseCorrection` and `commitSupplierReturn`, idempotent on a
+client id; a correction locks the line's batch, so two corrections to one line
+serialise. `batchLedger`/`rebuildQuantity` count both, so `db:verify` stays
+exact. Supplier balances (one and all) add correction invoice deltas over
+tracked purchases and subtract return credit. The data export now includes
+`supplier_payments` (missing since PCN-007) and both new tables.
+
+The open question is settled as expected: each correction records the batch's
+`effective_unit_cost_paisa` after it, and `reportFigures` values every
+allocation (and every restocked return) from a corrected batch at the latest
+one — so units sold before the mistake was found are re-valued too. New
+allocations still snapshot `batches.unit_cost_paisa`; reports override it, so
+nothing else needs to read corrections. A correction that adds units does not
+resolve the pending layer (a purchase or count correction still does).
+
+UI: the invoice review page shows the corrected total beside the entered one,
+the history, and one owner-only link to `/purchases/[id]/correct`, where both
+forms live; both acts appear on the Day screen. Tests:
+`purchase-correction.test.ts`, `supplier-return.test.ts`,
+`commit-purchase-correction.integration.test.ts` (ledger and balance terms each
+seen failing when removed), the stock-rebuild suite (two new event kinds and an
+independent supplier-balance invariant; seen failing with the return term
+dropped), `e2e/corrections.spec.ts`.
 
 ---
 
 ## PCN-010 — reconcile the plan with local-first and the pilot
 
-Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided (amendments not yet applied)
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided, applied
 
 **Plan sections in tension.** The gap audit (2026-10-22) compared the master
 plan with the code after PCN-004 (local-first), PCN-006 (perpetual licence) and
@@ -1110,9 +1138,32 @@ Open, not decided here: pilot pricing (free fixed-term pilot with written terms
 and a founding price was recommended), and remote screen-share support for
 non-technical shops (Phase 12 §7 currently excludes remote-control software).
 
-**Applied.** Not yet. Amendments, in one session: Phase 2 and Phase 5 §2/§6 and
-Phase 13 §6 brought in line with PCN-007; Phase 3 §3/§5 trimmed to PCN-006;
-Phase 12 rewritten for a local install (logs and support bundle, nightly
-verifier beside the backup, backup visibility, LAN security, installer update
-procedure); Phase 13 §3 replaced by a pilot-readiness plan and post-pilot
-roadmap; W1, W11 and Phase 13 §2 restated; OPERATIONS.md corrected.
+**Applied.** 2026-10-23, uncommitted on `claude/epic-euler-jdspyu`, in
+`MASTER_PLAN.md` and the matching phase files:
+
+- **Phase 2:** the payables exclusion amended to PCN-007; the prescriptions
+  exclusion widened to controlled-drug registers, with no compliance claim; a
+  "First customers" paragraph (decision 1); the owner success criterion now
+  reads "a phone on the shop's network".
+- **Phase 3:** pricing restated as a one-time licence fee, figure not set,
+  pilot terms open; collection amended; §5 items 4–6 amended. Superseded text
+  retained. **§4's revenue illustration (Rs 20,000/year) is left as written**:
+  it is arithmetic on a subscription price nobody now charges, and replacing it
+  needs the figure the pilots will set.
+- **Phase 5:** §2 Supplier carries the derived owed position; §6 adds
+  controlled-drug registers and carries PCN-007's amendment into the master.
+- **Phase 7:** W1 says nothing opens a drawer; W11 is LAN-only and depends on
+  the LAN session.
+- **Phase 12:** rewritten for the local install. Backup visibility, the nightly
+  verifier, owner password/PIN change and LAN sessions are stated as **not yet
+  built**, not described as if they existed.
+- **Phase 13:** §2 restates the catalogue (138 verified, 3,819 reference); §3
+  is now "Pilot readiness" with a status table, keeping the build-week record
+  and cut order; §5, §6 and §7 amended.
+- `phase-03` and `phase-12` were regenerated from the master blocks (keeping
+  their own status line); the other phase files were edited in step. A drift
+  check shows no non-status differences between master and phase files for
+  Phases 2, 3, 5, 7, 12 and 13.
+- **OPERATIONS.md:** 58 mm is not yet supported, the receipt printer is set as
+  the Windows default and a test receipt printed; §6 "Adding a second counter"
+  now says it is not yet possible and names the three missing prerequisites.

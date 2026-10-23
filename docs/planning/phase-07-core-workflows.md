@@ -11,11 +11,11 @@ Each workflow states: trigger, the path (with its keyboard shape), failure momen
 
 **Trigger:** customer at counter. **Frequency:** dozens to hundreds daily.
 
-Path: focus is always in search → type a few characters or scan → best match highlighted, arrow/enter to select → quantity (defaults to 1; typing "2" then unit toggles strip/tablet where relevant) → line lands in cart, focus returns to search → repeat → payment key → amount tendered (defaults to exact) → change displayed large → commit → receipt prints, drawer opens, focus returns to search for the next customer.
+Path: focus is always in search → type a few characters or scan → best match highlighted, arrow/enter to select → quantity (defaults to 1; typing "2" then unit toggles strip/tablet where relevant) → line lands in cart, focus returns to search → repeat → payment key → amount tendered (defaults to exact) → change displayed large → commit → receipt prints, focus returns to search for the next customer. *(Amended 2026-10-22, PCN-010: the product sends no drawer command; a cash drawer opens only where the printer driver is set to kick it on print.)*
 
 - Never leaves the keyboard (I1). Scan-anywhere adds the scanned item (I1).
 - Batch consumption and pricing are automatic (D1); if the consuming batch's price differs from the last-sold price, the line shows it plainly — no interruption.
-- **Failure moments:** product not found → quick-add (W6) or refine search; stock shows zero but shelf has it → sale proceeds, pending layer records it (D2); customer disputes price → line price editable (logged as override, visible to owner, T1); connectivity drops mid-sale → nothing about the path changes (charter outcome; mechanics in Phase 8 ADR).
+- **Failure moments:** product not found → quick-add (W6) or refine search; stock shows zero but shelf has it → sale proceeds, pending layer records it (D2); only expired stock left → warned before payment, naming the expiry; the sale proceeds and is an exception (PCN-008); customer disputes price → line price editable (logged as override, visible to owner, T1); connectivity drops mid-sale → nothing about the path changes (charter outcome; mechanics in Phase 8 ADR).
 - **Speed:** routine repeat sale well under half a minute; working target ~15 seconds (I2).
 
 ## W2. Udhaar sale (full or partial credit)
@@ -46,14 +46,14 @@ Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry
 
 **Trigger:** distributor delivery with invoice; entered between customers, interruptible and resumable (a rush must not lose a half-entered invoice).
 
-Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date → lines: product search → quantity + bonus quantity (10+1 entered as 10 + 1, kept distinct — Phase 5 §3) → unit cost → expiry (always asked) → batch number (optional) → MRP/selling price confirmation (capture-at-receiving, Phase 1 §3; changed price flags the transition for the owner) → next line. Commit creates batches (D1 feeds from here).
+Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date → lines: product search → quantity + bonus quantity (10+1 entered as 10 + 1, kept distinct — Phase 5 §3) → unit cost → expiry (always asked) → batch number (optional) → MRP/selling price confirmation (capture-at-receiving, Phase 1 §3; changed price flags the transition for the owner) → next line. Commit creates batches (D1 feeds from here). A line entered wrong is corrected afterwards from the invoice, owner-only, by stating what it should have said — never by editing it (PCN-009, T2).
 
 - Unknown product → inline create with global-catalog assist (Phase 6): pick identity, confirm pack structure, price — richer than W6's quick-add because time pressure is lower.
 - **Speed:** a 20-line invoice in a handful of minutes; per-line rhythm matters more than total.
 
 ## W8. Stock adjustment
 
-**Trigger:** damage, expiry write-off, return to distributor, count correction. Path: adjustment → product → quantity ± → mandatory coded reason (+ optional note) → commit. Attributed, listed in owner's daily view without exception (T1). Count corrections resolve pending layers (D2). Salesman may adjust; visibility is the control, not permission friction (P7 balanced with T1).
+**Trigger:** damage, expiry write-off, return to distributor, count correction. (Goods returned to a distributor *for credit* are a supplier return from the invoice, owner-only, which also reduces what is owed — PCN-009; the reason-coded adjustment remains for returns with no credit.) Path: adjustment → product → quantity ± → mandatory coded reason (+ optional note) → commit. Attributed, listed in owner's daily view without exception (T1). Count corrections resolve pending layers (D2). Salesman may adjust; visibility is the control, not permission friction (P7 balanced with T1).
 
 ## W9. Opening stock (onboarding)
 
@@ -61,11 +61,11 @@ A guided variant of W7 without a supplier invoice: walk the shelves, search/crea
 
 ## W10. Day close
 
-**Trigger:** shutter down. Path: one screen, three numbers first — today's sales, expected cash in drawer, running udhaar total — then the exception list: discounts and overrides, adjustments, returns, quick items created, negative-stock incidents, cash movements (D5, T1). Owner counts the drawer against the expected figure; a recorded over/short entry closes the ritual. Nothing locks (D5). **Speed:** the three numbers in one glance; the ritual in two minutes.
+**Trigger:** shutter down. Path: one screen, three numbers first — today's sales, expected cash in drawer, running udhaar total — then the exception list: expired stock sold (PCN-008), discounts and overrides, adjustments, returns, quick items created, negative-stock incidents, cash movements (D5, T1). Owner counts the drawer against the expected figure; a recorded over/short entry closes the ritual. Nothing locks (D5). **Speed:** the three numbers in one glance; the ritual in two minutes.
 
 ## W11. Owner remote view
 
-**Trigger:** owner's phone, any time. Mobile-usable (Phase 3 §5.5): today's three numbers, the exception list, low stock and near-expiry counts. Read-only in V1. This is what "check your shop from anywhere" in the sales pitch concretely is.
+**Trigger:** owner's phone, any time. Mobile-usable (Phase 3 §5.5): today's three numbers, the exception list, low stock and near-expiry counts. Read-only in V1. *(Amended 2026-10-22, PCN-010.)* **In V1 this is reached on the shop's own network**: the Node in the shop serves it, and nothing reaches it from outside until roadmap Phase 3 adds a cloud route — so the pitch is "check your shop from your phone in the shop", not "from anywhere". It also needs a session that works over LAN HTTP, which is not yet built (Phase 12 §5).
 
 ## W12. Expiry & low-stock management
 

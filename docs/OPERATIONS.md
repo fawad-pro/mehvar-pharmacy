@@ -21,13 +21,13 @@ guide.
 
 ## 1. Before you go (founder, at home)
 
-|          |                                                                                                                                                                |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hardware | 4 GB RAM minimum, 64-bit Windows 10/11, SSD. A dedicated machine, not the shop's household PC.                                                                 |
-| Printer  | 80 mm thermal (58 mm supported). Install its driver and print a Windows test page **first** — a printer that does not work in Notepad will not work in Mehvar. |
-| Scanner  | USB, configured to send Enter after the code.                                                                                                                  |
-| UPS      | Strongly recommended. A power cut mid-write is the one hardware failure the append-only design cannot fully absorb.                                            |
-| Network  | Not required to sell. Required only if the owner wants a second counter.                                                                                       |
+|          |                                                                                                                                                                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hardware | 4 GB RAM minimum, 64-bit Windows 10/11, SSD. A dedicated machine, not the shop's household PC.                                                                                                                                                                           |
+| Printer  | 80 mm thermal (58 mm is not yet supported — the receipt is laid out for 80 mm). Install its driver, print a Windows test page **first**, and make it the Windows default printer — Setup warns if the default is a PDF printer. Then print a test receipt from Settings. |
+| Scanner  | USB, configured to send Enter after the code.                                                                                                                                                                                                                            |
+| UPS      | Strongly recommended. A power cut mid-write is the one hardware failure the append-only design cannot fully absorb.                                                                                                                                                      |
+| Network  | Not required to sell. A shop LAN will be needed for a second counter or the owner's phone, neither yet possible (§6).                                                                                                                                                    |
 
 Build the installer (on Windows):
 
@@ -183,22 +183,28 @@ drive if `MEHVAR_BACKUP_DIR` points there, which is why section 5 says it should
 7. **Run the restore drill** (above) once the nightly backup has run, and check
    the support bundle's verifier section reads OK.
 
-A second counter on the LAN keeps its own session and needs nothing, provided
-the new PC has the old one's address (set a reserved address on the router).
+Once second counters exist (§6 — not yet possible), the new PC must also take
+the old one's LAN address (a reserved address on the router).
 
 ## 6. Adding a second counter
 
-The second machine installs nothing.
+**Not yet possible — one counter for the pilot** (PCN-010). A second machine
+would install nothing and reach the Node over the shop LAN, but three things are
+missing first:
 
-1. Give the server machine a **static IP** (name resolution on a shop LAN is
-   unreliable — a counter that cannot resolve the server cannot sell).
-2. On the second machine:
-   ```powershell
-   powershell -File counter-shortcut.ps1 -CounterHost 192.168.1.50 -Autostart
-   ```
-3. Add the device in Settings so it gets its own receipt prefix. `B-1`, `B-2`
-   cannot collide with `A-1` — `unique(tenant_id, receipt_prefix)` has enforced
-   that since Day 1 (PCN-001).
+- **A way to add the counter.** Only the installer creates a counter ("Counter
+  1", receipts `A-…`), and there is no Settings screen for another. Sharing
+  Counter 1's setup key with a second machine is unsafe: both would number
+  receipts `A-…`, and a receipt printed before its number was found taken would
+  not match the stored record.
+- **A session that works over the LAN.** The session cookie is `Secure`, which
+  browsers keep only over HTTPS or on `localhost`, so a counter at
+  `http://192.168.1.50:3000` cannot stay signed in.
+- **A search index that refreshes while open**, so one counter sees another's
+  new products, prices and stock without reloading.
+
+When those exist: give the server machine a static IP, then run
+`counter-shortcut.ps1 -CounterHost <ip> -Autostart` on the second machine.
 
 ## 6a. The licence
 
