@@ -53,6 +53,25 @@ async function addLine(
  * to skip. Adding a line now requires the cost to be entered; a genuinely free
  * line is an explicit "0", never a blank.
  */
+/**
+ * Enough whole boxes to sell more than the counter holds right now, by up to
+ * eight boxes. Read from the same catalog payload the counter's index uses.
+ */
+async function boxesBeyondStock(page: Page, name: string): Promise<number> {
+  const seeded = SEED_PRODUCTS.find((product) => product.name.startsWith(name));
+  const perBox = seeded?.packLevels[0]?.factor ?? 1;
+  const response = await page.request.get('/api/catalog');
+  expect(response.ok()).toBe(true);
+  const snapshot = (await response.json()) as {
+    products: Array<{ id: string; name: string }>;
+    stock: Record<string, number>;
+  };
+  const product = snapshot.products.find((row) => row.name.startsWith(name));
+  expect(product, `${name} is in the catalog`).toBeDefined();
+  const onHand = Math.max(0, snapshot.stock[product?.id ?? ''] ?? 0);
+  return Math.floor(onHand / perBox) + 8;
+}
+
 test('the invoice total reflects the cost of every entered line', async ({ page }) => {
   await openCounter(page);
   await page.keyboard.press('F7');
@@ -139,18 +158,24 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   // Day 3's promise first — sell far more than the system has, which D2 records
   // as a pending shortfall rather than refusing (P2).
   //
-  // Toradol is seeded with ten vials and no other spec touches it, so 40 is a
-  // shortfall whatever ran before, and receiving 500 of it at the end of this
-  // test cannot pull another spec's oversell back into stock. (It did: this
-  // test and sale.spec.ts both reached for Rocephin, and this one stocking it
-  // made the other's correct behaviour look like a regression.)
+  // Toradol is seeded with ten ampoules and no other spec touches it, so
+  // receiving it at the end of this test cannot pull another spec's oversell
+  // back into stock. (It did: this test and sale.spec.ts both reached for
+  // Rocephin, and this one stocking it made the other's correct behaviour look
+  // like a regression.)
+  //
+  // The quantity is sized from what the system holds NOW, not assumed from the
+  // seed: every run of this test receives 500, so a fixed 40 stopped being a
+  // shortfall after the first run, and the suite has to pass against a
+  // developer's database without resetting it.
   //
   // Not one of the two products seeded at zero, deliberately: a product that
   // has never had a batch is absent from the stock map, which the index reads
   // as *unknown* rather than zero (catalog-queries.ts), and unknown does not
   // warn. That is the right call — it just means the shortfall path has to be
   // tested with a product the system has an opinion about.
-  await search(page).fill(`40*${SHORTFALL_PRODUCT.toLowerCase()}`);
+  const boxes = await boxesBeyondStock(page, SHORTFALL_PRODUCT);
+  await search(page).fill(`${boxes}*${SHORTFALL_PRODUCT.toLowerCase()}`);
   await expect(page.getByRole('option').first()).toContainText(SHORTFALL_PRODUCT);
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText(/more than in stock|not in stock/);
@@ -195,9 +220,9 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   await page.keyboard.press('F6');
   await expect(page).toHaveURL(/\/stock$/);
   await expect(
-    page.getByRole('region', { name: 'Sold more than the system had' }).getByText(
-      SHORTFALL_PRODUCT,
-    ),
+    page
+      .getByRole('region', { name: 'Sold more than the system had' })
+      .getByText(SHORTFALL_PRODUCT),
   ).toBeHidden();
 });
 
@@ -219,7 +244,11 @@ test('W7: twenty lines go in without the invoice growing harder to enter', async
   const rows = page.getByRole('table').getByRole('row');
   // 20 lines plus the header.
   await expect(rows).toHaveCount(21);
-  await expect(page.getByText('20 lines')).toBeVisible();
+  // This draft's count, not the recent-purchases list beneath it, which on a
+  // database this test has run against before lists an earlier 20-line invoice.
+  await expect(
+    page.getByText('Invoice total').locator('..').getByText('20 lines', { exact: true }),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('20 batches');

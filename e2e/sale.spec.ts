@@ -136,6 +136,13 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     await page.keyboard.press('F12');
     await page.keyboard.press('Enter');
 
+    // Wait for THIS sale's number. Reading the status straight after Enter can
+    // catch the previous sale's text, which read as a repeated number.
+    await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+    const previous = numbers.at(-1);
+    if (previous !== undefined) {
+      await expect(lastSale(page)).not.toContainText(new RegExp(`A-${previous}(?!\\d)`));
+    }
     const text = (await lastSale(page).textContent()) ?? '';
     const match = /A-(\d+)/.exec(text);
     expect(match, 'a receipt number was issued').not.toBeNull();
