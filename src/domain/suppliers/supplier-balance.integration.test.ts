@@ -15,7 +15,13 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { commitPurchase, type PurchaseCommand } from '@/domain/purchases/commit-purchase';
 import { commitSupplierPayment } from '@/domain/suppliers/commit-supplier-payment';
-import { balancesBySupplier, supplierBalance } from '@/db/supplier-queries';
+import { commitSupplierReturn } from '@/domain/suppliers/commit-supplier-return';
+import {
+  balancesBySupplier,
+  supplierBalance,
+  supplierBook,
+  supplierPositions,
+} from '@/db/supplier-queries';
 import { purchaseLines, purchases, suppliers } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -191,5 +197,116 @@ suite('supplier credit against Postgres', () => {
     });
     // Owed nothing, then paid 5,000 anyway — the supplier now holds an advance.
     expect(await supplierBalance(tenant.scope, supplierId)).toBe(-5_000);
+  });
+});
+
+/**
+ * [PCN-011] A credit with a supplier is shown, never dropped. Until PCN-011 the
+ * owed list filtered balances at or below zero and the Day total floored each
+ * one, so both of these credits were invisible everywhere.
+ *
+ * Its own tenant, because the book sums every supplier in the pharmacy and the
+ * suite above adds a supplier per test.
+ */
+suite('supplier credit is visible (PCN-011)', () => {
+  let tenant: TestTenant;
+  let product: TestProduct;
+
+  beforeAll(async () => {
+    tenant = await provisionTestTenant('suppliercredit');
+    product = await createTestProduct(tenant.scope, `Credited ${uuidv7().slice(-6)}`, 500);
+  });
+
+  afterAll(async () => {
+    await tenant.cleanup();
+  });
+
+  async function supplier(name: string): Promise<Uuid> {
+    const id = uuidv7();
+    await tenant.scope.insert(suppliers, {
+      id,
+      name: `${name} ${uuidv7().slice(-6)}`,
+      phone: null,
+    });
+    return id;
+  }
+
+  /** 100 units at Rs 2.80 = 28,000 invoiced. */
+  async function receive(supplierId: Uuid, cashPaidPaisa: number): Promise<Uuid> {
+    const result = await commitPurchase(tenant.scope, {
+      purchaseId: uuidv7(),
+      supplierId,
+      invoiceRef: null,
+      invoiceDate: null,
+      note: null,
+      cashPaidPaisa,
+      lines: [
+        {
+          lineId: uuidv7(),
+          productId: product.id,
+          qtyBase: 100,
+          bonusQtyBase: 0,
+          unitCostPaisa: 280,
+          expiryDate: '2030-06-30',
+          batchNumber: null,
+          mrpAtReceivingPaisa: null,
+          priceAtReceivingPaisa: 500,
+        },
+      ],
+    });
+    if (!result.ok) throw new Error('purchase refused');
+    return result.value.batchIds[0]! as Uuid;
+  }
+
+  it('lists credits apart from debts, and the book never nets them', async () => {
+    // Paid in full, then 20 units sent back for 5,600 credit.
+    const returnedTo = await supplier('Returned to');
+    const batchId = await receive(returnedTo, 28_000);
+    const returned = await commitSupplierReturn(tenant.scope, {
+      returnId: uuidv7(),
+      batchId,
+      qtyBase: 20,
+      creditPaisa: 5_600,
+      note: null,
+    });
+    expect(returned.ok).toBe(true);
+
+    // Owed 28,000, paid 30,000.
+    const overpaid = await supplier('Overpaid');
+    await receive(overpaid, 0);
+    await commitSupplierPayment(tenant.scope, {
+      paymentId: uuidv7(),
+      supplierId: overpaid,
+      amountPaisa: 30_000,
+      purchaseId: null,
+      note: null,
+    });
+
+    // Genuinely owed 10,000.
+    const owing = await supplier('Owing');
+    await receive(owing, 18_000);
+
+    // Settled exactly: in neither list.
+    const settled = await supplier('Settled');
+    await receive(settled, 28_000);
+
+    const positions = await supplierPositions(tenant.scope);
+    expect(positions.owed.map((row) => [row.id, row.balancePaisa])).toEqual([[owing, 10_000]]);
+    expect(positions.inCredit.map((row) => [row.id, row.creditPaisa])).toEqual([
+      [returnedTo, 5_600],
+      [overpaid, 2_000],
+    ]);
+
+    expect(await supplierBook(tenant.scope)).toEqual({
+      owedPaisa: 10_000,
+      creditPaisa: 7_600,
+      suppliersOwed: 1,
+      suppliersInCredit: 2,
+    });
+
+    // The book is the balances, split by direction — nothing appears or vanishes.
+    const balances = Object.values(await balancesBySupplier(tenant.scope));
+    const book = await supplierBook(tenant.scope);
+    expect(book.owedPaisa - book.creditPaisa).toBe(balances.reduce((a, b) => a + b, 0));
   });
 });

@@ -22,7 +22,7 @@ import {
   type SupplierPaymentRejection,
 } from '@/domain/suppliers/commit-supplier-payment';
 import { insertSupplier, listPurchases, searchSuppliers } from '@/db/purchase-queries';
-import { listSuppliersOwed, type SupplierBalanceItem } from '@/db/supplier-queries';
+import { supplierPositions, type SupplierPositions } from '@/db/supplier-queries';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
@@ -133,12 +133,13 @@ export async function recentPurchasesAction() {
 /* [PCN-007] Supplier credit — what the pharmacy owes, and paying it down      */
 /* -------------------------------------------------------------------------- */
 
-export async function suppliersOwedAction(): Promise<SupplierBalanceItem[]> {
+/** Who is owed and, since PCN-011, who holds the pharmacy's credit. */
+export async function supplierPositionsAction(): Promise<SupplierPositions> {
   const session = await currentSession();
   if (!session) {
-    return [];
+    return { owed: [], inCredit: [] };
   }
-  return listSuppliersOwed(scopeFor(session));
+  return supplierPositions(scopeFor(session));
 }
 
 function supplierMessageFor(reason: SupplierPaymentRejection): string {

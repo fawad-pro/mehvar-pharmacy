@@ -2,6 +2,16 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Supplier credit made visible (PCN-011)
+
+- A supplier holding the pharmacy's money — an overpayment, or credit for goods
+  sent back from a paid invoice — used to vanish from every screen. The
+  Purchases panel now lists "Credit with suppliers" under "Owed to suppliers".
+- Paying more than is owed says, before recording, how much will stay with the
+  supplier as credit. A warning, never a block.
+- The Day screen shows "Rs X credit with N suppliers" beside the owed figure
+  when there is any. Owed and credit are never netted.
+
 ## Session — Expired stock, purchase corrections, supplier returns (Day 20)
 
 PCN-008 and PCN-009 applied; the E2E suite made to pass against a database it

@@ -86,9 +86,24 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   await expect(history).toContainText('cost typed wrong');
   await expect(history).toContainText(`returned to ${supplier}`);
 
-  // And the owner sees both on the Day screen (T1).
+  // PCN-011: paying more than is owed says so first, and the credit it leaves
+  // stays visible instead of the supplier vanishing from the panel.
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+  const owedRow = page.getByRole('listitem').filter({ hasText: supplier });
+  // 500 invoiced − 100 corrected − 40 credited for the return.
+  await expect(owedRow).toContainText('360.00');
+  await owedRow.getByRole('button', { name: 'Pay' }).click();
+  await owedRow.getByLabel('Amount paid').fill('400');
+  await expect(owedRow.getByRole('status')).toContainText('40.00 more than you owe');
+  await owedRow.getByLabel('Amount paid').press('Enter');
+  const credit = page.getByRole('region', { name: 'Credit with suppliers' });
+  await expect(credit.getByRole('listitem').filter({ hasText: supplier })).toContainText('40.00');
+
+  // And the owner sees all of it on the Day screen (T1).
   await page.keyboard.press('F9');
   await expect(page).toHaveURL(/\/day/);
   await expect(page.getByRole('heading', { name: /Purchase corrections/ })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Returns to suppliers/ })).toBeVisible();
+  await expect(page.getByRole('link', { name: /credit with \d+ suppliers?/ })).toBeVisible();
 });

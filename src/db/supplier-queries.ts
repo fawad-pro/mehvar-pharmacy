@@ -36,6 +36,7 @@ import {
   suppliers,
 } from './schema';
 
+import { summariseSupplierBook, type SupplierBook } from '@/domain/suppliers/supplier-position';
 import type { Uuid } from '@/lib/uuid';
 
 /** Positive = the pharmacy owes; negative = an advance sits with the supplier. */
@@ -165,34 +166,51 @@ export interface SupplierBalanceItem {
   balancePaisa: number;
 }
 
-/**
- * Suppliers the pharmacy currently owes, largest first — the "Owed to
- * suppliers" panel on the Purchases surface, the payable mirror of the
- * customers-owing list (W11).
- */
-export async function listSuppliersOwed(scope: TenantScope): Promise<SupplierBalanceItem[]> {
-  const rows = await scope.db
-    .select({ id: suppliers.id, name: suppliers.name, phone: suppliers.phone })
-    .from(suppliers)
-    .where(scope.scopeOf(suppliers, eq(suppliers.isActive, true)));
-
-  const balances = await balancesBySupplier(scope);
-
-  return rows
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      phone: row.phone,
-      balancePaisa: balances[row.id] ?? 0,
-    }))
-    .filter((row) => row.balancePaisa > 0)
-    .sort((a, b) => b.balancePaisa - a.balancePaisa);
+export interface SupplierPositions {
+  /** Suppliers the pharmacy owes, largest first. `balancePaisa` > 0. */
+  owed: SupplierBalanceItem[];
+  /**
+   * [PCN-011] Suppliers holding the pharmacy's money, largest first.
+   * `creditPaisa` is positive; the direction is in the list, never the sign.
+   */
+  inCredit: (Omit<SupplierBalanceItem, 'balancePaisa'> & { creditPaisa: number })[];
 }
 
-/** The all-time total the pharmacy owes suppliers — one figure for the Day screen. */
-export async function supplierOwedTotal(scope: TenantScope): Promise<number> {
-  const balances = await balancesBySupplier(scope);
-  return Object.values(balances).reduce((total, value) => total + Math.max(0, value), 0);
+/**
+ * Every active supplier's position for the Purchases panel: who is owed, and
+ * (PCN-011) who holds credit. The payable mirror of the customers lists (W11).
+ * A settled supplier appears in neither.
+ */
+export async function supplierPositions(scope: TenantScope): Promise<SupplierPositions> {
+  const [rows, balances] = await Promise.all([
+    scope.db
+      .select({ id: suppliers.id, name: suppliers.name, phone: suppliers.phone })
+      .from(suppliers)
+      .where(scope.scopeOf(suppliers, eq(suppliers.isActive, true))),
+    balancesBySupplier(scope),
+  ]);
+
+  const owed: SupplierPositions['owed'] = [];
+  const inCredit: SupplierPositions['inCredit'] = [];
+  for (const row of rows) {
+    const balancePaisa = balances[row.id] ?? 0;
+    if (balancePaisa > 0) {
+      owed.push({ ...row, balancePaisa });
+    } else if (balancePaisa < 0) {
+      inCredit.push({ ...row, creditPaisa: -balancePaisa });
+    }
+  }
+  owed.sort((a, b) => b.balancePaisa - a.balancePaisa);
+  inCredit.sort((a, b) => b.creditPaisa - a.creditPaisa);
+  return { owed, inCredit };
+}
+
+/**
+ * The all-time supplier book for the Day screen: what is owed and, separately
+ * (PCN-011), what suppliers hold in credit. Never netted across suppliers.
+ */
+export async function supplierBook(scope: TenantScope): Promise<SupplierBook> {
+  return summariseSupplierBook(Object.values(await balancesBySupplier(scope)));
 }
 
 /** Idempotency (ADR-3 posture, as `commitPurchase`): a payment id committed once. */

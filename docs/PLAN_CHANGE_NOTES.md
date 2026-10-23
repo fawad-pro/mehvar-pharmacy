@@ -1167,3 +1167,43 @@ non-technical shops (Phase 12 §7 currently excludes remote-control software).
 - **OPERATIONS.md:** 58 mm is not yet supported, the receipt printer is set as
   the Windows default and a test receipt printed; §6 "Adding a second counter"
   now says it is not yet possible and names the three missing prerequisites.
+
+## PCN-011 — a credit with a supplier is shown nowhere
+
+Session: Day 20 follow-up · Raised: 2026-10-23 · Status: decided, applied
+
+**Plan sections in tension.** PCN-007 made what a pharmacy owes a supplier a
+derived, signed position, "the mirror of a customer balance (invariant 3)".
+The customer side shows both directions on purpose (`domain/udhaar/position.ts`:
+an advance is "real money the shop is holding, so it must be visible"). PCN-009
+added supplier returns, whose credit routinely exceeds what is owed.
+
+**The contradiction or gap.** A negative supplier balance (an overpayment, or
+credit for goods sent back from an invoice already paid) was legal and correctly
+derived, but invisible: the owed list kept only balances above zero, the Day
+total floored each supplier at zero, and that line hid itself at zero. A
+supplier holding Rs 56 of the shop's money simply vanished from every screen.
+Demonstrated against a scratch database on 2026-10-23.
+
+**Options.** A. Show credit separately, as the customer side does, and warn
+before a payment that leaves credit. B. Refuse overpayments. Rejected:
+distributors take round sums and advances, and returns create credit with no
+payment at all. C. Net credits against debts. Rejected: one supplier's credit
+does not pay another's invoice.
+
+**Recommendation.** A.
+
+**Decision.** 2026-10-23, the owner: A, as recommended.
+
+**Applied.** 2026-10-23 on `claude/epic-euler-jdspyu`.
+`domain/suppliers/supplier-position.ts` holds the meaning (book summary, payment
+effect). The Purchases panel lists "Credit with suppliers" beneath "Owed to
+suppliers"; a payment larger than what is owed says how much will stay as credit
+before it is recorded (a warning, never a block). The Day screen adds "Rs X
+credit with N suppliers" beside the owed figure, only when there is credit.
+Owed and credit are never netted. Phase 5 §6 notes it.
+
+Not addressed here: a credit from a return against a purchase entered before
+supplier credit existed (PCN-007's untracked history) is shown like any other,
+although that invoice counts as owing nothing; the supplier payment action still
+mints its idempotency id on the server, so a double submit can record twice.

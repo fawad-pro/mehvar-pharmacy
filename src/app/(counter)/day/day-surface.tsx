@@ -154,6 +154,8 @@ export function DaySurface({
   lateSynced,
   hasOpeningFloat,
   supplierOwedPaisa,
+  supplierCreditPaisa,
+  suppliersInCredit,
 }: {
   day: BusinessDay;
   today: BusinessDay;
@@ -175,6 +177,9 @@ export function DaySurface({
   hasOpeningFloat: boolean;
   /** [PCN-007] What the pharmacy owes suppliers — a position, always all-time. */
   supplierOwedPaisa: number;
+  /** [PCN-011] Credit suppliers hold for the pharmacy — reported apart, never netted. */
+  supplierCreditPaisa: number;
+  suppliersInCredit: number;
 }) {
   const isToday = day === today;
   /** Counting and recording cash is something you do to *this* drawer, now. */
@@ -341,6 +346,19 @@ export function DaySurface({
             <span className="numeral text-amber font-medium">
               {formatPaisa(paisa(supplierOwedPaisa), { withSymbol: true })}
             </span>
+          </Link>
+        ) : null}
+        {/* [PCN-011] The other direction: money a supplier holds for the shop
+            (an overpayment, or credit for goods sent back from a paid invoice).
+            Hidden until PCN-011 — the owed figure floored it at zero — although
+            it is as real as a customer's advance. Same rule as that note: shown
+            only when there is something to show. */}
+        {supplierCreditPaisa > 0 ? (
+          <Link href="/purchases" className="hover:underline">
+            <span className="numeral font-medium">
+              {formatPaisa(paisa(supplierCreditPaisa), { withSymbol: true })}
+            </span>{' '}
+            credit with {suppliersInCredit} supplier{suppliersInCredit === 1 ? '' : 's'}
           </Link>
         ) : null}
       </div>
