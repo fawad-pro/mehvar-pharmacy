@@ -75,6 +75,7 @@ export async function returnableLinesForSale(
       enteredUnitLevel: saleLines.enteredUnitLevel,
       qtyBase: saleLines.qtyBase,
       unitPricePaisa: saleLines.unitPricePaisa,
+      lineAmountPaisa: saleLines.lineAmountPaisa,
       lineDiscountPaisa: saleLines.lineDiscountPaisa,
     })
     .from(saleLines)

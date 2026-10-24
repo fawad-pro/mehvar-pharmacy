@@ -34,12 +34,18 @@ import {
 } from '@/db/sales-queries';
 import { customerBalance } from '@/db/udhaar-queries';
 import type { TenantScope } from '@/db/scoped';
-import { paisa, type Paisa } from '@/lib/branded';
+import { packFactor, paisa, type Paisa } from '@/lib/branded';
 import { businessDayOf } from '@/lib/business-day';
+import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { planAllocation } from '../inventory/allocation';
-import { validateSaleCommand, type SaleCommand, type SaleRejection } from './sale-command';
+import {
+  saleLineGrossPaisa,
+  validateSaleCommand,
+  type SaleCommand,
+  type SaleRejection,
+} from './sale-command';
 
 // The command and its validator are pure and live apart (see `sale-command.ts`
 // for why); re-exported so every existing caller keeps one import.
@@ -140,7 +146,21 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
         productId: line.productId,
         qtyBase: line.qtyBase,
         enteredUnitLevel: line.enteredUnitLevel,
-        unitPricePaisa: line.unitPricePaisa,
+        // [PCN-012] The nominal per-base price is derived here, not trusted:
+        // money is read from `lineAmountPaisa` whenever it is present.
+        unitPricePaisa:
+          line.unitCount !== undefined && line.unitPricePaisaEntered !== undefined
+            ? nominalPricePerBase(
+                paisa(line.unitPricePaisaEntered),
+                packFactor(line.qtyBase / line.unitCount),
+              )
+            : line.unitPricePaisa,
+        unitKey: line.unitCount !== undefined ? (line.unitKey ?? null) : null,
+        unitName: line.unitCount !== undefined ? (line.unitName ?? null) : null,
+        unitCount: line.unitCount ?? null,
+        unitPricePaisaEntered:
+          line.unitCount !== undefined ? (line.unitPricePaisaEntered ?? null) : null,
+        lineAmountPaisa: line.unitCount !== undefined ? saleLineGrossPaisa(line) : null,
         lineDiscountPaisa: line.lineDiscountPaisa,
         priceOverridden: line.priceOverridden,
       })),

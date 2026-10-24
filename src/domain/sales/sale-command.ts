@@ -27,10 +27,63 @@ export interface SaleLineCommand {
   readonly productId: Uuid;
   readonly qtyBase: number;
   readonly enteredUnitLevel: string;
-  /** Per base unit, as charged (ADR-5: the client's last-known price). */
+  /**
+   * Per base unit. On a record-version-1 line this IS the price charged
+   * (ADR-5: the client's last-known price). On a PCN-012 line it is nominal
+   * and the money is `unitCount × unitPricePaisaEntered`.
+   */
   readonly unitPricePaisa: number;
+  /*
+   * [PCN-012] What was entered and charged, exactly. Absent on a line from a
+   * client still on record version 1 (ADR-3 accepts the previous version for
+   * at least one release); present together or not at all.
+   */
+  readonly unitKey?: string;
+  readonly unitName?: string;
+  readonly unitCount?: number;
+  /** The price of ONE entered unit. */
+  readonly unitPricePaisaEntered?: number;
   readonly lineDiscountPaisa: number;
   readonly priceOverridden: boolean;
+}
+
+/**
+ * [PCN-012] A line's gross amount before its own discount, or null when the
+ * line is malformed. Exact either way: count × unit price for a PCN-012 line,
+ * per-base price × base quantity for a version-1 line.
+ */
+export function saleLineGrossPaisa(line: SaleLineCommand): number | null {
+  if (line.unitCount === undefined) {
+    return line.unitPricePaisa * line.qtyBase;
+  }
+  const count = line.unitCount;
+  const price = line.unitPricePaisaEntered;
+  if (
+    !Number.isSafeInteger(count) ||
+    count <= 0 ||
+    price === undefined ||
+    !Number.isSafeInteger(price) ||
+    !line.unitName ||
+    line.qtyBase % count !== 0
+  ) {
+    return null;
+  }
+  return count * price;
+}
+
+/**
+ * [PCN-012] A STORED sale line's gross amount, before its own discount: the
+ * exact amount recorded since PCN-012, or per-base price × base quantity for
+ * a line written before it — in both cases exactly what was charged. Every
+ * reader of a line's money goes through this, never through `unit_price_paisa`
+ * alone, which became nominal with PCN-012.
+ */
+export function storedLineGrossPaisa(line: {
+  readonly lineAmountPaisa: number | null;
+  readonly unitPricePaisa: number;
+  readonly qtyBase: number;
+}): number {
+  return line.lineAmountPaisa ?? line.unitPricePaisa * line.qtyBase;
 }
 
 export interface SaleCommand {
@@ -78,10 +131,17 @@ export function validateSaleCommand(
     if (!Number.isSafeInteger(line.qtyBase) || line.qtyBase <= 0) {
       return { ok: false, reason: 'invalid_quantity' };
     }
-    if (line.unitPricePaisa < 0 || line.lineDiscountPaisa < 0) {
+    if (
+      line.unitPricePaisa < 0 ||
+      line.lineDiscountPaisa < 0 ||
+      (line.unitPricePaisaEntered ?? 0) < 0
+    ) {
       return { ok: false, reason: 'negative_amount' };
     }
-    const gross = line.unitPricePaisa * line.qtyBase;
+    const gross = saleLineGrossPaisa(line);
+    if (gross === null) {
+      return { ok: false, reason: 'invalid_quantity' };
+    }
     subtotal += Math.max(0, gross - line.lineDiscountPaisa);
   }
 

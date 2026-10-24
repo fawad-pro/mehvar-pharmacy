@@ -18,6 +18,8 @@
 
 import type { Uuid } from '@/lib/uuid';
 
+import { storedLineGrossPaisa } from './sale-command';
+
 export interface ReturnLineCommand {
   readonly saleLineId: Uuid;
   readonly qtyBase: number;
@@ -54,6 +56,8 @@ export interface ReturnableSaleLine {
   /** Already returned against this line, from prior (non-idempotent) returns. */
   readonly alreadyReturnedBase: number;
   readonly unitPricePaisa: number;
+  /** [PCN-012] The exact amount charged, or null on a line from before it. */
+  readonly lineAmountPaisa: number | null;
   readonly lineDiscountPaisa: number;
 }
 
@@ -94,7 +98,9 @@ export function refundForLine(line: ReturnableSaleLine, qtyBase: number): number
   if (line.qtyBase <= 0) {
     return 0;
   }
-  const chargedTotal = line.unitPricePaisa * line.qtyBase - line.lineDiscountPaisa;
+  // [PCN-012] What the line actually charged: a box refunds as a share of the
+  // box price, never of a rounded per-tablet figure.
+  const chargedTotal = storedLineGrossPaisa(line) - line.lineDiscountPaisa;
   return Math.floor((chargedTotal * qtyBase) / line.qtyBase);
 }
 

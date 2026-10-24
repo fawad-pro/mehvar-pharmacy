@@ -54,6 +54,13 @@ export interface ProductDraft {
    * catalogue is never silently rewritten under it (P8).
    */
   globalProductId: string | null;
+  /**
+   * [PCN-012] Prices typed per unit, smallest first (base unit, then each
+   * pack level), null for a blank. When present, it decides `units` and the
+   * legacy `pricePaisa` follows from it; when absent, `pricePaisa` is the
+   * per-base price and every pack is priced from it, as before PCN-012.
+   */
+  unitPrices?: readonly (number | null)[];
 }
 
 /**

@@ -22,6 +22,7 @@ import {
 import type { TenantScope } from '@/db/scoped';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
+import { legacyPricePerBase, unitsFromEnteredPrices, unitsOf, type ProductUnit } from './units';
 import {
   packStructureChange,
   validateBarcode,
@@ -37,11 +38,53 @@ export type CatalogResult<T = void> =
   | { ok: false; conflict: 'barcode_taken'; productName: string }
   | { ok: false; conflict: 'not_found' };
 
+/**
+ * [PCN-012] The units a draft describes, and the draft with its legacy
+ * per-base price brought in line with them.
+ *
+ * Prices typed per unit win; a draft with none (a quick item, an older caller)
+ * prices every pack from its per-base price, exactly as before PCN-012. Sell
+ * flags carry over by position from the product being edited.
+ */
+function withUnits(
+  draft: ProductDraft,
+  previous: readonly ProductUnit[] = [],
+): { draft: ProductDraft; units: ProductUnit[] } {
+  const structure = [
+    { name: draft.baseUnitName.trim(), factor: 1 },
+    ...draft.packLevels.map((level) => ({ name: level.name.trim(), factor: level.factor })),
+  ];
+  const sell = structure.map((_, index) => previous[index]?.sell ?? true);
+  const entered = draft.unitPrices
+    ? unitsFromEnteredPrices(structure, draft.unitPrices, sell)
+    : null;
+  if (entered) {
+    return { draft: { ...draft, pricePaisa: legacyPricePerBase(entered) }, units: entered };
+  }
+  // Structure invalid enough that units cannot be priced (a bad factor) is
+  // left to validation, which refuses the draft before anything is written.
+  const factorsUsable = structure.every(
+    (unit) => Number.isSafeInteger(unit.factor) && unit.factor > 0,
+  );
+  const priceUsable = Number.isSafeInteger(draft.pricePaisa) && draft.pricePaisa >= 0;
+  if (!factorsUsable || !priceUsable) {
+    return { draft, units: [] };
+  }
+  const derived = unitsOf({
+    baseUnitName: structure[0]?.name ?? '',
+    packLevels: structure.slice(1),
+    pricePerBasePaisa: draft.pricePaisa,
+    units: null,
+  }).map((unit, index) => ({ ...unit, sell: sell[index] ?? true }));
+  return { draft, units: derived };
+}
+
 export async function createProduct(
   scope: TenantScope,
   draft: ProductDraft,
 ): Promise<CatalogResult<Uuid>> {
-  const validated = validateProductDraft(draft);
+  const priced = withUnits(draft);
+  const validated = validateProductDraft(priced.draft);
   if (!validated.ok) {
     return validated;
   }
@@ -61,6 +104,7 @@ export async function createProduct(
     formulaText: validated.value.formulaText,
     baseUnitName: validated.value.baseUnitName,
     packLevels: validated.value.packLevels,
+    units: priced.units,
     defaultPricePerBaseUnit: validated.value.pricePaisa,
     currentMrpPerBaseUnit: validated.value.mrpPaisa,
     minStockBaseUnits: validated.value.minStockBaseUnits,
@@ -133,6 +177,7 @@ export async function createQuickItem(
     formulaText: null,
     baseUnitName: validated.value.baseUnitName,
     packLevels: [],
+    units: withUnits(validated.value).units,
     defaultPricePerBaseUnit: validated.value.pricePaisa,
     currentMrpPerBaseUnit: null,
     minStockBaseUnits: null,
@@ -164,9 +209,11 @@ export async function editProduct(
     return { ok: false, rejections: [{ reason: 'pack_structure_locked' }] };
   }
 
+  const priced = withUnits(draft, existing.units);
+
   // Levels the edit keeps exactly as they were are exempt from nesting:
   // see `validatePackLevels`.
-  const validated = validateProductDraft(draft, {
+  const validated = validateProductDraft(priced.draft, {
     nestingCheckedFrom: change === 'changed' ? 0 : existing.packLevels.length,
   });
   if (!validated.ok) {
@@ -182,6 +229,7 @@ export async function editProduct(
     formulaText: value.formulaText,
     baseUnitName: value.baseUnitName,
     packLevels: value.packLevels,
+    units: priced.units,
     defaultPricePerBaseUnit: value.pricePaisa,
     currentMrpPerBaseUnit: value.mrpPaisa,
     minStockBaseUnits: value.minStockBaseUnits,

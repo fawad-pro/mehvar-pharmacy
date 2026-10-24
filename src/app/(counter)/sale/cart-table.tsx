@@ -19,17 +19,16 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { nextUnitLevel, resolveQuantity } from '@/client/search/quantity-grammar';
 import {
   isPriceOverridden,
   lineGrossPaisa,
   lineTotal,
   parseDiscountInput,
   type CartLine,
+  type updateLine,
 } from '@/domain/sales/cart';
-import { baseQty, paisa } from '@/lib/branded';
+import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity, unitLevels } from '@/lib/quantity';
 
 export interface CartTableProps {
   lines: readonly CartLine[];
@@ -38,7 +37,7 @@ export interface CartTableProps {
   /** PCN-008: expired stock on hand per product, from the index snapshot. */
   expiredByProduct?: Readonly<Record<string, { qtyBase: number; expiryDate: string } | null>>;
   onSelect: (lineId: string | null) => void;
-  onChange: (lineId: string, patch: Partial<CartLine>) => void;
+  onChange: (lineId: string, patch: Parameters<typeof updateLine>[2]) => void;
   onRemove: (lineId: string) => void;
   onLeaveCart: () => void;
   /** Phase 10 §4: "Space or F12 from cart" opens the payment overlay. */
@@ -142,9 +141,6 @@ export function CartTable({
 
   function handleKey(event: React.KeyboardEvent<HTMLTableRowElement>, line: CartLine): void {
     const index = lines.findIndex((candidate) => candidate.lineId === line.lineId);
-    const levels = unitLevels(line.baseUnitName, [...line.packLevels]);
-    const level = levels.find((candidate) => candidate.name === line.enteredUnitLevel) ?? levels[0];
-    const step = level?.factor ?? 1;
 
     switch (event.key) {
       case 'ArrowDown': {
@@ -173,16 +169,15 @@ export function CartTable({
         event.preventDefault();
         // Steps by the entered unit: pressing + on a strip line adds a strip,
         // not a tablet. That is what the operator means.
-        onChange(line.lineId, { qtyBase: baseQty(line.qtyBase + step) });
+        onChange(line.lineId, { unitCount: line.unitCount + 1 });
         break;
       }
       case '-': {
         event.preventDefault();
-        const reduced = line.qtyBase - step;
-        if (reduced <= 0) {
+        if (line.unitCount <= 1) {
           onRemove(line.lineId);
         } else {
-          onChange(line.lineId, { qtyBase: baseQty(reduced) });
+          onChange(line.lineId, { unitCount: line.unitCount - 1 });
         }
         break;
       }
@@ -203,20 +198,19 @@ export function CartTable({
         break;
       }
       case 'Tab': {
-        // Cycles the unit level and re-expresses the same count at the new one,
-        // so Tab on "2 strip" reads "2 box" rather than silently changing 20 to 2.
+        // Cycles the unit and keeps the count, so Tab on "2 strip" reads
+        // "2 box" at the box's own price (PCN-012), never 20 tablets.
         if (event.shiftKey) {
           return;
         }
         event.preventDefault();
-        const target = nextUnitLevel(line.enteredUnitLevel, line.baseUnitName, [
-          ...line.packLevels,
-        ]);
-        const count = Math.max(1, Math.round(line.qtyBase / step));
-        onChange(line.lineId, {
-          enteredUnitLevel: target,
-          qtyBase: resolveQuantity(count, target, line.baseUnitName, [...line.packLevels]),
-        });
+        const sold = line.units.filter((unit) => unit.sell);
+        const cycle = sold.length > 0 ? sold : line.units;
+        const at = cycle.findIndex((unit) => unit.key === line.unitKey);
+        const target = cycle[(at + 1) % cycle.length];
+        if (target) {
+          onChange(line.lineId, { unitKey: target.key });
+        }
         break;
       }
       default:
@@ -288,7 +282,7 @@ export function CartTable({
               </td>
               <td className="px-3 py-1.5">
                 {/* W5: always natural language, never database thinking. */}
-                {describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels])}
+                {line.unitCount} {line.enteredUnitLevel}
                 {selected ? (
                   <span className="text-ink/40 ml-2 text-xs">
                     +/− · Tab {line.enteredUnitLevel} · % disc · Del
@@ -296,7 +290,7 @@ export function CartTable({
                 ) : null}
               </td>
               <td className="numeral px-3 py-1.5 text-right">
-                {formatPaisa(paisa(line.unitPricePaisa))}
+                {formatPaisa(paisa(line.pricePerUnitPaisa))}
               </td>
               <td className="numeral px-3 py-1.5 text-right">
                 {editingDiscount?.lineId === line.lineId ? (

@@ -1469,3 +1469,28 @@ state: a unit's name is still its identity (barcodes and sale lines refer to it
 by name); renames become allowed with the stable unit keys of step 2. A wrong
 pack is fixed today by adding the product again; the guided "replace this
 product" flow lands with step 2.
+
+**Step 2, slice 2a implemented** (2026-10-24, on
+`claude/epic-euler-jdspyu`) — selling at the owner's own unit prices:
+
+- `products.units` (migration 0012) holds each unit's own price with a stable
+  key; a product from before PCN-012 has none and derives its units from the
+  legacy columns, which is what it charged — nothing is backfilled. The legacy
+  per-base price is kept in step (the base unit's own price).
+- The product form asks for a price per unit; blanks show the suggestion Mehvar
+  will save (from the nearest typed unit: exact upwards, rounded up downwards).
+  At least one price is required.
+- Sale lines store the unit, count, price per unit and the exact line amount
+  (migration 0012, nullable; a database CHECK enforces amount = count × price).
+  The cart charges count × unit price, Tab keeps the count and moves to the
+  next unit at its own price, and +/− step by one unit. The receipt reads
+  "2 box".
+- Offline records: a sale whose lines carry units is recorded as version 2;
+  one captured before the update arrives as version 1 and is charged per base
+  as before (ADR-3).
+- Receipts, reprints and return refunds read the exact amount; a returned box
+  refunds as a share of the box price.
+- Not yet in 2a: MRP per named unit (the field is now labelled per base unit,
+  which is what it stores), the shop's "sell loose?" question and per-unit Sell
+  ticks (stored, all on), purchases priced per unit (2b), cumulative costing
+  (2c), renames and "replace this product" (2d).

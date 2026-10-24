@@ -7,7 +7,7 @@
  * sub-unit corruption bug.
  */
 
-import { baseQty, packFactor, type BaseQty, type PackFactor } from './branded';
+import { baseQty, packFactor, paisa, type BaseQty, type PackFactor, type Paisa } from './branded';
 
 /**
  * One grouping level above the base unit, as stored in `products.pack_levels`
@@ -100,4 +100,38 @@ export function describeQuantity(
     return `0 ${baseUnitName}`;
   }
   return parts.map(({ level, count }) => `${count} ${level.name}`).join(' + ');
+}
+
+/**
+ * [PCN-012] A price for one unit, worked out from the price of another unit
+ * of the same product: `price × toFactor ÷ fromFactor`, rounded UP to the paisa.
+ *
+ * Used only to SUGGEST a price the owner did not type (a box price from a strip
+ * price). Pack sizes nest, so a larger unit comes out exact; a smaller one
+ * (a loose tablet from a strip) rounds up, because a suggestion that undercuts
+ * the pack it came from is the one direction a pharmacy never wants. A price
+ * the owner typed is stored as typed and never passes through here.
+ *
+ * Lives here because it multiplies by pack factors (Phase 11 §2).
+ */
+export function scalePriceBetweenUnits(
+  price: Paisa,
+  fromFactor: PackFactor,
+  toFactor: PackFactor,
+): Paisa {
+  if (!Number.isSafeInteger(price) || price < 0) {
+    throw new RangeError(`A unit price must be a non-negative whole number of paisa: ${price}`);
+  }
+  const numerator = price * toFactor;
+  return paisa(Math.ceil(numerator / fromFactor));
+}
+
+/**
+ * [PCN-012] The nominal per-base price of a unit: its price ÷ its size,
+ * rounded DOWN. Written only to `sale_lines.unit_price_paisa`, a NOT NULL
+ * column kept for rows read by code from before PCN-012; money is always read
+ * from the exact line amount, never multiplied back from this.
+ */
+export function nominalPricePerBase(pricePerUnit: Paisa, factor: PackFactor): Paisa {
+  return paisa(Math.floor(pricePerUnit / factor));
 }

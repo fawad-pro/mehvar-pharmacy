@@ -17,11 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
-import {
-  defaultUnitLevel,
-  parseQuantityQuery,
-  resolveQuantity,
-} from '@/client/search/quantity-grammar';
+import { defaultUnitLevel, parseQuantityQuery } from '@/client/search/quantity-grammar';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { useRegisterUdhaarKeyHandler } from '@/client/keyboard/udhaar-key-context';
 import { keyFor } from '@/client/keyboard/registry';
@@ -38,20 +34,23 @@ import { miniStatement } from '@/domain/udhaar/settlement';
 // From the pure module, never from `commit-sale.ts`: that one reaches the
 // database, and importing it here would pull `server-only` into the browser.
 import { validateSaleCommand, type SaleRejection } from '@/domain/sales/sale-command';
+import { unitsOf } from '@/domain/catalog/units';
 import {
   addToCart,
   cartTotals,
   grossSubtotalPaisa,
   isPriceOverridden,
   lineTotal,
+  lineUnit,
+  newCartLine,
   removeLine,
   totalLineDiscountPaisa,
   updateLine,
   type CartLine,
 } from '@/domain/sales/cart';
-import { baseQty, paisa, ZERO_PAISA } from '@/lib/branded';
+import { packFactor, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity } from '@/lib/quantity';
+import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7 } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
@@ -154,21 +153,28 @@ export function SaleSurface() {
     const { count } = parseQuantityQuery(rawQuery);
     const level =
       hit.unitLevelName ?? defaultUnitLevel(hit.product.baseUnitName, hit.product.packLevels);
-    const qtyBase = resolveQuantity(count, level, hit.product.baseUnitName, hit.product.packLevels);
 
     setLines((current) =>
-      addToCart(current, {
-        lineId: uuidv7(),
-        productId: hit.product.id,
-        name: hit.product.name,
-        baseUnitName: hit.product.baseUnitName,
-        packLevels: hit.product.packLevels,
-        qtyBase,
-        enteredUnitLevel: level,
-        unitPricePaisa: paisa(hit.product.pricePaisa),
-        catalogPricePaisa: paisa(hit.product.pricePaisa),
-        lineDiscountPaisa: ZERO_PAISA,
-      }),
+      addToCart(
+        current,
+        newCartLine({
+          lineId: uuidv7(),
+          productId: hit.product.id,
+          name: hit.product.name,
+          baseUnitName: hit.product.baseUnitName,
+          packLevels: hit.product.packLevels,
+          // [PCN-012] Each unit at its own price; derived for an index cached
+          // before PCN-012.
+          units: unitsOf({
+            baseUnitName: hit.product.baseUnitName,
+            packLevels: hit.product.packLevels,
+            pricePerBasePaisa: hit.product.pricePaisa,
+            units: hit.product.units,
+          }),
+          unitName: level,
+          count,
+        }),
+      ),
     );
     setLastSale(null);
     setError(null);
@@ -212,7 +218,16 @@ export function SaleSurface() {
           productId: line.productId,
           qtyBase: line.qtyBase,
           enteredUnitLevel: line.enteredUnitLevel,
-          unitPricePaisa: line.unitPricePaisa,
+          // [PCN-012] The exact charge is count × the unit's price; the
+          // per-base figure is nominal, for a column older readers expect.
+          unitPricePaisa: nominalPricePerBase(
+            line.pricePerUnitPaisa,
+            packFactor(lineUnit(line)?.factor ?? 1),
+          ),
+          unitKey: line.unitKey,
+          unitName: line.enteredUnitLevel,
+          unitCount: line.unitCount,
+          unitPricePaisaEntered: line.pricePerUnitPaisa,
           lineDiscountPaisa: line.lineDiscountPaisa,
           priceOverridden: isPriceOverridden(line),
         })),
@@ -274,7 +289,8 @@ export function SaleSurface() {
         tenantFooterLine: receiptContext.tenantFooterLine,
         lines: soldLines.map((line) => ({
           name: line.name,
-          quantityLabel: describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels]),
+          // As sold: "2 strip", never re-expressed as tablets (P9).
+          quantityLabel: `${line.unitCount} ${line.enteredUnitLevel}`,
           amountPaisa: lineTotal(line),
         })),
         // The receipt's Subtotal is the GROSS figure — before any line's own
@@ -375,18 +391,24 @@ export function SaleSurface() {
       addLocalProduct(product);
 
       setLines((current) =>
-        addToCart(current, {
-          lineId: uuidv7(),
-          productId: product.id,
-          name: product.name,
-          baseUnitName: product.baseUnitName,
-          packLevels: [],
-          qtyBase: baseQty(1),
-          enteredUnitLevel: product.baseUnitName,
-          unitPricePaisa: paisa(product.pricePaisa),
-          catalogPricePaisa: paisa(product.pricePaisa),
-          lineDiscountPaisa: ZERO_PAISA,
-        }),
+        addToCart(
+          current,
+          newCartLine({
+            lineId: uuidv7(),
+            productId: product.id,
+            name: product.name,
+            baseUnitName: product.baseUnitName,
+            packLevels: [],
+            units: unitsOf({
+              baseUnitName: product.baseUnitName,
+              packLevels: [],
+              pricePerBasePaisa: product.pricePaisa,
+              units: null,
+            }),
+            unitName: product.baseUnitName,
+            count: 1,
+          }),
+        ),
       );
       setLastSale(null);
       setError(null);

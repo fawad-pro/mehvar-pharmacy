@@ -200,4 +200,32 @@ suite('pack structure locks once a product has history (PCN-012)', () => {
     );
     expect(result.ok).toBe(false);
   });
+
+  it('prices typed per unit are stored exactly, with the rest suggested (PCN-012)', async () => {
+    const { id, base } = await created({
+      baseUnitName: 'cap',
+      packLevels: [{ name: 'box', factor: 14 }],
+      unitPrices: [null, 25_000],
+    });
+    const stored = await findProduct(tenant.scope, id);
+    // A box of 14 at Rs 250 is Rs 250 — not 14 × a rounded capsule price.
+    expect(stored?.units.map((unit) => [unit.name, unit.pricePaisa])).toEqual([
+      ['cap', 1_786],
+      ['box', 25_000],
+    ]);
+    // The legacy per-base column follows the base unit's own price.
+    expect(stored?.pricePaisa).toBe(1_786);
+
+    // Adding a carton keeps both existing prices and suggests the new one from
+    // the box directly below it: ten boxes, exactly.
+    const extended = await editProduct(tenant.scope, id, {
+      ...base,
+      packLevels: [...(base.packLevels ?? []), { name: 'carton', factor: 140 }],
+      unitPrices: [1_786, 25_000, null],
+    });
+    expect(extended.ok).toBe(true);
+    expect((await findProduct(tenant.scope, id))?.units.map((unit) => unit.pricePaisa)).toEqual([
+      1_786, 25_000, 250_000,
+    ]);
+  });
 });

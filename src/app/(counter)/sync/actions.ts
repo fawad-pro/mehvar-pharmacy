@@ -21,6 +21,20 @@ import type { CapturedRecord } from '@/client/sync/records';
 /** Phase 12 §2.6 / defect C4: stamped at the boundary that knows the version. */
 const CLIENT_SCHEMA_VERSION = 1;
 
+/**
+ * [PCN-012] Record version 2: sale lines carry the unit entered, its count and
+ * its price. Read from the record rather than assumed, because a sale captured
+ * before an update can sit in the outbox and arrive after it — and it must be
+ * recorded as the version it is (ADR-3 accepts version 1 for a release).
+ */
+const UNIT_PRICED_SALE_VERSION = 2;
+
+function saleRecordVersion(lines: readonly { unitCount?: number }[]): number {
+  return lines.some((line) => line.unitCount !== undefined)
+    ? UNIT_PRICED_SALE_VERSION
+    : CLIENT_SCHEMA_VERSION;
+}
+
 export interface DeliverableRecord {
   readonly record: CapturedRecord;
   /**
@@ -45,7 +59,7 @@ function toCommand(item: DeliverableRecord): IngestibleRecord {
         command: {
           ...record.payload,
           origin,
-          clientSchemaVersion: CLIENT_SCHEMA_VERSION,
+          clientSchemaVersion: saleRecordVersion(record.payload.lines),
           clientCommittedAt: new Date(record.payload.clientCommittedAt),
         },
       };

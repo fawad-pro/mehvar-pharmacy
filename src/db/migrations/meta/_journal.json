@@ -85,6 +85,13 @@
       "when": 1792713514119,
       "tag": "0011_purchase_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792839459101,
+      "tag": "0012_unit_prices",
+      "breakpoints": true
     }
   ]
 }

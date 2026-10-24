@@ -5,6 +5,7 @@ import { currentSession, scopeFor } from '@/auth/session';
 import { findReceipt } from '@/db/receipt-queries';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
+import { storedLineGrossPaisa } from '@/domain/sales/sale-command';
 import { describeQuantity } from '@/lib/quantity';
 
 import { ReceiptActions } from './receipt-actions';
@@ -45,10 +46,12 @@ export default async function ReceiptDetailPage({
   const heading =
     receipt.kind === 'sale' ? 'Sale' : receipt.kind === 'settlement' ? 'Payment' : 'Return';
 
-  const lineGross = (line: { qtyBase: number; unitPricePaisa: number }) =>
-    line.qtyBase * line.unitPricePaisa;
-  const lineTotal = (line: { qtyBase: number; unitPricePaisa: number; lineDiscountPaisa: number }) =>
-    lineGross(line) - line.lineDiscountPaisa;
+  // [PCN-012] What the line actually charged: the stored amount when there is
+  // one, per-base price × base quantity for a line from before PCN-012.
+  const lineGross = storedLineGrossPaisa;
+  const lineTotal = (
+    line: Parameters<typeof storedLineGrossPaisa>[0] & { lineDiscountPaisa: number },
+  ) => lineGross(line) - line.lineDiscountPaisa;
 
   // Subtotal is the GROSS figure — before any line's own discount — never a
   // sum of `lineTotal`, which is already net. Summing net totals made
@@ -168,10 +171,14 @@ export default async function ReceiptDetailPage({
                   <td className="text-ink/70 px-3 py-2">
                     {/* W5's natural language, the same words the printed slip
                         used — never a raw base-unit count. */}
-                    {describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
+                    {line.unitCount !== null && line.unitName !== null
+                      ? `${line.unitCount} ${line.unitName}`
+                      : describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
                   </td>
                   <td className="numeral px-3 py-2 text-right">
-                    {formatPaisa(paisa(line.unitPricePaisa))}
+                    {/* The price of one unit as sold; per base unit only for a
+                        line from before PCN-012, which is what it charged. */}
+                    {formatPaisa(paisa(line.unitPricePaisaEntered ?? line.unitPricePaisa))}
                   </td>
                   <td className="numeral px-3 py-2 text-right">
                     {formatPaisa(paisa(lineTotal(line)))}

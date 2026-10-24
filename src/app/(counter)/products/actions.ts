@@ -69,6 +69,14 @@ async function requireAuthoring() {
 
 function draftFromForm(form: FormData): ProductDraft {
   const packLevels = parsePackLevels(String(form.get('packLevels') ?? ''));
+  // [PCN-012] `unitPrice-0` is the base unit, then one per pack level. Entered
+  // in rupees, stored in paisa: the conversion happens once, here at the
+  // boundary (Phase 9 §1). A blank or unreadable box is "not typed".
+  const unitPrices = [0, ...packLevels.map((_, index) => index + 1)].map((index) => {
+    const raw = String(form.get(`unitPrice-${index}`) ?? '').trim();
+    const value = Number(raw);
+    return raw === '' || !Number.isFinite(value) || value < 0 ? null : rupeesToPaisa(value);
+  });
   const mrp = String(form.get('mrp') ?? '').trim();
   const minStock = String(form.get('minStock') ?? '').trim();
 
@@ -80,9 +88,11 @@ function draftFromForm(form: FormData): ProductDraft {
     formulaText: String(form.get('formulaText') ?? ''),
     baseUnitName: String(form.get('baseUnitName') ?? ''),
     packLevels,
-    // Entered in rupees, stored in paisa. The conversion happens once, here at
-    // the boundary (Phase 9 §1).
-    pricePaisa: rupeesToPaisa(Number(form.get('price') ?? 0)),
+    // [PCN-012] Prices arrive per unit and decide the per-base price; with
+    // none typed at all there is no price, which validation refuses rather
+    // than saving a product at Rs 0.
+    pricePaisa: unitPrices.some((price) => price !== null) ? 0 : Number.NaN,
+    unitPrices,
     mrpPaisa: mrp === '' ? null : rupeesToPaisa(Number(mrp)),
     minStockBaseUnits: minStock === '' ? null : Math.trunc(Number(minStock)),
     needsCompletion: form.get('needsCompletion') === 'on',
@@ -105,7 +115,7 @@ function messageFor(result: Extract<CatalogResult<unknown>, { ok: false }>): str
     case 'base_unit_required':
       return 'Name the base unit — the smallest thing you sell, like tab or bottle.';
     case 'price_required':
-      return 'Enter a price in rupees.';
+      return 'Enter a price for at least one unit — the strip, the box or the single piece.';
     case 'price_negative':
       return 'A price cannot be negative.';
     case 'min_stock_negative':

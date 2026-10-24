@@ -431,3 +431,130 @@ suite('commitSale against Postgres', () => {
     ).rejects.toThrow();
   });
 });
+
+/** [PCN-012] A line sold in a named unit at that unit's own price. */
+function unitLine(
+  productId: string,
+  unitName: string,
+  factor: number,
+  count: number,
+  price: number,
+) {
+  return {
+    lineId: uuidv7(),
+    productId,
+    qtyBase: count * factor,
+    enteredUnitLevel: unitName,
+    unitPricePaisa: Math.floor(price / factor),
+    unitKey: 'u1',
+    unitName,
+    unitCount: count,
+    unitPricePaisaEntered: price,
+    lineDiscountPaisa: 0,
+    priceOverridden: false,
+  };
+}
+
+describe('unit-priced lines — validation (PCN-012)', () => {
+  it('charges count × unit price, not base quantity × a per-base price', () => {
+    // Three boxes of 14 at Rs 250: Rs 750, exactly.
+    const result = validateSaleCommand(
+      command({ lines: [unitLine('p', 'box', 14, 3, 25_000)], cashPaisa: 75_000 }),
+    );
+    expect(result).toEqual({ ok: true, subtotalPaisa: 75_000, totalPaisa: 75_000 });
+  });
+
+  it('refuses a line whose base quantity is not a whole number of its unit', () => {
+    const line = { ...unitLine('p', 'box', 14, 3, 25_000), qtyBase: 40 };
+    expect(validateSaleCommand(command({ lines: [line], cashPaisa: 75_000 }))).toEqual({
+      ok: false,
+      reason: 'invalid_quantity',
+    });
+  });
+
+  it('refuses a unit line with no unit name', () => {
+    const line = { ...unitLine('p', 'box', 14, 3, 25_000), unitName: '' };
+    expect(validateSaleCommand(command({ lines: [line], cashPaisa: 75_000 }))).toEqual({
+      ok: false,
+      reason: 'invalid_quantity',
+    });
+  });
+});
+
+suite('unit-priced lines against Postgres (PCN-012)', () => {
+  let tenant: TestTenant;
+  let product: TestProduct;
+
+  beforeAll(async () => {
+    tenant = await provisionTestTenant('unitsale');
+    product = await createTestProduct(tenant.scope, `Boxed ${uuidv7().slice(-6)}`, 1_786);
+    await addOpeningStock(tenant.scope, product.id, 100);
+  });
+
+  afterAll(async () => {
+    await tenant.cleanup();
+  });
+
+  it('stores what was entered and the exact amount, and the sale total follows it', async () => {
+    const saleId = uuidv7();
+    const result = await commitSale(
+      tenant.scope,
+      command({
+        saleId,
+        lines: [unitLine(product.id, 'box', 14, 3, 25_000)],
+        cashPaisa: 75_000,
+        clientSchemaVersion: 2,
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const [sale] = await tenant.scope.select(sales, eq(sales.id, saleId));
+    expect(sale?.totalPaisa).toBe(75_000);
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.saleId, saleId));
+    expect(line).toMatchObject({
+      qtyBase: 42,
+      unitKey: 'u1',
+      unitName: 'box',
+      unitCount: 3,
+      unitPricePaisaEntered: 25_000,
+      lineAmountPaisa: 75_000,
+      // Nominal, rounded down, derived on the server: 25,000 ÷ 14.
+      unitPricePaisa: 1_785,
+    });
+  });
+
+  it('a version-1 line still stores no entered unit, and is charged per base as before', async () => {
+    const saleId = uuidv7();
+    const result = await commitSale(
+      tenant.scope,
+      command({ saleId, lines: [saleLine(product.id, 4, 1_786)], cashPaisa: 7_144 }),
+    );
+    expect(result.ok).toBe(true);
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.saleId, saleId));
+    expect(line).toMatchObject({ unitCount: null, lineAmountPaisa: null, unitPricePaisa: 1_786 });
+  });
+
+  it('the database refuses an amount that is not count × price', async () => {
+    const saleId = uuidv7();
+    await commitSale(
+      tenant.scope,
+      command({ saleId, lines: [unitLine(product.id, 'box', 14, 1, 25_000)], cashPaisa: 25_000 }),
+    );
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.saleId, saleId));
+    await expect(
+      tenant.scope.insert(saleLines, {
+        id: uuidv7(),
+        saleId,
+        productId: product.id,
+        qtyBase: 14,
+        enteredUnitLevel: 'box',
+        unitPricePaisa: 1_785,
+        unitName: 'box',
+        unitCount: 1,
+        unitPricePaisaEntered: 25_000,
+        lineAmountPaisa: 24_990,
+      } as never),
+    ).rejects.toThrow();
+    expect(line?.lineAmountPaisa).toBe(25_000);
+  });
+});

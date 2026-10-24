@@ -17,6 +17,7 @@ import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or, sql } from 'driz
 
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
 import type { CatalogSuggestion } from '@/domain/catalog/product';
+import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
 import { businessDayOf } from '@/lib/business-day';
 import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
@@ -47,6 +48,8 @@ export interface IndexProductRow {
   baseUnitName: string;
   packLevels: PackLevel[];
   pricePaisa: number;
+  /** [PCN-012] Each unit with its own price, smallest first. */
+  units: ProductUnit[];
   mrpPaisa: number | null;
   needsCompletion: boolean;
 }
@@ -185,9 +188,20 @@ function toIndexProduct(row: typeof products.$inferSelect): IndexProductRow {
     baseUnitName: row.baseUnitName,
     packLevels: row.packLevels,
     pricePaisa: row.defaultPricePerBaseUnit,
+    units: unitsOfRow(row),
     mrpPaisa: row.currentMrpPerBaseUnit,
     needsCompletion: row.needsCompletion,
   };
+}
+
+/** [PCN-012] A product row's units, derived for rows written before PCN-012. */
+function unitsOfRow(row: typeof products.$inferSelect): ProductUnit[] {
+  return unitsOf({
+    baseUnitName: row.baseUnitName,
+    packLevels: row.packLevels,
+    pricePerBasePaisa: row.defaultPricePerBaseUnit,
+    units: row.units,
+  });
 }
 
 /* ========================================================================== */
@@ -376,6 +390,8 @@ export interface ProductDetail extends ProductListItem {
   stockBase: number | null;
   /** Present when this product came from Mehvar's catalogue (Phase 6 §2). */
   globalProductId: string | null;
+  /** [PCN-012] Each unit with its own price, smallest first. */
+  units: ProductUnit[];
 }
 
 export async function findProduct(
@@ -404,6 +420,7 @@ export async function findProduct(
     baseUnitName: row.baseUnitName,
     packLevels: row.packLevels,
     pricePaisa: row.defaultPricePerBaseUnit,
+    units: unitsOfRow(row),
     mrpPaisa: row.currentMrpPerBaseUnit,
     minStockBaseUnits: row.minStockBaseUnits,
     needsCompletion: row.needsCompletion,

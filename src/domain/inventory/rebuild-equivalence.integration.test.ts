@@ -39,6 +39,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
+import { saleLineGrossPaisa, type SaleLineCommand } from '@/domain/sales/sale-command';
 import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
 import { commitPurchase } from '@/domain/purchases/commit-purchase';
 import { commitPurchaseCorrection } from '@/domain/purchases/commit-purchase-correction';
@@ -140,7 +141,54 @@ const observed = {
   /** [PCN-009] Corrections and supplier returns that actually committed. */
   correctionsCommitted: 0,
   supplierReturnsCommitted: 0,
+  /** [PCN-012] Sale lines entered as a count of strips at the strip's own price. */
+  unitPricedLines: 0,
 };
+
+/**
+ * [PCN-012] A random sale line: half the time a version-1 line (base units at
+ * the per-base price), half the time strips at a strip price of their own —
+ * sometimes cheaper than ten tablets, so the two pricing paths cannot agree by
+ * accident. One history mixes both, as a real outbox does across an update.
+ */
+function randomSaleLine(
+  random: () => number,
+  product: TestProduct,
+  lineDiscountPaisa: number,
+  priceOverridden: boolean,
+): SaleLineCommand {
+  if (random() < 0.5) {
+    return {
+      lineId: uuidv7(),
+      productId: product.id,
+      qtyBase: between(random, 1, 60),
+      enteredUnitLevel: pick(random, ['tab', 'strip']),
+      unitPricePaisa: product.pricePaisa,
+      lineDiscountPaisa,
+      priceOverridden,
+    };
+  }
+  observed.unitPricedLines += 1;
+  const count = between(random, 1, 6);
+  const stripPrice = product.pricePaisa * 10 - between(random, 0, 50);
+  return {
+    lineId: uuidv7(),
+    productId: product.id,
+    qtyBase: count * 10,
+    enteredUnitLevel: 'strip',
+    unitPricePaisa: Math.floor(stripPrice / 10),
+    unitKey: 'u1',
+    unitName: 'strip',
+    unitCount: count,
+    unitPricePaisaEntered: stripPrice,
+    lineDiscountPaisa,
+    priceOverridden,
+  };
+}
+
+function lineGross(line: SaleLineCommand): number {
+  return saleLineGrossPaisa(line) ?? 0;
+}
 
 /**
  * One random event against the world.
@@ -265,19 +313,10 @@ async function applyRandomEvent(world: World): Promise<void> {
     // account rather than being paid in cash.
     const customerId = pick(random, world.customers);
     const lineCount = between(random, 1, 3);
-    const lines = Array.from({ length: lineCount }, () => {
-      const product = pick(random, world.products);
-      return {
-        lineId: uuidv7(),
-        productId: product.id,
-        qtyBase: between(random, 1, 60),
-        enteredUnitLevel: pick(random, ['tab', 'strip']),
-        unitPricePaisa: product.pricePaisa,
-        lineDiscountPaisa: 0,
-        priceOverridden: false,
-      };
-    });
-    const total = lines.reduce((sum, line) => sum + line.unitPricePaisa * line.qtyBase, 0);
+    const lines = Array.from({ length: lineCount }, () =>
+      randomSaleLine(random, pick(random, world.products), 0, false),
+    );
+    const total = lines.reduce((sum, line) => sum + lineGross(line), 0);
     // Sometimes fully on credit, sometimes a cash/credit split.
     const cashPaisa = random() < 0.4 ? 0 : between(random, 0, total);
     const creditPaisa = total - cashPaisa;
@@ -457,21 +496,17 @@ async function applyRandomEvent(world: World): Promise<void> {
   // A cash sale. Quantities deliberately overshoot available stock sometimes,
   // so the pending layer is exercised rather than assumed.
   const lineCount = between(random, 1, 3);
-  const lines = Array.from({ length: lineCount }, () => {
-    const product = pick(random, world.products);
-    return {
-      lineId: uuidv7(),
-      productId: product.id,
-      qtyBase: between(random, 1, 60),
-      enteredUnitLevel: pick(random, ['tab', 'strip']),
-      unitPricePaisa: product.pricePaisa,
-      lineDiscountPaisa: random() < 0.2 ? between(random, 1, 100) : 0,
-      priceOverridden: random() < 0.1,
-    };
-  });
+  const lines = Array.from({ length: lineCount }, () =>
+    randomSaleLine(
+      random,
+      pick(random, world.products),
+      random() < 0.2 ? between(random, 1, 100) : 0,
+      random() < 0.1,
+    ),
+  );
 
   const subtotal = lines.reduce(
-    (sum, line) => sum + Math.max(0, line.unitPricePaisa * line.qtyBase - line.lineDiscountPaisa),
+    (sum, line) => sum + Math.max(0, lineGross(line) - line.lineDiscountPaisa),
     0,
   );
   const invoiceDiscount = random() < 0.2 ? Math.min(subtotal, between(random, 1, 200)) : 0;
@@ -583,8 +618,15 @@ async function assertInvariants(world: World, label: string): Promise<void> {
 
   for (const sale of allSales) {
     const own = linesBySale.get(sale.id) ?? [];
+    // [PCN-012] The stored amount when the line has one, else per-base × base
+    // quantity — exactly what each kind of line charged.
     const subtotal = own.reduce(
-      (sum, line) => sum + Math.max(0, line.unitPricePaisa * line.qtyBase - line.lineDiscountPaisa),
+      (sum, line) =>
+        sum +
+        Math.max(
+          0,
+          (line.lineAmountPaisa ?? line.unitPricePaisa * line.qtyBase) - line.lineDiscountPaisa,
+        ),
       0,
     );
     expect(sale.subtotalPaisa, `${label}: subtotal of ${sale.receiptNumber}`).toBe(subtotal);
@@ -865,5 +907,6 @@ suite('rebuild equivalence — randomized histories', () => {
     expect(observed.supplierReturnsCommitted, 'no supplier return ever committed').toBeGreaterThan(
       0,
     );
+    expect(observed.unitPricedLines, 'no sale line was ever priced per strip').toBeGreaterThan(0);
   });
 });

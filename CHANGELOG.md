@@ -2,6 +2,17 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Prices per strip and box (PCN-012, step 2a)
+
+- Each unit of a product has its own price. The owner types the strip or box
+  price they know; Mehvar suggests the others and shows them before saving.
+- A box sells at exactly the box price: a box of 14 at Rs 250 is Rs 250.00 on
+  the line, the total, the receipt and a refund — no more per-tablet rounding.
+- At the counter, Tab moves a line to the next unit at that unit's price and
+  keeps the count; + and − add or remove one unit. Receipts say "2 box".
+- Sales recorded before this change, and offline sales captured before the
+  update, keep exactly the amounts they were charged.
+
 ## Session — Pack sizes protected (PCN-012, step 1)
 
 - A product's base unit and pack sizes can no longer be changed once anything

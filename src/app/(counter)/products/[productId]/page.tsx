@@ -107,7 +107,11 @@ export default async function ProductDetailPage({
           packLevels: formatPackLevels(product.packLevels),
           // Paisa in the database, rupees in the field. Two decimal places
           // exactly, so a price never renders as 3.4999999.
-          priceRupees: (product.pricePaisa / 100).toFixed(2),
+          // [PCN-012] Each unit's own price, as the owner set it (or as it was
+          // derived for a product from before PCN-012).
+          unitPriceRupees: Object.fromEntries(
+            product.units.map((unit) => [unit.name, (unit.pricePaisa / 100).toFixed(2)]),
+          ),
           mrpRupees: product.mrpPaisa === null ? '' : (product.mrpPaisa / 100).toFixed(2),
           minStock: product.minStockBaseUnits === null ? '' : String(product.minStockBaseUnits),
           needsCompletion: product.needsCompletion,

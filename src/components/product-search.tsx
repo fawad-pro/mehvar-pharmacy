@@ -18,8 +18,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
-import { parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { defaultUnitLevel, parseQuantityQuery } from '@/client/search/quantity-grammar';
 import { MatchTier, type SearchHit } from '@/client/search/catalog-index';
+import { findUnit, unitsOf } from '@/domain/catalog/units';
 import { formatPaisa } from '@/lib/money';
 import { describeQuantity } from '@/lib/quantity';
 import { baseQty, paisa } from '@/lib/branded';
@@ -277,12 +278,36 @@ function ResultRow({
         <StockBadge stockBase={hit.stockBase} product={product} />
 
         {/* Paisa crosses the wire as a plain number; it becomes branded again
-            at this boundary rather than being cast (Phase 11 §2). */}
-        <span className="numeral w-20 shrink-0 tabular-nums">
-          {formatPaisa(paisa(product.pricePaisa))}
-        </span>
+            at this boundary rather than being cast (Phase 11 §2).
+            [PCN-012] The price of the unit Enter will add — the scanned
+            barcode's unit, or the counter's default — never a per-tablet
+            figure for a product sold by the strip. */}
+        <UnitPrice hit={hit} />
       </button>
     </li>
+  );
+}
+
+function UnitPrice({ hit }: { hit: SearchHit }) {
+  const { product } = hit;
+  const units = unitsOf({
+    baseUnitName: product.baseUnitName,
+    packLevels: product.packLevels,
+    pricePerBasePaisa: product.pricePaisa,
+    units: product.units,
+  });
+  const unit =
+    findUnit(
+      units,
+      hit.unitLevelName ?? defaultUnitLevel(product.baseUnitName, product.packLevels),
+    ) ?? units[0];
+  return (
+    <span className="numeral w-28 shrink-0 text-right tabular-nums">
+      {formatPaisa(paisa(unit?.pricePaisa ?? product.pricePaisa))}
+      {unit && units.length > 1 ? (
+        <span className="text-ink/50 text-xs"> / {unit.name}</span>
+      ) : null}
+    </span>
   );
 }
 

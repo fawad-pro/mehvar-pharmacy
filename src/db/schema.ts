@@ -39,6 +39,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import type { ProductUnit } from '@/domain/catalog/units';
 import type { PackLevel } from '@/lib/quantity';
 
 /* ========================================================================== */
@@ -225,6 +226,14 @@ export const products = pgTable(
     /** Ordered levels, factors in base units — read whole, written rarely,
         never queried relationally (Phase 9 §2's note on why this is JSONB). */
     packLevels: jsonb('pack_levels').$type<PackLevel[]>().notNull().default([]),
+    /**
+     * [PCN-012] Each unit with its own price, smallest first. Null on a product
+     * written before PCN-012: `unitsOf` derives its units from the columns
+     * around it, which is what it charged then — so nothing is backfilled.
+     * `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are
+     * kept in step with it for one release.
+     */
+    units: jsonb('units').$type<ProductUnit[]>(),
     defaultPricePerBaseUnit: bigint('default_price_per_base_unit', { mode: 'number' }).notNull(),
     /** Reference ceiling, D4: the pack in hand is authoritative, not our data. */
     currentMrpPerBaseUnit: bigint('current_mrp_per_base_unit', { mode: 'number' }),
@@ -495,7 +504,24 @@ export const saleLines = pgTable(
     qtyBase: integer('qty_base').notNull(),
     /** As entered, for display and receipt (W5's natural language). */
     enteredUnitLevel: text('entered_unit_level').notNull(),
+    /**
+     * Per base unit. Before PCN-012 this was the price charged; since, it is
+     * nominal (the entered unit's price ÷ its size, rounded down) and kept only
+     * because the column is NOT NULL. Money is read from `line_amount_paisa`.
+     */
     unitPricePaisa: bigint('unit_price_paisa', { mode: 'number' }).notNull(),
+    /*
+     * [PCN-012] What was actually entered and charged. Null on lines written
+     * before PCN-012 (and by an offline client still on record version 1),
+     * whose amount is `unit_price_paisa × qty_base` — exactly what was charged.
+     */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
+    /** The price of ONE entered unit, as charged. */
+    unitPricePaisaEntered: bigint('unit_price_paisa_entered', { mode: 'number' }),
+    /** `unit_count × unit_price_paisa_entered`, before the line discount. */
+    lineAmountPaisa: bigint('line_amount_paisa', { mode: 'number' }),
     lineDiscountPaisa: bigint('line_discount_paisa', { mode: 'number' }).notNull().default(0),
     /** T1 exposure — surfaces in the owner's daily view. */
     priceOverridden: boolean('price_overridden').notNull().default(false),
@@ -505,6 +531,15 @@ export const saleLines = pgTable(
     index('sale_lines_sale_idx').on(table.tenantId, table.saleId),
     index('sale_lines_tenant_created_idx').on(table.tenantId, table.createdAt),
     check('sale_lines_qty_positive', sql`${table.qtyBase} > 0`),
+    // [PCN-012] The entered columns arrive together or not at all, and the
+    // amount is exactly count × price — the database refuses anything else.
+    check(
+      'sale_lines_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitPricePaisaEntered} IS NULL AND ${table.lineAmountPaisa} IS NULL AND ${table.unitName} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitPricePaisaEntered} >= 0 AND ${table.unitName} IS NOT NULL
+              AND ${table.lineAmountPaisa} = ${table.unitCount} * ${table.unitPricePaisaEntered}
+              AND ${table.qtyBase} % ${table.unitCount} = 0)`,
+    ),
   ],
 );
 
