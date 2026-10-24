@@ -283,6 +283,24 @@ test('W8: an adjustment needs a coded reason, and says who made it', async ({ pa
   await expect(adjustments).toContainText('found behind the counter');
 });
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A product with stock on hand now — Panadol when it has some. */
+async function stockedProduct(page: Page): Promise<{ id: string; name: string }> {
+  const response = await page.request.get('/api/catalog');
+  expect(response.ok()).toBe(true);
+  const snapshot = (await response.json()) as {
+    products: Array<{ id: string; name: string }>;
+    stock: Record<string, number>;
+  };
+  const stocked = snapshot.products.filter((row) => (snapshot.stock[row.id] ?? 0) > 0);
+  const product = stocked.find((row) => /panadol/i.test(row.name)) ?? stocked[0];
+  expect(product, 'some product has stock on hand').toBeDefined();
+  return { id: product?.id ?? '', name: product?.name ?? '' };
+}
+
 test('W8: removing stock must name the batch it leaves from', async ({ page }) => {
   await openCounter(page);
   await page.keyboard.press('F8');
@@ -291,14 +309,26 @@ test('W8: removing stock must name the batch it leaves from', async ({ page }) =
   // click as the adjustment screen mounts.
   await expect(page).toHaveURL(/\/stock\/adjust$/);
 
-  await search(page).fill('panadol');
-  await page.getByRole('option').first().click();
+  // Sized from live stock, never the seed (Day 20): other specs sell Panadol
+  // down, so its earliest batch can hold fewer units than any fixed number.
+  const product = await stockedProduct(page);
+  await search(page).fill(product.name);
+  await page
+    .getByRole('option', { name: new RegExp(escapeRegExp(product.name)) })
+    .first()
+    .click();
 
   // Removing is the default direction, and it asks which batch — FEFO-ordered,
   // so the one the operator most likely means is already chosen.
-  await expect(page.getByLabel('From batch')).toBeVisible();
+  const batch = page.getByLabel('From batch');
+  await expect(batch).toBeVisible();
+  const chosen = await batch.evaluate(
+    (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent ?? '',
+  );
+  const left = Number(/(\d+)\s[^·]*left\s*$/.exec(chosen)?.[1] ?? 0);
+  expect(left, `the chosen batch says how many are left: "${chosen}"`).toBeGreaterThan(0);
 
-  await page.getByLabel('Units to remove').fill('3');
+  await page.getByLabel('Units to remove').fill(String(Math.min(3, left)));
   await page.getByLabel('Reason').selectOption('damage');
   await page.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
