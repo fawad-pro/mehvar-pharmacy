@@ -592,6 +592,21 @@ exception visibility.
   spec that needs a shortfall or an expired batch sizes it from the current
   catalog payload, never from the seed; warm-up lists every routed key.
 
+## Things the scanner fix established
+
+- **Revalidating a route does not reach the counter's search index.** The
+  index is client state built from `/api/catalog`, held by `CatalogProvider`
+  in the counter layout across navigation. A catalogue edit must call
+  `useCatalog().refresh()`; the search box also pulls changes on arrival. A
+  comment claiming `revalidateAfter('catalog')` made edits "reach /sale" is
+  what kept this invisible.
+- **`refresh` from `useCatalog` is stable on purpose.** It was rebuilt with
+  every index, so an effect depending on it re-ran after the refresh it
+  triggered.
+- **A scanned code is a GTIN only by proof**, never by shape: AI 01 with a
+  valid check digit, and GTIN-13 ⇄ `0`-prefixed GTIN-14 as the only
+  equivalence. Indicator digits 1–9 are other packaging levels.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

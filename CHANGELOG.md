@@ -2,6 +2,21 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Barcode scanning at the counter
+
+- A barcode linked on the Products screen now scans at the counter straight
+  away. The counter's search index was built once per page load, and catalogue
+  edits never refreshed it, so a fresh code read as unknown until a reload.
+- The 2D code on medicine packs (GS1 DataMatrix: product number, expiry,
+  batch) finds its product. Before, any code containing letters was never
+  looked up as a barcode. A pack's code matches the box's printed EAN and every
+  later batch of the same pack; a code saved earlier as a full 2D string still
+  works.
+- An unknown scan no longer opens "Add it now" with the code as the product
+  name. The scanner's Enter does nothing by itself; the operator chooses "Link
+  it to a product" (owner only, at the unit the code is on) or "Add a new
+  product" with the name left blank.
+
 ## Session — Prices per strip and box (PCN-012, step 2a)
 
 - Each unit of a product has its own price. The owner types the strip or box

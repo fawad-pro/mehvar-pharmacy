@@ -30,6 +30,7 @@ import { CustomerPicker } from '@/components/customer-picker';
 import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import { ReceiptView } from '@/components/receipt-view';
 import type { CustomerHit } from '@/app/(counter)/customers/actions';
+import { linkScannedCode } from '@/app/(counter)/products/actions';
 import { miniStatement } from '@/domain/udhaar/settlement';
 // From the pure module, never from `commit-sale.ts`: that one reaches the
 // database, and importing it here would pull `server-only` into the browser.
@@ -51,7 +52,7 @@ import {
 import { packFactor, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 import { nominalPricePerBase } from '@/lib/quantity';
-import { uuidv7 } from '@/lib/uuid';
+import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
 import { PaymentOverlay, type PaymentSplit } from './payment-overlay';
@@ -454,6 +455,15 @@ export function SaleSurface() {
               setQuickAdd({ name, settle });
             })
           }
+          // Phase 10 §5: an unknown scan links in place. On success the
+          // index is refreshed so the next scan of this code is a plain hit.
+          onLinkCode={async (code, productId, unitLevelName) => {
+            const outcome = await linkScannedCode(productId as Uuid, code, unitLevelName);
+            if (outcome.ok) {
+              refresh();
+            }
+            return outcome;
+          }}
         />
       </div>
 

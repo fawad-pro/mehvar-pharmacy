@@ -15,6 +15,7 @@ import { DuplicateNotice } from '@/components/duplicate-notice';
 
 import { saveProduct, type ActionState } from './actions';
 import { CatalogPicker } from './catalog-picker';
+import { useCatalog } from '@/client/search/provider';
 import { exceedsMrp, parsePackLevels } from '@/domain/catalog/product';
 import { unitsFromEnteredPrices } from '@/domain/catalog/units';
 import type { PackLevel } from '@/lib/quantity';
@@ -71,12 +72,18 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
   const [baseUnit, setBaseUnit] = useState(initial.baseUnitName);
   const [packLevels, setPackLevels] = useState(initial.packLevels);
 
+  const { refresh: refreshCatalog } = useCatalog();
+
   useEffect(() => {
     if (state.status === 'saved') {
+      // The counter's search index is client state that revalidation does not
+      // reach; refresh it so the saved product, price or units are what the
+      // next search and scan see.
+      refreshCatalog();
       router.push('/products');
       router.refresh();
     }
-  }, [state, router]);
+  }, [state, router, refreshCatalog]);
 
   // D4 — the warning shows as it is typed, and never blocks: "the pack in hand
   // is authoritative, not our data".

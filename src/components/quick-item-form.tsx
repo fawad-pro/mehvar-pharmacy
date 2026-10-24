@@ -46,10 +46,15 @@ export function QuickItemForm({
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState(DEFAULT_BASE_UNIT);
   const priceField = useRef<HTMLInputElement>(null);
+  const nameField = useRef<HTMLInputElement>(null);
 
-  // The name is already right, so focus starts on the one thing still unknown.
+  // A typed name is already right, so focus starts on the one thing still
+  // unknown. With no name — the form was opened from an unknown scanned code,
+  // which is never offered as a name — focus starts on the name.
   useEffect(() => {
-    priceField.current?.focus();
+    (initialName.trim() === '' ? nameField : priceField).current?.focus();
+    // Once, on open: the starting focus does not follow later typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const pricePaisa = paisaFromRupeeInput(price);
@@ -89,6 +94,7 @@ export function QuickItemForm({
           Name
         </label>
         <input
+          ref={nameField}
           id="quick-name"
           value={name}
           onChange={(event) => {

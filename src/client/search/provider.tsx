@@ -110,17 +110,21 @@ export function CatalogProvider({
     [tenantId],
   );
 
+  // Stable, so a consumer can list it as an effect dependency without the
+  // refresh it triggers (a new index) re-running the effect that called it.
+  const refresh = useCallback(() => {
+    setNonce((current) => current + 1);
+  }, []);
+
   const value = useMemo<CatalogContextValue>(
     () => ({
       index,
       status,
       productCount: index?.size ?? 0,
-      refresh: () => {
-        setNonce((current) => current + 1);
-      },
+      refresh,
       addLocalProduct,
     }),
-    [index, status, addLocalProduct],
+    [index, status, refresh, addLocalProduct],
   );
 
   return <CatalogContext.Provider value={value}>{children}</CatalogContext.Provider>;

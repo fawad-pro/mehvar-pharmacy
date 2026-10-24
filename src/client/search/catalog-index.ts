@@ -29,13 +29,13 @@
  * change back to a naive scan fails a test rather than a demo.
  */
 
+import { barcodeKeys } from '@/domain/catalog/barcode';
 import type { ProductUnit } from '@/domain/catalog/units';
 import type { PackLevel } from '@/lib/quantity';
 
 import {
   boundedDistance,
   distanceTolerance,
-  looksLikeBarcode,
   normalize,
   skeleton,
   tokenize,
@@ -229,7 +229,15 @@ export class CatalogIndex {
       index.addProduct(product);
     }
     for (const barcode of payload.barcodes) {
-      index.barcodeIndex.set(normalizeBarcode(barcode.barcode), barcode);
+      // Filed under every key the code is known by (`barcodeKeys`): as saved,
+      // and — for a GTIN — its GTIN-13/14 forms, so the box's 1D barcode and
+      // the pack's 2D code find the same product. The first code to claim a
+      // key keeps it.
+      for (const key of barcodeKeys(barcode.barcode)) {
+        if (!index.barcodeIndex.has(key)) {
+          index.barcodeIndex.set(key, barcode);
+        }
+      }
     }
     index.finalize();
     return index;
@@ -319,7 +327,10 @@ export class CatalogIndex {
   }
 
   resolveBarcode(code: string): SearchHit | undefined {
-    const barcode = this.barcodeIndex.get(normalizeBarcode(code));
+    // Most specific key first: the code exactly as scanned, then its GTIN.
+    const barcode = barcodeKeys(code)
+      .map((key) => this.barcodeIndex.get(key))
+      .find((candidate) => candidate !== undefined);
     if (!barcode) {
       return undefined;
     }
@@ -347,9 +358,12 @@ export class CatalogIndex {
   }
 
   search(rawQuery: string, limit: number = DEFAULT_LIMIT): SearchHit[] {
-    // A scan is a keyboard (I1). A long digit run is a code, not a name, and it
-    // must not pay for ranking (Phase 10 §5: "barcode hit bypasses ranking").
-    if (looksLikeBarcode(rawQuery)) {
+    // A scan is a keyboard (I1), and a barcode hit bypasses ranking (Phase 10
+    // §5). Any single token long enough to be a code is tried as one: a hash
+    // lookup costs nothing, and a code with letters in it (a GS1 pack's batch)
+    // is still a code. Before, only all-digit input was tried, so a pack code
+    // saved exactly as scanned could never be found.
+    if (/^\S{6,}$/.test(rawQuery.trim())) {
       const hit = this.resolveBarcode(rawQuery);
       if (hit) {
         return [hit];

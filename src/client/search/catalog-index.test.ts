@@ -271,6 +271,44 @@ describe('barcodes bypass ranking (Phase 10 §5)', () => {
     expect(index.resolveBarcode(' 8964000101018 ')?.product.name).toBe('Panadol');
   });
 
+  it('finds a product saved by its EAN when the pack’s 2D code is scanned', () => {
+    // 8964000101018 is Panadol's EAN-13; the pack's GS1 code carries the same
+    // item as GTIN-14 0 8964000101018, followed by an expiry and a batch.
+    const hit = index.resolveBarcode('010896400010101817301231' + '10AB12C');
+    expect(hit?.product.name).toBe('Panadol');
+    expect(hit?.unitLevelName).toBe('strip');
+    // Through `search`, the path the counter takes, despite the letters.
+    expect(index.search('01089640001010181730123110AB12C')[0]?.product.name).toBe('Panadol');
+  });
+
+  it('finds a 2D code saved exactly as scanned, from this and any other batch', () => {
+    const saved = '01080026600316931728053110892302XV';
+    const withPack = CatalogIndex.build({
+      ...PAYLOAD,
+      barcodes: [
+        ...PAYLOAD.barcodes,
+        { barcode: saved, productId: 'augmentin', unitLevelName: 'box' },
+      ],
+    });
+    expect(withPack.search(saved)[0]?.product.name).toBe('Augmentin');
+    expect(withPack.resolveBarcode('0108002660031693173012311NEXT')?.product.name).toBe(
+      'Augmentin',
+    );
+    expect(withPack.resolveBarcode('8002660031693')?.product.name).toBe('Augmentin');
+  });
+
+  it('matches a non-GTIN code containing letters exactly, and nothing else', () => {
+    const withInternal = CatalogIndex.build({
+      ...PAYLOAD,
+      barcodes: [
+        ...PAYLOAD.barcodes,
+        { barcode: 'HERB-0042', productId: 'disprin', unitLevelName: 'tab' },
+      ],
+    });
+    expect(withInternal.search('HERB-0042')[0]?.product.name).toBe('Disprin');
+    expect(withInternal.resolveBarcode('HERB-0043')).toBeUndefined();
+  });
+
   it('returns nothing for an unknown code, so the UI can offer the link prompt', () => {
     expect(index.resolveBarcode('0000000000000')).toBeUndefined();
     // Falls through to ranking rather than dead-ending (P2).

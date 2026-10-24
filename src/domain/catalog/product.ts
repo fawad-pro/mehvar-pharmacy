@@ -12,6 +12,8 @@
 
 import type { PackLevel } from '@/lib/quantity';
 
+import { barcodeToStore } from './barcode';
+
 export type ProductRejection =
   | { reason: 'name_required' }
   | { reason: 'base_unit_required' }
@@ -278,7 +280,10 @@ export function validateBarcode(
   packLevels: readonly PackLevel[],
 ): Validated<BarcodeDraft> {
   const rejections: ProductRejection[] = [];
-  const barcode = draft.barcode.trim().replace(/\s+/g, '');
+  // A pack's 2D code is saved as its GTIN: the batch and expiry it also
+  // carries change with every delivery and are not the product's identity.
+  // Any other code is saved as scanned, cleaned of the scanner's framing.
+  const barcode = barcodeToStore(draft.barcode);
   const unitLevelName = draft.unitLevelName.trim();
 
   if (barcode === '') {

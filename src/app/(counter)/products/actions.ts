@@ -163,8 +163,9 @@ export async function saveProduct(
     return { status: 'error', message: messageFor(result) };
   }
 
-  // The counter's search index reads the catalog too, so a saved product has
-  // to reach /sale as well as /products.
+  // Revalidates the server-rendered pages. The counter's search index is client
+  // state that this does not reach; the form refreshes it (`useCatalog`), and
+  // the search box pulls changes whenever it is arrived at.
   revalidateAfter('catalog');
   return { status: 'saved' };
 }
@@ -190,6 +191,36 @@ export async function saveBarcode(
 
   revalidateAfter('catalog');
   return { status: 'saved' };
+}
+
+export type LinkCodeOutcome = { ok: true } | { ok: false; message: string };
+
+/**
+ * Links a code scanned at the counter to a product — Phase 6 §4's "unknown
+ * barcode scanned → five-second link to a product", reached from the inline
+ * prompt Phase 10 §5 puts on an unknown scan. Same writer and the same
+ * owner-only gate as the Products screen's barcode panel.
+ */
+export async function linkScannedCode(
+  productId: Uuid,
+  code: string,
+  unitLevelName: string,
+): Promise<LinkCodeOutcome> {
+  const gate = await requireAuthoring();
+  if ('error' in gate) {
+    return { ok: false, message: gate.error };
+  }
+
+  const result = await addBarcode(scopeFor(gate.session), productId, {
+    barcode: code,
+    unitLevelName,
+  });
+  if (!result.ok) {
+    return { ok: false, message: messageFor(result) };
+  }
+
+  revalidateAfter('catalog');
+  return { ok: true };
 }
 
 export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<void> {

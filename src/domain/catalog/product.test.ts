@@ -285,6 +285,15 @@ describe('barcodes map to a unit level', () => {
     ).toBe(true);
   });
 
+  it('saves a pack’s 2D code as its GTIN, not one batch’s full string', () => {
+    const result = validateBarcode(
+      { barcode: '01080026600316931728053110892302XV', unitLevelName: 'box' },
+      'tab',
+      levels,
+    );
+    expect(result.ok && result.value.barcode).toBe('08002660031693');
+  });
+
   it('strips the whitespace a scanner sometimes emits', () => {
     const result = validateBarcode(
       { barcode: ' 8964 000101018 ', unitLevelName: 'strip' },

@@ -15,6 +15,7 @@
 import { useActionState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 
+import { useCatalog } from '@/client/search/provider';
 import { unitLevels, type PackLevel } from '@/lib/quantity';
 
 import { saveBarcode, unlinkBarcode, type ActionState } from '../actions';
@@ -42,6 +43,7 @@ export function BarcodePanel({
     { status: 'idle' },
   );
   const field = useRef<HTMLInputElement>(null);
+  const { refresh: refreshCatalog } = useCatalog();
 
   useEffect(() => {
     if (state.status === 'saved') {
@@ -49,8 +51,12 @@ export function BarcodePanel({
       field.current?.form?.reset();
       field.current?.focus();
       router.refresh();
+      // The counter's search index is client state, not a server page:
+      // revalidating does not reach it. Without this, the code just linked
+      // scans as unknown until the page is reloaded.
+      refreshCatalog();
     }
-  }, [state, router]);
+  }, [state, router, refreshCatalog]);
 
   const levels = unitLevels(baseUnitName, packLevels);
 
