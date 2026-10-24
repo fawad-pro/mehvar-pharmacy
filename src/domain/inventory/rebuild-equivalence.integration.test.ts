@@ -143,6 +143,8 @@ const observed = {
   supplierReturnsCommitted: 0,
   /** [PCN-012] Sale lines entered as a count of strips at the strip's own price. */
   unitPricedLines: 0,
+  /** Adjustments asking for more than the batch had, and refused. */
+  adjustmentsRefused: 0,
 };
 
 /**
@@ -278,12 +280,18 @@ async function applyRandomEvent(world: World): Promise<void> {
       return;
     }
     const batch = pick(random, withStock);
+    // Now and then the operator asks for more than the batch has — a typo, or
+    // a sale that took the units while the screen was open. The refusal must
+    // leave no adjustment behind, or the next verification sees a mismatch.
+    const overshoot = random() < 0.15;
 
-    await commitAdjustment(tenant.scope, {
+    const result = await commitAdjustment(tenant.scope, {
       adjustmentId: uuidv7(),
       productId: batch.productId,
       batchId: batch.id,
-      qtyBaseDelta: -between(random, 1, Math.min(batch.qtyRemainingBase, 20)),
+      qtyBaseDelta: overshoot
+        ? -(batch.qtyRemainingBase + between(random, 1, 5))
+        : -between(random, 1, Math.min(batch.qtyRemainingBase, 20)),
       reason: pick(random, [
         'damage',
         'expiry_writeoff',
@@ -292,6 +300,10 @@ async function applyRandomEvent(world: World): Promise<void> {
       ] as const),
       note: null,
     });
+    if (overshoot) {
+      expect(result).toEqual({ ok: false, reason: 'stale_batch_state' });
+      observed.adjustmentsRefused += 1;
+    }
     return;
   }
 
@@ -908,5 +920,9 @@ suite('rebuild equivalence — randomized histories', () => {
       0,
     );
     expect(observed.unitPricedLines, 'no sale line was ever priced per strip').toBeGreaterThan(0);
+    expect(
+      observed.adjustmentsRefused,
+      'no adjustment was ever refused — the refusal path went untested',
+    ).toBeGreaterThan(0);
   });
 });

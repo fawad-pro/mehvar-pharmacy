@@ -2,6 +2,18 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Refused stock adjustments leave nothing behind
+
+- Removing more units than a batch has (damage, expiry, a downward count) is
+  refused as before, but the refusal no longer saves the adjustment. It was
+  returned from inside the transaction, which committed it: the record said the
+  units left, the batch still held them, and `db:verify` reported a mismatch.
+  The Adjust screen's "try again" then wrote a second one.
+- A retry of a refused adjustment is refused again, instead of being reported
+  as already done.
+- Databases where an adjustment was refused before this fix may already hold
+  such records; `npm run db:verify` names the batch if so.
+
 ## Session — Readable thermal receipts
 
 - The receipt is laid out at 72 mm, the printable width of an 80 mm roll.
