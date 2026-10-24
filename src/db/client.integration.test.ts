@@ -58,6 +58,26 @@ async function sessionsOnScratch(): Promise<number> {
   );
 }
 
+/**
+ * Waits for the scratch database's sessions to reach zero.
+ *
+ * `pool.end()` resolves once the CLIENT has hung up; the server backend exits a
+ * moment later, and under a full test run that moment is long enough to be
+ * seen. Checking or dropping in that window raced: `DROP … WITH (FORCE)` then
+ * tried to terminate the leaving backend, which an admin role that is not a
+ * superuser may not do ("permission denied to terminate process"). A pool that
+ * never closes still fails this — its session never goes away.
+ */
+async function sessionsDrained(): Promise<number> {
+  const deadline = Date.now() + 5_000;
+  let sessions = await sessionsOnScratch();
+  while (sessions > 0 && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    sessions = await sessionsOnScratch();
+  }
+  return sessions;
+}
+
 suite('the database pool', () => {
   beforeAll(async () => {
     await adminQuery(`DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)`);
@@ -70,6 +90,7 @@ suite('the database pool', () => {
 
   afterAll(async () => {
     await closeDatabase();
+    await sessionsDrained();
     await adminQuery(`DROP DATABASE IF EXISTS ${SCRATCH_DB} WITH (FORCE)`);
   });
 
@@ -80,7 +101,7 @@ suite('the database pool', () => {
     );
 
     await closeDatabase();
-    expect(await sessionsOnScratch(), 'closeDatabase must leave no session behind').toBe(0);
+    expect(await sessionsDrained(), 'closeDatabase must leave no session behind').toBe(0);
 
     // The invariant the restore drill actually needs. No FORCE: a session left
     // behind raises `is being accessed by other users` here, exactly as it did
