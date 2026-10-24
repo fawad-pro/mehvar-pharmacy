@@ -2,6 +2,15 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Sync backs off when the server cannot store a sale
+
+- A sale the server answers but cannot store (a database missing a
+  migration, a writer bug) no longer resends every 250ms. Any answer used to
+  reset the sync backoff to zero, so three unsynced sales went out about four
+  times a second for as long as the counter was open. Only a delivery that
+  moved the queue clears the backoff now; anything else waits 1s, 2s, 4s… up
+  to 30s, exactly as an unreachable server does. Nothing queued is dropped.
+
 ## Session — Refused stock adjustments leave nothing behind
 
 - Removing more units than a batch has (damage, expiry, a downward count) is

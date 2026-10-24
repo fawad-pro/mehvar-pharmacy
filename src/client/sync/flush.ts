@@ -37,7 +37,9 @@ export const BATCH_SIZE = 25;
  * `origin` that said `offline_sync` for all of them would be a column that
  * told the owner nothing.
  */
-export function originFor(record: Pick<OutboxRecord, 'capturedOffline' | 'attempts'>): 'online' | 'offline_sync' {
+export function originFor(
+  record: Pick<OutboxRecord, 'capturedOffline' | 'attempts'>,
+): 'online' | 'offline_sync' {
   return record.capturedOffline || record.attempts > 0 ? 'offline_sync' : 'online';
 }
 
@@ -69,6 +71,20 @@ export function backoffMs(consecutiveFailures: number): number {
     return 0;
   }
   return Math.min(MAX_DELAY_MS, BASE_DELAY_MS * 2 ** (consecutiveFailures - 1));
+}
+
+/**
+ * The pump's failure count after the server has answered a delivery.
+ *
+ * An answer proves the network is fine, but not that the queue moved. When the
+ * head record comes back `retry` or `rejected` — a schema the code has run
+ * ahead of, a bug in a writer — nothing was delivered, and resetting the count
+ * to zero meant re-sending the same records every 250ms for as long as the tab
+ * stayed open. Only progress clears the count; an answer that moved nothing
+ * backs off exactly as an unreachable server does.
+ */
+export function failuresAfterAnswer(previous: number, progressed: boolean): number {
+  return progressed ? 0 : previous + 1;
 }
 
 /**

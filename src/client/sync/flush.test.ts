@@ -9,7 +9,13 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { backoffMs, originFor, readyToFlush, withReceiptNumber } from './flush';
+import {
+  backoffMs,
+  failuresAfterAnswer,
+  originFor,
+  readyToFlush,
+  withReceiptNumber,
+} from './flush';
 import type { OutboxRecord } from './records';
 
 describe('originFor', () => {
@@ -27,6 +33,25 @@ describe('originFor', () => {
     // `navigator.onLine` lies through a captive portal or a dead upstream. A
     // failed attempt is harder evidence than the flag.
     expect(originFor({ capturedOffline: false, attempts: 1 })).toBe('offline_sync');
+  });
+});
+
+describe('failuresAfterAnswer', () => {
+  it('clears the count once something was delivered', () => {
+    expect(failuresAfterAnswer(4, true)).toBe(0);
+  });
+
+  it('backs off when the server answered but nothing moved', () => {
+    // The laptop whose database missed two migrations: every sale came back
+    // `retry`, the count reset to zero on every answer, and the same three
+    // records went out every 250ms. The delay must grow instead.
+    let failures = 0;
+    const delays: number[] = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      failures = failuresAfterAnswer(failures, false);
+      delays.push(backoffMs(failures));
+    }
+    expect(delays).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000]);
   });
 });
 

@@ -37,7 +37,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { deliverRecords, type DeliverableRecord } from '@/app/(counter)/sync/actions';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 
-import { backoffMs, BATCH_SIZE, originFor, readyToFlush, withReceiptNumber } from './flush';
+import {
+  backoffMs,
+  BATCH_SIZE,
+  failuresAfterAnswer,
+  originFor,
+  readyToFlush,
+  withReceiptNumber,
+} from './flush';
 import {
   enqueue,
   markAttempted,
@@ -195,10 +202,6 @@ export function SyncProvider({
           return;
         }
 
-        // The server answered, so whatever the per-record verdicts are, the
-        // network is not the problem any more.
-        consecutiveFailures.current = 0;
-
         let progressed = false;
         for (const outcome of report.outcomes) {
           const entry = batch.find((candidate) => candidate.record.id === outcome.id);
@@ -215,15 +218,12 @@ export function SyncProvider({
 
           if (outcome.status === 'receipt_taken') {
             const mint = mintReceiptNumber.current;
+            // Without a mint the receipt context has not loaded yet, so there
+            // is no counter to draw the next number from. Nothing progresses,
+            // and `failuresAfterAnswer` below puts the retry on the backoff.
             if (mint) {
               await replaceRecord(entry.sequence, withReceiptNumber(entry.record, mint()));
               progressed = true;
-            } else {
-              // The receipt context has not loaded yet, so there is no counter
-              // to draw the next number from. Counted as a failure so the
-              // retry is on the short backoff rather than falling through to
-              // the safety tick.
-              consecutiveFailures.current += 1;
             }
             await markAttempted(entry.sequence, 'receipt_taken');
             continue;
@@ -235,6 +235,9 @@ export function SyncProvider({
           await markAttempted(entry.sequence, outcome.reason);
         }
 
+        // An answer that moved nothing backs off like an unreachable server:
+        // see `failuresAfterAnswer`.
+        consecutiveFailures.current = failuresAfterAnswer(consecutiveFailures.current, progressed);
         if (!progressed) {
           return;
         }
