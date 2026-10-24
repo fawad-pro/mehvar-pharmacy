@@ -85,10 +85,12 @@ export function PinSwitchOverlay({
 
   return (
     <OverlayBackdrop label="Switch user" onDismiss={onClose}>
-      <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
+      {/* The card never grows past the screen: the list of names scrolls, so
+          the PIN field and Switch stay in reach however many users a shop has. */}
+      <div className="bg-paper flex max-h-full w-full max-w-sm flex-col rounded-lg p-5 shadow-xl">
         <h2 className="text-green-900 mb-4 text-lg font-semibold">Who is at the counter?</h2>
 
-        <div className="mb-4 flex flex-col gap-1">
+        <div className="mb-4 flex min-h-0 flex-col gap-1 overflow-y-auto">
           {users.map((user) => (
             <button
               key={user.id}

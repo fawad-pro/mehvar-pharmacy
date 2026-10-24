@@ -75,3 +75,23 @@ test('a wrong PIN says what to do next, without blame (I5)', async ({ page }) =>
   await overlay.getByRole('button', { name: 'Switch' }).click();
   await expect(overlay).toBeHidden();
 });
+
+test('on a short screen the names scroll and Switch stays in reach', async ({ page }) => {
+  // A shop with many users, or a small counter screen: the same overflow. The
+  // shared database once held fourteen users and the Switch button sat below
+  // the bottom of the screen, unclickable.
+  await setUpCounter(page);
+  await page.setViewportSize({ width: 1024, height: 300 });
+  await page.keyboard.press('F10');
+
+  const overlay = page.getByRole('dialog', { name: 'Switch user' });
+  await expect(overlay.getByRole('button', { name: 'Switch' })).toBeInViewport({ ratio: 1 });
+  await expect(overlay.getByLabel('PIN')).toBeInViewport({ ratio: 1 });
+
+  const salesman = overlay.getByRole('button', { name: new RegExp(DEMO.salesman.name) });
+  await salesman.scrollIntoViewIfNeeded();
+  await salesman.click();
+  await overlay.getByLabel('PIN').fill(DEMO.salesman.pin);
+  await overlay.getByRole('button', { name: 'Switch' }).click();
+  await expect(overlay).toBeHidden();
+});
