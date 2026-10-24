@@ -47,6 +47,10 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  // Which sale the screen is showing now. A lines answer for any earlier pick
+  // arrives too late to matter and is dropped — otherwise it overwrites the
+  // sale on screen, or resets quantities the operator has already typed.
+  const selection = useRef(0);
 
   const search = useCallback((term: string) => {
     void findSaleForReturnAction(term).then(setResults);
@@ -62,7 +66,11 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   // making them do the same work twice. The handoff lands on the sale itself.
   useEffect(() => {
     if (prefillReceipt) {
+      let cancelled = false;
       void findSaleForReturnAction(prefillReceipt).then((found) => {
+        if (cancelled) {
+          return;
+        }
         const exact = found.find((row) => row.receiptNumber === prefillReceipt);
         if (exact) {
           void selectSale(exact);
@@ -74,19 +82,25 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
           searchRef.current?.focus();
         }
       });
-      return;
+      return () => {
+        cancelled = true;
+      };
     }
     search('');
     searchRef.current?.focus();
   }, [search, prefillReceipt]);
 
   async function selectSale(found: FoundSale): Promise<void> {
+    const mine = ++selection.current;
     setSale(found);
     setRefundMethod('cash');
     setReasonNote('');
     setError(null);
     setDone(null);
     const rows = await returnableLinesAction(found.saleId);
+    if (mine !== selection.current) {
+      return;
+    }
     setLines(rows);
     setDrafts(
       Object.fromEntries(
@@ -99,6 +113,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   }
 
   function backToSearch(): void {
+    selection.current += 1;
     setSale(null);
     setLines([]);
     setDrafts({});
