@@ -53,6 +53,36 @@ Carry `dist\MehvarSetup-<version>.exe` on a USB stick. It needs no internet to i
    pairing key once.
 6. Print a test receipt. If it prints without a dialog appearing, ADR-6's kiosk
    printing is working.
+7. Check the test receipt's two bars with a ruler (see "Receipt printer
+   settings" below).
+
+### Receipt printer settings
+
+The receipt is laid out 72 mm wide, the usual printable width of an 80 mm
+roll, in solid black. The test receipt ends with two bars that check the
+printout on the actual printer:
+
+- **50 mm bar:** measure it. Shorter than 50 mm means something scaled the
+  page down; check the browser's print scale (100% / Default) and the driver's
+  paper size.
+- **72 mm bar:** both ends should print. A missing end means the printer's
+  printable width is narrower than 72 mm. Report it, with the printer model,
+  rather than shrinking the page.
+
+Verified on a **Speed-X SP-200U** (USB, 80 mm), 2026-10:
+
+| Setting       | Value                                                                   |
+| ------------- | ----------------------------------------------------------------------- |
+| Driver        | POS-80 (the generic 80 mm driver); the printer prints with it           |
+| Paper size    | `Printer Paper (80 x 3276mm)`, the driver's 80 mm continuous roll       |
+| Windows check | The Windows test page prints clearly, so the head and paper are working |
+
+Not yet verified on that printer, so treat these as things to try in order, not
+as fixes: print scale 100% in the print dialog; the driver's halftoning option
+set to its text or none setting, if the bars or text still look grey or
+speckled. The driver exposes no density setting that has been found. If text
+is still faint once the bars measure true, the remaining cause is the printer's
+head heat or paper, which software cannot change.
 
 If anything fails, Setup names the step that failed and points at the log. **Do
 not hand the machine over.** Send `C:\ProgramData\Mehvar\logs\install-*.log`

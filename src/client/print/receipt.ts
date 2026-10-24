@@ -46,6 +46,12 @@ export interface ReceiptData {
 
   /** D2: sold more than the system had on hand — shown so it is never silent. */
   readonly pendingNote?: string;
+
+  /**
+   * Test receipts only: two measured bars (50 mm and 72 mm) so the printout
+   * itself shows whether the page was scaled or clipped (see `ReceiptView`).
+   */
+  readonly calibration?: boolean;
 }
 
 /** What a test receipt is numbered: never a number from the device's sequence. */
@@ -72,5 +78,6 @@ export function testReceipt(input: {
     lines: [{ name: 'Test receipt — not a sale', quantityLabel: '1', amountPaisa: 0 }],
     subtotalPaisa: 0,
     totalPaisa: 0,
+    calibration: true,
   };
 }

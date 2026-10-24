@@ -2,6 +2,19 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Readable thermal receipts
+
+- The receipt is laid out at 72 mm, the printable width of an 80 mm roll.
+  At 80 mm it was wider than the head prints, so it was shrunk to about 90%
+  before it reached the paper.
+- Everything prints in solid black. Grey quantities, faint dashed rules and the
+  coloured mark were reaching the thermal driver as halftone dots.
+- Larger, heavier type: 13px body, bold item names, and the amount due largest
+  and boldest on the slip. Nothing printed was added or removed.
+- The test receipt ends with a 50 mm and a 72 mm bar, so a ruler shows
+  whether a printer scales or clips the page (OPERATIONS.md, "Receipt printer
+  settings").
+
 ## Session — Barcode scanning at the counter
 
 - A barcode linked on the Products screen now scans at the counter straight

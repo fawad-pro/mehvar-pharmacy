@@ -25,10 +25,13 @@ import type { ReceiptData } from '@/client/print/receipt';
 
 export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
   return (
-    <div id="printable-receipt" className="font-sans text-[11px] leading-snug">
+    // Sized for a 203-dpi thermal head (print CSS: 72 mm, solid black). 13px
+    // body with heavier weights: thin 11px strokes came out one dot wide,
+    // which is what read as small and faint next to the driver's test page.
+    <div id="printable-receipt" className="font-sans text-[13px] leading-snug font-medium">
       <header className="text-center">
         {receipt.tenantHeaderLines.map((line, index) => (
-          <p key={index} className={index === 0 ? 'text-sm font-semibold' : ''}>
+          <p key={index} className={index === 0 ? 'text-[16px] font-bold' : 'text-[12px]'}>
             {line}
           </p>
         ))}
@@ -42,10 +45,12 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
         <>
           {receipt.lines.map((line, index) => (
             <div key={index} className="pt-1">
-              <p>{line.name}</p>
+              <p className="font-bold">{line.name}</p>
               <div className="flex justify-between">
-                <span className="text-ink/70">{line.quantityLabel}</span>
-                <span className="numeral">{formatPaisa(paisa(line.amountPaisa))}</span>
+                <span>{line.quantityLabel}</span>
+                <span className="numeral font-semibold">
+                  {formatPaisa(paisa(line.amountPaisa))}
+                </span>
               </div>
             </div>
           ))}
@@ -57,7 +62,7 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           ) : null}
           {receipt.discountPaisa ? <Row label="Discount" amountPaisa={-receipt.discountPaisa} /> : null}
           {receipt.totalPaisa !== undefined ? (
-            <Row label="Amount Due" amountPaisa={receipt.totalPaisa} bold />
+            <Row label="Amount Due" amountPaisa={receipt.totalPaisa} emphasis />
           ) : null}
 
           {/* No change/remaining arithmetic on the printed slip — that
@@ -90,12 +95,12 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
       ) : null}
 
       {receipt.pendingNote ? (
-        <p className="text-amber mt-1 text-center text-[10px]">{receipt.pendingNote}</p>
+        <p className="mt-1 text-center text-[12px] italic">{receipt.pendingNote}</p>
       ) : null}
 
       <Rule />
 
-      <footer className="text-center text-[10px]">
+      <footer className="text-center text-[12px]">
         <p>Receipt {receipt.receiptNumber}</p>
         <p>
           {receipt.dateTime.toLocaleDateString('en-PK')}{' '}
@@ -103,27 +108,52 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           {receipt.salesmanName}
         </p>
         <p className="mt-1">{receipt.tenantFooterLine}</p>
-        <p className="text-green-600 mt-1 font-semibold">Mehvar</p>
+        <p className="mt-1 font-bold">Mehvar</p>
       </footer>
+
+      {receipt.calibration ? <Calibration /> : null}
     </div>
   );
 }
 
+/**
+ * The test receipt's check that the page printed at true size. Measure the
+ * 50 mm bar with a ruler: shorter means the browser or driver scaled the page
+ * down. Both ends of the 72 mm bar should print: a missing end means the
+ * printable width is narrower than 72 mm.
+ */
+function Calibration() {
+  return (
+    <section aria-label="Printer check" className="mt-2 text-[11px]">
+      <div className="w-[50mm] border-t-[3px] border-solid" />
+      <p>50 mm — measure this bar</p>
+      {/* Edge to edge of the 72 mm page, outside the receipt's 1 mm padding. */}
+      <div className="-mx-[1mm] mt-1 w-[72mm] border-x-[3px] border-t-[3px] border-solid pt-1" />
+      <p>72 mm — both ends should print</p>
+    </section>
+  );
+}
+
 function Rule() {
-  return <hr className="border-ink/30 my-1 border-t border-dashed" />;
+  return <hr className="my-1 border-t border-solid" />;
 }
 
 function Row({
   label,
   amountPaisa,
   bold = false,
+  emphasis = false,
 }: {
   label: string;
   amountPaisa: number;
   bold?: boolean;
+  /** The one figure the customer pays — the largest on the slip. */
+  emphasis?: boolean;
 }) {
   return (
-    <div className={`flex justify-between ${bold ? 'font-semibold' : ''}`}>
+    <div
+      className={`flex justify-between ${emphasis ? 'mt-0.5 text-[18px] font-extrabold' : bold ? 'font-bold' : ''}`}
+    >
       <span>{label}</span>
       <span className="numeral">{formatPaisa(paisa(amountPaisa))}</span>
     </div>
