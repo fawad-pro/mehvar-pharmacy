@@ -32,7 +32,7 @@ Hospital-integration-adjacent. Nothing in it is decided.
 
 ## Identifier system — cite these by number
 
-- **P1–P8** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)
+- **P1–P9** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)
 - **D1–D5** domain semantic decisions (Phase 5 §4)
 - **W1–W12** core workflows (Phase 7)
 - **ADR-1–ADR-8** architecture decisions (Phase 8)
@@ -257,6 +257,10 @@ exception visibility.
   allocation.
 - **Effective unit cost floors.** Bonus stock makes cost land a paisa low rather
   than high, so a reported margin is never better than the real one.
+  _Superseded by PCN-012 (2026-10-24): the reasoning is inverted — a cost that
+  lands low reports a HIGHER margin. Allocations are to be costed cumulatively,
+  rounding up, so cost is never understated and a used-up batch reconciles
+  exactly to what was paid. Do not copy the floor into new code._
 - **A batch born from an adjustment is counted once.** It is that batch's
   `qty_received`; the adjustment sum in `batchLedger` takes only _negative_
   deltas. Day 3's signed sum was right until materialization existed, and

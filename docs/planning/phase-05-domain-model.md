@@ -35,6 +35,8 @@ Anything the pharmacy sells. Medicines are the primary case but not the only one
 
 **All stock arithmetic happens in base units.** "3 strips + 4 tablets" is stored and computed as 34 tablets; presentation converts back to natural language. This single rule eliminates the classic sub-unit corruption bug (P4 via arithmetic honesty).
 
+*Amended 2026-10-24 by PCN-012.* Stock arithmetic stays in base units, and nobody at the counter sees them (P9). Each unit level carries its own selling price, entered as the owner knows it (strip, box), and an MRP entered against the unit it is printed for. Which units are offered is set once per pharmacy ("Do you sell loose tablets?") and per product (a "Sell" tick per unit). A product's smallest unit and existing pack sizes lock once any record references them; adding a larger pack and renaming a label stay allowed, and pack sizes must nest (a box holds a whole number of strips). A wrong pack after trading starts is fixed by replacing the product, with stock moved across by adjustments. Quantities are shown as an amount in the product's own units, largest first ("12 boxes, 3 strips, 7 tablets"), never with a word implying opened, loose or sealed packs.
+
 ### Batch (stock layer)
 A quantity of a product that arrived together: batch number (as printed, optional in practice), expiry date, unit cost, and MRP/selling price at the time of arrival. Created by purchase entries and opening-stock entries. Batches are how expiry tracking, FEFO, and cost-basis reporting exist at all.
 
@@ -53,6 +55,8 @@ Goods arriving: supplier, date, lines. Each line: product, quantity (any unit le
 
 ### Sale
 The counter event: lines + payment. Each line: product, quantity in base units, unit level as entered (for display/receipt), unit price, discount (line or invoice level), and the batch consumption it resolved to (recorded automatically). Payment: cash amount and/or credit amount against a named customer. A fully-paid cash sale and a fully-credit udhaar sale are the same record shape with different payment splits.
+
+*Amended 2026-10-24 by PCN-012.* Purchase and sale lines record the unit entered, its count, the price or cost per that unit and the exact line amount; sale totals, invoices and supplier balances add line amounts, so they match paper to the paisa. Each batch carries its exact total cost; allocations are costed cumulatively, rounding up, so recognised cost is never understated and a used-up batch reconciles exactly to what was paid.
 
 ### Payment
 Money received from a customer independent of a new sale — the udhaar settlement. Amount, customer, method (cash in V1). A customer's balance = credit extended (from sales) − payments − credit reversed by returns.

@@ -47,6 +47,8 @@ Layout logic (not pixels): three zones with fixed roles.
 
 **Quantity grammar (I3):** `3*pana` in search = quantity 3 of the selected result; bare selection = qty 1; Tab on the qty cell cycles unit levels (tab/strip/box) where the product defines them.
 
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the cart line (only the units the product is sold by), beside − qty +; the price column shows the price per chosen unit. Tab still cycles the same buttons.
+
 **States that must be visible calmly (I7):** consuming-batch price change (D1 — line shows "price updated" chip), zero/negative stock (line proceeds, amber chip, D2), unsynced count in top bar (ADR-3), quick-add result row when search is empty (W6: one key → name+price mini-form inline).
 
 ## 5. Search interaction spec (ADR-4's front half)

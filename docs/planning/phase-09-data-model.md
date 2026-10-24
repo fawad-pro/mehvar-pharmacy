@@ -14,6 +14,7 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 - **Attribution:** `created_by` (user id) + `created_at` on every business row (T1). Immutable tables have no `updated_at` — there are no updates.
 - **Money:** integer paisa (`bigint`). No floats anywhere near money.
 - **Quantities:** integer base units (Phase 5 §2) everywhere. Presentation converts.
+- **Entered units (2026-10-24, PCN-012):** event lines also store the entered unit, its count, the per-unit price or cost and the exact line amount. All additive: rows written before PCN-012 are read through a fallback (line amount = per-base price × base quantity) and never backfilled (ADR-1).
 - **Immutability:** business-event tables accept INSERT only (enforced §5). Products/customers/suppliers are reference entities: editable fields limited to identity/settings, never to anything a report derives from.
 - **Soft archive:** reference entities carry `is_active`; nothing is ever deleted (referenced history must resolve).
 - **Business day:** derived from `created_at` in tenant-local time (single timezone country); no stored day-close lock (D5). Over/short entries are cash movements with a reason code.
@@ -44,6 +45,8 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 
 **sale_lines** — id, tenant_id, sale_id, product_id, qty_base, entered_unit_level, unit_price_paisa (per base unit as charged), line_discount_paisa, price_overridden boolean (T1 exposure).
+
+*Amended 2026-10-24 by PCN-012.* **products** gains `units` JSONB (`[{key, name, factor, price_paisa, sell}]`, smallest first) and `mrp_paisa` + `mrp_unit_key`; `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are kept in step for one release, then retired. **purchase_lines** gains `unit_key`, `unit_name`, `unit_count`, `bonus_unit_count`, `unit_cost_paisa_entered`, `line_cost_paisa`. **sale_lines** gains `unit_key`, `unit_name`, `unit_count`, `unit_price_paisa_entered`, `line_amount_paisa` (before line discount). **batches** gains `cost_total_paisa` and `prices_at_receiving` JSONB. Adjustments, sale-return lines, supplier returns and purchase corrections gain `unit_key`, `unit_name`, `unit_count` for display. **global_products** gains `reference_mrp_unit`. Tenant settings gain `sellsLoose`.
 
 **sale_line_allocations** — id, tenant_id, sale_line_id, batch_id (nullable), qty_base, unit_cost_paisa (from batch; null while pending).
 *The D1/D2 mechanism: server-side FEFO writes one row per consumed batch (ADR-5); `batch_id NULL` rows are the pending layer, plus resolved_by (nullable FK to the purchase_line or adjustment that later resolved it) and resolved_at. Pending rows are the only "mutable" business rows in the system, and only their resolution fields may be set — once, forward-only.*

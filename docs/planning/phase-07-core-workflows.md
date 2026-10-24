@@ -38,6 +38,8 @@ Same path as W1 until payment: credit key → customer picker (type-ahead on nam
 
 Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry accepts the unit level ("4" + tab in tablet mode, or "1" strip), display always shows natural language ("1 strip + 4 tab"), arithmetic always in base units (Phase 5 §2). Called out because it is a known competitor-parity trap: it must feel native, not modal.
 
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words and limited to the units it is sold by (Tab · Strip · Box), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
+
 ## W6. Quick item (unknown product mid-sale)
 
 **Trigger:** shelf item not in catalog; customer waiting. Path: from an empty search result, one key → name + price → line lands in cart, sale continues. Creates a real product flagged *needs completion* (D3); appears in owner's daily view and completion queue. **Speed:** under 10 seconds. Guardrail: quick items cannot be silently forgotten — the queue nags until enriched or merged.
@@ -48,6 +50,8 @@ Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry
 
 Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date → lines: product search → quantity + bonus quantity (10+1 entered as 10 + 1, kept distinct — Phase 5 §3) → unit cost → expiry (always asked) → batch number (optional) → MRP/selling price confirmation (capture-at-receiving, Phase 1 §3; changed price flags the transition for the owner) → next line. Commit creates batches (D1 feeds from here). A line entered wrong is corrected afterwards from the invoice, owner-only, by stating what it should have said — never by editing it (PCN-009, T2).
 
+*Amended 2026-10-24 by PCN-012.* Quantity, bonus and cost are entered per pack as invoiced ("Cost per box", "Bonus (boxes)"); the line total matches the paper invoice to the paisa.
+
 - Unknown product → inline create with global-catalog assist (Phase 6): pick identity, confirm pack structure, price — richer than W6's quick-add because time pressure is lower.
 - **Speed:** a 20-line invoice in a handful of minutes; per-line rhythm matters more than total.
 
@@ -55,9 +59,13 @@ Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date
 
 **Trigger:** damage, expiry write-off, return to distributor, count correction. (Goods returned to a distributor *for credit* are a supplier return from the invoice, owner-only, which also reduces what is owed — PCN-009; the reason-coded adjustment remains for returns with no credit.) Path: adjustment → product → quantity ± → mandatory coded reason (+ optional note) → commit. Attributed, listed in owner's daily view without exception (T1). Count corrections resolve pending layers (D2). Salesman may adjust; visibility is the control, not permission friction (P7 balanced with T1).
 
+*Amended 2026-10-24 by PCN-012.* Quantities are entered in the product's own units with the shared quantity control.
+
 ## W9. Opening stock (onboarding)
 
 A guided variant of W7 without a supplier invoice: walk the shelves, search/create products, enter quantity + expiry + price. Creates opening batches (reason-coded, D-model §3). Assisted by founder during onboarding (Phase 3: assisted setup is part of the trial). Import path (CSV from a competitor system) lands here too (Phase 6 §3.3). This workflow is the adoption gate — it must be genuinely fast, and its quality determines whether trust starts at day one or never.
+
+*Amended 2026-10-24 by PCN-012.* Stock is counted as it sits — Boxes [ ] Strips [ ] Tablets [ ], only the units the product has — with a cost per unit that is required and pre-filled from the product's last purchase when there is one.
 
 ## W10. Day close
 

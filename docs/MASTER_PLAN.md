@@ -11,7 +11,7 @@ Status: Planning complete. This package is the authoritative specification for t
 1. **This package is the spec.** Implement it; do not re-litigate it. If implementation reveals a genuine flaw, raise a plan-change note, get a decision, then proceed (Phase 11 §4). Never silently patch around the plan.
 2. **Reading order for the implementation session:** Phase 5 (domain) → Phase 9 (schema) → Phase 8 (ADRs) → Phase 7 (workflows) → Phase 10 (screens) → Phase 11 (standards) → Phase 13 (day plan). Phases 1–4, 6, 12 are context and constraints; consult as referenced.
 3. **Identifier system, used throughout:**
-   - **P1–P8** product principles, **I1–I7** interaction principles, **T1–T5** trust principles (Phase 4)
+   - **P1–P9** product principles, **I1–I7** interaction principles, **T1–T5** trust principles (Phase 4)
    - **D1–D5** domain semantic decisions (Phase 5 §4)
    - **W1–W12** core workflows (Phase 7)
    - **ADR-1–ADR-8** architecture decisions (Phase 8) — note: Mehvar Hospital's ADR numbering is a separate series; references to "Mehvar ADR-2/16/18 lineage" mean the hospital product's records, cited as philosophical ancestry only.
@@ -382,6 +382,8 @@ Each principle includes its test — the question that settles a dispute.
 
 **P8. The shop opens tomorrow.** The pharmacy's ability to trade is never hostage to our operations. Updates, deployments, migrations, and recovery procedures are designed so the counter works every morning, unconditionally — changes land quietly, never mid-rush, and never require the pharmacy to do anything to keep selling. *Test: describe the worst thing that can happen on our side tonight; show why the counter still sells at 9am.*
 
+**P9. Sophisticated inside, simple outside.** *(Added 2026-10-24, PCN-012.)* The owner and the salesman never need to understand base units, paisa conversions, batch valuation or migrations to sell a strip of medicine; those are Mehvar's job. *Test: does anyone at the counter have to convert, divide or know a stored figure to finish this task? If yes, the design is wrong.*
+
 ## 2. Interaction Principles
 
 **I1. Keyboard-first, shortcuts visible.** The entire sale — search, add, quantity, discount, payment, print — completes without the mouse. Shortcuts are printed on the interface itself, not hidden in help. The scanner is a keyboard: a scan anywhere sensible does the right thing.
@@ -485,6 +487,8 @@ Anything the pharmacy sells. Medicines are the primary case but not the only one
 
 **All stock arithmetic happens in base units.** "3 strips + 4 tablets" is stored and computed as 34 tablets; presentation converts back to natural language. This single rule eliminates the classic sub-unit corruption bug (P4 via arithmetic honesty).
 
+*Amended 2026-10-24 by PCN-012.* Stock arithmetic stays in base units, and nobody at the counter sees them (P9). Each unit level carries its own selling price, entered as the owner knows it (strip, box), and an MRP entered against the unit it is printed for. Which units are offered is set once per pharmacy ("Do you sell loose tablets?") and per product (a "Sell" tick per unit). A product's smallest unit and existing pack sizes lock once any record references them; adding a larger pack and renaming a label stay allowed, and pack sizes must nest (a box holds a whole number of strips). A wrong pack after trading starts is fixed by replacing the product, with stock moved across by adjustments. Quantities are shown as an amount in the product's own units, largest first ("12 boxes, 3 strips, 7 tablets"), never with a word implying opened, loose or sealed packs.
+
 ### Batch (stock layer)
 A quantity of a product that arrived together: batch number (as printed, optional in practice), expiry date, unit cost, and MRP/selling price at the time of arrival. Created by purchase entries and opening-stock entries. Batches are how expiry tracking, FEFO, and cost-basis reporting exist at all.
 
@@ -503,6 +507,8 @@ Goods arriving: supplier, date, lines. Each line: product, quantity (any unit le
 
 ### Sale
 The counter event: lines + payment. Each line: product, quantity in base units, unit level as entered (for display/receipt), unit price, discount (line or invoice level), and the batch consumption it resolved to (recorded automatically). Payment: cash amount and/or credit amount against a named customer. A fully-paid cash sale and a fully-credit udhaar sale are the same record shape with different payment splits.
+
+*Amended 2026-10-24 by PCN-012.* Purchase and sale lines record the unit entered, its count, the price or cost per that unit and the exact line amount; sale totals, invoices and supplier balances add line amounts, so they match paper to the paisa. Each batch carries its exact total cost; allocations are costed cumulatively, rounding up, so recognised cost is never understated and a used-up batch reconciles exactly to what was paid.
 
 ### Payment
 Money received from a customer independent of a new sale — the udhaar settlement. Amount, customer, method (cash in V1). A customer's balance = credit extended (from sales) − payments − credit reversed by returns.
@@ -658,6 +664,8 @@ Same path as W1 until payment: credit key → customer picker (type-ahead on nam
 
 Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry accepts the unit level ("4" + tab in tablet mode, or "1" strip), display always shows natural language ("1 strip + 4 tab"), arithmetic always in base units (Phase 5 §2). Called out because it is a known competitor-parity trap: it must feel native, not modal.
 
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words and limited to the units it is sold by (Tab · Strip · Box), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
+
 ## W6. Quick item (unknown product mid-sale)
 
 **Trigger:** shelf item not in catalog; customer waiting. Path: from an empty search result, one key → name + price → line lands in cart, sale continues. Creates a real product flagged *needs completion* (D3); appears in owner's daily view and completion queue. **Speed:** under 10 seconds. Guardrail: quick items cannot be silently forgotten — the queue nags until enriched or merged.
@@ -668,6 +676,8 @@ Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry
 
 Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date → lines: product search → quantity + bonus quantity (10+1 entered as 10 + 1, kept distinct — Phase 5 §3) → unit cost → expiry (always asked) → batch number (optional) → MRP/selling price confirmation (capture-at-receiving, Phase 1 §3; changed price flags the transition for the owner) → next line. Commit creates batches (D1 feeds from here). A line entered wrong is corrected afterwards from the invoice, owner-only, by stating what it should have said — never by editing it (PCN-009, T2).
 
+*Amended 2026-10-24 by PCN-012.* Quantity, bonus and cost are entered per pack as invoiced ("Cost per box", "Bonus (boxes)"); the line total matches the paper invoice to the paisa.
+
 - Unknown product → inline create with global-catalog assist (Phase 6): pick identity, confirm pack structure, price — richer than W6's quick-add because time pressure is lower.
 - **Speed:** a 20-line invoice in a handful of minutes; per-line rhythm matters more than total.
 
@@ -675,9 +685,13 @@ Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date
 
 **Trigger:** damage, expiry write-off, return to distributor, count correction. (Goods returned to a distributor *for credit* are a supplier return from the invoice, owner-only, which also reduces what is owed — PCN-009; the reason-coded adjustment remains for returns with no credit.) Path: adjustment → product → quantity ± → mandatory coded reason (+ optional note) → commit. Attributed, listed in owner's daily view without exception (T1). Count corrections resolve pending layers (D2). Salesman may adjust; visibility is the control, not permission friction (P7 balanced with T1).
 
+*Amended 2026-10-24 by PCN-012.* Quantities are entered in the product's own units with the shared quantity control.
+
 ## W9. Opening stock (onboarding)
 
 A guided variant of W7 without a supplier invoice: walk the shelves, search/create products, enter quantity + expiry + price. Creates opening batches (reason-coded, D-model §3). Assisted by founder during onboarding (Phase 3: assisted setup is part of the trial). Import path (CSV from a competitor system) lands here too (Phase 6 §3.3). This workflow is the adoption gate — it must be genuinely fast, and its quality determines whether trust starts at day one or never.
+
+*Amended 2026-10-24 by PCN-012.* Stock is counted as it sits — Boxes [ ] Strips [ ] Tablets [ ], only the units the product has — with a cost per unit that is required and pre-filled from the product's last purchase when there is one.
 
 ## W10. Day close
 
@@ -815,6 +829,7 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 - **Attribution:** `created_by` (user id) + `created_at` on every business row (T1). Immutable tables have no `updated_at` — there are no updates.
 - **Money:** integer paisa (`bigint`). No floats anywhere near money.
 - **Quantities:** integer base units (Phase 5 §2) everywhere. Presentation converts.
+- **Entered units (2026-10-24, PCN-012):** event lines also store the entered unit, its count, the per-unit price or cost and the exact line amount. All additive: rows written before PCN-012 are read through a fallback (line amount = per-base price × base quantity) and never backfilled (ADR-1).
 - **Immutability:** business-event tables accept INSERT only (enforced §5). Products/customers/suppliers are reference entities: editable fields limited to identity/settings, never to anything a report derives from.
 - **Soft archive:** reference entities carry `is_active`; nothing is ever deleted (referenced history must resolve).
 - **Business day:** derived from `created_at` in tenant-local time (single timezone country); no stored day-close lock (D5). Over/short entries are cash movements with a reason code.
@@ -844,6 +859,8 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 
 **sale_lines** — id, tenant_id, sale_id, product_id, qty_base, entered_unit_level, unit_price_paisa (per base unit as charged), line_discount_paisa, price_overridden boolean (T1 exposure).
+
+*Amended 2026-10-24 by PCN-012.* **products** gains `units` JSONB (`[{key, name, factor, price_paisa, sell}]`, smallest first) and `mrp_paisa` + `mrp_unit_key`; `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are kept in step for one release, then retired. **purchase_lines** gains `unit_key`, `unit_name`, `unit_count`, `bonus_unit_count`, `unit_cost_paisa_entered`, `line_cost_paisa`. **sale_lines** gains `unit_key`, `unit_name`, `unit_count`, `unit_price_paisa_entered`, `line_amount_paisa` (before line discount). **batches** gains `cost_total_paisa` and `prices_at_receiving` JSONB. Adjustments, sale-return lines, supplier returns and purchase corrections gain `unit_key`, `unit_name`, `unit_count` for display. **global_products** gains `reference_mrp_unit`. Tenant settings gain `sellsLoose`.
 
 **sale_line_allocations** — id, tenant_id, sale_line_id, batch_id (nullable), qty_base, unit_cost_paisa (from batch; null while pending).
 *The D1/D2 mechanism: server-side FEFO writes one row per consumed batch (ADR-5); `batch_id NULL` rows are the pending layer, plus resolved_by (nullable FK to the purchase_line or adjustment that later resolved it) and resolved_at. Pending rows are the only "mutable" business rows in the system, and only their resolution fields may be set — once, forward-only.*
@@ -948,6 +965,8 @@ Layout logic (not pixels): three zones with fixed roles.
 **Payment overlay (Space or F12 from cart):** tendered amount (numpad-first, defaults exact), change rendered enormous, Enter commits → receipt prints (ADR-6) → overlay closes → focus returns to search, cart clears. Split cash/credit lives here when a customer is attached.
 
 **Quantity grammar (I3):** `3*pana` in search = quantity 3 of the selected result; bare selection = qty 1; Tab on the qty cell cycles unit levels (tab/strip/box) where the product defines them.
+
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the cart line (only the units the product is sold by), beside − qty +; the price column shows the price per chosen unit. Tab still cycles the same buttons.
 
 **States that must be visible calmly (I7):** consuming-batch price change (D1 — line shows "price updated" chip), zero/negative stock (line proceeds, amber chip, D2), unsynced count in top bar (ADR-3), quick-add result row when search is empty (W6: one key → name+price mini-form inline).
 

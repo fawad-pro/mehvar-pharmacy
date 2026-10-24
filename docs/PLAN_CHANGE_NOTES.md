@@ -1207,3 +1207,253 @@ Not addressed here: a credit from a return against a purchase entered before
 supplier credit existed (PCN-007's untracked history) is shown like any other,
 although that invoice counts as owing nothing; the supplier payment action still
 mints its idempotency id on the server, so a double submit can record twice.
+
+## PCN-012 — pharmacists work in boxes and strips; Mehvar does the arithmetic
+
+Session: unit review (post Day 20) · Raised: 2026-10-24 · Status: decided, applied to the plan (not yet implemented)
+
+**Principle this note proposes (P9). Sophisticated inside, simple outside.**
+The owner and the salesman never need to understand base units, paisa
+conversions, batch valuation or migrations to sell a strip of medicine; those
+are Mehvar's job. _Test: does anyone at the counter have to convert, divide or
+know a stored figure to finish this task? If yes, the design is wrong._
+
+### Plan sections in tension
+
+- Phase 5 §2 says products have "selling prices **per unit level**", but Phase 9
+  stores one `default_price_per_base_unit`, and purchase costs and sale prices
+  are per base unit too. The plan intended per-level prices; the schema did not
+  carry them.
+- W7 says purchase quantity is entered at "any unit level", but the built
+  purchase, opening-stock (W9) and adjustment (W8) screens accept base units
+  only ("Qty (tab)", "Units to add"), with cost per tablet.
+- Phase 9 §1 allows reference entities to edit "never anything a report derives
+  from", yet a product's base unit and pack factors can be edited after stock
+  exists, which silently changes the meaning of every recorded quantity.
+- W5 and Phase 10 §4 put the unit behind the Tab key; the price column shows
+  the per-tablet price even on a strip line.
+
+### The problem, from the counter
+
+An owner knows what a box or a strip costs and sells for. Nobody in the shop
+counts tablets. Today Mehvar asks for both: cost per tablet on a box invoice,
+tablets on the opening-stock screen, a per-tablet price on the product form.
+Per-tablet storage also cannot represent real pack prices: a box of 14 at
+Rs 250 is 1,785.7 paisa a tablet, so the box sells for Rs 250.04 or Rs 249.90,
+and a box invoice drifts from the distributor's paper.
+
+### Options
+
+- **A. Units and prices per pack, conversions internal.** Recommended; detailed
+  below.
+- **B. Keep per-base-unit storage and convert in the screens.** Rejected: the
+  rounding is in the stored figures, so no screen can make a box total exact.
+- **C. Track stock per pack level (sealed boxes, open strips).** Rejected:
+  every cut strip becomes a stock movement nobody records, and the counts drift
+  from the shelf. Base-unit stock stays the single truth (Phase 5 §2, ADR-8).
+
+### Recommendation: A
+
+**What the owner and salesman see**
+
+1. **A product's units, in its own words.** "1 strip = 10 tablets, 1 box = 10
+   strips", pre-filled from the catalogue and confirmed against the pack. A
+   bottle, tube, vial or piece has one unit and shows no unit choice at all.
+2. **A price per unit, typed as the owner knows it.** Enter the strip price;
+   Mehvar suggests the box and loose prices (editable). Each saved price is
+   stored exactly. MRP is entered as printed, against the unit it is printed
+   for.
+3. **Only relevant units are offered.**
+   - Shop level, asked once at setup: "Do you sell loose tablets/capsules?" It
+     sets the default for new products.
+   - Product level: one tick per unit, "Sell by tablet / strip / box". A unit
+     not ticked never appears at the counter.
+   - No other unit settings.
+4. **One quantity control everywhere.** Large unit buttons labelled with the
+   product's own words (Tab · Strip · Box), with **− qty +**, as in the sale
+   line. Same control on sale, purchase, opening stock, adjustments, returns,
+   supplier returns and corrections. Keyboard shortcuts remain for speed but are
+   never required.
+
+   | Screen                       | Units offered                                                | Default                                                      |
+   | ---------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+   | Sale                         | units ticked "Sell"                                          | last unit used for that product, else the smallest sold unit |
+   | Purchase                     | pack units (never loose)                                     | the largest pack                                             |
+   | Opening stock / count        | one box per offered unit: Boxes [ ] Strips [ ] (Tablets [ ]) | —                                                            |
+   | Adjust, returns, corrections | as sale or purchase                                          | the unit originally used                                     |
+
+5. **Prices and costs follow the chosen unit.** "× Rs 27.60" per strip at the
+   counter; "Cost per box" and "Bonus (boxes)" on a purchase. Opening-stock cost
+   is per unit too, and required (see decision 5).
+6. **Stock is stated as an amount, never as a shelf Mehvar has not seen.**
+   _(Modified on approval.)_ A quantity is the same amount written in the
+   product's own units, largest first: **"12 boxes, 3 strips, 7 tablets"**. It
+   says _how much_ there is, and nothing about what condition it is in: no
+   "loose", "open", "sealed" or "cut" anywhere, because Mehvar does not record
+   which packs are opened and a word implying it would be a claim it cannot
+   back. Rules:
+   - only units the product has, only non-zero parts, unit names as the owner
+     set them;
+   - the remainder is always shown, in the smallest unit, even when the shop
+     does not sell that unit, because hiding it would understate stock;
+   - each batch shows its own amount the same way beside its expiry, so the
+     product total is the sum of what is listed;
+   - negative stock reads "Short by 2 strips"; never a minus sign;
+   - the exact smallest-unit total is on the product's detail page, never
+     required.
+
+   A physical count is entered the same way (Boxes, Strips, Tablets as they sit
+   on the shelf), so what the owner types and what Mehvar shows use one
+   vocabulary.
+
+**What Mehvar does inside**
+
+- Stock, batches, FEFO, the pending layer and the ADR-8 verifier stay in
+  integer base units, unchanged.
+- Every transaction line stores what was actually entered and charged: the
+  unit, the count, the price or cost per that unit, and the exact line amount.
+  Invoices, receipts, sale totals and supplier balances add up line amounts, so
+  they match paper to the paisa.
+- **Margin-cost reconciliation** _(modified on approval)._ Each batch carries
+  its exact total cost (what was paid for the line, bonus units included at no
+  extra cost). Allocations are costed **cumulatively**: the cost of the first
+  _n_ units taken from a batch is the batch total × _n_ ÷ units received,
+  rounded **up** to the paisa, and each allocation's cost is the difference
+  between the running figure after it and before it. Both properties are
+  tested:
+  - at every point, recognised cost is never less than the true proportional
+    cost, so a reported margin is never better than the real one;
+  - when a batch is used up, its allocation costs add up to exactly what was
+    paid. No paisa is lost or invented.
+
+  Corrections (PCN-009) restate the batch total and apply the same rule to
+  units taken afterwards; returns restock at the cost the units left with.
+
+- **Correction to Day 6's rule.** `effectiveUnitCostPaisa` floors the per-unit
+  cost and claims this keeps margin "never better than the truth". It does the
+  opposite: a lower cost reports a higher margin. The error is at most one
+  paisa per unit, but the stated guarantee is false; the cumulative rule above
+  replaces it when this note is implemented.
+
+### Protecting pack configurations
+
+- Once any batch, purchase, sale, adjustment or return references a product,
+  its smallest unit and every existing pack size are **locked**. Adding a larger
+  pack (e.g. a carton) and renaming a label stay allowed.
+- Units get a stable internal key, so renaming "Tab" to "Tablet" never orphans
+  history; lines also keep the name as it was shown.
+- Pack sizes must nest: a box holds a whole number of strips.
+- A pack entered wrong after trading starts is fixed by a guided "replace this
+  product": a new product with the right pack, with stock moved across through
+  reason-coded adjustments, so history stays true.
+
+### Data model
+
+| Table                                                                          | Change                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `products`                                                                     | `units` JSONB: `[{key, name, factor, pricePaisa, sell}]`, smallest first; `mrp_paisa` + `mrp_unit_key`. The old `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are kept in step for one release, then retired. |
+| `tenants.settings`                                                             | `sellsLoose` boolean (no schema change).                                                                                                                                                                                          |
+| `sale_lines`                                                                   | add `unit_key`, `unit_name`, `unit_count`, `unit_price_paisa_entered`, `line_amount_paisa` (before line discount). `qty_base` stays.                                                                                              |
+| `purchase_lines`                                                               | add `unit_key`, `unit_name`, `unit_count`, `bonus_unit_count`, `unit_cost_paisa_entered`, `line_cost_paisa`.                                                                                                                      |
+| `batches`                                                                      | add `cost_total_paisa`, and `prices_at_receiving` JSONB (each unit's price when the batch arrived, so D1's batch-price rule applies per unit).                                                                                    |
+| `adjustments`, `sale_return_lines`, `supplier_returns`, `purchase_corrections` | add `unit_key`, `unit_name`, `unit_count` for display; corrections also the entered cost.                                                                                                                                         |
+| `global_products`                                                              | `reference_mrp_unit` beside `reference_mrp_paisa`; the catalogue CSV import asks whether a list's price is per pack (default) or per unit.                                                                                        |
+| Offline records (ADR-3)                                                        | carry the same entered fields; schema version bumped.                                                                                                                                                                             |
+
+### Migration and backward compatibility
+
+- **History is never rewritten (ADR-1).** New event-table columns are nullable;
+  old rows are read through a fallback (line amount = per-base price × base
+  quantity), which is exactly what was charged or invoiced at the time. No
+  backfill touches an event row.
+- **Products** (reference rows) are converted once: each pack level's price =
+  per-base price × factor, every unit ticked "Sell", `sellsLoose` = true for
+  existing shops, so nothing they sell today disappears.
+- **Figures do not move.** Every receipt reprints identically; day totals come
+  from stored sale totals; supplier balances, stock and margins for existing
+  rows are unchanged to the paisa (asserted by tests below).
+- **Offline skew:** ingestion accepts the previous record version for at least
+  one release; an old record is ingested as base units.
+- **Rollout (P8):** additive migration through the normal installer update; no
+  owner action, no counter downtime beyond the update itself. Export gains the
+  new columns.
+
+### Tests
+
+1. **Exact amounts:** a box of 14 at Rs 250 charges Rs 250.00; a mixed-unit
+   invoice totals the paper figure; supplier balance equals Σ line costs exactly.
+2. **Margin-cost reconciliation:** for every batch and every prefix of its
+   allocations, recognised cost ≥ the exact proportional cost; once a batch is
+   used up, Σ allocation costs = batch cost total exactly; per-unit flooring
+   must fail this test before it is believed (Day 8).
+3. **Crown suite (extended, not forked):** random sales, purchases, adjustments,
+   returns and corrections in random units; assert base-stock rebuild, Σ line
+   amounts − discounts = sale subtotal, Σ line costs = invoice total, plus every
+   existing Phase 5 §5 invariant.
+4. **Units:** nesting validation; conversion; display equivalence (never more,
+   never less than the base quantity; no sealed/opened claim); negative stock.
+5. **Guards:** editing a locked unit is refused; adding a larger pack and
+   renaming a label are allowed; history still displays after a rename.
+6. **Compatibility:** a database holding pre-change rows produces identical
+   receipts, day figures, supplier balances, stock and margins after the
+   migration (run against a restored pre-change dump, as the restore drill does).
+7. **Sync:** old and new record versions ingest to identical effects; replay N
+   times stays exactly-once.
+8. **E2E:** sell by strip and by box with the buttons (mouse and keyboard);
+   receive in boxes with cost per box; opening stock as boxes + strips; stock
+   view; a shop that does not sell loose tablets never sees a Tab button; no
+   stock view contains "loose", "open" or "sealed".
+
+### Out of scope
+
+- **Whole-rupee checkout rounding** (e.g. Rs 27.60 → Rs 28) is a separate
+  decision; nothing here assumes it.
+- The open PCN-011 items (untracked-history credit, server-minted supplier
+  payment id) are unaffected.
+
+### Plan amendments
+
+Phase 4 §1 (P9); Phase 5 §2 and the Purchase/Sale entries; W5, W7, W8, W9;
+Phase 9 §1 conventions and the `products`, `purchase_lines`, `sale_lines`,
+`batches` definitions; Phase 10 §4.
+
+### Decisions put to the owner
+
+1. Adopt P9 as a product principle.
+2. Selling prices per unit and exact line amounts (option A) rather than
+   per-base-unit prices.
+3. Unit configuration: one shop question ("sell loose?") plus one "Sell" tick
+   per unit per product, and nothing else.
+4. Margin valuation: exact batch cost total, allocation cost rounded down.
+   _Replaced on approval by the cumulative rule above._
+5. Opening-stock cost: required, pre-filled from that product's last purchase
+   when one exists. Alternative: allow "cost not known", which keeps the batch
+   out of margin figures.
+6. History: old rows read through the fallback, never backfilled.
+7. Wrong pack after trading starts: "replace this product" with stock moved
+   across, rather than allowing edits.
+8. Stock wording: "12 boxes, 3 strips + 7 loose" as an amount, with the exact
+   smallest-unit total on the product detail page only. _Replaced on approval:
+   "12 boxes, 3 strips, 7 tablets", with no condition words._
+9. Delivery order: the locks and nesting check first (they enforce Phase 9 §1
+   as written), then the data model, then the shared quantity control, then the
+   stock display.
+
+**Decision.** 2026-10-24, the owner: **approved**. Decisions 1–3, 5–7 and 9 as
+recommended (opening-stock cost required, pre-filled from the last purchase; a
+wrong pack fixed by "replace this product"), with two modifications:
+
+1. **Margin-cost reconciliation** replaces decision 4: allocations are costed
+   cumulatively, rounding up, so recognised cost is never understated and a
+   used-up batch reconciles exactly to what was paid.
+2. **Truthful stock wording** replaces decision 8: stock is stated as an amount
+   in the product's units ("12 boxes, 3 strips, 7 tablets"), with no word
+   implying opened, loose or sealed packs.
+
+Whole-rupee checkout rounding remains a separate, undecided question.
+
+**Applied.** 2026-10-24, to the plan only: Phase 4 §1 (P9), Phase 5 §2 and the
+Purchase/Sale entries, W5, W7, W8, W9, Phase 9 §1 and its table definitions,
+and Phase 10 §4, in `MASTER_PLAN.md` and the matching phase files. CLAUDE.md's
+identifier list now reads P1–P9, and its Day 6 costing lesson is marked
+superseded. No code has changed; implementation follows decision 9's order.
