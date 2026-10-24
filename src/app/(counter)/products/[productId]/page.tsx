@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
-import { alternativesFor, findProduct } from '@/db/catalog-queries';
+import { alternativesFor, findProduct, productHasHistory } from '@/db/catalog-queries';
 import { formatPackLevels } from '@/domain/catalog/product';
 import { baseQty } from '@/lib/branded';
 import { describeQuantity } from '@/lib/quantity';
@@ -22,9 +22,10 @@ export default async function ProductDetailPage({
 
   const { productId } = await params;
   const scope = scopeFor(session);
-  const [product, alternatives] = await Promise.all([
+  const [product, alternatives, hasHistory] = await Promise.all([
     findProduct(scope, productId),
     alternativesFor(scope, productId),
+    productHasHistory(scope, productId),
   ]);
   if (!product) {
     notFound();
@@ -110,6 +111,8 @@ export default async function ProductDetailPage({
           mrpRupees: product.mrpPaisa === null ? '' : (product.mrpPaisa / 100).toFixed(2),
           minStock: product.minStockBaseUnits === null ? '' : String(product.minStockBaseUnits),
           needsCompletion: product.needsCompletion,
+          // [PCN-012] Said before Save, not discovered after it.
+          unitsLocked: hasHistory,
         }}
       />
     </section>

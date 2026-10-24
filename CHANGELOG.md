@@ -2,6 +2,17 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Pack sizes protected (PCN-012, step 1)
+
+- A product's base unit and pack sizes can no longer be changed once anything
+  is recorded against it (stock, a sale, a purchase or an adjustment). Changing
+  them would have silently re-read every recorded quantity. Prices, names and a
+  larger pack on top (a carton over the box) can still be edited.
+- The product edit form says the units are fixed before Save, and the refusal
+  says what to do instead.
+- New pack sizes must nest: a box must hold a whole number of strips. Products
+  already trading with a non-nesting pack keep working and stay editable.
+
 ## Session — Supplier credit made visible (PCN-011)
 
 - A supplier holding the pharmacy's money — an overpayment, or credit for goods

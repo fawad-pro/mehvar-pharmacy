@@ -22,6 +22,10 @@ export type ProductRejection =
   | { reason: 'pack_level_duplicate_name'; name: string }
   | { reason: 'pack_level_collides_with_base'; name: string }
   | { reason: 'pack_level_not_ascending'; index: number }
+  /** PCN-012: a level must hold a whole number of the level below it. */
+  | { reason: 'pack_level_not_nested'; index: number; below: string }
+  /** PCN-012: the product has history, so its existing units cannot change. */
+  | { reason: 'pack_structure_locked' }
   | { reason: 'min_stock_negative' }
   | { reason: 'barcode_required' }
   | { reason: 'barcode_unknown_unit_level'; unitLevelName: string };
@@ -65,11 +69,21 @@ export interface ProductDraft {
  *    is not a level);
  *  - names are unique, and none may shadow the base unit;
  *  - factors ascend, because the natural-language renderer walks them
- *    largest-first and an out-of-order list would decompose incorrectly.
+ *    largest-first and an out-of-order list would decompose incorrectly;
+ *  - [PCN-012] each level holds a whole number of the level below it. A box
+ *    of 25 tablets over a strip of 10 is two and a half strips, and no screen
+ *    can state that stock in boxes and strips truthfully.
  */
 export function validatePackLevels(
   levels: readonly PackLevel[],
   baseUnitName: string,
+  /**
+   * [PCN-012] Levels before this index are exempt from the nesting rule:
+   * an existing product's own levels, kept unchanged by an edit. Nesting
+   * arrived after products were trading, and those levels can no longer
+   * change, so refusing them would only block unrelated edits like a price.
+   */
+  nestingCheckedFrom = 0,
 ): ProductRejection[] {
   const rejections: ProductRejection[] = [];
   const seen = new Set<string>();
@@ -95,10 +109,68 @@ export function validatePackLevels(
     const previous = levels[index - 1];
     if (previous !== undefined && level.factor <= previous.factor) {
       rejections.push({ reason: 'pack_level_not_ascending', index });
+    } else if (
+      index >= nestingCheckedFrom &&
+      previous !== undefined &&
+      Number.isSafeInteger(previous.factor) &&
+      previous.factor > 1 &&
+      level.factor % previous.factor !== 0
+    ) {
+      rejections.push({ reason: 'pack_level_not_nested', index, below: previous.name });
     }
   });
 
   return rejections;
+}
+
+/**
+ * [PCN-012] How an edit relates to a product's current units.
+ *
+ * Every recorded quantity is a count of base units, and the pack sizes say
+ * what those counts mean as strips and boxes. Once a product has history,
+ * changing its base unit or an existing pack size would silently reinterpret
+ * every quantity already recorded (Phase 9 §1: reference entities never edit
+ * "anything a report derives from"). So, for a product with history:
+ *
+ *  - `unchanged` — the same units: always allowed;
+ *  - `extended`  — the same units with larger packs added on top (a carton
+ *    over the box, or a quick item gaining its strip during completion):
+ *    allowed, because nothing already recorded changes meaning;
+ *  - `changed`   — anything else, including a rename: refused.
+ *
+ * Renames are refused for now, stricter than PCN-012's end state: a unit's
+ * name is also its identity today (barcodes and sale lines refer to it by
+ * name). They become allowed once units carry stable keys.
+ */
+export type PackStructureChange = 'unchanged' | 'extended' | 'changed';
+
+export interface PackStructure {
+  readonly baseUnitName: string;
+  readonly packLevels: readonly PackLevel[];
+}
+
+export function packStructureChange(
+  current: PackStructure,
+  next: PackStructure,
+): PackStructureChange {
+  if (current.baseUnitName.trim() !== next.baseUnitName.trim()) {
+    return 'changed';
+  }
+  if (next.packLevels.length < current.packLevels.length) {
+    return 'changed';
+  }
+  const kept = current.packLevels.every((level, index) => {
+    const candidate = next.packLevels[index];
+    return (
+      candidate !== undefined &&
+      candidate.name.trim() === level.name.trim() &&
+      candidate.factor === level.factor
+    );
+  });
+  if (!kept) {
+    return 'changed';
+  }
+  return next.packLevels.length === current.packLevels.length ? 'unchanged' : 'extended';
 }
 
 /**
@@ -124,7 +196,10 @@ export function formatPackLevels(levels: readonly PackLevel[]): string {
   return levels.map((level) => `${level.name}:${level.factor}`).join(', ');
 }
 
-export function validateProductDraft(draft: ProductDraft): Validated<ProductDraft> {
+export function validateProductDraft(
+  draft: ProductDraft,
+  options: { nestingCheckedFrom?: number } = {},
+): Validated<ProductDraft> {
   const rejections: ProductRejection[] = [];
 
   const name = draft.name.trim();
@@ -147,7 +222,9 @@ export function validateProductDraft(draft: ProductDraft): Validated<ProductDraf
     rejections.push({ reason: 'min_stock_negative' });
   }
 
-  rejections.push(...validatePackLevels(draft.packLevels, baseUnitName));
+  rejections.push(
+    ...validatePackLevels(draft.packLevels, baseUnitName, options.nestingCheckedFrom ?? 0),
+  );
 
   if (rejections.length > 0) {
     return { ok: false, rejections };

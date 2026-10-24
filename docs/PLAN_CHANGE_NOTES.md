@@ -1456,4 +1456,16 @@ Whole-rupee checkout rounding remains a separate, undecided question.
 Purchase/Sale entries, W5, W7, W8, W9, Phase 9 §1 and its table definitions,
 and Phase 10 §4, in `MASTER_PLAN.md` and the matching phase files. CLAUDE.md's
 identifier list now reads P1–P9, and its Day 6 costing lesson is marked
-superseded. No code has changed; implementation follows decision 9's order.
+superseded. Implementation follows decision 9's order.
+
+**Step 1 implemented** (2026-10-24, on `claude/epic-euler-jdspyu`):
+pack sizes must nest (a level holds a whole number of the level below), and a
+product with any batch, sale line, purchase line or adjustment refuses a change
+to its base unit or existing pack sizes, while price edits and a larger pack on
+top stay allowed. Levels a product already had before nesting existed are
+grandfathered for unrelated edits. The edit form says the units are fixed
+before Save. **Renames are refused for now**, stricter than this note's end
+state: a unit's name is still its identity (barcodes and sale lines refer to it
+by name); renames become allowed with the stable unit keys of step 2. A wrong
+pack is fixed today by adding the product again; the guided "replace this
+product" flow lands with step 2.

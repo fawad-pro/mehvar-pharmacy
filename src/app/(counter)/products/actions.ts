@@ -120,6 +120,10 @@ function messageFor(result: Extract<CatalogResult<unknown>, { ok: false }>): str
       return `“${first.name}” is already the base unit.`;
     case 'pack_level_not_ascending':
       return 'List pack levels smallest first, like strip:10, box:200.';
+    case 'pack_level_not_nested':
+      return `Each pack must hold a whole number of the one before it — this one is not a whole number of “${first.below}”. A box of 10 strips of 10 tablets is box:100.`;
+    case 'pack_structure_locked':
+      return 'This product already has stock or sales, so its base unit and pack sizes cannot change — everything recorded so far is counted in them. You can add a bigger pack at the end. If the pack is wrong, add the product again with the right pack.';
     case 'barcode_required':
       return 'Scan or type the barcode.';
     case 'barcode_unknown_unit_level':

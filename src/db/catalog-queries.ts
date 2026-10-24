@@ -23,7 +23,15 @@ import type { Uuid } from '@/lib/uuid';
 
 import { database } from './client';
 import { type TenantScope } from './scoped';
-import { batches, globalProducts, productBarcodes, products } from './schema';
+import {
+  adjustments,
+  batches,
+  globalProducts,
+  productBarcodes,
+  products,
+  purchaseLines,
+  saleLines,
+} from './schema';
 
 /* ========================================================================== */
 /* The ADR-4 index payload                                                     */
@@ -424,6 +432,43 @@ export async function findBarcodeOwner(
     .where(scope.scopeOf(productBarcodes, eq(productBarcodes.barcode, barcode)))
     .limit(1);
   return rows[0];
+}
+
+/**
+ * [PCN-012] Has anything been recorded against this product?
+ *
+ * A batch (purchase, opening stock, or an adjustment that brought stock into
+ * existence), a sale line (including one the pending layer holds with no
+ * batch behind it), a purchase line or an adjustment. Returns and corrections
+ * always point at one of those, so they need no lookup of their own.
+ *
+ * Four independent limit-1 lookups rather than one query with correlated
+ * subqueries (CLAUDE.md, Day 3).
+ */
+export async function productHasHistory(scope: TenantScope, productId: Uuid): Promise<boolean> {
+  const found = await Promise.all([
+    scope.db
+      .select({ id: batches.id })
+      .from(batches)
+      .where(scope.scopeOf(batches, eq(batches.productId, productId)))
+      .limit(1),
+    scope.db
+      .select({ id: saleLines.id })
+      .from(saleLines)
+      .where(scope.scopeOf(saleLines, eq(saleLines.productId, productId)))
+      .limit(1),
+    scope.db
+      .select({ id: purchaseLines.id })
+      .from(purchaseLines)
+      .where(scope.scopeOf(purchaseLines, eq(purchaseLines.productId, productId)))
+      .limit(1),
+    scope.db
+      .select({ id: adjustments.id })
+      .from(adjustments)
+      .where(scope.scopeOf(adjustments, eq(adjustments.productId, productId)))
+      .limit(1),
+  ]);
+  return found.some((rows) => rows.length > 0);
 }
 
 /* ========================================================================== */

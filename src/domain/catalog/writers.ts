@@ -16,12 +16,14 @@ import {
   findProduct,
   insertBarcode,
   insertProduct,
+  productHasHistory,
   updateProduct,
 } from '@/db/catalog-queries';
 import type { TenantScope } from '@/db/scoped';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import {
+  packStructureChange,
   validateBarcode,
   validateProductDraft,
   type BarcodeDraft,
@@ -150,23 +152,40 @@ export async function editProduct(
     return { ok: false, conflict: 'not_found' };
   }
 
-  const validated = validateProductDraft(draft);
+  // [PCN-012] What the edit does to the product's units decides two things.
+  const change = packStructureChange(existing, draft);
+
+  // Once anything is recorded against the product, its existing units are
+  // fixed: every stored quantity is a count of its base unit (Phase 9 §1).
+  // Adding a larger pack on top changes the meaning of nothing recorded.
+  // Checked before field validation: for a locked product, "that name is
+  // already a pack level" would send the owner fixing the wrong thing.
+  if (change === 'changed' && (await productHasHistory(scope, productId))) {
+    return { ok: false, rejections: [{ reason: 'pack_structure_locked' }] };
+  }
+
+  // Levels the edit keeps exactly as they were are exempt from nesting:
+  // see `validatePackLevels`.
+  const validated = validateProductDraft(draft, {
+    nestingCheckedFrom: change === 'changed' ? 0 : existing.packLevels.length,
+  });
   if (!validated.ok) {
     return validated;
   }
 
+  const { value } = validated;
   await updateProduct(scope, productId, {
-    name: validated.value.name,
-    manufacturer: validated.value.manufacturer,
-    form: validated.value.form,
-    strength: validated.value.strength,
-    formulaText: validated.value.formulaText,
-    baseUnitName: validated.value.baseUnitName,
-    packLevels: validated.value.packLevels,
-    defaultPricePerBaseUnit: validated.value.pricePaisa,
-    currentMrpPerBaseUnit: validated.value.mrpPaisa,
-    minStockBaseUnits: validated.value.minStockBaseUnits,
-    needsCompletion: validated.value.needsCompletion,
+    name: value.name,
+    manufacturer: value.manufacturer,
+    form: value.form,
+    strength: value.strength,
+    formulaText: value.formulaText,
+    baseUnitName: value.baseUnitName,
+    packLevels: value.packLevels,
+    defaultPricePerBaseUnit: value.pricePaisa,
+    currentMrpPerBaseUnit: value.mrpPaisa,
+    minStockBaseUnits: value.minStockBaseUnits,
+    needsCompletion: value.needsCompletion,
   });
 
   return { ok: true, value: undefined };

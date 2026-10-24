@@ -33,6 +33,11 @@ export interface ProductFormValues {
   mrpRupees: string;
   minStock: string;
   needsCompletion: boolean;
+  /**
+   * [PCN-012] The product has stock or sales recorded, so its base unit and
+   * existing pack sizes are fixed (the server enforces it; this only says so).
+   */
+  unitsLocked?: boolean;
 }
 
 export function ProductForm({ initial }: { initial: ProductFormValues }) {
@@ -186,6 +191,13 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           onChange={setPackLevels}
         />
         <PackLevelPreview baseUnit={baseUnit} levels={parsed} />
+        {initial.unitsLocked ? (
+          <p className="text-ink/70 text-sm leading-snug" role="note">
+            This product already has stock or sales, so its base unit and these pack sizes stay as
+            they are — everything recorded so far is counted in them. You can add a bigger pack at
+            the end, like a carton.
+          </p>
+        ) : null}
       </Section>
 
       <Section title="Price">
