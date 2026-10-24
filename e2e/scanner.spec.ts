@@ -101,8 +101,10 @@ test('an unknown code never becomes a product by itself, and links in place', as
   await scan(page, code);
   await page.getByRole('option', { name: /Link it to a product/ }).click();
   await expect(page.getByText(/Linking code/)).toBeVisible();
-  await page.keyboard.type(product.name.slice(0, 6).toLowerCase());
-  await page.keyboard.press('Enter');
+  // The whole name, and the option chosen by it: a prefix's top match can be a
+  // sibling product ("panado" ranks Panadol above Panadol Extra).
+  await page.keyboard.type(product.name.toLowerCase());
+  await page.getByRole('option').filter({ hasText: product.name }).first().click();
   await page
     .getByRole('button', { name: /^Link to / })
     .first()
