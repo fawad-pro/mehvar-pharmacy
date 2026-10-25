@@ -24,13 +24,15 @@ import { keyFor } from '@/client/keyboard/registry';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import type { ReceiptData } from '@/client/print/receipt';
 import { CaptureBlockedError, useSync } from '@/client/sync/provider';
-import type { SearchHit } from '@/client/search/catalog-index';
+import { MatchTier, type SearchHit } from '@/client/search/catalog-index';
 import { ProductSearch } from '@/components/product-search';
 import { CustomerPicker } from '@/components/customer-picker';
 import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import { ReceiptView } from '@/components/receipt-view';
 import type { CustomerHit } from '@/app/(counter)/customers/actions';
-import { linkScannedCode } from '@/app/(counter)/products/actions';
+import { barcodeOwnerAction, linkScannedCode } from '@/app/(counter)/products/actions';
+import { barcodeToStore, parseGs1 } from '@/domain/catalog/barcode';
+import { businessDayOf } from '@/lib/business-day';
 import { miniStatement } from '@/domain/udhaar/settlement';
 // From the pure module, never from `commit-sale.ts`: that one reaches the
 // database, and importing it here would pull `server-only` into the browser.
@@ -94,9 +96,18 @@ export function SaleSurface() {
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
   const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
-  /** W6's pending mini-form: the typed name, plus the resolver the search awaits. */
+  /** The last scanned pack, when its own 2D code says it has expired. */
+  const [expiredPack, setExpiredPack] = useState<{ name: string; expiry: string } | null>(null);
+  /**
+   * W6's pending mini-form: the typed name, plus the resolver the search awaits.
+   * From an unknown scan it also carries the code, and — if another product
+   * turns out to own that code — that product, so the form can refuse to put
+   * the code on a second one.
+   */
   const [quickAdd, setQuickAdd] = useState<{
     name: string;
+    code: string | null;
+    owner: { name: string; hit: SearchHit | null } | null;
     settle: (added: boolean) => void;
   } | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
@@ -176,6 +187,14 @@ export function SaleSurface() {
           count,
         }),
       ),
+    );
+    // The pack in hand, not the batch FEFO will allocate: its own code says
+    // when it expires. Said, never blocked (P2) — the operator checks the pack.
+    const pack = parseGs1(rawQuery);
+    setExpiredPack(
+      pack?.expiry && pack.expiry < businessDayOf(new Date())
+        ? { name: hit.product.name, expiry: pack.expiry }
+        : null,
     );
     setLastSale(null);
     setError(null);
@@ -317,6 +336,7 @@ export function SaleSurface() {
       };
 
       setLines([]);
+      setExpiredPack(null);
       setCustomer(null);
       setPaying(false);
       setLastSale({
@@ -376,6 +396,7 @@ export function SaleSurface() {
             name: product.name,
             pricePaisa: product.pricePaisa,
             baseUnitName: product.baseUnitName,
+            barcode: draft.barcode,
           },
         });
       } catch (error) {
@@ -389,7 +410,13 @@ export function SaleSurface() {
         throw error;
       }
 
-      addLocalProduct(product);
+      // With its code, so the next scan of this pack adds it directly.
+      addLocalProduct(
+        product,
+        draft.barcode
+          ? { barcode: draft.barcode, productId: product.id, unitLevelName: product.baseUnitName }
+          : undefined,
+      );
 
       setLines((current) =>
         addToCart(
@@ -450,9 +477,47 @@ export function SaleSurface() {
               setSelectedLineId(last.lineId);
             }
           }}
-          onQuickAdd={(name) =>
+          onQuickAdd={(name, code) =>
             new Promise<boolean>((settle) => {
-              setQuickAdd({ name, settle });
+              // The counter's own index first (works offline); then the server,
+              // which also catches a code linked since this index was built.
+              const local = code ? (index?.resolveBarcode(code) ?? null) : null;
+              setQuickAdd({
+                name,
+                code: code ?? null,
+                owner: local ? { name: local.product.name, hit: local } : null,
+                settle,
+              });
+              if (code && !local) {
+                void barcodeOwnerAction(code)
+                  .then((found) => {
+                    if (!found) return;
+                    const hit =
+                      index?.products.find((product) => product.id === found.productId) ?? null;
+                    setQuickAdd((current) =>
+                      current && current.code === code
+                        ? {
+                            ...current,
+                            owner: {
+                              name: found.productName,
+                              hit: hit
+                                ? {
+                                    product: hit,
+                                    tier: MatchTier.Barcode,
+                                    matchedOn: 'barcode',
+                                    stockBase: index?.stockOf(hit.id) ?? null,
+                                  }
+                                : null,
+                            },
+                          }
+                        : current,
+                    );
+                  })
+                  .catch(() => {
+                    // Offline: the index check above is what there is, and the
+                    // server will still refuse to attach a code it finds taken.
+                  });
+              }
             })
           }
           // Phase 10 §5: an unknown scan links in place. On success the
@@ -534,6 +599,18 @@ export function SaleSurface() {
           {!receiptContext ? (
             <p className="text-amber text-xs" role="status">
               Getting this counter ready…
+            </p>
+          ) : null}
+
+          {expiredPack ? (
+            <p className="text-amber text-sm font-medium" role="status" aria-label="Expired pack">
+              Scanned pack of {expiredPack.name} expired on{' '}
+              {new Date(`${expiredPack.expiry}T00:00:00`).toLocaleDateString('en-PK', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}{' '}
+              — check before selling.
             </p>
           ) : null}
 
@@ -627,6 +704,19 @@ export function SaleSurface() {
       {quickAdd ? (
         <QuickItemForm
           initialName={quickAdd.name}
+          barcode={quickAdd.code ? barcodeToStore(quickAdd.code) : null}
+          owner={quickAdd.owner}
+          onSellOwner={
+            quickAdd.owner?.hit
+              ? () => {
+                  const hit = quickAdd.owner?.hit;
+                  if (hit) onSelect(hit, '');
+                  quickAdd.settle(true);
+                  setQuickAdd(null);
+                  focusSearch();
+                }
+              : undefined
+          }
           onCreate={(draft) => {
             void (async () => {
               try {

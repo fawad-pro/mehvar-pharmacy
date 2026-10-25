@@ -15,6 +15,7 @@ import 'server-only';
 
 import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or, sql } from 'drizzle-orm';
 
+import { barcodeKeys } from '@/domain/catalog/barcode';
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
 import type { CatalogSuggestion } from '@/domain/catalog/product';
 import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
@@ -438,15 +439,25 @@ export async function findProduct(
 }
 
 /** Is this barcode already taken within the tenant? Unique (tenant_id, barcode). */
+/**
+ * Which product already owns this code — under any form the counter treats as
+ * the same item (`barcodeKeys`: the code as written, its GTIN-14, its EAN-13).
+ * Matching the exact string only let a pack's GTIN be linked to one product
+ * while the box's EAN sat on another; the counter would then find the first.
+ */
 export async function findBarcodeOwner(
   scope: TenantScope,
   barcode: string,
 ): Promise<{ productId: string; productName: string } | undefined> {
+  const keys = barcodeKeys(barcode);
+  if (keys.length === 0) {
+    return undefined;
+  }
   const rows = await scope.db
     .select({ productId: productBarcodes.productId, productName: products.name })
     .from(productBarcodes)
     .innerJoin(products, eq(productBarcodes.productId, products.id))
-    .where(scope.scopeOf(productBarcodes, eq(productBarcodes.barcode, barcode)))
+    .where(scope.scopeOf(productBarcodes, inArray(productBarcodes.barcode, keys)))
     .limit(1);
   return rows[0];
 }

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { cart, openCounter, search } from './support/counter';
+import { cart, openCounter, search, total, unsynced } from './support/counter';
 
 /**
  * The barcode scanner at the counter (I1: "the scanner is a keyboard").
@@ -116,4 +116,107 @@ test('an unknown code never becomes a product by itself, and links in place', as
   await scan(page, packCode(gtin, 'NEXT1'));
   await expect(page.getByText('This code is not linked to a product yet')).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
+});
+
+/** Links `code` to a product from its Products page, as the owner does. */
+async function linkOnProducts(page: Page, productId: string, code: string): Promise<void> {
+  await page.goto(`/products/${productId}`);
+  await page.getByLabel('Scan or type a code').fill(code, { timeout: 30_000 });
+  await page.getByRole('button', { name: 'Link' }).click();
+  await expect(page.getByText(code)).toBeVisible();
+}
+
+test('a new product added from an unknown scan keeps the code', async ({ page }) => {
+  await openCounter(page);
+  const gtin = freshGtin13();
+  const name = `Scanned new ${Date.now()}`;
+
+  await scan(page, packCode(gtin, 'NEW1'));
+  await page.getByRole('option', { name: /Add a new product/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Quick item' });
+  // Saved as the product number, not this one pack's batch string.
+  await expect(dialog).toContainText(`0${gtin}`);
+  await dialog.getByLabel('Name').fill(name);
+  await dialog.getByLabel('Price').fill('120');
+  await dialog.getByLabel('Price').press('Enter');
+  await expect(cart(page)).toContainText(name);
+
+  // The next scan — another batch of the same pack — adds it directly.
+  await scan(page, packCode(gtin, 'NEW2'));
+  await expect(page.getByText('This code is not linked to a product yet')).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // One line, now two of it: 2 × Rs 120.
+  await expect(cart(page).getByRole('row').filter({ hasText: name })).toHaveCount(1);
+  await expect(total(page)).toHaveText('240.00');
+
+  // And the server has it, through sync: the catalog every counter loads
+  // carries the code on the new product.
+  await expect(unsynced(page)).toHaveCount(0, { timeout: 30_000 });
+  await expect
+    .poll(async () => {
+      const snapshot = (await (await page.request.get('/api/catalog')).json()) as {
+        products: Array<{ id: string; name: string }>;
+        barcodes: Array<{ barcode: string; productId: string }>;
+      };
+      const created = snapshot.products.find((row) => row.name === name);
+      return snapshot.barcodes.some(
+        (row) => row.barcode === `0${gtin}` && row.productId === created?.id,
+      );
+    })
+    .toBe(true);
+});
+
+test('a code another product owns is never put on a new one', async ({ page, context }) => {
+  await openCounter(page);
+  const owner = await anyStockedProduct(page);
+  const gtin = freshGtin13();
+
+  // Linked elsewhere after this counter built its index: the counter does not
+  // know, so the scan reads as unknown — the server still does.
+  const other = await context.newPage();
+  await linkOnProducts(other, owner.id, gtin);
+  await other.close();
+
+  await scan(page, packCode(gtin, 'CLASH'));
+  await page.getByRole('option', { name: /Add a new product/ }).click();
+  const dialog = page.getByRole('dialog', { name: 'Quick item' });
+  await expect(dialog.getByRole('alert')).toContainText(`already on ${owner.name}`);
+  await expect(dialog.getByRole('button', { name: /Save without the barcode/ })).toBeVisible();
+
+  await dialog.getByRole('button', { name: `Sell ${owner.name} instead` }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(cart(page)).toContainText(owner.name);
+});
+
+test('an expired pack is added, and said to be expired', async ({ page }) => {
+  await openCounter(page);
+  const product = await anyStockedProduct(page);
+  const gtin = freshGtin13();
+  await linkOnProducts(page, product.id, gtin);
+  await page.keyboard.press('F1');
+  await expect(page).toHaveURL(/\/sale$/);
+
+  // (17) 200131: this pack expired on 31 Jan 2020.
+  await scan(page, `010${gtin}17200131` + '10OLD1');
+  await expect(cart(page)).toContainText(product.name);
+  await expect(page.getByRole('status', { name: 'Expired pack' })).toContainText(
+    'expired on 31 Jan 2020',
+  );
+
+  // A pack in date says nothing.
+  await scan(page, packCode(gtin, 'FRESH1'));
+  await expect(page.getByRole('status', { name: 'Expired pack' })).toHaveCount(0);
+});
+
+test('scanning a pack on Receive Stock fills its batch and expiry', async ({ page }) => {
+  await openCounter(page);
+  const product = await anyStockedProduct(page);
+  const gtin = freshGtin13();
+  await linkOnProducts(page, product.id, gtin);
+
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+  await scan(page, `010${gtin}17300131` + '10B7Q41');
+  await expect(page.getByLabel('Expiry')).toHaveValue('2030-01-31');
+  await expect(page.getByLabel('Batch no.')).toHaveValue('B7Q41');
 });

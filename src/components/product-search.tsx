@@ -54,7 +54,8 @@ export function ProductSearch({
    * clears; a cancelled quick-add leaves the typing alone, because the operator
    * is most likely about to correct a spelling.
    */
-  onQuickAdd?: (name: string) => Promise<boolean>;
+  /** `code` is the unknown scanned code, when the quick item comes from one. */
+  onQuickAdd?: (name: string, code?: string) => Promise<boolean>;
   /**
    * Phase 10 §5 / Phase 6 §4 — links an unknown scanned code to a product, at
    * the unit the code is printed on. Absent where linking is not offered.
@@ -149,7 +150,8 @@ export function ProductSearch({
       resetBox();
     } else if (option === 'add') {
       // Never the code as the name: the operator types what the product is.
-      void quickAdd('');
+      // The code travels with it, so the new product keeps it.
+      void quickAdd('', parsed.query);
     }
   }
 
@@ -237,11 +239,11 @@ export function ProductSearch({
     }
   }
 
-  async function quickAdd(name: string = parsed.query): Promise<void> {
+  async function quickAdd(name: string = parsed.query, code?: string): Promise<void> {
     if (!onQuickAdd || parsed.query === '') {
       return;
     }
-    const added = await onQuickAdd(name);
+    const added = await onQuickAdd(name, code);
     if (added) {
       // Same reset choosing a hit performs: the item is in the cart, so the box
       // is ready for the next one (Phase 7 rule 1).

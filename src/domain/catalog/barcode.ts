@@ -111,3 +111,138 @@ export function looksLikeScannedCode(raw: string): boolean {
   const cleaned = cleanScannedCode(raw);
   return gtinFromElementString(cleaned) !== null || /^\d{6,}$/.test(cleaned);
 }
+
+/**
+ * What a GS1 element string says, field by field.
+ *
+ * Only the GTIN identifies the product (`barcodeKeys` and `barcodeToStore`
+ * use it alone). The other fields describe the one pack in the operator's
+ * hand: when it expires, which batch it came from. Receive Stock fills a
+ * line's batch and expiry from them, and the counter warns on an expired
+ * pack; neither changes what the code IS.
+ */
+export interface Gs1Fields {
+  /** AI 01 — the GTIN-14, check digit validated. */
+  readonly gtin: string;
+  /** AI 17 — expiry date, ISO `YYYY-MM-DD`. */
+  readonly expiry: string | null;
+  /** AI 11 — production date, ISO `YYYY-MM-DD`. */
+  readonly productionDate: string | null;
+  /** AI 10 — batch or lot number. */
+  readonly batch: string | null;
+  /** AI 21 — serial number. */
+  readonly serial: string | null;
+}
+
+/** Fixed-length AIs this parser reads, by data length. 15 (best before) is skipped. */
+const FIXED_AIS: Readonly<Record<string, number>> = { '01': 14, '11': 6, '15': 6, '17': 6 };
+/** Variable-length AIs, up to 20 characters, ended by GS or the end of the code. */
+const VARIABLE_AIS = new Set(['10', '21']);
+const VARIABLE_MAX = 20;
+const GS = '\u001d';
+
+/**
+ * YYMMDD → `YYYY-MM-DD`, or null if it is not a date. The century is 20YY:
+ * medicine dates sit within a few years of today. A day of `00` means the
+ * last day of that month — GS1's own rule for packs that print month and year.
+ */
+function gs1Date(yymmdd: string): string | null {
+  if (!/^\d{6}$/.test(yymmdd)) {
+    return null;
+  }
+  const year = 2000 + Number(yymmdd.slice(0, 2));
+  const month = Number(yymmdd.slice(2, 4));
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const day = yymmdd.slice(4, 6) === '00' ? lastDay : Number(yymmdd.slice(4, 6));
+  if (month < 1 || month > 12 || day < 1 || day > lastDay) {
+    return null;
+  }
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** The raw AI → value pairs, from the human-readable `(01)…` form. */
+function bracketedPairs(code: string): Array<[string, string]> | null {
+  const pairs: Array<[string, string]> = [];
+  const pattern = /\((\d{2})\)([^()]*)/gy;
+  let match: RegExpExecArray | null;
+  let consumed = 0;
+  while ((match = pattern.exec(code)) !== null) {
+    pairs.push([match[1]!, match[2]!.replace(/[\s\u001d]/g, '')]);
+    consumed = pattern.lastIndex;
+  }
+  return consumed === code.length && pairs.length > 0 ? pairs : null;
+}
+
+/**
+ * The raw AI → value pairs, from the string a scanner types.
+ *
+ * A variable-length field (batch, serial) ends at GS. A scanner that is not set
+ * to send GS drops it, and then the field can only run to the end of the code:
+ * GS1 puts variable fields last for exactly this reason, and the packs seen at
+ * the pilot do (`01…17…10<batch>`). A pack printing batch THEN serial, read by
+ * such a scanner, joins the two into one value that no parser can split; it is
+ * refused only when it is longer than a batch can be. Reading it right needs the
+ * scanner to transmit GS.
+ */
+function scannedPairs(code: string): Array<[string, string]> | null {
+  const pairs: Array<[string, string]> = [];
+  let at = 0;
+  while (at < code.length) {
+    if (code[at] === GS) {
+      at += 1;
+      continue;
+    }
+    const ai = code.slice(at, at + 2);
+    const fixed = FIXED_AIS[ai];
+    if (fixed !== undefined) {
+      const value = code.slice(at + 2, at + 2 + fixed);
+      if (value.length !== fixed) {
+        return pairs.length > 0 ? pairs : null;
+      }
+      pairs.push([ai, value]);
+      at += 2 + fixed;
+    } else if (VARIABLE_AIS.has(ai)) {
+      const end = code.indexOf(GS, at + 2);
+      const value = code.slice(at + 2, end === -1 ? code.length : end);
+      if (value.length === 0 || value.length > VARIABLE_MAX) {
+        // Not a batch or serial as GS1 defines one: stop rather than guess.
+        return pairs.length > 0 ? pairs : null;
+      }
+      pairs.push([ai, value]);
+      at = end === -1 ? code.length : end + 1;
+    } else {
+      // An AI this parser does not read: what came before it is still good.
+      return pairs.length > 0 ? pairs : null;
+    }
+  }
+  return pairs;
+}
+
+/**
+ * Splits a GS1 element string into its fields, or returns null when the code
+ * is not one: it must start with a GTIN (AI 01) whose check digit is valid,
+ * exactly the test `gtinFromElementString` applies. A plain EAN, an internal
+ * code or a typed name is never a GS1 string.
+ */
+export function parseGs1(raw: string): Gs1Fields | null {
+  const framed = raw.trim().replace(/^\][A-Za-z][0-9A-Za-z]/, '');
+  const pairs = framed.startsWith('(')
+    ? bracketedPairs(framed.replace(/\s/g, ''))
+    : scannedPairs(framed.replace(/[^\S\u001d]/g, ''));
+  const first = pairs?.[0];
+  if (!pairs || !first || first[0] !== '01' || !hasValidCheckDigit(first[1])) {
+    return null;
+  }
+  const value = (ai: string): string | null => pairs.find(([key]) => key === ai)?.[1] ?? null;
+  const date = (ai: string): string | null => {
+    const found = value(ai);
+    return found === null ? null : gs1Date(found);
+  };
+  return {
+    gtin: first[1],
+    expiry: date('17'),
+    productionDate: date('11'),
+    batch: value('10'),
+    serial: value('21'),
+  };
+}

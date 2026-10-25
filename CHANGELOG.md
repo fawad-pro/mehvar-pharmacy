@@ -2,6 +2,26 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Unknown barcodes keep their code; GS1 expiry and batch
+
+- "Add a new product" from an unknown scan now saves the scanned code with the
+  new product (as its GTIN, not one pack's batch string), so the next scan adds
+  it directly. It travels with the quick item through the outbox, so it works
+  offline too. A salesman's quick item keeps it as well; the owner sees it on
+  the product page.
+- A barcode is never put on a second product. Before saving, the dialog checks
+  the counter's own index and, online, the server; if another product owns the
+  code it says so and offers "Sell <that product> instead" or "Save without the
+  barcode". The server refuses too, and now matches a code under every form the
+  counter treats as the same item (GS1 string, GTIN-14, EAN-13): a pack's code
+  could previously be linked to one product while its box's EAN sat on another.
+- GS1 DataMatrix codes are read field by field: product number, expiry, batch,
+  serial. Receive Stock fills a line's batch and expiry from a scanned pack, and
+  the counter says so when a scanned pack's own code shows it has expired (the
+  sale is never blocked). A scanner that does not transmit the GS separator
+  cannot split a batch followed by a serial; packs printing the batch last
+  (as seen at the pilot) read correctly.
+
 ## Session — Receipt type at true size
 
 - The pilot printer's Chrome output came out at about 75% (the Windows test

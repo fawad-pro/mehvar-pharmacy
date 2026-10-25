@@ -26,6 +26,7 @@ import {
   type DraftLine,
   type PurchaseDraft,
 } from '@/client/purchases/draft';
+import { parseGs1 } from '@/domain/catalog/barcode';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { effectiveUnitCostPaisa, receivedQty } from '@/domain/purchases/costing';
 import { purchaseWarnings, type PurchaseWarning } from '@/domain/purchases/purchase-command';
@@ -154,7 +155,10 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     searchRef.current?.focus();
   }, []);
 
-  const onSelectProduct = useCallback((hit: SearchHit) => {
+  const onSelectProduct = useCallback((hit: SearchHit, rawQuery: string) => {
+    // A pack's 2D code carries its own batch and expiry: scanning it fills
+    // them in, still editable. A typed search leaves them empty, as before.
+    const pack = parseGs1(rawQuery);
     setPending({
       productId: hit.product.id,
       productName: hit.product.name,
@@ -166,8 +170,8 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     setQty('');
     setBonus('');
     setCost('');
-    setExpiry('');
-    setBatchNumber('');
+    setExpiry(pack?.expiry ?? '');
+    setBatchNumber(pack?.batch ?? '');
   }, []);
 
   function addLine(): void {

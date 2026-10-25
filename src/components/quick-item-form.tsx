@@ -28,6 +28,8 @@ export interface QuickItemDraft {
   name: string;
   pricePaisa: number;
   baseUnitName: string;
+  /** The scanned code the new product keeps; null when typed, or when it clashes. */
+  barcode: string | null;
 }
 
 /** The unit a shelf item is sold in when nobody has said otherwise. */
@@ -35,10 +37,22 @@ const DEFAULT_BASE_UNIT = 'item';
 
 export function QuickItemForm({
   initialName,
+  barcode = null,
+  owner = null,
+  onSellOwner,
   onCreate,
   onCancel,
 }: {
   initialName: string;
+  /** The unknown code this item was added from, saved with it. */
+  barcode?: string | null;
+  /**
+   * The product that already owns `barcode`, when one does. The code is then
+   * never put on the new product: the operator sells the owner instead, or
+   * saves the new product without the code.
+   */
+  owner?: { name: string } | null;
+  onSellOwner?: (() => void) | undefined;
   onCreate: (draft: QuickItemDraft) => void;
   onCancel: () => void;
 }) {
@@ -68,6 +82,8 @@ export function QuickItemForm({
       name: name.trim(),
       pricePaisa,
       baseUnitName: unit.trim() === '' ? DEFAULT_BASE_UNIT : unit.trim(),
+      // A code another product owns is never attached here.
+      barcode: owner ? null : barcode,
     });
   }
 
@@ -89,6 +105,27 @@ export function QuickItemForm({
         <p className="text-ink/60 mb-4 text-sm">
           Name and price is enough. The owner completes the rest later.
         </p>
+
+        {barcode && owner ? (
+          <div className="border-amber mb-3 rounded border px-3 py-2 text-sm" role="alert">
+            <p className="font-medium">This barcode is already on {owner.name}.</p>
+            <p className="text-ink/60 mt-0.5 text-xs">It will not be added to a second product.</p>
+            {onSellOwner ? (
+              <button
+                type="button"
+                onClick={onSellOwner}
+                className="text-green-600 mt-1 text-sm font-medium underline-offset-2 hover:underline"
+              >
+                Sell {owner.name} instead
+              </button>
+            ) : null}
+          </div>
+        ) : barcode ? (
+          <p className="text-ink/60 mb-3 text-xs">
+            Barcode <span className="numeral text-ink">{barcode}</span> — saved with this product,
+            so the next scan adds it directly.
+          </p>
+        ) : null}
 
         <label className="text-ink/60 mb-1 block text-xs" htmlFor="quick-name">
           Name
@@ -147,7 +184,7 @@ export function QuickItemForm({
             disabled={!ready}
             className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
           >
-            Add to sale — Enter
+            {barcode && owner ? 'Save without the barcode — Enter' : 'Add to sale — Enter'}
           </button>
         </div>
       </div>

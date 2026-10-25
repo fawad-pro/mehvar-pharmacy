@@ -6,6 +6,7 @@ import {
   cleanScannedCode,
   gtinFromElementString,
   looksLikeScannedCode,
+  parseGs1,
 } from './barcode';
 
 /** The pack scanned at the counter: (01) GTIN, (17) 2028-05-31, (10) batch. */
@@ -82,5 +83,65 @@ describe('a scanned code, as opposed to a typed name', () => {
     expect(looksLikeScannedCode('8964000101018')).toBe(true);
     expect(looksLikeScannedCode('panadol')).toBe(false);
     expect(looksLikeScannedCode('500')).toBe(false);
+  });
+});
+
+describe('the fields of a GS1 pack code', () => {
+  it('reads the pilot pack: product number, expiry and batch', () => {
+    expect(parseGs1('010896400159017017280331' + '10563C')).toEqual({
+      gtin: '08964001590170',
+      expiry: '2028-03-31',
+      productionDate: null,
+      batch: '563C',
+      serial: null,
+    });
+    expect(parseGs1(PACK)).toMatchObject({ gtin: GTIN14, expiry: '2028-05-31', batch: '892302XV' });
+  });
+
+  it('reads the human-readable form printed under the symbol', () => {
+    expect(parseGs1('(01)08964001590170(17)280331(10)563C')).toMatchObject({
+      gtin: '08964001590170',
+      expiry: '2028-03-31',
+      batch: '563C',
+    });
+  });
+
+  it('splits batch and serial when the scanner sends GS, with the AIM prefix', () => {
+    expect(parseGs1(']d2010896400159017021SN0042\u001d10B7Q41\u001d17300131')).toMatchObject({
+      serial: 'SN0042',
+      batch: 'B7Q41',
+      expiry: '2030-01-31',
+    });
+  });
+
+  it('reads a day of 00 as the last day of that month, leap years included', () => {
+    expect(parseGs1('010896400159017017280200')?.expiry).toBe('2028-02-29');
+    expect(parseGs1('010896400159017017270200')?.expiry).toBe('2027-02-28');
+  });
+
+  it('is not a GS1 string without a valid GTIN first', () => {
+    expect(parseGs1('010896400159017117280331')).toBeNull();
+    expect(parseGs1('8964000101018')).toBeNull();
+    expect(parseGs1('PND-500')).toBeNull();
+    expect(parseGs1('panadol')).toBeNull();
+  });
+
+  it('refuses a batch longer than GS1 allows rather than guessing where it ends', () => {
+    // Batch then serial with no GS between them, run together past 20 chars.
+    const fields = parseGs1('0108964001590170' + '10LOT12345678901' + '21SERIAL99');
+    expect(fields?.gtin).toBe('08964001590170');
+    expect(fields?.batch).toBeNull();
+  });
+
+  it('keeps what it read before a field it does not know', () => {
+    expect(parseGs1('010896400159017017280331' + '7003ABCDEFGHIJ')).toMatchObject({
+      gtin: '08964001590170',
+      expiry: '2028-03-31',
+      batch: null,
+    });
+  });
+
+  it('a bad date is no date, not a wrong one', () => {
+    expect(parseGs1('010896400159017017281399')?.expiry).toBeNull();
   });
 });

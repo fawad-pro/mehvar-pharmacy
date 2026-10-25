@@ -136,10 +136,20 @@ export async function createProduct(
  */
 export async function createQuickItem(
   scope: TenantScope,
-  input: { id: Uuid; name: string; pricePaisa: number; baseUnitName: string },
+  input: {
+    id: Uuid;
+    name: string;
+    pricePaisa: number;
+    baseUnitName: string;
+    /** The code scanned when the item was added, if it was added from a scan. */
+    barcode?: string | null;
+  },
 ): Promise<CatalogResult<Uuid>> {
   const existing = await findProduct(scope, input.id);
   if (existing) {
+    // A replay: the product is there. The code may not be, if the first
+    // delivery stopped between the two writes; attaching it is idempotent.
+    await attachQuickItemBarcode(scope, input.id, input.baseUnitName, input.barcode);
     return { ok: true, value: input.id };
   }
 
@@ -184,7 +194,29 @@ export async function createQuickItem(
     needsCompletion: true,
   });
 
+  await attachQuickItemBarcode(scope, input.id, validated.value.baseUnitName, input.barcode);
   return { ok: true, value: input.id };
+}
+
+/**
+ * The scanned code goes onto the new item at its one unit — unless another
+ * product already owns it. Then it is NOT attached: never onto the wrong
+ * product, and never a rejection, because this runs during sync and a sale may
+ * depend on the item (P2). The counter checks for a clash before saving and
+ * asks the operator; this is the backstop for one that arose meanwhile.
+ */
+async function attachQuickItemBarcode(
+  scope: TenantScope,
+  productId: Uuid,
+  baseUnitName: string,
+  barcode: string | null | undefined,
+): Promise<void> {
+  if (!barcode || barcode.trim() === '') {
+    return;
+  }
+  // `addBarcode` refuses a code another product owns; that refusal is the
+  // outcome wanted here, so its result is deliberately not escalated.
+  await addBarcode(scope, productId, { barcode, unitLevelName: baseUnitName });
 }
 
 export async function editProduct(

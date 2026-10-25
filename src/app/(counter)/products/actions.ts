@@ -20,7 +20,7 @@ import {
   setProductActive,
   type CatalogResult,
 } from '@/domain/catalog/writers';
-import { globalCatalogSize, searchGlobalCatalog } from '@/db/catalog-queries';
+import { findBarcodeOwner, globalCatalogSize, searchGlobalCatalog } from '@/db/catalog-queries';
 import {
   parsePackLevels,
   type CatalogSearchResult,
@@ -194,6 +194,22 @@ export async function saveBarcode(
 }
 
 export type LinkCodeOutcome = { ok: true } | { ok: false; message: string };
+
+/**
+ * Which product, if any, already owns a scanned code — asked by the quick-item
+ * dialog before it saves a new product with that code, so a stale counter index
+ * can never lead to a code being put on a second product. Read-only, so any
+ * signed-in user may ask: a salesman adds quick items too (W6).
+ */
+export async function barcodeOwnerAction(
+  code: string,
+): Promise<{ productId: string; productName: string } | null> {
+  const session = await currentSession();
+  if (!session) {
+    return null;
+  }
+  return (await findBarcodeOwner(scopeFor(session), code)) ?? null;
+}
 
 /**
  * Links a code scanned at the counter to a product — Phase 6 §4's "unknown
