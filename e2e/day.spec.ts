@@ -1,14 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import {
-  cart,
-  DEMO,
-  lastSale,
-  openCounter,
-  printedReceipt,
-  search,
-  unsynced,
-} from './support/counter';
+import { cart, DEMO, openCounter, payAndSettle, printedReceipt, search } from './support/counter';
 
 /**
  * Day 7's screens: W4 returns, W10 day close, W11 the owner phone view, and
@@ -19,29 +11,12 @@ import {
  * so F9/F2/Settings are reachable here without a PIN switch first.
  */
 
-/**
- * Sells one Panadol and waits until the sale has synced and the screen has
- * re-rendered for it, returning the "Saved — …" text.
- *
- * The wait is about the test, not the product: when the pump delivers a sale,
- * `RefreshOnSync` refreshes the server components, and Next holds a function
- * key's navigation until that refresh lands. A spec that presses F2 inside
- * that window is measuring the refresh, not the key. Known product risk: on a
- * slow server the keys feel dead for as long as the refresh takes.
- */
+/** Sells one Panadol and waits for it to settle — see `payAndSettle`. */
 async function sellPanadol(page: Page): Promise<string | null> {
-  const refreshed = page.waitForResponse((response) => /\/sale\?_rsc=/.test(response.url()), {
-    timeout: 30_000,
-  });
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText('Panadol');
-  await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
-  const saved = await lastSale(page).textContent();
-  await expect(unsynced(page)).toHaveCount(0, { timeout: 30_000 });
-  await (await refreshed).finished();
-  return saved;
+  return payAndSettle(page);
 }
 
 test('W4: a return finds the sale, restocks a batch, and prints a refund receipt', async ({

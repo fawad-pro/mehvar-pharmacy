@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { SEED_PRODUCTS } from '../scripts/db/seed-data';
 
-import { cart, lastSale, openCounter, search, unsynced } from './support/counter';
+import { cart, lastSale, openCounter, payAndSettle, search, unsynced } from './support/counter';
 
 /**
  * Day 6's "done when", verbatim: "a 20-line invoice enters at working rhythm
@@ -129,9 +129,8 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   await search(page).fill('disprin');
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText('Disprin');
-  await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
-  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+  // Settled before the next key: see `payAndSettle`.
+  expect(await payAndSettle(page)).toMatch(/Saved — A-\d+/);
 
   // Back to the invoice — nothing lost.
   await page.keyboard.press('F7');

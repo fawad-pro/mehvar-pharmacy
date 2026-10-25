@@ -93,7 +93,12 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   // stays visible instead of the supplier vanishing from the panel.
   await page.keyboard.press('F7');
   await expect(page).toHaveURL(/\/purchases$/);
-  const owedRow = page.getByRole('listitem').filter({ hasText: supplier });
+  // The owed row links to the supplier's account. "Received recently" names
+  // the supplier too, and matching both made this flaky: strict mode failed
+  // whenever that list had loaded first.
+  const owedRow = page.locator('li', {
+    has: page.locator('a[href^="/purchases/suppliers/"]', { hasText: supplier }),
+  });
   // 500 invoiced − 100 corrected − 40 credited for the return.
   await expect(owedRow).toContainText('360.00');
   await owedRow.getByRole('button', { name: 'Pay' }).click();
