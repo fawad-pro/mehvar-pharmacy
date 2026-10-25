@@ -34,17 +34,17 @@ test('the receipt prints at the 80 mm roll’s printable width, in solid black',
   );
   expect(new Set(colours)).toEqual(new Set(['rgb(0, 0, 0)']));
 
-  // Body text is at least 12px; the amount due is the largest and boldest.
+  // Body text is at least 13px; the amount due is the largest figure.
   const due = receipt.getByText('Amount Due').locator('..');
   const dueStyle = await due.evaluate((el) => {
     const style = getComputedStyle(el);
     return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
   });
-  expect(dueStyle.size).toBeGreaterThanOrEqual(18);
+  expect(dueStyle.size).toBeGreaterThanOrEqual(16);
   // Largest by size, not weight: extra-bold bled on the thermal head.
   expect(dueStyle.weight).toBeLessThanOrEqual(500);
   const bodySize = await receipt.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  expect(bodySize).toBeGreaterThanOrEqual(14);
+  expect(bodySize).toBeGreaterThanOrEqual(13);
 
   // The owner's layout: date and time directly under the shop's own lines,
   // items in QTY | ITEM | AMT columns with a bare number under QTY, the

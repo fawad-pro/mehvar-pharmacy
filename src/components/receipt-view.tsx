@@ -32,17 +32,19 @@ import type { ReceiptData } from '@/client/print/receipt';
 
 export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
   return (
-    // Sized for a 203-dpi thermal head (print CSS: 72 mm, solid black). 14px
-    // body with heavier weights: thin 11px strokes came out one dot wide, and
-    // 13px still read a little small on the pilot counter's paper.
-    <div id="printable-receipt" className="font-sans text-[14px] leading-snug font-medium">
+    // Sized for a 203-dpi thermal head (print CSS: 72 mm, solid black). 13px
+    // body with heavier weights: thin 11px strokes came out one dot wide. The
+    // pilot judged sizes while Chrome printed this driver at ~75%; once printed
+    // at true size (Scale 133, OPERATIONS.md) 14px read too large, so every
+    // size but the shop name stepped down one.
+    <div id="printable-receipt" className="font-sans text-[13px] leading-snug font-medium">
       <header className="text-center">
         {receipt.tenantHeaderLines.map((line, index) => (
-          <p key={index} className={index === 0 ? 'text-[18px] font-bold' : 'text-[13px]'}>
+          <p key={index} className={index === 0 ? 'text-[18px] font-bold' : 'text-[12px]'}>
             {line}
           </p>
         ))}
-        <p className="text-[13px]">
+        <p className="text-[12px]">
           {receipt.dateTime.toLocaleDateString('en-PK')}{' '}
           {receipt.dateTime.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -56,9 +58,9 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
         <>
           {/* One grid for every line, so the columns line up down the slip. */}
           <div className="grid grid-cols-[auto_1fr_auto] gap-x-2 gap-y-1">
-            <span className="text-[13px] font-bold">QTY</span>
-            <span className="text-[13px] font-bold">ITEM</span>
-            <span className="text-right text-[13px] font-bold">AMT</span>
+            <span className="text-[12px] font-bold">QTY</span>
+            <span className="text-[12px] font-bold">ITEM</span>
+            <span className="text-right text-[12px] font-bold">AMT</span>
             {receipt.lines.map((line, index) => (
               <Fragment key={index}>
                 <span className="numeral">{line.quantity}</span>
@@ -112,12 +114,12 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
       ) : null}
 
       {receipt.pendingNote ? (
-        <p className="mt-1 text-center text-[13px] italic">{receipt.pendingNote}</p>
+        <p className="mt-1 text-center text-[12px] italic">{receipt.pendingNote}</p>
       ) : null}
 
       <Rule />
 
-      <footer className="text-center text-[13px]">
+      <footer className="text-center text-[12px]">
         <p>
           Receipt {receipt.receiptNumber} · Served by {receipt.salesmanName}
         </p>
@@ -162,15 +164,15 @@ function Row({
   amountPaisa: number;
   bold?: boolean;
   /**
-   * The one figure the customer pays — the largest on the slip, by size alone:
-   * extra-bold at 18px bled on the thermal head into something like spilled
+   * The one figure the customer pays — the largest figure on the slip, by size
+   * alone: extra-bold at 18px bled on the thermal head into something like spilled
    * ink, so it keeps the body's weight.
    */
   emphasis?: boolean;
 }) {
   return (
     <div
-      className={`flex justify-between ${emphasis ? 'mt-0.5 text-[18px]' : bold ? 'font-bold' : ''}`}
+      className={`flex justify-between ${emphasis ? 'mt-0.5 text-[16px]' : bold ? 'font-bold' : ''}`}
     >
       <span>{label}</span>
       <span className="numeral">{formatPaisa(paisa(amountPaisa))}</span>

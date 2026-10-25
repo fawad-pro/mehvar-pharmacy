@@ -77,21 +77,30 @@ Verified on a **Speed-X SP-200U** (USB, 80 mm), 2026-10:
 | Paper size    | `Printer Paper (80 x 3276mm)`, the driver's 80 mm continuous roll       |
 | Windows check | The Windows test page prints clearly, so the head and paper are working |
 
-Observed on that printer, before the fix of 2026-10-25: the 50 mm bar printed
-37–38 mm and the slip sat on the left of the roll. The cause was the
-receipt's own page size, which Chrome had been ignoring (an invalid CSS rule);
-it is now set exactly when the receipt prints. In Chrome's print dialog, under
-**More settings**, use **Margins: None** and **Scale: Default**, with the
-roll's paper size; Chrome remembers these per printer. Then print the test
-receipt and measure the bar again. If it still prints short with those
-settings, check the POS-80 driver's Printing Preferences for its own scaling,
-and report what you find.
+Chrome print dialog on that printer (**More settings**; Chrome remembers these
+per printer), as found during the pilot, 2026-10-25:
+
+| Setting    | Value                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| Margins    | **None.** With margins on, a print once fed metres of blank paper         |
+| Paper size | **80 x 297mm** or **80(72) x 210mm**. Never **80 x 3276mm** (3.3 m pages) |
+| Scale      | **Custom, 133**                                                           |
+
+Why 133: Chrome printed this driver at about 75% (a 50 mm bar came out
+37–38 mm, pinned to the left), while the Windows test page prints centred and
+full width. 140 filled the roll; 133 is the exact inverse of 75%, so the
+receipt prints at its designed size. That figure has not yet been confirmed
+with a ruler: print the test receipt and check that the 50 mm bar measures
+50 mm. Why Chrome shrinks this driver's output and Windows does not is not
+known; a custom scale is a per-printer setting, and silent kiosk printing (no
+dialog) has not been tested with it.
 
 Not yet verified on that printer, so treat this as something to try, not a
 fix: if the bars or text still look grey or speckled, set the driver's
-halftoning option to its text or none setting. The driver exposes no density setting that has been found. If text
-is still faint once the bars measure true, the remaining cause is the printer's
-head heat or paper, which software cannot change.
+halftoning option to its text or none setting. The driver exposes no density
+setting that has been found. If text is still faint once the bars measure
+true, the remaining cause is the printer's head heat or paper, which software
+cannot change.
 
 If anything fails, Setup names the step that failed and points at the log. **Do
 not hand the machine over.** Send `C:\ProgramData\Mehvar\logs\install-*.log`

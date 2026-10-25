@@ -2,6 +2,16 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Receipt type at true size
+
+- The pilot printer's Chrome output came out at about 75% (the Windows test
+  page does not), so every size judged so far was seen shrunk. With Chrome's
+  Scale at 133 the receipt prints at its designed size, where 14px read too
+  large: every size except the shop name is one step smaller (13px body,
+  12px header and footer lines, 16px Amount Due). OPERATIONS.md records the
+  Chrome settings found for the SP-200U: Margins None, paper 80 x 297mm or
+  80(72) x 210mm (never 80 x 3276mm), Scale 133.
+
 ## Session — The receipt prints at true size
 
 - The slip printed at about 75% and sat on the left of the roll: a 50 mm test
