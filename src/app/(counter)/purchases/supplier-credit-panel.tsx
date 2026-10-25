@@ -21,6 +21,7 @@
  * a module that reaches the database (the rule recorded on Day 4/Day 6).
  */
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
 import { supplierPaymentEffect } from '@/domain/suppliers/supplier-position';
@@ -108,7 +109,7 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
           <ul className="border-line divide-line divide-y rounded border text-sm">
             {inCredit.map((row) => (
               <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
-                <span className="font-medium">{row.name}</span>
+                <SupplierName id={row.id} name={row.name} />
                 {row.phone ? <span className="text-ink/50 text-xs">{row.phone}</span> : null}
                 <span className="numeral ml-auto font-medium">
                   {formatPaisa(paisa(row.creditPaisa), { withSymbol: true })}
@@ -127,12 +128,27 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
   );
 }
 
-function SupplierCreditRow({
+/** The way into the supplier's account, where every payment is listed (T4). */
+function SupplierName({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      href={`/purchases/suppliers/${id}`}
+      className="text-green-700 font-medium underline-offset-2 hover:underline"
+    >
+      {name}
+    </Link>
+  );
+}
+
+export function SupplierCreditRow({
   row,
   onSettled,
+  onAccountPage = false,
 }: {
   row: SupplierRow;
   onSettled: () => void;
+  /** On the account itself the name would link to the page it is on. */
+  onAccountPage?: boolean;
 }) {
   const [paying, setPaying] = useState(false);
   const [amount, setAmount] = useState('');
@@ -177,7 +193,11 @@ function SupplierCreditRow({
   return (
     <li className="px-3 py-2">
       <div className="flex flex-wrap items-baseline gap-x-3">
-        <span className="font-medium">{row.name}</span>
+        {onAccountPage ? (
+          <span className="font-medium">{row.name}</span>
+        ) : (
+          <SupplierName id={row.id} name={row.name} />
+        )}
         {row.phone ? <span className="text-ink/50 text-xs">{row.phone}</span> : null}
         <span className="numeral text-amber ml-auto font-medium">
           {formatPaisa(paisa(row.balancePaisa), { withSymbol: true })}

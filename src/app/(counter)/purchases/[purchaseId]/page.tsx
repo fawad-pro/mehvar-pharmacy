@@ -8,9 +8,11 @@ import {
   supplierReturnsForBatches,
 } from '@/db/correction-queries';
 import { findPurchase } from '@/db/purchase-queries';
+import { supplierBalance } from '@/db/supplier-queries';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 import { describeQuantity } from '@/lib/quantity';
+import type { Uuid } from '@/lib/uuid';
 
 /**
  * One received invoice, expanded.
@@ -45,9 +47,15 @@ export default async function PurchaseDetailPage({
   }
   // [PCN-009] What has been corrected or sent back since, shown beside the
   // invoice as entered — never instead of it (T2).
-  const [corrections, lineBatches] = await Promise.all([
+  const [corrections, lineBatches, accountPaisa] = await Promise.all([
     correctionsForPurchase(scope, purchaseId),
     batchesForPurchase(scope, purchaseId),
+    // Where the supplier's account stands NOW. "On credit" below is what this
+    // invoice left owing when it arrived; payments made since are against the
+    // account, so the invoice says where to see them rather than going stale.
+    purchase.supplierId && purchase.creditTracked
+      ? supplierBalance(scope, purchase.supplierId as Uuid)
+      : Promise.resolve(null),
   ]);
   const returns = await supplierReturnsForBatches(
     scope,
@@ -203,6 +211,26 @@ export default async function PurchaseDetailPage({
               </span>
             </div>
           </>
+        ) : null}
+        {accountPaisa !== null && purchase.supplierId ? (
+          <p className="text-ink/70 border-line mt-1 flex flex-wrap justify-between gap-x-3 border-t pt-2">
+            <span>
+              {purchase.supplierName} account today:{' '}
+              <span className={accountPaisa > 0 ? 'text-amber font-medium' : 'font-medium'}>
+                {accountPaisa > 0
+                  ? `you owe ${formatPaisa(paisa(accountPaisa), { withSymbol: true })}`
+                  : accountPaisa < 0
+                    ? `they hold ${formatPaisa(paisa(-accountPaisa), { withSymbol: true })} credit for you`
+                    : 'settled'}
+              </span>
+            </span>
+            <Link
+              href={`/purchases/suppliers/${purchase.supplierId}`}
+              className="text-green-600 hover:underline"
+            >
+              Payments and account →
+            </Link>
+          </p>
         ) : null}
         {purchase.creditTracked ? null : (
           <p className="text-ink/60 text-xs">

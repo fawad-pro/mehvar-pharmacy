@@ -2,6 +2,18 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Supplier accounts: every payment can be found again
+
+- Each supplier has an account page (Purchases → a supplier's name, or
+  "Payments and account" on any invoice). It lists every invoice, correction,
+  return and payment with the date, time and who recorded it, and a running
+  balance that ends on the figure at the top. Before this, paying the last
+  Rs 500 of an invoice from "Owed to suppliers" lowered the balance and was
+  shown nowhere.
+- An invoice page now says where the supplier's account stands today, beside
+  what that invoice left on credit when it arrived.
+- The account takes payments too, the way a customer's does.
+
 ## Session — Sync backs off when the server cannot store a sale
 
 - A sale the server answers but cannot store (a database missing a

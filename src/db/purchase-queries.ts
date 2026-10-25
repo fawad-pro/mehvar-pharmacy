@@ -254,6 +254,7 @@ export interface PurchaseDetailLine {
 
 export interface PurchaseDetail {
   readonly id: string;
+  readonly supplierId: string | null;
   readonly supplierName: string | null;
   readonly invoiceRef: string | null;
   readonly invoiceDate: string | null;
@@ -287,6 +288,7 @@ export async function findPurchase(
   const [head] = await scope.db
     .select({
       id: purchases.id,
+      supplierId: purchases.supplierId,
       supplierName: suppliers.name,
       invoiceRef: purchases.invoiceRef,
       invoiceDate: purchases.invoiceDate,

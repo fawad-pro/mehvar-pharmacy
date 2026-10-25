@@ -11,18 +11,21 @@
  * and it is checked by making each term move and asserting the balance follows.
  */
 
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { commitPurchase, type PurchaseCommand } from '@/domain/purchases/commit-purchase';
+import { commitPurchaseCorrection } from '@/domain/purchases/commit-purchase-correction';
 import { commitSupplierPayment } from '@/domain/suppliers/commit-supplier-payment';
 import { commitSupplierReturn } from '@/domain/suppliers/commit-supplier-return';
 import {
   balancesBySupplier,
   supplierBalance,
   supplierBook,
+  supplierLedger,
   supplierPositions,
 } from '@/db/supplier-queries';
-import { purchaseLines, purchases, suppliers } from '@/db/schema';
+import { batches, purchaseLines, purchases, suppliers } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import {
@@ -184,6 +187,83 @@ suite('supplier credit against Postgres', () => {
     expect(result.ok).toBe(true);
     const row = (await tenant.scope.select(purchases)).find((p) => p.id === command.purchaseId);
     expect(row?.creditTracked).toBe(true);
+  });
+
+  /*
+   * T4 for suppliers: the balance expands into the rows that produced it. Until
+   * the account existed, the Rs 500 that cleared an invoice was counted in the
+   * balance and shown nowhere. Every kind of row moves here at once, plus a
+   * pre-tracking invoice that must stay out — and the rows must sum to the
+   * balance exactly (Day 8: a figure and its expansion are tested as one).
+   */
+  it('the account lists every invoice, correction, return and payment, and sums to the balance', async () => {
+    await historicalPurchase();
+    const paidInPart = purchase({ cashPaidPaisa: 18_000 });
+    await commitPurchase(tenant.scope, paidInPart);
+    const corrected = purchase({ cashPaidPaisa: 28_000 });
+    await commitPurchase(tenant.scope, corrected);
+
+    const correctedLine = corrected.lines[0]!.lineId;
+    expect(
+      (
+        await commitPurchaseCorrection(tenant.scope, {
+          correctionId: uuidv7(),
+          purchaseLineId: correctedLine,
+          qtyBase: 100,
+          bonusQtyBase: 0,
+          unitCostPaisa: 250,
+          note: 'cost typed wrong',
+        })
+      ).ok,
+    ).toBe(true);
+    const [batch] = await tenant.scope.select(
+      batches,
+      eq(batches.sourceId, paidInPart.lines[0]!.lineId),
+    );
+    expect(
+      (
+        await commitSupplierReturn(tenant.scope, {
+          returnId: uuidv7(),
+          batchId: batch!.id as Uuid,
+          qtyBase: 10,
+          creditPaisa: 2_800,
+          note: 'near expiry',
+        })
+      ).ok,
+    ).toBe(true);
+    const paymentId = uuidv7();
+    await commitSupplierPayment(tenant.scope, {
+      paymentId,
+      supplierId,
+      amountPaisa: 7_200,
+      purchaseId: null,
+      note: 'the rest',
+    });
+
+    const ledger = await supplierLedger(tenant.scope, supplierId);
+    expect(ledger.map((row) => row.kind).sort()).toEqual(
+      ['correction', 'invoice', 'invoice', 'payment', 'return'].sort(),
+    );
+    // 10,000 left on credit − 3,000 corrected − 2,800 returned − 7,200 paid.
+    const balance = await supplierBalance(tenant.scope, supplierId);
+    expect(balance).toBe(-3_000);
+    expect(ledger.reduce((sum, row) => sum + row.amountPaisa, 0)).toBe(balance);
+
+    const invoice = ledger.find(
+      (row) => row.kind === 'invoice' && row.id === paidInPart.purchaseId,
+    );
+    expect(invoice).toMatchObject({
+      invoiceTotalPaisa: 28_000,
+      paidNowPaisa: 18_000,
+      amountPaisa: 10_000,
+    });
+    const payment = ledger.find((row) => row.id === paymentId);
+    expect(payment).toMatchObject({ kind: 'payment', amountPaisa: -7_200, note: 'the rest' });
+    expect(payment?.byName).toBeTruthy();
+    // The invoice from before supplier credit is not part of the account.
+    expect(
+      ledger.some((row) => row.kind === 'invoice' && row.invoiceRef === 'BEFORE-SUPPLIER-CREDIT'),
+    ).toBe(false);
   });
 
   it('overpayment leaves an advance (a negative balance)', async () => {

@@ -39,7 +39,10 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
 
   // Open the invoice from the recent list.
+  // From "Received recently": the supplier's name in "Owed to suppliers" is a
+  // link too, to the supplier's account.
   await page
+    .getByRole('region', { name: 'Received recently' })
     .getByRole('link', { name: new RegExp(supplier) })
     .first()
     .click();

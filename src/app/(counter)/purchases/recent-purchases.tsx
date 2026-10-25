@@ -54,7 +54,7 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
   }
 
   return (
-    <div>
+    <section aria-label="Received recently">
       <h2 className="text-green-900 mb-2 font-medium">Received recently</h2>
       {rows.length === 0 ? (
         <p className="text-ink/50 text-sm">Nothing received yet.</p>
@@ -87,6 +87,6 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

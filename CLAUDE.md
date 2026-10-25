@@ -607,6 +607,18 @@ exception visibility.
   valid check digit, and GTIN-13 ⇄ `0`-prefixed GTIN-14 as the only
   equivalence. Indicator digits 1–9 are other packaging levels.
 
+## Things the supplier account established
+
+- **Walk the whole workflow, not the screen you changed** — the owner's
+  standing instruction. Supplier credit had a balance, a Pay button and tests
+  for both, and a payment still vanished: nothing listed it. Before calling a
+  money workflow done, follow the money from where it is entered to every place
+  someone would look for it afterwards, and back.
+- **A balance with a Pay button needs its expansion** (T4). `supplierLedger`
+  is to `supplierBalance` what `customerLedger` is to `customerBalance`, and
+  `supplier-balance.integration` asserts the rows sum to the balance (Day 8).
+  A new term in one is a new term in the other.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
