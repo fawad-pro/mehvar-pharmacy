@@ -9,8 +9,12 @@
 
 export interface ReceiptLine {
   readonly name: string;
-  /** Natural language, W5: "1 strip + 4 tab" — never the raw base-unit count. */
-  readonly quantityLabel: string;
+  /**
+   * How many, as sold: the count of the unit the operator entered (2 strips
+   * prints 2). The slip prints the number alone under QTY — the owner's
+   * choice; the unit stays on the screen and the receipt detail page.
+   */
+  readonly quantity: number;
   readonly amountPaisa: number;
 }
 
@@ -75,7 +79,7 @@ export function testReceipt(input: {
     salesmanName: input.salesmanName,
     tenantHeaderLines: input.tenantHeaderLines,
     tenantFooterLine: input.tenantFooterLine,
-    lines: [{ name: 'Test receipt — not a sale', quantityLabel: '1', amountPaisa: 0 }],
+    lines: [{ name: 'Test receipt — not a sale', quantity: 1, amountPaisa: 0 }],
     subtotalPaisa: 0,
     totalPaisa: 0,
     calibration: true,

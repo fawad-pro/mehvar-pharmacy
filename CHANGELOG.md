@@ -2,6 +2,16 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Receipt layout from the pilot
+
+- Items print as columns, QTY | ITEM | AMT, with the quantity as a plain
+  number (2 strips prints 2). The unit word is no longer on the slip; it stays
+  on the screen and on the receipt detail page.
+- The date and time print under the shop's phone number; the salesman is named
+  beside the receipt number ("Served by …"); the mark reads MEHVAR.
+- Type is one step larger: 14px body, 18px shop name, 13px header and footer
+  lines. Amount Due stays at 18px, extra-bold.
+
 ## Session — Supplier accounts: every payment can be found again
 
 - Each supplier has an account page (Purchases → a supplier's name, or

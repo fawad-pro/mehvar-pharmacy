@@ -194,7 +194,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
         const original = lines.find((line) => line.saleLineId === chosen.saleLineId)!;
         return {
           name: original.productName,
-          quantityLabel: `${chosen.qtyBase} ${original.baseUnitName}`,
+          quantity: chosen.qtyBase,
           amountPaisa: -refundForLine(original, chosen.qtyBase),
         };
       }),

@@ -9,6 +9,11 @@
  *    mini-statement… footer = receipt number, date/time, salesman name,
  *    configurable thank-you line, and a modest 'Mehvar' mark."
  *
+ * Laid out to the owner's pilot feedback: the date and time sit under the
+ * shop's own lines, items are columns (QTY | ITEM | AMT) rather than a name
+ * with its quantity beneath, and the salesman is named beside the receipt
+ * number.
+ *
  * Kiosk silent printing (`--kiosk-printing`) is a Chrome launch flag configured
  * once at physical installation (Phase 12 §6); this component's job is only to
  * be the thing that prints correctly when `window.print()` is called — on a
@@ -19,22 +24,28 @@
  * `@media print` rule in `globals.css`.
  */
 
+import { Fragment } from 'react';
+
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import type { ReceiptData } from '@/client/print/receipt';
 
 export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
   return (
-    // Sized for a 203-dpi thermal head (print CSS: 72 mm, solid black). 13px
-    // body with heavier weights: thin 11px strokes came out one dot wide,
-    // which is what read as small and faint next to the driver's test page.
-    <div id="printable-receipt" className="font-sans text-[13px] leading-snug font-medium">
+    // Sized for a 203-dpi thermal head (print CSS: 72 mm, solid black). 14px
+    // body with heavier weights: thin 11px strokes came out one dot wide, and
+    // 13px still read a little small on the pilot counter's paper.
+    <div id="printable-receipt" className="font-sans text-[14px] leading-snug font-medium">
       <header className="text-center">
         {receipt.tenantHeaderLines.map((line, index) => (
-          <p key={index} className={index === 0 ? 'text-[16px] font-bold' : 'text-[12px]'}>
+          <p key={index} className={index === 0 ? 'text-[18px] font-bold' : 'text-[13px]'}>
             {line}
           </p>
         ))}
+        <p className="text-[13px]">
+          {receipt.dateTime.toLocaleDateString('en-PK')}{' '}
+          {receipt.dateTime.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })}
+        </p>
       </header>
 
       <Rule />
@@ -43,24 +54,30 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
 
       {receipt.lines && receipt.lines.length > 0 ? (
         <>
-          {receipt.lines.map((line, index) => (
-            <div key={index} className="pt-1">
-              <p className="font-bold">{line.name}</p>
-              <div className="flex justify-between">
-                <span>{line.quantityLabel}</span>
-                <span className="numeral font-semibold">
+          {/* One grid for every line, so the columns line up down the slip. */}
+          <div className="grid grid-cols-[auto_1fr_auto] gap-x-2 gap-y-1">
+            <span className="text-[13px] font-bold">QTY</span>
+            <span className="text-[13px] font-bold">ITEM</span>
+            <span className="text-right text-[13px] font-bold">AMT</span>
+            {receipt.lines.map((line, index) => (
+              <Fragment key={index}>
+                <span className="numeral">{line.quantity}</span>
+                <span className="font-bold break-words">{line.name}</span>
+                <span className="numeral text-right font-semibold">
                   {formatPaisa(paisa(line.amountPaisa))}
                 </span>
-              </div>
-            </div>
-          ))}
+              </Fragment>
+            ))}
+          </div>
 
           <Rule />
 
           {receipt.subtotalPaisa !== undefined ? (
             <Row label="Subtotal" amountPaisa={receipt.subtotalPaisa} />
           ) : null}
-          {receipt.discountPaisa ? <Row label="Discount" amountPaisa={-receipt.discountPaisa} /> : null}
+          {receipt.discountPaisa ? (
+            <Row label="Discount" amountPaisa={-receipt.discountPaisa} />
+          ) : null}
           {receipt.totalPaisa !== undefined ? (
             <Row label="Amount Due" amountPaisa={receipt.totalPaisa} emphasis />
           ) : null}
@@ -95,20 +112,17 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
       ) : null}
 
       {receipt.pendingNote ? (
-        <p className="mt-1 text-center text-[12px] italic">{receipt.pendingNote}</p>
+        <p className="mt-1 text-center text-[13px] italic">{receipt.pendingNote}</p>
       ) : null}
 
       <Rule />
 
-      <footer className="text-center text-[12px]">
-        <p>Receipt {receipt.receiptNumber}</p>
+      <footer className="text-center text-[13px]">
         <p>
-          {receipt.dateTime.toLocaleDateString('en-PK')}{' '}
-          {receipt.dateTime.toLocaleTimeString('en-PK', { hour: '2-digit', minute: '2-digit' })} ·{' '}
-          {receipt.salesmanName}
+          Receipt {receipt.receiptNumber} · Served by {receipt.salesmanName}
         </p>
         <p className="mt-1">{receipt.tenantFooterLine}</p>
-        <p className="mt-1 font-bold">Mehvar</p>
+        <p className="mt-1 font-bold">MEHVAR</p>
       </footer>
 
       {receipt.calibration ? <Calibration /> : null}

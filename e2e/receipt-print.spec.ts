@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { openCounter, printedReceipt } from './support/counter';
+import { DEMO, openCounter, printedReceipt } from './support/counter';
 
 /**
  * The receipt as the print engine sees it — ADR-6, Phase 10 §7.
@@ -43,7 +43,22 @@ test('the receipt prints at the 80 mm roll’s printable width, in solid black',
   expect(dueStyle.size).toBeGreaterThanOrEqual(18);
   expect(dueStyle.weight).toBeGreaterThanOrEqual(700);
   const bodySize = await receipt.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
-  expect(bodySize).toBeGreaterThanOrEqual(13);
+  expect(bodySize).toBeGreaterThanOrEqual(14);
+
+  // The owner's layout: date and time directly under the shop's own lines,
+  // items in QTY | ITEM | AMT columns with a bare number under QTY, the
+  // salesman beside the receipt number, and the mark in capitals.
+  await expect(receipt.locator('header p').last()).toHaveText(
+    /^\d{1,2}\/\d{1,2}\/\d{4} \d{1,2}:\d{2}\s?(am|pm)$/i,
+  );
+  for (const heading of ['QTY', 'ITEM', 'AMT']) {
+    await expect(receipt.getByText(heading, { exact: true })).toBeVisible();
+  }
+  await expect(
+    receipt.getByText('Test receipt — not a sale').locator('xpath=preceding-sibling::span[1]'),
+  ).toHaveText('1');
+  await expect(receipt.locator('footer')).toContainText(`Served by ${DEMO.owner}`);
+  await expect(receipt.locator('footer')).toContainText('MEHVAR');
 
   // The test receipt's measured bars, at true size.
   const check = receipt.getByRole('region', { name: 'Printer check' });

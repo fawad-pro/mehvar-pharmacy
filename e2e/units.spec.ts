@@ -59,6 +59,10 @@ test('a box priced by the owner sells at exactly that price (PCN-012)', async ({
   await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
   await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('500.00');
-  await expect(printedReceipt(page)).toContainText('2 box');
+  // The slip prints the count as sold under QTY — 2 (boxes), never the 28
+  // capsules they hold (P9). The unit word is off the slip by the owner's choice.
+  await expect(
+    printedReceipt(page).getByText(name).locator('xpath=preceding-sibling::span[1]'),
+  ).toHaveText('2');
   await expect(printedReceipt(page)).toContainText('500.00');
 });

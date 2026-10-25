@@ -290,8 +290,8 @@ export function SaleSurface() {
         tenantFooterLine: receiptContext.tenantFooterLine,
         lines: soldLines.map((line) => ({
           name: line.name,
-          // As sold: "2 strip", never re-expressed as tablets (P9).
-          quantityLabel: `${line.unitCount} ${line.enteredUnitLevel}`,
+          // As sold: 2 strips is 2, never re-expressed as tablets (P9).
+          quantity: line.unitCount,
           amountPaisa: lineTotal(line),
         })),
         // The receipt's Subtotal is the GROSS figure — before any line's own
