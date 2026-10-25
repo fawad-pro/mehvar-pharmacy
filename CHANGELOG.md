@@ -2,6 +2,23 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Scanning on Receive Stock moves to the next product
+
+- Scanning the next product while the cursor sat in a line's Qty, Unit cost or
+  any other field typed the barcode into that field: Qty filled with thirteen
+  digits, the previous pack's expiry and batch stayed on screen, and with the
+  cursor in Unit cost the scanner's Enter could add a line costing trillions.
+  A scan is now recognised wherever the cursor is (by its speed, with the code
+  confirmed against the catalogue), the field is put back as it was, a
+  complete line is added, and the scanned product's line opens with its own
+  batch and expiry. An incomplete line is kept and named, never lost.
+- Backstop: a quantity of more than 100,000 units or a price above Rs 1,000,000
+  a unit is refused as "looks like a barcode".
+- A barcode linked while a counter was fetching catalogue changes could be
+  missed by every later update, leaving the code unknown at the counter until
+  a full reload. The update's watermark is now taken before reading, with a
+  small overlap.
+
 ## Session — Unknown barcodes keep their code; GS1 expiry and batch
 
 - "Add a new product" from an unknown scan now saves the scanned code with the

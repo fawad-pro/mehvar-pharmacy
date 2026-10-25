@@ -16,8 +16,11 @@ import { cart, openCounter, search, total, unsynced } from './support/counter';
  */
 
 /** A GTIN-13 in the 20–29 restricted range, unique to this run. */
+let minted = 0;
 function freshGtin13(): string {
-  const body = `20${String(Date.now()).slice(-10)}`;
+  // Time plus a counter: two codes minted in the same millisecond must differ.
+  minted += 1;
+  const body = `20${String(Date.now() + minted * 7919).slice(-10)}`;
   let sum = 0;
   for (let i = 0; i < 12; i += 1) {
     sum += Number(body[i]) * (i % 2 === 0 ? 1 : 3);
@@ -219,4 +222,69 @@ test('scanning a pack on Receive Stock fills its batch and expiry', async ({ pag
   await scan(page, `010${gtin}17300131` + '10B7Q41');
   await expect(page.getByLabel('Expiry')).toHaveValue('2030-01-31');
   await expect(page.getByLabel('Batch no.')).toHaveValue('B7Q41');
+});
+
+test('on Receive Stock, scanning the next product moves on — wherever the cursor is', async ({
+  page,
+}) => {
+  await openCounter(page);
+  const snapshot = (await (await page.request.get('/api/catalog')).json()) as {
+    products: Array<{ id: string; name: string; packLevels: unknown[] }>;
+  };
+  const [first, second] = snapshot.products.filter((row) => row.packLevels.length > 0);
+  const packGtin = freshGtin13();
+  const boxEan = freshGtin13();
+  await linkOnProducts(page, first!.id, packGtin);
+  await linkOnProducts(page, second!.id, boxEan);
+
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+
+  // A 2D pack opens its line with batch and expiry; the cursor goes to Qty.
+  await scan(page, `010${packGtin}17280331` + '10563C');
+  await expect(page.getByLabel('Batch no.')).toHaveValue('563C');
+  await expect(page.getByLabel(/^Qty/)).toBeFocused();
+
+  // Scanned again before the line is finished: refused, and Qty is not left
+  // holding barcode digits.
+  await page.waitForTimeout(300);
+  await page.keyboard.type(boxEan, { delay: 0 });
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByText(`Finish the ${first!.name} line first`, { exact: false }),
+  ).toBeVisible();
+  await expect(page.getByLabel(/^Qty/)).toHaveValue('');
+
+  // Finished like a person (one key at a time), the cursor left in Unit cost,
+  // then the next product scanned: the first line is added, the next opens with
+  // nothing carried over from the pack before it.
+  await page.getByLabel(/^Qty/).pressSequentially('5', { delay: 120 });
+  await page.getByLabel('Unit cost').pressSequentially('12', { delay: 120 });
+  // A person reaches for the scanner: never within 50 ms of their last key.
+  await page.waitForTimeout(300);
+  await page.keyboard.type(boxEan, { delay: 0 });
+  await page.keyboard.press('Enter');
+  const lines = page.getByRole('table');
+  await expect(lines).toContainText(first!.name);
+  // Added with the pack's own expiry (the draft table shows expiry, not batch).
+  await expect(lines).toContainText('2028-03-31');
+  await expect(page.getByLabel('Unit cost')).toHaveValue('');
+  await expect(page.getByLabel('Batch no.')).toHaveValue('');
+  await expect(page.getByLabel('Expiry')).toHaveValue('');
+  await expect(page.getByLabel(/^Qty/)).toBeFocused();
+});
+
+test('on Receive Stock, a barcode-sized number is refused as a quantity', async ({ page }) => {
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+  await search(page).fill('panadol');
+  await page.getByRole('option').first().click();
+
+  // Typed slowly, so it is not a scan — the backstop catches it on Add.
+  await page.getByLabel(/^Qty/).pressSequentially('8961101721817', { delay: 60 });
+  await page.getByLabel('Unit cost').fill('10');
+  await page.getByLabel('Unit cost').press('Enter');
+  await expect(page.getByText(/That quantity looks like a barcode/)).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
 });

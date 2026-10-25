@@ -11,7 +11,7 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { findBarcodeOwner } from '@/db/catalog-queries';
+import { catalogSnapshot, findBarcodeOwner } from '@/db/catalog-queries';
 import { productBarcodes } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -139,5 +139,20 @@ suite('barcode ownership against Postgres', () => {
     });
     expect(refused).toMatchObject({ ok: false, conflict: 'barcode_taken' });
     expect(await codesOf(other)).toEqual([]);
+  });
+  it("a code linked while a counter's catalog update is being read reaches its next update", async () => {
+    // The watermark must not be later than the moment the reads began:
+    // stamped after them, a code linked mid-read fell between two updates and
+    // stayed unknown at every counter until a full reload.
+    const before = Date.now();
+    const first = await catalogSnapshot(tenant.scope);
+    expect(Date.parse(first.syncedAt)).toBeLessThanOrEqual(before);
+
+    const ean = freshEan13();
+    const owner = await product('Linked mid-read');
+    await addBarcode(tenant.scope, owner, { barcode: ean, unitLevelName: 'box' });
+
+    const next = await catalogSnapshot(tenant.scope, new Date(first.syncedAt));
+    expect(next.barcodes.some((row) => row.barcode === ean && row.productId === owner)).toBe(true);
   });
 });

@@ -26,6 +26,7 @@ import {
   type DraftLine,
   type PurchaseDraft,
 } from '@/client/purchases/draft';
+import { scanCandidates, type KeyStroke } from '@/client/scan/burst';
 import { parseGs1 } from '@/domain/catalog/barcode';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { effectiveUnitCostPaisa, receivedQty } from '@/domain/purchases/costing';
@@ -56,8 +57,23 @@ function emptyDraft(): PurchaseDraft {
   };
 }
 
+/** The line's editable fields, as text — what a scan in a field is undone back to. */
+interface LineFields {
+  qty: string;
+  bonus: string;
+  cost: string;
+  expiry: string;
+  batchNumber: string;
+  price: string;
+}
+
+/** No delivery line is this many units; a scanned EAN in Qty is far beyond it. */
+const MAX_LINE_UNITS = 100_000;
+/** Rs 1,000,000 a unit: no medicine costs this; a barcode in a price field does. */
+const MAX_UNIT_PAISA = 100_000_000;
+
 export function PurchaseEntry({ tenantId }: { tenantId: string }) {
-  const { refresh } = useCatalog();
+  const { index, refresh } = useCatalog();
   const [draft, setDraft] = useState<PurchaseDraft>(emptyDraft);
   const [resumed, setResumed] = useState(false);
   const [picking, setPicking] = useState(false);
@@ -81,6 +97,11 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
   const [batchNumber, setBatchNumber] = useState('');
   const [price, setPrice] = useState('');
   const qtyRef = useRef<HTMLInputElement>(null);
+  // Scan detection in the line's fields (see `client/scan/burst.ts`): the keys
+  // typed since the last Enter, and the fields as they stood before each one —
+  // what a scan that landed in a field is undone back to.
+  const strokes = useRef<KeyStroke[]>([]);
+  const before = useRef<LineFields[]>([]);
 
   // Resumed once, after mount. W7's whole point: "a rush must not lose a
   // half-entered invoice."
@@ -174,14 +195,23 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     setBatchNumber(pack?.batch ?? '');
   }, []);
 
-  function addLine(): void {
+  function addLine(fields: LineFields = { qty, bonus, cost, expiry, batchNumber, price }): boolean {
     if (!pending) {
-      return;
+      return false;
     }
+    const { qty, bonus, cost, expiry, batchNumber, price } = fields;
     const qtyBase = Number(qty.trim());
     if (!Number.isSafeInteger(qtyBase) || qtyBase <= 0) {
       setError('Enter how many units arrived.');
-      return;
+      return false;
+    }
+    // Backstop for a barcode typed into a number field: no delivery line is a
+    // hundred thousand units or a million rupees a unit, and a scanned EAN is
+    // thirteen digits. Said plainly, never stored.
+    const bonusBase = bonus.trim() === '' ? 0 : Math.max(0, Number(bonus.trim()));
+    if (qtyBase > MAX_LINE_UNITS || bonusBase > MAX_LINE_UNITS) {
+      setError('That quantity looks like a barcode, not a count. Check Qty and Bonus.');
+      return false;
     }
     // The unit cost must be ENTERED, not merely default to zero. "Sells for" is
     // pre-filled from the catalog and "Unit cost" is not, so a line added
@@ -191,12 +221,16 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     // explicit "0"; a blank is the operator having skipped the field.
     if (cost.trim() === '') {
       setError('Enter what this stock cost — type 0 if it was free.');
-      return;
+      return false;
     }
     const pricePaisa = paisaFromRupeeInput(price);
     if (pricePaisa <= 0) {
       setError('Enter the selling price for this stock.');
-      return;
+      return false;
+    }
+    if (paisaFromRupeeInput(cost) > MAX_UNIT_PAISA || pricePaisa > MAX_UNIT_PAISA) {
+      setError('That price looks like a barcode, not an amount. Check Unit cost and Sells for.');
+      return false;
     }
 
     const line: DraftLine = {
@@ -205,7 +239,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       productName: pending.productName,
       baseUnitName: pending.baseUnitName,
       qtyBase,
-      bonusQtyBase: bonus.trim() === '' ? 0 : Math.max(0, Number(bonus.trim())),
+      bonusQtyBase: bonusBase,
       unitCostPaisa: paisaFromRupeeInput(cost),
       expiryDate: expiry.trim() === '' ? null : expiry.trim(),
       batchNumber: batchNumber.trim() === '' ? null : batchNumber.trim(),
@@ -221,6 +255,72 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     setError(null);
     setReceived(null);
     focusSearch();
+    return true;
+  }
+
+  /**
+   * A barcode scanned while the cursor was in one of the line's fields. The
+   * fields go back to how they were before it; then it is the next product:
+   * the current line is added if it is complete, and the scanned product's
+   * line opens — with its own batch and expiry from a 2D code.
+   */
+  function routeScan(code: string, fields: LineFields): void {
+    setQty(fields.qty);
+    setBonus(fields.bonus);
+    setCost(fields.cost);
+    setExpiry(fields.expiry);
+    setBatchNumber(fields.batchNumber);
+    setPrice(fields.price);
+
+    const hit = index?.resolveBarcode(code);
+    if (!hit) {
+      setError(
+        'That code is not linked to a product yet. Finish or drop this line (Esc), then scan it in the search box to link or add it.',
+      );
+      return;
+    }
+    const complete =
+      fields.qty.trim() !== '' && fields.cost.trim() !== '' && fields.price.trim() !== '';
+    if (!complete) {
+      setError(
+        `Scanned ${hit.product.name}. Finish the ${pending?.productName ?? ''} line first — quantity and unit cost — or press Esc to drop it.`,
+      );
+      return;
+    }
+    if (addLine(fields)) {
+      onSelectProduct(hit, code);
+    }
+  }
+
+  function onLineKeyDownCapture(event: React.KeyboardEvent): void {
+    // When the key was pressed, not when this handler got to it: each keystroke
+    // re-renders the form, and on a busy page handler time stretches a
+    // scanner's 4 ms gaps past the threshold.
+    const now = event.timeStamp;
+    if (event.key === 'Enter') {
+      const typed = strokes.current;
+      const snapshots = before.current;
+      strokes.current = [];
+      before.current = [];
+      const candidates = scanCandidates(typed, now);
+      if (candidates) {
+        // Handled here, before the field's own Enter would add the line. The
+        // code is the longest ending the catalogue knows; failing that, all of it.
+        event.preventDefault();
+        event.stopPropagation();
+        const code =
+          candidates.find((candidate) => index?.resolveBarcode(candidate)) ?? candidates[0]!;
+        const fields = snapshots[typed.length - code.length] ?? snapshots[0]!;
+        routeScan(code, fields);
+      }
+      return;
+    }
+    if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    // Keydown runs before the field changes: this is the line as it stood.
+    before.current.push({ qty, bonus, cost, expiry, batchNumber, price });
+    strokes.current.push({ key: event.key, at: now });
   }
 
   function removeLine(lineId: string): void {
@@ -332,6 +432,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
         {pending ? (
           <div
             className="mt-3 flex flex-wrap items-end gap-2"
+            onKeyDownCapture={onLineKeyDownCapture}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
                 event.preventDefault();
@@ -416,7 +517,9 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
 
             <button
               type="button"
-              onClick={addLine}
+              onClick={() => {
+                addLine();
+              }}
               className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium"
             >
               Add — Enter

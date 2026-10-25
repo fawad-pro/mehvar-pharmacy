@@ -1494,3 +1494,20 @@ product" flow lands with step 2.
   which is what it stores), the shop's "sell loose?" question and per-unit Sell
   ticks (stored, all on), purchases priced per unit (2b), cumulative costing
   (2c), renames and "replace this product" (2d).
+
+**Session 2 scope additions** (owner, 2026-10-25, from the pilot's scanning
+review). To be done with purchases priced per unit, so receiving is designed
+once:
+
+- **Fields to type after a 1D scan.** An EAN carries only the product number; a
+  GS1 DataMatrix also carries batch and expiry. After a 1D scan on Receive
+  Stock, mark Expiry and Batch as "type from the pack" and put the cursor in
+  Expiry; after a 2D scan they are filled and only checked.
+- **MRP captured at receiving.** Receive Stock never asks for the MRP printed on
+  the pack (`purchase_lines.mrp_at_receiving_paisa` is always null), and "Sells
+  for" is pre-filled from the product's saved price. Ask for "MRP on pack" per
+  line; warn, never block, when Sells for exceeds it (`exceedsMrp`), since the
+  printed MRP is the legal ceiling for registered medicines; and when a
+  delivery's MRP differs from the product's, ask whether to update the
+  product's price rather than changing it silently. No barcode carries the
+  price: GS1 pharma codes carry product number, expiry, batch and serial only.

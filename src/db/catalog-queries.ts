@@ -91,6 +91,12 @@ export interface ExpiredStock {
  * removal is just a change the client interprets as a drop.
  */
 export async function catalogSnapshot(scope: TenantScope, since?: Date): Promise<CatalogSnapshot> {
+  // The watermark is taken BEFORE reading, and a little early. Stamped after
+  // the reads, a barcode linked while they ran was newer than nothing the
+  // client fetched yet older than its watermark — so no later delta carried it,
+  // and every counter read the code as unknown until a full reload. Reading a
+  // few seconds twice is harmless: the client merges by product and barcode.
+  const syncedAt = new Date(Date.now() - WATERMARK_OVERLAP_MS).toISOString();
   const changed = since
     ? await scope.select(products, gt(products.updatedAt, since))
     : await scope.select(products, eq(products.isActive, true));
@@ -116,9 +122,12 @@ export async function catalogSnapshot(scope: TenantScope, since?: Date): Promise
     removedBarcodes: [],
     stock: await stockByProduct(scope),
     expired: await expiredStockByProduct(scope, businessDayOf(new Date())),
-    syncedAt: new Date().toISOString(),
+    syncedAt,
   };
 }
+
+/** Overlap between deltas: covers the reads' own duration and app/DB clock skew. */
+const WATERMARK_OVERLAP_MS = 5_000;
 
 /**
  * Base units on hand per product, from `batches.qty_remaining`.
