@@ -161,12 +161,16 @@ function Row({
   label: string;
   amountPaisa: number;
   bold?: boolean;
-  /** The one figure the customer pays — the largest on the slip. */
+  /**
+   * The one figure the customer pays — the largest on the slip, by size alone:
+   * extra-bold at 18px bled on the thermal head into something like spilled
+   * ink, so it keeps the body's weight.
+   */
   emphasis?: boolean;
 }) {
   return (
     <div
-      className={`flex justify-between ${emphasis ? 'mt-0.5 text-[18px] font-extrabold' : bold ? 'font-bold' : ''}`}
+      className={`flex justify-between ${emphasis ? 'mt-0.5 text-[18px]' : bold ? 'font-bold' : ''}`}
     >
       <span>{label}</span>
       <span className="numeral">{formatPaisa(paisa(amountPaisa))}</span>

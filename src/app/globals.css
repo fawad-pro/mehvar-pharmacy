@@ -153,8 +153,13 @@
     opacity: 1;
   }
 
+  /*
+   * No `size` here: `72mm auto` is invalid CSS, Chrome dropped it silently and
+   * scaled the slip to whatever paper the dialog chose. The page size — 72 mm
+   * wide, exactly one receipt tall — is written just before printing by
+   * `setReceiptPageSize` (client/print/use-print-receipt.ts).
+   */
   @page {
-    size: 72mm auto;
     margin: 0;
   }
 }

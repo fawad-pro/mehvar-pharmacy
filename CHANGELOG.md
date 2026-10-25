@@ -2,6 +2,19 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — The receipt prints at true size
+
+- The slip printed at about 75% and sat on the left of the roll: a 50 mm test
+  bar measured 37 mm. The receipt's page size was written as
+  `size: 72mm auto`, which is not valid CSS, so Chrome dropped it and laid the
+  slip out on a Letter-size page before fitting it to the roll. The page size
+  is now set the moment a receipt prints: 72 mm wide and exactly as tall as
+  that receipt, so a long receipt is never split and no blank paper is fed.
+- Amount Due is no longer extra-bold; it stands out by size. At 18px
+  extra-bold the thermal head bled it into a smudge.
+- OPERATIONS.md gives the Chrome print settings to use (Margins: None, Scale:
+  Default) and the bar check that confirms them.
+
 ## Session — Receipt layout from the pilot
 
 - Items print as columns, QTY | ITEM | AMT, with the quantity as a plain

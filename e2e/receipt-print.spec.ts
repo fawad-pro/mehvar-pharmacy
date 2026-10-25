@@ -41,7 +41,8 @@ test('the receipt prints at the 80 mm roll’s printable width, in solid black',
     return { size: parseFloat(style.fontSize), weight: Number(style.fontWeight) };
   });
   expect(dueStyle.size).toBeGreaterThanOrEqual(18);
-  expect(dueStyle.weight).toBeGreaterThanOrEqual(700);
+  // Largest by size, not weight: extra-bold bled on the thermal head.
+  expect(dueStyle.weight).toBeLessThanOrEqual(500);
   const bodySize = await receipt.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
   expect(bodySize).toBeGreaterThanOrEqual(14);
 
@@ -59,6 +60,27 @@ test('the receipt prints at the 80 mm roll’s printable width, in solid black',
   ).toHaveText('1');
   await expect(receipt.locator('footer')).toContainText(`Served by ${DEMO.owner}`);
   await expect(receipt.locator('footer')).toContainText('MEHVAR');
+
+  // The page the print engine gets: 72 mm wide and one receipt tall. A static
+  // `size: 72mm auto` was invalid CSS that Chrome dropped silently, so the slip
+  // printed at ~75% on the pilot counter — while every check above passed,
+  // because they measure the receipt, not the page. These measure the page.
+  const pageRule = await page.evaluate(() => {
+    const sheet = [...document.styleSheets].find(
+      (candidate) => (candidate.ownerNode as Element | null)?.id === 'receipt-page',
+    );
+    const rule = sheet?.cssRules[0] as CSSPageRule | undefined;
+    return rule ? rule.style.getPropertyValue('size') : '';
+  });
+  const [widthMm, heightMm] = pageRule.split(' ').map((part) => parseFloat(part));
+  expect(pageRule, 'a size Chrome accepted').toMatch(/^72mm \d+mm$/);
+  expect(widthMm).toBe(72);
+  expect(heightMm! * MM).toBeGreaterThanOrEqual(box?.height ?? Infinity);
+
+  const pdf = (await page.pdf({ preferCSSPageSize: true })).toString('latin1');
+  const mediaBox = /\/MediaBox\s*\[\s*0 0 ([\d.]+) ([\d.]+)\s*\]/.exec(pdf);
+  // 72 mm in PDF points (1 pt = 1/72 in); Letter would be 612.
+  expect(Number(mediaBox?.[1])).toBeCloseTo((72 / 25.4) * 72, 0);
 
   // The test receipt's measured bars, at true size.
   const check = receipt.getByRole('region', { name: 'Printer check' });

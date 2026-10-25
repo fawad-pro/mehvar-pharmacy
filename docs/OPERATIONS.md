@@ -77,10 +77,19 @@ Verified on a **Speed-X SP-200U** (USB, 80 mm), 2026-10:
 | Paper size    | `Printer Paper (80 x 3276mm)`, the driver's 80 mm continuous roll       |
 | Windows check | The Windows test page prints clearly, so the head and paper are working |
 
-Not yet verified on that printer, so treat these as things to try in order, not
-as fixes: print scale 100% in the print dialog; the driver's halftoning option
-set to its text or none setting, if the bars or text still look grey or
-speckled. The driver exposes no density setting that has been found. If text
+Observed on that printer, before the fix of 2026-10-25: the 50 mm bar printed
+37–38 mm and the slip sat on the left of the roll. The cause was the
+receipt's own page size, which Chrome had been ignoring (an invalid CSS rule);
+it is now set exactly when the receipt prints. In Chrome's print dialog, under
+**More settings**, use **Margins: None** and **Scale: Default**, with the
+roll's paper size; Chrome remembers these per printer. Then print the test
+receipt and measure the bar again. If it still prints short with those
+settings, check the POS-80 driver's Printing Preferences for its own scaling,
+and report what you find.
+
+Not yet verified on that printer, so treat this as something to try, not a
+fix: if the bars or text still look grey or speckled, set the driver's
+halftoning option to its text or none setting. The driver exposes no density setting that has been found. If text
 is still faint once the bars measure true, the remaining cause is the printer's
 head heat or paper, which software cannot change.
 
