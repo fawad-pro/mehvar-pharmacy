@@ -26,6 +26,7 @@
  */
 
 import type { CapturedRecord, OutboxRecord, StoredRecord } from './records';
+import { retryRead } from './flush';
 import { recordId } from './records';
 
 const DATABASE_NAME = 'mehvar-sync';
@@ -154,30 +155,27 @@ export async function enqueue(
  * Scoped to the tenant: a shared counter machine that switched pharmacies must
  * not deliver one tenant's sales under another's session.
  */
-export async function pendingRecords(tenantId: string): Promise<StoredRecord[]> {
-  try {
-    return await withStore('readonly', async (store) => {
-      const [keys, values] = await Promise.all([
-        promisify(store.getAllKeys()),
-        promisify(store.getAll() as IDBRequest<OutboxRecord[]>),
-      ]);
-      const stored: StoredRecord[] = [];
-      for (const [position, value] of values.entries()) {
-        const key = keys[position];
-        if (typeof key === 'number' && value.tenantId === tenantId) {
-          stored.push({ sequence: key, record: value });
-        }
-      }
-      return stored.sort((a, b) => a.sequence - b.sequence);
-    });
-  } catch {
-    // An unreadable outbox is a flush that does not happen, not a crash.
-    return [];
-  }
+export async function pendingRecords(tenantId: string): Promise<StoredRecord[] | null> {
+  // Null, not empty, when the outbox cannot be read: "nothing queued" would
+  // set the badge to zero over records still on disk. See `retryRead`.
+  return retryRead(() => readPending(tenantId));
 }
 
-export async function pendingCount(tenantId: string): Promise<number> {
-  return (await pendingRecords(tenantId)).length;
+async function readPending(tenantId: string): Promise<StoredRecord[]> {
+  return withStore('readonly', async (store) => {
+    const [keys, values] = await Promise.all([
+      promisify(store.getAllKeys()),
+      promisify(store.getAll() as IDBRequest<OutboxRecord[]>),
+    ]);
+    const stored: StoredRecord[] = [];
+    for (const [position, value] of values.entries()) {
+      const key = keys[position];
+      if (typeof key === 'number' && value.tenantId === tenantId) {
+        stored.push({ sequence: key, record: value });
+      }
+    }
+    return stored.sort((a, b) => a.sequence - b.sequence);
+  });
 }
 
 /** Removes a delivered record. Called only after the server confirmed it landed. */

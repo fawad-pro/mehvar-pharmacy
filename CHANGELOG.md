@@ -2,6 +2,16 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — The unsynced badge never drops to zero over queued records
+
+- Reading the offline queue occasionally failed (an aborted browser-storage
+  transaction), and the failure was read as "nothing queued": the badge went
+  to zero and the retry was cancelled while sales sat on disk, until the next
+  15-second check. A failed read is now retried, and if it still fails the
+  badge keeps its number and the counter looks again a second later. Nothing
+  was ever lost; the badge was wrong. Seen in 3 of 15 runs of the offline test
+  before, 0 of 15 after.
+
 ## Session — Scanning on Receive Stock moves to the next product
 
 - Scanning the next product while the cursor sat in a line's Qty, Unit cost or

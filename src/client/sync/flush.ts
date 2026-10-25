@@ -88,6 +88,35 @@ export function failuresAfterAnswer(previous: number, progressed: boolean): numb
 }
 
 /**
+ * A read that may fail transiently, retried a few times; null if it never
+ * succeeded.
+ *
+ * Reading the outbox can abort (an IndexedDB transaction aborted mid-read: a
+ * real, if occasional, event — the pilot's offline test hit it three times in
+ * fifteen). The read used to answer that with "nothing queued", and the pump
+ * then set the unsynced badge to zero and cancelled its retry, while two
+ * records sat on disk. Null keeps "could not read" apart from "empty", so the
+ * caller can leave the badge alone and try again.
+ */
+export async function retryRead<T>(
+  read: () => Promise<T>,
+  attempts = 3,
+  waitMs = 25,
+): Promise<T | null> {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await read();
+    } catch {
+      if (attempt === attempts) {
+        return null;
+      }
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  return null;
+}
+
+/**
  * Is there work, and has its wait elapsed?
  *
  * Only one wait exists rather than one per record, because delivery is strictly

@@ -14,6 +14,7 @@ import {
   failuresAfterAnswer,
   originFor,
   readyToFlush,
+  retryRead,
   withReceiptNumber,
 } from './flush';
 import type { OutboxRecord } from './records';
@@ -52,6 +53,28 @@ describe('failuresAfterAnswer', () => {
       delays.push(backoffMs(failures));
     }
     expect(delays).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000]);
+  });
+});
+
+describe('retryRead', () => {
+  it('returns what the read returned, retrying a transient failure', async () => {
+    let calls = 0;
+    const read = async (): Promise<string[]> => {
+      calls += 1;
+      if (calls < 3) throw new Error('AbortError: The transaction was aborted');
+      return ['customer', 'sale'];
+    };
+    expect(await retryRead(read, 3, 0)).toEqual(['customer', 'sale']);
+    expect(calls).toBe(3);
+  });
+
+  it('says it could not read — never "nothing queued" — when every attempt fails', async () => {
+    // The pilot's offline test: the outbox read aborted, came back as [], and
+    // the badge dropped to zero over two queued records.
+    const read = async (): Promise<string[]> => {
+      throw new Error('AbortError');
+    };
+    expect(await retryRead(read, 3, 0)).toBeNull();
   });
 });
 

@@ -171,6 +171,10 @@ export function SyncProvider({
     try {
       for (;;) {
         const pending = await pendingRecords(tenantId);
+        if (pending === null) {
+          // Unreadable for now: no delivery, and the badge keeps its number.
+          return;
+        }
         setUnsyncedCount(pending.length);
         setStuck(pending.some((entry) => entry.record.attempts >= STUCK_AFTER_ATTEMPTS));
 
@@ -255,12 +259,21 @@ export function SyncProvider({
       // Anything still queued gets a retry at the delay it actually earned,
       // rather than waiting for the next safety tick.
       const remaining = await pendingRecords(tenantId);
-      setUnsyncedCount(remaining.length);
-      setRetryRequest(
-        remaining.length > 0
-          ? { delayMs: backoffMs(consecutiveFailures.current), at: Date.now() }
-          : null,
-      );
+      if (remaining === null) {
+        // Could not read the outbox: leave the badge as it is (it was right a
+        // moment ago) and look again soon, rather than report zero.
+        setRetryRequest({
+          delayMs: Math.max(1_000, backoffMs(consecutiveFailures.current)),
+          at: Date.now(),
+        });
+      } else {
+        setUnsyncedCount(remaining.length);
+        setRetryRequest(
+          remaining.length > 0
+            ? { delayMs: backoffMs(consecutiveFailures.current), at: Date.now() }
+            : null,
+        );
+      }
     }
   }, [tenantId]);
 
