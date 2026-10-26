@@ -2,6 +2,17 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — A barcode scanned into a payment amount never becomes money
+
+- A barcode scanned into Cash tendered replaced the amount, and the scanner's
+  own Enter committed the sale: the receipt printed "Paid
+  8,964,000,101,018.00" before any cash was counted. In Settle Udhaar the same
+  scan would have recorded a payment of billions against the customer and the
+  drawer. A scan in either field is now recognised: the field is put back,
+  the screen says it was a barcode, and nothing is saved.
+- Backstop for a scan that slips past: an amount of Rs 1 crore or more is
+  committed only by clicking the button, never by Enter. Nothing is refused.
+
 ## Session — A missed scan on Receive Stock no longer crashes the page
 
 - A scan was recognised only if every key, and the Enter after it, came within

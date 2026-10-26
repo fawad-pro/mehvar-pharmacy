@@ -26,6 +26,7 @@ import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import { useSync } from '@/client/sync/provider';
+import { needsClickToCommit, useAmountScanGuard } from '@/client/scan/amount-guard';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
@@ -62,6 +63,7 @@ export function SettleUdhaarOverlay({
   const { receipt, print } = usePrintReceipt();
   const { capture } = useSync();
   const amountField = useRef<HTMLInputElement>(null);
+  const scanGuard = useAmountScanGuard(amount);
 
   useEffect(() => {
     if (step.name === 'amount') {
@@ -168,7 +170,23 @@ export function SettleUdhaarOverlay({
                     setError(null);
                   }}
                   onKeyDown={(event) => {
+                    // A barcode scanned here must never become a payment: the
+                    // scanner's own Enter would record it (see amount-guard).
+                    const beforeScan = scanGuard(event);
+                    if (beforeScan !== null) {
+                      event.preventDefault();
+                      setAmount(beforeScan);
+                      setError('That was a barcode, not an amount — nothing was saved.');
+                      return;
+                    }
                     if (event.key === 'Enter') {
+                      const typed = paisaFromRupeeInput(amount);
+                      if (needsClickToCommit(typed)) {
+                        setError(
+                          `${formatPaisa(typed, { withSymbol: true })} looks like a barcode. If it is right, click Settle.`,
+                        );
+                        return;
+                      }
                       void commit(step.customer);
                     }
                     if (event.key === 'Escape') {
