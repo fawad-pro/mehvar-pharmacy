@@ -72,6 +72,10 @@ const MAX_LINE_UNITS = 100_000;
 /** Rs 1,000,000 a unit: no medicine costs this; a barcode in a price field does. */
 const MAX_UNIT_PAISA = 100_000_000;
 
+function rupeesLookLikeBarcode(raw: string): boolean {
+  return Number(raw.trim()) * 100 > MAX_UNIT_PAISA;
+}
+
 export function PurchaseEntry({ tenantId }: { tenantId: string }) {
   const { index, refresh } = useCatalog();
   const [draft, setDraft] = useState<PurchaseDraft>(emptyDraft);
@@ -223,13 +227,15 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       setError('Enter what this stock cost — type 0 if it was free.');
       return false;
     }
+    // Checked on the typed number, before conversion: an amount past what a
+    // number holds exactly converts to zero, which must never pass as "free".
+    if (rupeesLookLikeBarcode(cost) || rupeesLookLikeBarcode(price)) {
+      setError('That price looks like a barcode, not an amount. Check Unit cost and Sells for.');
+      return false;
+    }
     const pricePaisa = paisaFromRupeeInput(price);
     if (pricePaisa <= 0) {
       setError('Enter the selling price for this stock.');
-      return false;
-    }
-    if (paisaFromRupeeInput(cost) > MAX_UNIT_PAISA || pricePaisa > MAX_UNIT_PAISA) {
-      setError('That price looks like a barcode, not an amount. Check Unit cost and Sells for.');
       return false;
     }
 

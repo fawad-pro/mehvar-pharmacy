@@ -245,6 +245,11 @@ describe('rupee input', () => {
     expect(paisaFromRupeeInput('abc')).toBe(0);
     expect(paisaFromRupeeInput('-5')).toBe(0);
   });
+
+  it('treats an amount too large to hold exactly as unreadable, never a throw', () => {
+    // "12" typed into Unit cost, then a scanned EAN-13 that was not caught.
+    expect(paisaFromRupeeInput('122030297825992')).toBe(0);
+  });
 });
 
 describe('discount input — one field, one underlying amount', () => {

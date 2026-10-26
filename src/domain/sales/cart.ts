@@ -253,7 +253,11 @@ export function paisaFromRupeeInput(raw: string): Paisa {
   if (!Number.isFinite(value) || value < 0) {
     return ZERO_PAISA;
   }
-  return paisa(Math.round(value * 100));
+  const converted = Math.round(value * 100);
+  // A barcode scanned into an amount field (sixteen digits and up) is more
+  // paisa than a number holds exactly. Unreadable, like junk — never a throw
+  // mid-render; a caller that must not take it as zero checks the size first.
+  return Number.isSafeInteger(converted) ? paisa(converted) : ZERO_PAISA;
 }
 
 /**

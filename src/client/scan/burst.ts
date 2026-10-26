@@ -23,10 +23,11 @@ export interface KeyStroke {
 
 /** Scanners type a character every few ms; fast typists manage ~80–150 ms. */
 export const MAX_GAP_MS = 50;
-/** A stutter inside a scan can stretch a gap this far; a person pauses longer. */
+/**
+ * A stutter inside a scan can stretch a gap this far — including the gap
+ * before the scanner's own Enter; a person pauses longer.
+ */
 export const MAX_STUTTER_MS = 200;
-/** Keys the trailing fast run needs before it counts as a scanner at all. */
-export const MIN_FAST_RUN = 6;
 /** Shorter than any real barcode (EAN-8 is 8), longer than any real quantity. */
 export const MIN_SCAN_LENGTH = 8;
 
@@ -34,30 +35,39 @@ export const MIN_SCAN_LENGTH = 8;
  * The codes the keys ending with this Enter could have been, longest first —
  * or null when they were not a scan. `strokes` are the printable keys since
  * the last Enter, oldest first; `enterAt` is when Enter was pressed.
+ *
+ * The keys run back from Enter for as long as no gap exceeds a stutter. They
+ * were a scan when that run is barcode-long and its TYPICAL gap (the median)
+ * is a scanner's. Judged by the median, not by every gap, because a busy PC
+ * stretches the odd gap — in the middle, at the end, or before Enter — past
+ * 50 ms, and a scan missed for one slow key landed in a price field. No person
+ * types eight keys with half their gaps under 50 ms.
  */
 export function scanCandidates(strokes: readonly KeyStroke[], enterAt: number): string[] | null {
   const last = strokes[strokes.length - 1];
-  if (!last || enterAt - last.at > MAX_GAP_MS) {
+  if (!last || enterAt - last.at > MAX_STUTTER_MS) {
     return null;
   }
-  let fastStart = strokes.length - 1;
-  while (fastStart > 0 && strokes[fastStart]!.at - strokes[fastStart - 1]!.at <= MAX_GAP_MS) {
-    fastStart -= 1;
-  }
-  if (strokes.length - fastStart < MIN_FAST_RUN) {
-    return null;
-  }
-  let start = fastStart;
+  let start = strokes.length - 1;
   while (start > 0 && strokes[start]!.at - strokes[start - 1]!.at <= MAX_STUTTER_MS) {
     start -= 1;
   }
-  const text = strokes
-    .slice(start)
-    .map((stroke) => stroke.key)
-    .join('');
+  const run = strokes.slice(start);
+  if (run.length < MIN_SCAN_LENGTH) {
+    return null;
+  }
+  const gaps = run
+    .slice(1)
+    .map((stroke, index) => stroke.at - run[index]!.at)
+    .concat(enterAt - last.at)
+    .sort((a, b) => a - b);
+  if (gaps[Math.floor((gaps.length - 1) / 2)]! > MAX_GAP_MS) {
+    return null;
+  }
+  const text = run.map((stroke) => stroke.key).join('');
   const candidates: string[] = [];
   for (let length = text.length; length >= MIN_SCAN_LENGTH; length -= 1) {
     candidates.push(text.slice(text.length - length));
   }
-  return candidates.length > 0 ? candidates : null;
+  return candidates;
 }

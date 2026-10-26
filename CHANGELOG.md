@@ -2,6 +2,18 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — A missed scan on Receive Stock no longer crashes the page
+
+- A scan was recognised only if every key, and the Enter after it, came within
+  50 ms. On a busy PC one slow key was enough to miss it: the digits went into
+  the field, and in Unit cost the amount was too large to convert, so the page
+  crashed instead of saying "looks like a barcode". Scans are now judged by
+  their typical key gap, which a slow key or late Enter no longer spoils, and
+  an amount that large is refused with the message, never a crash. Seen in 2
+  of 6 runs of the Receive Stock scan test before, 0 of 36 after.
+- The same conversion is used by the payment and udhaar overlays, which could
+  have crashed the same way on a scanned code in an amount field.
+
 ## Session — Units as buttons on the sale line (PCN-012, as amended)
 
 - Every unit a product has (tab, strip, box) is a button on its cart line,

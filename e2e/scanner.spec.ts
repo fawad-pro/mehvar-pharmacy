@@ -288,3 +288,24 @@ test('on Receive Stock, a barcode-sized number is refused as a quantity', async 
   await expect(page.getByText(/That quantity looks like a barcode/)).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
 });
+
+test('on Receive Stock, a barcode run into a price is refused, never a crash', async ({ page }) => {
+  // What a missed scan into Unit cost used to do: "12" then thirteen digits is
+  // more paisa than a number holds exactly, and the page threw instead of
+  // refusing.
+  const crashes: string[] = [];
+  page.on('pageerror', (error) => crashes.push(error.message));
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+  await search(page).fill('panadol');
+  await page.getByRole('option').first().click();
+
+  await page.getByLabel(/^Qty/).fill('5');
+  // Typed slowly, so it is not a scan — the backstop catches it on Add.
+  await page.getByLabel('Unit cost').pressSequentially('122030297825992', { delay: 60 });
+  await page.getByLabel('Unit cost').press('Enter');
+  await expect(page.getByText(/That price looks like a barcode/)).toBeVisible();
+  await expect(page.getByRole('table')).toHaveCount(0);
+  expect(crashes).toEqual([]);
+});
