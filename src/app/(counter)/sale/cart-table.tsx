@@ -204,10 +204,8 @@ export function CartTable({
           return;
         }
         event.preventDefault();
-        const sold = line.units.filter((unit) => unit.sell);
-        const cycle = sold.length > 0 ? sold : line.units;
-        const at = cycle.findIndex((unit) => unit.key === line.unitKey);
-        const target = cycle[(at + 1) % cycle.length];
+        const at = line.units.findIndex((unit) => unit.key === line.unitKey);
+        const target = line.units[(at + 1) % line.units.length];
         if (target) {
           onChange(line.lineId, { unitKey: target.key });
         }
@@ -281,13 +279,22 @@ export function CartTable({
                 ) : null}
               </td>
               <td className="px-3 py-1.5">
-                {/* W5: always natural language, never database thinking. */}
-                {line.unitCount} {line.enteredUnitLevel}
-                {selected ? (
-                  <span className="text-ink/40 ml-2 text-xs">
-                    +/− · Tab {line.enteredUnitLevel} · % disc · Del
-                  </span>
-                ) : null}
+                <QuantityControl
+                  line={line}
+                  selected={selected}
+                  onUnit={(unitKey) => {
+                    onSelect(line.lineId);
+                    onChange(line.lineId, { unitKey });
+                  }}
+                  onStep={(delta) => {
+                    onSelect(line.lineId);
+                    if (line.unitCount + delta < 1) {
+                      onRemove(line.lineId);
+                    } else {
+                      onChange(line.lineId, { unitCount: line.unitCount + delta });
+                    }
+                  }}
+                />
               </td>
               <td className="numeral px-3 py-1.5 text-right">
                 {formatPaisa(paisa(line.pricePerUnitPaisa))}
@@ -347,5 +354,112 @@ export function CartTable({
         })}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * The quantity cell — Phase 10 §4 as amended by PCN-012 (and the owner's
+ * 2026-10-26 decision): every unit the product has as a button beside
+ * − count +, because a tablet has no Tab key and no plus key. The keyboard
+ * path is unchanged (the row's own keys); these are the same edits for a
+ * finger or a mouse.
+ *
+ * Every button keeps focus where it was (`onMouseDown` prevented) and is out
+ * of the tab order, so the row stays the one keyboard target, exactly as the
+ * Discount cell does.
+ */
+function QuantityControl({
+  line,
+  selected,
+  onUnit,
+  onStep,
+}: {
+  line: CartLine;
+  selected: boolean;
+  onUnit: (unitKey: string) => void;
+  onStep: (delta: 1 | -1) => void;
+}) {
+  const offered = line.units;
+  const keepFocus = (event: React.MouseEvent) => {
+    event.preventDefault();
+  };
+  const step =
+    'border-line text-ink h-11 w-11 shrink-0 rounded border text-lg leading-none hover:bg-green-100';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {offered.length > 1 ? (
+        <div role="group" aria-label={`Unit for ${line.name}`} className="flex">
+          {offered.map((unit, index) => {
+            const chosen = unit.key === line.unitKey;
+            return (
+              <button
+                key={unit.key}
+                type="button"
+                tabIndex={-1}
+                aria-pressed={chosen}
+                onMouseDown={keepFocus}
+                onClick={() => {
+                  if (!chosen) onUnit(unit.key);
+                }}
+                className={[
+                  'border-line h-11 min-w-11 border px-3 text-sm capitalize',
+                  index === 0 ? 'rounded-l' : '-ml-px',
+                  index === offered.length - 1 ? 'rounded-r' : '',
+                  chosen
+                    ? 'bg-green-600 text-paper border-green-600 font-medium'
+                    : 'bg-paper text-ink hover:bg-green-100',
+                ].join(' ')}
+              >
+                {unit.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={
+            line.unitCount <= 1 ? `Remove ${line.name}` : `One ${line.enteredUnitLevel} less`
+          }
+          onMouseDown={keepFocus}
+          onClick={() => {
+            onStep(-1);
+          }}
+          className={step}
+        >
+          −
+        </button>
+        {/* W5: always natural language. The pressed button already says the
+            unit, so beside the buttons it is said only to a screen reader —
+            "2 strip", never a bare "2". */}
+        <span className="min-w-8 text-center">
+          <span className="numeral">{line.unitCount}</span>
+          <span className={offered.length > 1 ? 'sr-only' : 'text-ink/60'}>
+            {' '}
+            {line.enteredUnitLevel}
+          </span>
+        </span>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`One ${line.enteredUnitLevel} more`}
+          onMouseDown={keepFocus}
+          onClick={() => {
+            onStep(1);
+          }}
+          className={step}
+        >
+          +
+        </button>
+      </div>
+      {selected ? (
+        <span className="text-ink/40 text-xs">
+          {offered.length > 1 ? '+/− · Tab unit · % disc · Del' : '+/− · % disc · Del'}
+        </span>
+      ) : null}
+    </div>
   );
 }

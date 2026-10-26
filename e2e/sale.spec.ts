@@ -266,9 +266,10 @@ test('a percentage line discount is computed off that line, not the cart', async
   await page.keyboard.press('Enter');
 
   await expect(cart(page)).toContainText('−9.00'); // 10% of Rs 90.00
-  // Disprin's row must show no discount at all — the empty-state dash.
-  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).toContainText('—');
-  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).not.toContainText('−');
+  // Disprin's row must show no discount at all — the empty-state dash in its
+  // Discount cell (the row's other "−" is the quantity button, PCN-012).
+  const disprinDiscount = cart(page).locator('tr', { hasText: 'Disprin' }).locator('td').nth(3);
+  await expect(disprinDiscount).toHaveText('—');
 });
 
 test('the Discount column is clickable, no keyboard shortcut required', async ({ page }) => {

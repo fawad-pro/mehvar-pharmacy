@@ -17,7 +17,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
-import { defaultUnitLevel, parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { lastSaleUnit, rememberSaleUnit } from '@/client/sale/last-unit';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { useRegisterUdhaarKeyHandler } from '@/client/keyboard/udhaar-key-context';
 import { keyFor } from '@/client/keyboard/registry';
@@ -37,7 +38,7 @@ import { miniStatement } from '@/domain/udhaar/settlement';
 // From the pure module, never from `commit-sale.ts`: that one reaches the
 // database, and importing it here would pull `server-only` into the browser.
 import { validateSaleCommand, type SaleRejection } from '@/domain/sales/sale-command';
-import { unitsOf } from '@/domain/catalog/units';
+import { defaultSaleUnit, unitsOf } from '@/domain/catalog/units';
 import {
   addToCart,
   cartTotals,
@@ -161,44 +162,49 @@ export function SaleSurface() {
    * the barcode's own unit level when the item was scanned — a box code means a
    * box, not a strip (Phase 5 §2).
    */
-  const onSelect = useCallback((hit: SearchHit, rawQuery: string) => {
-    const { count } = parseQuantityQuery(rawQuery);
-    const level =
-      hit.unitLevelName ?? defaultUnitLevel(hit.product.baseUnitName, hit.product.packLevels);
+  const startsLoose = receiptContext?.saleStartsLoose ?? false;
+  const onSelect = useCallback(
+    (hit: SearchHit, rawQuery: string) => {
+      const { count } = parseQuantityQuery(rawQuery);
+      // [PCN-012] Each unit at its own price; derived for an index cached
+      // before PCN-012.
+      const units = unitsOf({
+        baseUnitName: hit.product.baseUnitName,
+        packLevels: hit.product.packLevels,
+        pricePerBasePaisa: hit.product.pricePaisa,
+        units: hit.product.units,
+      });
+      // A scanned code keeps its own unit; otherwise the unit this counter last
+      // sold the product in, else the shop's configured start (PCN-012).
+      const level =
+        hit.unitLevelName ??
+        defaultSaleUnit(units, lastSaleUnit(hit.product.id), startsLoose)?.name ??
+        hit.product.baseUnitName;
 
-    setLines((current) =>
-      addToCart(
-        current,
-        newCartLine({
-          lineId: uuidv7(),
-          productId: hit.product.id,
-          name: hit.product.name,
-          baseUnitName: hit.product.baseUnitName,
-          packLevels: hit.product.packLevels,
-          // [PCN-012] Each unit at its own price; derived for an index cached
-          // before PCN-012.
-          units: unitsOf({
-            baseUnitName: hit.product.baseUnitName,
-            packLevels: hit.product.packLevels,
-            pricePerBasePaisa: hit.product.pricePaisa,
-            units: hit.product.units,
-          }),
-          unitName: level,
-          count,
-        }),
-      ),
-    );
-    // The pack in hand, not the batch FEFO will allocate: its own code says
-    // when it expires. Said, never blocked (P2) — the operator checks the pack.
-    const pack = parseGs1(rawQuery);
-    setExpiredPack(
-      pack?.expiry && pack.expiry < businessDayOf(new Date())
-        ? { name: hit.product.name, expiry: pack.expiry }
-        : null,
-    );
-    setLastSale(null);
-    setError(null);
-  }, []);
+      const line = newCartLine({
+        lineId: uuidv7(),
+        productId: hit.product.id,
+        name: hit.product.name,
+        baseUnitName: hit.product.baseUnitName,
+        packLevels: hit.product.packLevels,
+        units,
+        unitName: level,
+        count,
+      });
+      setLines((current) => addToCart(current, line));
+      // The pack in hand, not the batch FEFO will allocate: its own code says
+      // when it expires. Said, never blocked (P2) — the operator checks the pack.
+      const pack = parseGs1(rawQuery);
+      setExpiredPack(
+        pack?.expiry && pack.expiry < businessDayOf(new Date())
+          ? { name: hit.product.name, expiry: pack.expiry }
+          : null,
+      );
+      setLastSale(null);
+      setError(null);
+    },
+    [startsLoose],
+  );
 
   /**
    * Commits the cart — ADR-3's local commit, Phase 7 rule 3.
@@ -279,6 +285,11 @@ export function SaleSurface() {
 
       try {
         await capture({ kind: 'sale', payload: command });
+        // [PCN-012] The next line of each product starts in the unit it was
+        // sold in now — recorded on the sale, never on an abandoned cart.
+        for (const line of soldLines) {
+          rememberSaleUnit(line.productId, line.unitKey);
+        }
       } catch (error) {
         // The outbox refused the record, so it is not durable, so no receipt
         // may claim it happened. Either the licence is not active (PCN-006, a

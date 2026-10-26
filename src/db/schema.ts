@@ -112,6 +112,13 @@ export interface TenantSettings {
    * absent reads as on.
    */
   autoPrintReceipt?: boolean;
+  /**
+   * [PCN-012, as amended 2026-10-26] Whether a new sale line starts in the
+   * loose unit (tablet, capsule) rather than the smallest pack, for a product
+   * this counter has not sold before. Every unit stays on the line either
+   * way. Absent reads as off: the strip, today's behaviour.
+   */
+  saleStartsLoose?: boolean;
 }
 
 /* ========================================================================== */

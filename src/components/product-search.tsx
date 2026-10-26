@@ -18,10 +18,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
-import { defaultUnitLevel, parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { lastSaleUnit } from '@/client/sale/last-unit';
+import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { MatchTier, type SearchHit } from '@/client/search/catalog-index';
 import { looksLikeScannedCode } from '@/domain/catalog/barcode';
-import { findUnit, unitsOf } from '@/domain/catalog/units';
+import { defaultSaleUnit, findUnit, unitsOf } from '@/domain/catalog/units';
 import { formatPaisa } from '@/lib/money';
 import { describeQuantity, unitLevels } from '@/lib/quantity';
 import { baseQty, paisa } from '@/lib/branded';
@@ -502,17 +504,19 @@ function ResultRow({
 
 function UnitPrice({ hit }: { hit: SearchHit }) {
   const { product } = hit;
+  const startsLoose = useReceiptContext()?.saleStartsLoose ?? false;
   const units = unitsOf({
     baseUnitName: product.baseUnitName,
     packLevels: product.packLevels,
     pricePerBasePaisa: product.pricePaisa,
     units: product.units,
   });
+  // The price of the unit a pick will add: the scanned code's own, else the
+  // Sale screen's default (PCN-012).
   const unit =
-    findUnit(
-      units,
-      hit.unitLevelName ?? defaultUnitLevel(product.baseUnitName, product.packLevels),
-    ) ?? units[0];
+    (hit.unitLevelName ? findUnit(units, hit.unitLevelName) : undefined) ??
+    defaultSaleUnit(units, lastSaleUnit(product.id), startsLoose) ??
+    units[0];
   return (
     <span className="numeral w-28 shrink-0 text-right tabular-nums">
       {formatPaisa(paisa(unit?.pricePaisa ?? product.pricePaisa))}

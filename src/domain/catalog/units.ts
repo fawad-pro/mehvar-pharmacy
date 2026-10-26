@@ -143,3 +143,21 @@ export function unitsFromEnteredPrices(
 export function legacyPricePerBase(units: readonly ProductUnit[]): number {
   return units[0]?.pricePaisa ?? 0;
 }
+
+/**
+ * [PCN-012, as amended 2026-10-26] The unit a new sale line starts in: the
+ * unit this counter last sold the product in, else the shop's configured
+ * start — the loose unit, or the smallest pack (the strip) — else the one
+ * unit a product without packs has. Every unit stays offered either way; this
+ * only picks which is pressed.
+ */
+export function defaultSaleUnit(
+  units: readonly ProductUnit[],
+  lastUsedKey: string | null,
+  startsLoose: boolean,
+): ProductUnit | undefined {
+  return (
+    units.find((unit) => unit.key === lastUsedKey) ??
+    (startsLoose ? units[0] : (units[1] ?? units[0]))
+  );
+}

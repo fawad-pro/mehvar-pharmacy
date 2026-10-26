@@ -38,7 +38,7 @@ Same path as W1 until payment: credit key → customer picker (type-ahead on nam
 
 Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry accepts the unit level ("4" + tab in tablet mode, or "1" strip), display always shows natural language ("1 strip + 4 tab"), arithmetic always in base units (Phase 5 §2). Called out because it is a known competitor-parity trap: it must feel native, not modal.
 
-*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words and limited to the units it is sold by (Tab · Strip · Box), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words; on a sale line, every unit the product has (Tab · Strip · Box; amended 2026-10-26), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
 
 ## W6. Quick item (unknown product mid-sale)
 

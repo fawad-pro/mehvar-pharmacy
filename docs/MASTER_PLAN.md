@@ -487,7 +487,7 @@ Anything the pharmacy sells. Medicines are the primary case but not the only one
 
 **All stock arithmetic happens in base units.** "3 strips + 4 tablets" is stored and computed as 34 tablets; presentation converts back to natural language. This single rule eliminates the classic sub-unit corruption bug (P4 via arithmetic honesty).
 
-*Amended 2026-10-24 by PCN-012.* Stock arithmetic stays in base units, and nobody at the counter sees them (P9). Each unit level carries its own selling price, entered as the owner knows it (strip, box), and an MRP entered against the unit it is printed for. Which units are offered is set once per pharmacy ("Do you sell loose tablets?") and per product (a "Sell" tick per unit). A product's smallest unit and existing pack sizes lock once any record references them; adding a larger pack and renaming a label stay allowed, and pack sizes must nest (a box holds a whole number of strips). A wrong pack after trading starts is fixed by replacing the product, with stock moved across by adjustments. Quantities are shown as an amount in the product's own units, largest first ("12 boxes, 3 strips, 7 tablets"), never with a word implying opened, loose or sealed packs.
+*Amended 2026-10-24 by PCN-012.* Stock arithmetic stays in base units, and nobody at the counter sees them (P9). Each unit level carries its own selling price, entered as the owner knows it (strip, box), and an MRP entered against the unit it is printed for. At the counter every unit the product has is offered; a sale line starts in the unit the product was last sold in on that counter, else in the shop's configured start, the smallest pack or the loose unit (amended 2026-10-26, PCN-012). A product's smallest unit and existing pack sizes lock once any record references them; adding a larger pack and renaming a label stay allowed, and pack sizes must nest (a box holds a whole number of strips). A wrong pack after trading starts is fixed by replacing the product, with stock moved across by adjustments. Quantities are shown as an amount in the product's own units, largest first ("12 boxes, 3 strips, 7 tablets"), never with a word implying opened, loose or sealed packs.
 
 ### Batch (stock layer)
 A quantity of a product that arrived together: batch number (as printed, optional in practice), expiry date, unit cost, and MRP/selling price at the time of arrival. Created by purchase entries and opening-stock entries. Batches are how expiry tracking, FEFO, and cost-basis reporting exist at all.
@@ -664,7 +664,7 @@ Same path as W1 until payment: credit key → customer picker (type-ahead on nam
 
 Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry accepts the unit level ("4" + tab in tablet mode, or "1" strip), display always shows natural language ("1 strip + 4 tab"), arithmetic always in base units (Phase 5 §2). Called out because it is a known competitor-parity trap: it must feel native, not modal.
 
-*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words and limited to the units it is sold by (Tab · Strip · Box), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words; on a sale line, every unit the product has (Tab · Strip · Box; amended 2026-10-26), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
 
 ## W6. Quick item (unknown product mid-sale)
 
@@ -966,7 +966,7 @@ Layout logic (not pixels): three zones with fixed roles.
 
 **Quantity grammar (I3):** `3*pana` in search = quantity 3 of the selected result; bare selection = qty 1; Tab on the qty cell cycles unit levels (tab/strip/box) where the product defines them.
 
-*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the cart line (only the units the product is sold by), beside − qty +; the price column shows the price per chosen unit. Tab still cycles the same buttons.
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the cart line (every unit the product has; amended 2026-10-26), beside − qty +; the price column shows the price per chosen unit. Tab still cycles the same buttons.
 
 **States that must be visible calmly (I7):** consuming-batch price change (D1 — line shows "price updated" chip), zero/negative stock (line proceeds, amber chip, D2), unsynced count in top bar (ADR-3), quick-add result row when search is empty (W6: one key → name+price mini-form inline).
 

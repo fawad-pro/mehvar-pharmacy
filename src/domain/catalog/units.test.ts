@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { packFactor, paisa } from '@/lib/branded';
 import { scalePriceBetweenUnits } from '@/lib/quantity';
 
-import { legacyPricePerBase, unitsFromEnteredPrices, unitsOf } from './units';
+import { defaultSaleUnit, legacyPricePerBase, unitsFromEnteredPrices, unitsOf } from './units';
 
 const panadol = [
   { name: 'tab', factor: 1 },
@@ -128,5 +128,30 @@ describe('unitsFromEnteredPrices — the owner types the price they know', () =>
   it('the legacy per-base price is the base unit’s own price', () => {
     const units = unitsFromEnteredPrices(panadol, [null, 2_760, null]) ?? [];
     expect(legacyPricePerBase(units)).toBe(276);
+  });
+});
+
+describe('the unit a new sale line starts in (PCN-012, amended)', () => {
+  const units = unitsFromEnteredPrices(panadol, [300, null, null]) ?? [];
+  const syrup = unitsFromEnteredPrices([{ name: 'bottle', factor: 1 }], [12_000]) ?? [];
+
+  it('is the strip by default, or the tablet for a shop that starts sales loose', () => {
+    expect(defaultSaleUnit(units, null, false)?.name).toBe('strip');
+    expect(defaultSaleUnit(units, null, true)?.name).toBe('tab');
+  });
+
+  it('is the unit this counter last sold the product in, whatever the shop setting', () => {
+    expect(defaultSaleUnit(units, 'u2', false)?.name).toBe('box');
+    expect(defaultSaleUnit(units, 'u0', false)?.name).toBe('tab');
+    expect(defaultSaleUnit(units, 'u1', true)?.name).toBe('strip');
+  });
+
+  it('ignores a remembered unit the product no longer has', () => {
+    expect(defaultSaleUnit(units, 'u7', false)?.name).toBe('strip');
+  });
+
+  it('is the one unit of a product without packs', () => {
+    expect(defaultSaleUnit(syrup, null, false)?.name).toBe('bottle');
+    expect(defaultSaleUnit(syrup, null, true)?.name).toBe('bottle');
   });
 });

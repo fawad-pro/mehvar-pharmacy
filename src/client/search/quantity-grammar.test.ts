@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  defaultUnitLevel,
-  nextUnitLevel,
-  parseQuantityQuery,
-  resolveQuantity,
-} from './quantity-grammar';
+import { nextUnitLevel, parseQuantityQuery, resolveQuantity } from './quantity-grammar';
 
 const LEVELS = [
   { name: 'strip', factor: 10 },
@@ -105,15 +100,5 @@ describe('cycling unit levels — what Tab does', () => {
 
   it('recovers from an unknown current level', () => {
     expect(nextUnitLevel('carton', 'tab', LEVELS)).toBe('tab');
-  });
-});
-
-describe('the default level for a new line (I3)', () => {
-  it('is a strip when the product has one — the common case pre-selected', () => {
-    expect(defaultUnitLevel('tab', LEVELS)).toBe('strip');
-  });
-
-  it('is the base unit otherwise', () => {
-    expect(defaultUnitLevel('bottle', [])).toBe('bottle');
   });
 });

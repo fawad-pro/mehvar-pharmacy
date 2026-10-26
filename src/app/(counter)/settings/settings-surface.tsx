@@ -21,6 +21,7 @@ import {
   resetUserPinAction,
   setUserActiveAction,
   updateReceiptSettingsAction,
+  updateSaleStartsLooseAction,
 } from './actions';
 
 /** Just the two fields this screen edits — see actions.ts for why this is not
@@ -36,11 +37,94 @@ export function SettingsSurface() {
     <section className="mx-auto flex max-w-2xl flex-col gap-8 p-4">
       <h1 className="text-green-900 text-2xl font-semibold">Settings</h1>
       <ReceiptSettingsForm />
+      <SellingSettings />
       <UsersAndPins />
       <PrinterGuide />
       <LicenceSection />
       <ExportSection />
     </section>
+  );
+}
+
+/**
+ * [PCN-012, as amended 2026-10-26] Which unit a sale line starts in for a
+ * product this counter has not sold before. Every unit stays one tap away on
+ * the line; this only saves that tap for the shop's usual case. It applies to
+ * every product at once, existing ones included.
+ */
+function SellingSettings() {
+  const receiptContext = useReceiptContext();
+  const [startsLoose, setStartsLoose] = useState<boolean | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+
+  useEffect(() => {
+    void currentTenantSettingsAction().then((current) => {
+      if (current) {
+        setStartsLoose(current.saleStartsLoose ?? false);
+      }
+    });
+  }, []);
+
+  async function save(): Promise<void> {
+    if (startsLoose === null || busy) {
+      return;
+    }
+    setBusy(true);
+    setDone(null);
+    const outcome = await updateSaleStartsLooseAction(startsLoose);
+    // The counter holds its settings for the session, as with the receipt.
+    if (outcome.ok) {
+      await receiptContext?.reload();
+    }
+    setBusy(false);
+    setDone(outcome.ok ? 'Saved.' : outcome.message);
+  }
+
+  return (
+    <div className="border-line rounded border p-4">
+      <h2 className="text-green-900 mb-2 font-medium">Selling</h2>
+      {startsLoose === null ? (
+        <p className="text-ink/50 text-sm">Loading…</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={startsLoose}
+              onChange={(event) => {
+                setStartsLoose(event.target.checked);
+                setDone(null);
+              }}
+              className="mt-1"
+            />
+            <span>
+              Start sales in loose tablets/capsules
+              <span className="text-ink/50 block text-xs">
+                Off: a sale starts in the strip (the smallest pack). Either way every unit is one
+                tap away on the line, and each product starts in the unit it was last sold in.
+              </span>
+            </span>
+          </label>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => void save()}
+              aria-label="Save selling setting"
+              disabled={busy}
+              className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            {done ? (
+              <p className="text-green-900 text-sm" role="status">
+                {done}
+              </p>
+            ) : null}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

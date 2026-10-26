@@ -1511,3 +1511,31 @@ once:
   delivery's MRP differs from the product's, ask whether to update the
   product's price rather than changing it silently. No barcode carries the
   price: GS1 pharma codes carry product number, expiry, batch and serial only.
+
+**Counter unit control, amended** (owner, 2026-10-26, built before Session 2).
+Decision 3's "one 'Sell' tick per unit; a unit not ticked never appears at the
+counter" is **replaced**. Asked how existing products should behave (every
+existing product would have started its first line in tablets, since all its
+units read as ticked), the owner decided:
+
+- **Every unit the product has is always on the sale line**, as buttons beside
+  − count + (Phase 10 §4 as amended). The pharmacist can switch at any time;
+  the count is kept and the line is priced and deducted in the chosen unit
+  (count × the unit's size, in base units). Tab still cycles them all.
+- **Which button starts pressed:** the unit the product was last sold in on
+  this counter (recorded when a sale commits, never from an abandoned cart);
+  for a product with no sale there, the shop's configured start.
+- **The shop's configured start** is one setting, "Start sales in loose
+  tablets/capsules": off starts a line in the smallest pack (the strip), on in
+  the loose unit. Absent reads as off, which is what the counter did before.
+  It applies to every product at once, existing ones included, so the
+  "apply to existing products" step the owner chose is the setting itself — a
+  separate bulk-write button would change nothing further.
+- **No per-product "Sell" ticks.** With every unit offered, a tick would only
+  pick the starting unit, which the setting and the last sale already do.
+  `ProductUnit.sell` stays in the stored data (all true) and is not read by the
+  counter.
+- A scanned code still adds the line in the code's own unit.
+
+Out of scope here and unchanged: the purchase defaults (pack units only, the
+largest pack) and the remaining Session 2 items above.

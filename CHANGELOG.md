@@ -2,6 +2,18 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — Units as buttons on the sale line (PCN-012, as amended)
+
+- Every unit a product has (tab, strip, box) is a button on its cart line,
+  beside − and + for the count, so a tablet or touch screen can change the
+  unit and quantity without a keyboard. The price column shows the price of
+  the chosen unit; the line is charged and stock is taken in that unit.
+  Tab, + and − work as before.
+- A new line starts in the unit that product was last sold in on this counter,
+  else in the strip — or in tablets, for a shop that turns on "Start sales in
+  loose tablets/capsules" (Settings → Selling). A scanned barcode still adds
+  its own unit.
+
 ## Session — The unsynced badge never drops to zero over queued records
 
 - Reading the offline queue occasionally failed (an aborted browser-storage
