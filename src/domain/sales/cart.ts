@@ -247,17 +247,28 @@ export function removeLine(lines: readonly CartLine[], lineId: string): CartLine
   return lines.filter((line) => line.lineId !== lineId);
 }
 
-/** Rupee amounts arrive from a numeric field; this is the one conversion point. */
-export function paisaFromRupeeInput(raw: string): Paisa {
-  const value = Number(raw.trim());
-  if (!Number.isFinite(value) || value < 0) {
-    return ZERO_PAISA;
+/**
+ * A typed rupee amount in paisa, or null when the text is not one: blank,
+ * junk (a GS1 code ends in letters), negative, or more paisa than a number
+ * holds exactly (sixteen digits and up — a scanned code). For the fields where
+ * "not an amount" must not quietly read as zero: a drawer count, Paid now.
+ */
+export function parseRupeeInput(raw: string): Paisa | null {
+  const text = raw.trim();
+  const value = Number(text);
+  if (text === '' || !Number.isFinite(value) || value < 0) {
+    return null;
   }
   const converted = Math.round(value * 100);
-  // A barcode scanned into an amount field (sixteen digits and up) is more
-  // paisa than a number holds exactly. Unreadable, like junk — never a throw
-  // mid-render; a caller that must not take it as zero checks the size first.
-  return Number.isSafeInteger(converted) ? paisa(converted) : ZERO_PAISA;
+  return Number.isSafeInteger(converted) ? paisa(converted) : null;
+}
+
+/**
+ * Rupee amounts arrive from a numeric field; this is the one conversion point.
+ * Anything that is not an amount reads as zero — never a throw mid-render.
+ */
+export function paisaFromRupeeInput(raw: string): Paisa {
+  return parseRupeeInput(raw) ?? ZERO_PAISA;
 }
 
 /**

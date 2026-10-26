@@ -26,7 +26,7 @@ import {
   type CatalogSearchResult,
   type ProductDraft,
 } from '@/domain/catalog/product';
-import { rupeesToPaisa } from '@/lib/money';
+import { parseRupeeInput } from '@/domain/sales/cart';
 import type { Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
@@ -72,11 +72,11 @@ function draftFromForm(form: FormData): ProductDraft {
   // [PCN-012] `unitPrice-0` is the base unit, then one per pack level. Entered
   // in rupees, stored in paisa: the conversion happens once, here at the
   // boundary (Phase 9 §1). A blank or unreadable box is "not typed".
-  const unitPrices = [0, ...packLevels.map((_, index) => index + 1)].map((index) => {
-    const raw = String(form.get(`unitPrice-${index}`) ?? '').trim();
-    const value = Number(raw);
-    return raw === '' || !Number.isFinite(value) || value < 0 ? null : rupeesToPaisa(value);
-  });
+  // Unreadable includes a number too large to hold exactly (a scanned code),
+  // which used to throw out of this action.
+  const unitPrices = Array.from({ length: packLevels.length + 1 }, (_, index) =>
+    parseRupeeInput(String(form.get(`unitPrice-${index}`) ?? '')),
+  );
   const mrp = String(form.get('mrp') ?? '').trim();
   const minStock = String(form.get('minStock') ?? '').trim();
 
@@ -93,7 +93,7 @@ function draftFromForm(form: FormData): ProductDraft {
     // than saving a product at Rs 0.
     pricePaisa: unitPrices.some((price) => price !== null) ? 0 : Number.NaN,
     unitPrices,
-    mrpPaisa: mrp === '' ? null : rupeesToPaisa(Number(mrp)),
+    mrpPaisa: parseRupeeInput(mrp),
     minStockBaseUnits: minStock === '' ? null : Math.trunc(Number(minStock)),
     needsCompletion: form.get('needsCompletion') === 'on',
     globalProductId: String(form.get('globalProductId') ?? '').trim() || null,

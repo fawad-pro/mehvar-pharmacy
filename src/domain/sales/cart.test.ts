@@ -12,6 +12,7 @@ import {
   lineTotal,
   newCartLine,
   paisaFromRupeeInput,
+  parseRupeeInput,
   parseDiscountInput,
   removeLine,
   splitPayment,
@@ -249,6 +250,16 @@ describe('rupee input', () => {
   it('treats an amount too large to hold exactly as unreadable, never a throw', () => {
     // "12" typed into Unit cost, then a scanned EAN-13 that was not caught.
     expect(paisaFromRupeeInput('122030297825992')).toBe(0);
+  });
+
+  it('says "not an amount" rather than zero, for the fields that must tell them apart', () => {
+    expect(parseRupeeInput('250.50')).toBe(25_050);
+    expect(parseRupeeInput('0')).toBe(0);
+    expect(parseRupeeInput('')).toBeNull();
+    // A pack's GS1 code ends in letters; a long one overflows.
+    expect(parseRupeeInput('01089640015901701728033110563C')).toBeNull();
+    expect(parseRupeeInput('122030297825992')).toBeNull();
+    expect(parseRupeeInput('-5')).toBeNull();
   });
 });
 

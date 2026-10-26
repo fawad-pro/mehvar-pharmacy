@@ -2,6 +2,23 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session — One scan guard for every field
+
+- Patching amount fields one at a time kept leaving the next one open. At the
+  pilot: a GS1 code scanned into Receive Stock's Paid now read as Rs 0 and put
+  the whole invoice on credit; scanned into a supplier's Pay it crashed the
+  screen; and a plain EAN there recorded a supplier payment of
+  Rs 8,964,001,590,170 (reproduced on the test database).
+- Now one guard covers every text field on every screen: a scan is
+  recognised by its speed, its Enter is swallowed before the screen sees it,
+  the field is put back as it was, and one notice says so. Only the fields
+  meant for scans take them: product search, Returns search, a product's
+  barcode field, and the Receive Stock line.
+- Behind it, text that is not an amount is never read as zero where that
+  would record something: Paid now and the drawer count say "Not an amount"
+  and wait. The supplier Pay row, the drawer count and the product form no
+  longer crash on a very long number.
+
 ## Session — A barcode scanned into a payment amount never becomes money
 
 - A barcode scanned into Cash tendered replaced the amount, and the scanner's

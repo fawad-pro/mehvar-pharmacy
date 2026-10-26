@@ -23,7 +23,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
-import { needsClickToCommit, useAmountScanGuard } from '@/client/scan/amount-guard';
+import { needsClickToCommit } from '@/client/scan/amount-guard';
 
 export interface QuickItemDraft {
   name: string;
@@ -62,28 +62,8 @@ export function QuickItemForm({
   const [unit, setUnit] = useState(DEFAULT_BASE_UNIT);
   const priceField = useRef<HTMLInputElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
-  /** Why Enter did not save: a scan landed in a field, or an implausible price. */
+  /** Why Enter did not save: a price too large to be real (see amount-guard). */
   const [notice, setNotice] = useState<string | null>(null);
-  // A scanner's Enter would save whatever it typed — a code as the name or as
-  // a price of billions (see amount-guard). Each field puts a scan back.
-  const nameGuard = useAmountScanGuard(name);
-  const priceGuard = useAmountScanGuard(price);
-  const unitGuard = useAmountScanGuard(unit);
-
-  function guardScan(
-    event: React.KeyboardEvent,
-    guard: (event: React.KeyboardEvent) => string | null,
-    restore: (value: string) => void,
-  ): void {
-    const beforeScan = guard(event);
-    if (beforeScan !== null) {
-      event.preventDefault();
-      // Not the form's own Enter: nothing is saved.
-      event.stopPropagation();
-      restore(beforeScan);
-      setNotice('That was a barcode — nothing was saved. Type the name and price.');
-    }
-  }
 
   // A typed name is already right, so focus starts on the one thing still
   // unknown. With no name — the form was opened from an unknown scanned code,
@@ -165,9 +145,6 @@ export function QuickItemForm({
             setName(event.target.value);
             setNotice(null);
           }}
-          onKeyDown={(event) => {
-            guardScan(event, nameGuard, setName);
-          }}
           autoComplete="off"
           className="border-line focus:border-green-600 h-touch mb-3 w-full rounded border px-3 text-lg outline-none"
         />
@@ -186,9 +163,6 @@ export function QuickItemForm({
                 setPrice(event.target.value);
                 setNotice(null);
               }}
-              onKeyDown={(event) => {
-                guardScan(event, priceGuard, setPrice);
-              }}
               placeholder="0"
               className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
             />
@@ -203,9 +177,6 @@ export function QuickItemForm({
               onChange={(event) => {
                 setUnit(event.target.value);
                 setNotice(null);
-              }}
-              onKeyDown={(event) => {
-                guardScan(event, unitGuard, setUnit);
               }}
               autoComplete="off"
               className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"

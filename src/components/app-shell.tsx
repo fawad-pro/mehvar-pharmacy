@@ -21,6 +21,7 @@ import { ServiceWorker } from '@/client/sync/service-worker';
 import { KeyBar } from './key-bar';
 import { LicenceBanner, type LicenceNotice } from './licence-banner';
 import { PinSwitchOverlay, type SwitchableUser } from './pin-switch-overlay';
+import { ScanGuard } from './scan-guard';
 import { SettleUdhaarOverlay } from './settle-udhaar-overlay';
 import { TopBar } from './top-bar';
 
@@ -98,6 +99,9 @@ export function AppShell({
         {/* Every screen re-reads when the outbox lands a record — see the
             component's own note. Mounted here so no surface has to know. */}
         <RefreshOnSync />
+        {/* A barcode scanned into a field not meant for one is put back,
+            on every screen (see the component). */}
+        <ScanGuard />
 
         <div className="flex h-screen flex-col">
           <TopBar

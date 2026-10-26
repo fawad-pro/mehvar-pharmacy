@@ -28,7 +28,8 @@ import {
 } from '@/client/purchases/draft';
 import { scanCandidates, type KeyStroke } from '@/client/scan/burst';
 import { parseGs1 } from '@/domain/catalog/barcode';
-import { paisaFromRupeeInput } from '@/domain/sales/cart';
+import { paisaFromRupeeInput, parseRupeeInput } from '@/domain/sales/cart';
+import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { effectiveUnitCostPaisa, receivedQty } from '@/domain/purchases/costing';
 import { purchaseWarnings, type PurchaseWarning } from '@/domain/purchases/purchase-command';
 import { paisa } from '@/lib/branded';
@@ -147,11 +148,13 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
 
   // [PCN-007] "Paid now": empty means the whole invoice was paid (an ordinary
   // cash purchase, unchanged). Anything less is put on the supplier's account.
-  const cashPaidPaisa =
-    draft.cashPaidText !== undefined && draft.cashPaidText.trim() !== ''
-      ? paisaFromRupeeInput(draft.cashPaidText)
-      : invoiceTotal;
-  const creditPaisa = Math.max(0, invoiceTotal - cashPaidPaisa);
+  // Text that is not an amount (a scanned GS1 code ends in letters) is said,
+  // never read as Rs 0 — that put the whole invoice on credit unannounced.
+  const cashPaidTyped = (draft.cashPaidText ?? '').trim() !== '';
+  const cashPaidParsed = cashPaidTyped ? parseRupeeInput(draft.cashPaidText ?? '') : null;
+  const cashPaidUnreadable = cashPaidTyped && cashPaidParsed === null;
+  const cashPaidPaisa = cashPaidParsed ?? invoiceTotal;
+  const creditPaisa = cashPaidUnreadable ? 0 : Math.max(0, invoiceTotal - cashPaidPaisa);
 
   const command = useMemo(
     () => ({
@@ -338,7 +341,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
   }
 
   async function receive(): Promise<void> {
-    if (draft.lines.length === 0 || busy) {
+    if (draft.lines.length === 0 || busy || cashPaidUnreadable) {
       return;
     }
     setBusy(true);
@@ -438,6 +441,9 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
         {pending ? (
           <div
             className="mt-3 flex flex-wrap items-end gap-2"
+            // The line routes a scan to the next product itself, so the
+            // counter's scan guard leaves its fields alone.
+            data-scan-target=""
             onKeyDownCapture={onLineKeyDownCapture}
             onKeyDown={(event) => {
               if (event.key === 'Enter') {
@@ -662,8 +668,21 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
             onChange={(event) => {
               setDraft((current) => ({ ...current, cashPaidText: event.target.value }));
             }}
+            {...(cashPaidUnreadable || needsClickToCommit(cashPaidPaisa)
+              ? { 'aria-describedby': 'cash-paid-problem' }
+              : {})}
             className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
           />
+          {cashPaidUnreadable ? (
+            <p id="cash-paid-problem" className="text-red mt-1 text-xs" role="alert">
+              Not an amount — type what was paid, or clear it for paid in full.
+            </p>
+          ) : needsClickToCommit(cashPaidPaisa) ? (
+            <p id="cash-paid-problem" className="text-amber mt-1 text-xs" role="alert">
+              {formatPaisa(paisa(cashPaidPaisa), { withSymbol: true })} looks like a barcode. Check
+              Paid now.
+            </p>
+          ) : null}
         </div>
 
         {creditPaisa > 0 ? (
@@ -681,7 +700,12 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
         <button
           type="button"
           onClick={() => void receive()}
-          disabled={draft.lines.length === 0 || busy || (creditPaisa > 0 && !draft.supplierId)}
+          disabled={
+            draft.lines.length === 0 ||
+            busy ||
+            cashPaidUnreadable ||
+            (creditPaisa > 0 && !draft.supplierId)
+          }
           className="bg-green-600 text-paper min-h-touch ml-auto rounded px-6 text-lg font-medium disabled:opacity-40"
         >
           {busy ? 'Receiving…' : 'Receive stock'}

@@ -16,7 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { paisaFromRupeeInput, splitPayment } from '@/domain/sales/cart';
 import { keyFor } from '@/client/keyboard/registry';
-import { needsClickToCommit, useAmountScanGuard } from '@/client/scan/amount-guard';
+import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { formatPaisa } from '@/lib/money';
 import type { Paisa } from '@/lib/branded';
 
@@ -42,7 +42,7 @@ export function PaymentOverlay({
 }) {
   const [tenderedInput, setTenderedInput] = useState(() => (totalPaisa / 100).toFixed(2));
   const field = useRef<HTMLInputElement>(null);
-  /** Why Enter did not commit: a scan landed here, or an implausible amount. */
+  /** Why Enter did not commit: an amount too large to be cash (see amount-guard). */
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,7 +54,6 @@ export function PaymentOverlay({
   const split = splitPayment(totalPaisa, tenderedPaisa);
   const short = split.creditPaisa > 0;
   const canCommit = !short || customerName !== null;
-  const scanGuard = useAmountScanGuard(tenderedInput);
 
   function commit(): void {
     if (!canCommit || busy) {
@@ -95,15 +94,6 @@ export function PaymentOverlay({
             setNotice(null);
           }}
           onKeyDown={(event) => {
-            const beforeScan = scanGuard(event);
-            if (beforeScan !== null) {
-              event.preventDefault();
-              setTenderedInput(beforeScan);
-              setNotice(
-                `That was a barcode, not cash — nothing was saved. Press Esc to go back to the cart and scan it there.`,
-              );
-              return;
-            }
             if (event.key === 'Enter') {
               event.preventDefault();
               if (needsClickToCommit(tenderedPaisa)) {

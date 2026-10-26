@@ -18,6 +18,7 @@ import { CatalogPicker } from './catalog-picker';
 import { useCatalog } from '@/client/search/provider';
 import { exceedsMrp, parsePackLevels } from '@/domain/catalog/product';
 import { unitsFromEnteredPrices } from '@/domain/catalog/units';
+import { parseRupeeInput } from '@/domain/sales/cart';
 import type { PackLevel } from '@/lib/quantity';
 
 export interface ProductFormValues {
@@ -95,17 +96,14 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
     { name: baseUnit.trim(), factor: 1 },
     ...parsed.filter((level) => Number.isSafeInteger(level.factor) && level.factor > 1),
   ].filter((unit) => unit.name !== '');
-  const typedPaisa = structure.map((unit) => {
-    const raw = (prices[unit.name] ?? '').trim();
-    return raw === '' || !Number.isFinite(Number(raw)) || Number(raw) < 0
-      ? null
-      : Math.round(Number(raw) * 100);
-  });
+  // Not an amount (junk, or a number too large to hold exactly) is "not
+  // typed" — never a throw mid-render.
+  const typedPaisa = structure.map((unit) => parseRupeeInput(prices[unit.name] ?? ''));
   const suggested = unitsFromEnteredPrices(structure, typedPaisa) ?? [];
 
   const overMrp = exceedsMrp(
     suggested[0]?.pricePaisa ?? 0,
-    mrp === '' ? null : Math.round(Number(mrp) * 100),
+    parseRupeeInput(mrp),
   );
 
   if (picking) {

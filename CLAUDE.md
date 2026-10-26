@@ -624,3 +624,19 @@ exception visibility.
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
 boundaries. Migrations are committed with their feature. `npm run verify` before
 pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
+
+## Things the scan guard established
+
+- **A scanner types into whatever has the cursor and presses Enter.** Every
+  form that commits on Enter was one scan away from recording a barcode as
+  money: Cash tendered, a settlement, a supplier payment, Paid now. Fixing
+  them one by one found the next one each time.
+- **One guard on the window, ahead of every screen** (`client/scan/field-guard.ts`,
+  mounted by `ScanGuard` in the shell). A field that is MEANT to receive scans
+  opts out with `data-scan-target`; everything else is protected without
+  anyone remembering to protect it. A new scan field that forgets the
+  attribute fails loudly (its scans are put back), never silently.
+- **"Not an amount" is not zero.** `parseRupeeInput` returns null; use it
+  wherever reading junk as Rs 0 would record something (a drawer count, Paid
+  now). `paisaFromRupeeInput` (zero for junk) is only for fields where zero
+  commits nothing.

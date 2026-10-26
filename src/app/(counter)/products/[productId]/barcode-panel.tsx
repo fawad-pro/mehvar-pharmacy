@@ -99,6 +99,7 @@ export function BarcodePanel({
             id="barcode"
             name="barcode"
             ref={field}
+            data-scan-target=""
             autoComplete="off"
             className="border-line focus:border-green-600 h-touch mt-1 w-full rounded border px-3 outline-none"
           />

@@ -231,6 +231,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
               search(event.target.value);
             }}
             placeholder="Scan or search…"
+            data-scan-target=""
             className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
           />
 

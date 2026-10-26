@@ -275,6 +275,8 @@ export function ProductSearch({
         autoComplete="off"
         spellCheck={false}
         placeholder="Search or scan…"
+        // Scans belong here; the counter's scan guard leaves this field alone.
+        data-scan-target=""
         aria-autocomplete="list"
         aria-controls="product-search-results"
         aria-expanded={visibleHits.length > 0 || codeOptions.length > 0}

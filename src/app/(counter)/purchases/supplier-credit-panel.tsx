@@ -24,6 +24,8 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { needsClickToCommit } from '@/client/scan/amount-guard';
+import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { supplierPaymentEffect } from '@/domain/suppliers/supplier-position';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
@@ -155,13 +157,12 @@ export function SupplierCreditRow({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const enteredPaisa = Math.round(Number(amount || '0') * 100);
+  // Anything that is not an amount reads as zero, so nothing is recorded — a
+  // GS1 code here once overflowed into the credit sum and crashed the row.
+  const enteredPaisa = paisaFromRupeeInput(amount);
   // [PCN-011] Said before recording, never blocked: paying more than is owed
   // leaves the rest with the supplier as credit.
-  const { leavesCreditPaisa } = supplierPaymentEffect(
-    row.balancePaisa,
-    Number.isFinite(enteredPaisa) ? enteredPaisa : 0,
-  );
+  const { leavesCreditPaisa } = supplierPaymentEffect(row.balancePaisa, enteredPaisa);
 
   async function settle(): Promise<void> {
     const amountPaisa = enteredPaisa;
@@ -221,6 +222,13 @@ export function SupplierCreditRow({
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
+              // An amount too large to be real records only by a click.
+              if (needsClickToCommit(enteredPaisa)) {
+                setError(
+                  `${formatPaisa(enteredPaisa, { withSymbol: true })} looks like a barcode. If it is right, click Record payment.`,
+                );
+                return;
+              }
               void settle();
             }
           }}
@@ -236,6 +244,7 @@ export function SupplierCreditRow({
               autoFocus
               onChange={(event) => {
                 setAmount(event.target.value);
+                setError(null);
               }}
               className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
             />

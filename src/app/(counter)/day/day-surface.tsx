@@ -20,6 +20,7 @@ import {
   type CashDirection,
   type CashReason,
 } from '@/domain/cash/cash-command';
+import { paisaFromRupeeInput, parseRupeeInput } from '@/domain/sales/cart';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
@@ -655,11 +656,15 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  const countedPaisa = Math.round(Number(counted || '0') * 100);
+  // A count that is not an amount is said, never read as Rs 0 — that would
+  // record the whole drawer as short.
+  const countedParsed = parseRupeeInput(counted);
+  const unreadable = counted.trim() !== '' && countedParsed === null;
+  const countedPaisa = countedParsed ?? 0;
   const differencePaisa = countedPaisa - expectedCashPaisa;
 
   async function record(): Promise<void> {
-    if (differencePaisa === 0 || busy) {
+    if (countedParsed === null || differencePaisa === 0 || busy) {
       return;
     }
     setBusy(true);
@@ -701,7 +706,11 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
             className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
           />
         </div>
-        {counted !== '' ? (
+        {unreadable ? (
+          <p className="text-red text-sm" role="alert">
+            Not an amount — type the cash you counted.
+          </p>
+        ) : counted !== '' ? (
           <p className={`text-sm ${differencePaisa === 0 ? 'text-green-900' : 'text-amber'}`}>
             {differencePaisa === 0
               ? 'Matches exactly.'
@@ -711,7 +720,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
         <button
           type="button"
           onClick={() => void record()}
-          disabled={busy || counted === '' || differencePaisa === 0}
+          disabled={busy || countedParsed === null || differencePaisa === 0}
           className="bg-green-600 text-paper min-h-touch ml-auto rounded px-5 font-medium disabled:opacity-40"
         >
           {busy ? 'Recording…' : 'Record over/short'}
@@ -751,7 +760,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
   const direction = directionFor(reason);
 
   async function record(): Promise<void> {
-    const amountPaisa = Math.round(Number(amount || '0') * 100);
+    const amountPaisa = paisaFromRupeeInput(amount);
     if (amountPaisa <= 0 || busy || direction === null) {
       return;
     }
@@ -837,7 +846,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
         <button
           type="button"
           onClick={() => void record()}
-          disabled={busy || Math.round(Number(amount || '0') * 100) <= 0}
+          disabled={busy || paisaFromRupeeInput(amount) <= 0}
           className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
         >
           {busy ? 'Saving…' : 'Save'}
