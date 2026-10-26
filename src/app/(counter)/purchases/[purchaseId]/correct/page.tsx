@@ -8,7 +8,7 @@ import {
   correctionsForPurchase,
 } from '@/db/correction-queries';
 import { findPurchase } from '@/db/purchase-queries';
-import { correctedLine } from '@/domain/purchases/purchase-correction';
+import { correctedLine, lineStateOf } from '@/domain/purchases/purchase-correction';
 
 import { CorrectSurface, type CorrectableLineView } from './correct-surface';
 
@@ -48,7 +48,7 @@ export default async function CorrectPurchasePage({
     const batch = lineBatches.find((candidate) => candidate.lineId === line.lineId);
     if (!batch) return [];
     const current = correctedLine(
-      line,
+      lineStateOf(line),
       corrections.filter((correction) => correction.purchaseLineId === line.lineId),
     );
     return [
@@ -60,6 +60,9 @@ export default async function CorrectPurchasePage({
         packLevels: [...line.packLevels],
         qtyBase: current.qtyBase,
         bonusQtyBase: current.bonusQtyBase,
+        // [PCN-012] The line's own unit: a box line is corrected in boxes.
+        unitName: line.unitName ?? line.baseUnitName,
+        factor: current.factor,
         unitCostPaisa: current.unitCostPaisa,
         onHandBase: batch.qtyRemainingBase,
         effectiveUnitCostPaisa: correctedCosts.get(batch.batchId) ?? batch.unitCostPaisa,

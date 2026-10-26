@@ -17,5 +17,5 @@ export default async function PurchasesPage() {
   if (!session) {
     redirect('/login');
   }
-  return <PurchaseEntry tenantId={session.tenantId} />;
+  return <PurchaseEntry tenantId={session.tenantId} isOwner={session.userRole === 'owner'} />;
 }

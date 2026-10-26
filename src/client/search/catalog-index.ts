@@ -69,6 +69,8 @@ export interface IndexedProduct {
    */
   readonly units?: readonly ProductUnit[];
   readonly mrpPaisa: number | null;
+  /** [PCN-012] MRP as printed, for the unit it is printed on; absent when only the per-base figure exists. */
+  readonly mrpUnit?: { readonly key: string; readonly paisa: number } | null;
   readonly needsCompletion: boolean;
 }
 

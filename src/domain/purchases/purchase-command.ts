@@ -20,23 +20,54 @@
 
 import type { Uuid } from '@/lib/uuid';
 
+/**
+ * [PCN-012] A line as the invoice states it, in one of the product's units:
+ * "10 boxes + 1 free at Rs 250 a box, selling at Rs 280 a box". The line's
+ * cost is exactly `unitCount × unitCostPaisa` — never a per-tablet figure
+ * multiplied back, which cannot hold a box of 14 at Rs 250.
+ */
+export interface EnteredPurchaseUnit {
+  /** The product's unit (`ProductUnit.key`); its size turns counts into base units. */
+  readonly unitKey: string;
+  /** As shown when entered ("box"), kept even if the unit is renamed later. */
+  readonly unitName: string;
+  readonly unitCount: number;
+  /** Free units, in the same unit as the paid ones. */
+  readonly bonusUnitCount: number;
+  /** The cost of ONE unit, as invoiced. Zero is legal — samples exist. */
+  readonly unitCostPaisa: number;
+  /** What ONE unit sells for, set at receiving. */
+  readonly pricePaisa: number;
+}
+
 export interface PurchaseLineCommand {
   /** Client-generated; becomes `purchase_lines.id`. */
   readonly lineId: Uuid;
   readonly productId: Uuid;
-  /** Units invoiced. Must be positive — a zero-quantity line is a typo. */
+  /** Units invoiced, in base units. Must be positive — a zero-quantity line is a typo. */
   readonly qtyBase: number;
-  /** Scheme units received free ("10+1"). Kept distinct (Phase 5 §3). */
+  /** Scheme units received free ("10+1"), in base units. Kept distinct (Phase 5 §3). */
   readonly bonusQtyBase: number;
-  /** Per invoiced base unit, as billed. Zero is legal — samples exist. */
+  /**
+   * Per invoiced base unit. As billed on a line without `entered`; nominal
+   * (rounded up) on one with it, where `entered` is the invoice's truth.
+   */
   readonly unitCostPaisa: number;
   /** ISO date, or null for a non-perishable. */
   readonly expiryDate: string | null;
   readonly batchNumber: string | null;
-  /** Captured at receiving (Phase 1 §3); null when the pack does not state one. */
+  /**
+   * Captured at receiving (Phase 1 §3); null when the pack does not state one.
+   * Per the entered unit when the line has `entered`, per base unit otherwise.
+   */
   readonly mrpAtReceivingPaisa: number | null;
-  /** What this stock will sell for. Capture-at-receiving, per batch. */
+  /**
+   * What this stock will sell for, per base unit. Capture-at-receiving, per
+   * batch; nominal (rounded up) when the line has `entered`.
+   */
   readonly priceAtReceivingPaisa: number;
+  /** [PCN-012] Present when the line was entered in one of the product's units. */
+  readonly entered?: EnteredPurchaseUnit;
 }
 
 export interface PurchaseCommand {
@@ -71,11 +102,23 @@ export type PurchaseRejection =
   | 'invalid_price'
   | 'invalid_expiry'
   | 'negative_cash_paid'
-  | 'credit_without_supplier';
+  | 'credit_without_supplier'
+  /** [PCN-012] The entered unit does not describe the base quantities. */
+  | 'invalid_unit';
+
+/**
+ * What a line cost — exactly what the invoice says. Bonus units are free
+ * (Phase 9 §3). The one place a purchase line's cost is computed.
+ */
+export function lineCostPaisa(line: PurchaseLineCommand): number {
+  return line.entered
+    ? line.entered.unitCount * line.entered.unitCostPaisa
+    : line.qtyBase * line.unitCostPaisa;
+}
 
 /** The invoice's total cost — Σ line cost, bonus units free (Phase 9 §3). */
 export function invoiceCostPaisa(command: PurchaseCommand): number {
-  return command.lines.reduce((sum, line) => sum + line.qtyBase * line.unitCostPaisa, 0);
+  return command.lines.reduce((sum, line) => sum + lineCostPaisa(line), 0);
 }
 
 /** Cash paid at receiving, defaulting to the whole invoice ("paid in full"). */
@@ -115,6 +158,9 @@ export function validatePurchaseCommand(
     if (line.expiryDate !== null && !ISO_DATE.test(line.expiryDate)) {
       return { ok: false, reason: 'invalid_expiry', lineId: line.lineId };
     }
+    if (line.entered && !enteredDescribesLine(line, line.entered)) {
+      return { ok: false, reason: 'invalid_unit', lineId: line.lineId };
+    }
   }
 
   if (command.cashPaidPaisa !== undefined) {
@@ -135,6 +181,33 @@ export function validatePurchaseCommand(
 }
 
 /**
+ * The entered unit is whole and consistent with the base quantities: both are
+ * whole multiples of ONE unit size (the database enforces the same). Whether
+ * that size is the product's is the writer's check — it holds the product.
+ */
+function enteredDescribesLine(line: PurchaseLineCommand, entered: EnteredPurchaseUnit): boolean {
+  return (
+    entered.unitKey !== '' &&
+    entered.unitName.trim() !== '' &&
+    Number.isSafeInteger(entered.unitCount) &&
+    entered.unitCount > 0 &&
+    Number.isSafeInteger(entered.bonusUnitCount) &&
+    entered.bonusUnitCount >= 0 &&
+    Number.isSafeInteger(entered.unitCostPaisa) &&
+    entered.unitCostPaisa >= 0 &&
+    Number.isSafeInteger(entered.pricePaisa) &&
+    entered.pricePaisa > 0 &&
+    line.qtyBase % entered.unitCount === 0 &&
+    line.bonusQtyBase * entered.unitCount === entered.bonusUnitCount * line.qtyBase
+  );
+}
+
+/** The size of the entered unit, in base units, or 1 for a line without one. */
+export function enteredUnitFactor(line: PurchaseLineCommand): number {
+  return line.entered ? line.qtyBase / line.entered.unitCount : 1;
+}
+
+/**
  * Everything worth telling the operator that is not worth stopping them for.
  *
  * All four of these are things a careful person wants to see and a busy person
@@ -148,10 +221,11 @@ export function purchaseWarnings(
   const warnings: PurchaseWarning[] = [];
 
   for (const line of command.lines) {
-    if (
-      line.mrpAtReceivingPaisa !== null &&
-      line.priceAtReceivingPaisa > line.mrpAtReceivingPaisa
-    ) {
+    // Compared in the unit the line was entered in, which is the unit the MRP
+    // was read off: no per-tablet rounding can raise a false warning.
+    const price = line.entered ? line.entered.pricePaisa : line.priceAtReceivingPaisa;
+    const cost = line.entered ? line.entered.unitCostPaisa : line.unitCostPaisa;
+    if (line.mrpAtReceivingPaisa !== null && price > line.mrpAtReceivingPaisa) {
       // D4: MRP is regulated and printed on the pack. Selling above it is the
       // owner's call and their exposure, but nobody should do it unknowingly.
       warnings.push({ kind: 'price_above_mrp', lineId: line.lineId });
@@ -160,7 +234,7 @@ export function purchaseWarnings(
     // Comparison against the *invoiced* unit cost rather than the effective
     // one: a scheme purchase priced under the invoice line but above the
     // blended cost is ordinary trading, not a mistake worth flagging.
-    if (line.priceAtReceivingPaisa < line.unitCostPaisa) {
+    if (price < cost) {
       warnings.push({ kind: 'price_below_cost', lineId: line.lineId });
     }
 

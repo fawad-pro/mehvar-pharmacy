@@ -27,16 +27,23 @@ import {
   type PurchaseDraft,
 } from '@/client/purchases/draft';
 import { scanCandidates, type KeyStroke } from '@/client/scan/burst';
-import { parseGs1 } from '@/domain/catalog/barcode';
+import { looksLikeScannedCode, parseGs1 } from '@/domain/catalog/barcode';
 import { paisaFromRupeeInput, parseRupeeInput } from '@/domain/sales/cart';
 import { needsClickToCommit } from '@/client/scan/amount-guard';
-import { effectiveUnitCostPaisa, receivedQty } from '@/domain/purchases/costing';
-import { purchaseWarnings, type PurchaseWarning } from '@/domain/purchases/purchase-command';
-import { paisa } from '@/lib/branded';
+import {
+  lineCostPaisa,
+  purchaseWarnings,
+  type PurchaseWarning,
+} from '@/domain/purchases/purchase-command';
+import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
+import { recordedMrpFor } from '@/domain/catalog/mrp';
+import type { IndexedProduct } from '@/client/search/catalog-index';
+import { packFactor, paisa } from '@/lib/branded';
+import { levelToBaseUnits, scalePriceBetweenUnits } from '@/lib/quantity';
 import { formatPaisa } from '@/lib/money';
 import { uuidv7 } from '@/lib/uuid';
 
-import { receivePurchaseAction } from './actions';
+import { receivePurchaseAction, recordDeliveredMrpAction } from './actions';
 import { RecentPurchases } from './recent-purchases';
 import { SupplierCreditPanel } from './supplier-credit-panel';
 import { SupplierPicker } from './supplier-picker';
@@ -65,7 +72,18 @@ interface LineFields {
   cost: string;
   expiry: string;
   batchNumber: string;
+  mrp: string;
   price: string;
+}
+
+/**
+ * [PCN-012] The units a delivery arrives in: the product's packs, largest
+ * first — a distributor invoices boxes and strips, never loose tablets. A
+ * product with no pack (a bottle, a tube) arrives in its one unit.
+ */
+function receivingUnits(units: readonly ProductUnit[]): ProductUnit[] {
+  const packs = units.filter((unit) => unit.factor > 1);
+  return packs.length > 0 ? [...packs].reverse() : units.slice(0, 1);
 }
 
 /** No delivery line is this many units; a scanned EAN in Qty is far beyond it. */
@@ -77,7 +95,7 @@ function rupeesLookLikeBarcode(raw: string): boolean {
   return Number(raw.trim()) * 100 > MAX_UNIT_PAISA;
 }
 
-export function PurchaseEntry({ tenantId }: { tenantId: string }) {
+export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner: boolean }) {
   const { index, refresh } = useCatalog();
   const [draft, setDraft] = useState<PurchaseDraft>(emptyDraft);
   const [resumed, setResumed] = useState(false);
@@ -94,14 +112,24 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     productId: string;
     productName: string;
     baseUnitName: string;
+    /** [PCN-012] What this product can arrive in, largest pack first. */
+    units: ProductUnit[];
+    /**
+     * Fields a 1D barcode could not fill — it carries only the product number
+     * — so the operator reads them off the pack. A 2D code fills them.
+     */
+    fromPack: { expiry: boolean; batch: boolean };
   } | null>(null);
+  const [unitKey, setUnitKey] = useState('');
   const [qty, setQty] = useState('');
   const [bonus, setBonus] = useState('');
   const [cost, setCost] = useState('');
   const [expiry, setExpiry] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
+  const [mrp, setMrp] = useState('');
   const [price, setPrice] = useState('');
   const qtyRef = useRef<HTMLInputElement>(null);
+  const expiryRef = useRef<HTMLInputElement>(null);
   // Scan detection in the line's fields (see `client/scan/burst.ts`): the keys
   // typed since the last Enter, and the fields as they stood before each one —
   // what a scan that landed in a field is undone back to.
@@ -137,14 +165,12 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
 
   useEffect(() => {
     if (pending) {
-      qtyRef.current?.focus();
+      // After a 1D scan the pack still has to be read: start at its expiry.
+      (pending.fromPack.expiry ? expiryRef : qtyRef).current?.focus();
     }
   }, [pending]);
 
-  const invoiceTotal = draft.lines.reduce(
-    (sum, line) => sum + line.qtyBase * line.unitCostPaisa,
-    0,
-  );
+  const invoiceTotal = draft.lines.reduce((sum, line) => sum + lineCostPaisa(line), 0);
 
   // [PCN-007] "Paid now": empty means the whole invoice was paid (an ordinary
   // cash purchase, unchanged). Anything less is put on the supplier's account.
@@ -187,14 +213,32 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     // A pack's 2D code carries its own batch and expiry: scanning it fills
     // them in, still editable. A typed search leaves them empty, as before.
     const pack = parseGs1(rawQuery);
+    const units = receivingUnits(
+      unitsOf({
+        baseUnitName: hit.product.baseUnitName,
+        packLevels: hit.product.packLevels,
+        pricePerBasePaisa: hit.product.pricePaisa,
+        units: hit.product.units,
+      }),
+    );
+    // A scanned code names its own unit (a box code means a box); otherwise
+    // the largest pack, which is how distributors invoice.
+    const unit = units.find((candidate) => candidate.name === hit.unitLevelName) ?? units[0];
+    // A scanned code that did not say when the pack expires or which batch it
+    // is (an EAN, or a 2D code without those fields): read them off the pack.
+    const scanned = looksLikeScannedCode(rawQuery);
     setPending({
       productId: hit.product.id,
       productName: hit.product.name,
       baseUnitName: hit.product.baseUnitName,
+      units,
+      fromPack: { expiry: scanned && !pack?.expiry, batch: scanned && !pack?.batch },
     });
+    setUnitKey(unit?.key ?? '');
     // Pre-filled from the catalog: the common case is that the price has not
     // changed, and capture-at-receiving (Phase 1 §3) only needs confirming.
-    setPrice((hit.product.pricePaisa / 100).toFixed(2));
+    setPrice(((unit?.pricePaisa ?? hit.product.pricePaisa) / 100).toFixed(2));
+    setMrp('');
     setQty('');
     setBonus('');
     setCost('');
@@ -202,21 +246,36 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     setBatchNumber(pack?.batch ?? '');
   }, []);
 
-  function addLine(fields: LineFields = { qty, bonus, cost, expiry, batchNumber, price }): boolean {
+  function addLine(
+    fields: LineFields = { qty, bonus, cost, expiry, batchNumber, mrp, price },
+  ): boolean {
     if (!pending) {
       return false;
     }
-    const { qty, bonus, cost, expiry, batchNumber, price } = fields;
-    const qtyBase = Number(qty.trim());
-    if (!Number.isSafeInteger(qtyBase) || qtyBase <= 0) {
-      setError('Enter how many units arrived.');
+    const unit = pending.units.find((candidate) => candidate.key === unitKey) ?? pending.units[0];
+    if (!unit) {
+      return false;
+    }
+    const { qty, bonus, cost, expiry, batchNumber, mrp, price } = fields;
+    const unitCount = Number(qty.trim());
+    if (!Number.isSafeInteger(unitCount) || unitCount <= 0) {
+      setError(`Enter how many ${unit.name} arrived.`);
+      return false;
+    }
+    const bonusCount = bonus.trim() === '' ? 0 : Number(bonus.trim());
+    if (!Number.isSafeInteger(bonusCount) || bonusCount < 0) {
+      setError(`Enter the bonus as whole ${unit.name} — leave it empty for none.`);
       return false;
     }
     // Backstop for a barcode typed into a number field: no delivery line is a
     // hundred thousand units or a million rupees a unit, and a scanned EAN is
     // thirteen digits. Said plainly, never stored.
-    const bonusBase = bonus.trim() === '' ? 0 : Math.max(0, Number(bonus.trim()));
-    if (qtyBase > MAX_LINE_UNITS || bonusBase > MAX_LINE_UNITS) {
+    const level = { name: unit.name, factor: unit.factor };
+    if (
+      unitCount > MAX_LINE_UNITS ||
+      bonusCount > MAX_LINE_UNITS ||
+      levelToBaseUnits(unitCount + bonusCount, level) > MAX_LINE_UNITS * 1_000
+    ) {
       setError('That quantity looks like a barcode, not a count. Check Qty and Bonus.');
       return false;
     }
@@ -232,8 +291,10 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     }
     // Checked on the typed number, before conversion: an amount past what a
     // number holds exactly converts to zero, which must never pass as "free".
-    if (rupeesLookLikeBarcode(cost) || rupeesLookLikeBarcode(price)) {
-      setError('That price looks like a barcode, not an amount. Check Unit cost and Sells for.');
+    if (rupeesLookLikeBarcode(cost) || rupeesLookLikeBarcode(price) || rupeesLookLikeBarcode(mrp)) {
+      setError(
+        'That price looks like a barcode, not an amount. Check Unit cost, MRP and Sells for.',
+      );
       return false;
     }
     const pricePaisa = paisaFromRupeeInput(price);
@@ -241,19 +302,43 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       setError('Enter the selling price for this stock.');
       return false;
     }
+    // Optional, but never silently dropped: text that is not an amount is said.
+    const mrpPaisa = parseRupeeInput(mrp);
+    if (mrp.trim() !== '' && mrpPaisa === null) {
+      setError(
+        `MRP is not an amount — type the MRP printed on the ${unit.name}, or leave it empty.`,
+      );
+      return false;
+    }
+    const costPaisa = paisaFromRupeeInput(cost);
 
+    // [PCN-012] The line as the invoice states it: counts and money in the
+    // unit it arrived in. Base quantities come from the unit's size (through
+    // lib/quantity); the per-base cost and price are nominal, rounded up.
     const line: DraftLine = {
       lineId: uuidv7(),
       productId: pending.productId,
       productName: pending.productName,
       baseUnitName: pending.baseUnitName,
-      qtyBase,
-      bonusQtyBase: bonusBase,
-      unitCostPaisa: paisaFromRupeeInput(cost),
+      qtyBase: levelToBaseUnits(unitCount, level),
+      bonusQtyBase: levelToBaseUnits(bonusCount, level),
+      unitCostPaisa: scalePriceBetweenUnits(costPaisa, packFactor(unit.factor), packFactor(1)),
       expiryDate: expiry.trim() === '' ? null : expiry.trim(),
       batchNumber: batchNumber.trim() === '' ? null : batchNumber.trim(),
-      mrpAtReceivingPaisa: null,
-      priceAtReceivingPaisa: pricePaisa,
+      mrpAtReceivingPaisa: mrpPaisa,
+      priceAtReceivingPaisa: scalePriceBetweenUnits(
+        pricePaisa,
+        packFactor(unit.factor),
+        packFactor(1),
+      ),
+      entered: {
+        unitKey: unit.key,
+        unitName: unit.name,
+        unitCount,
+        bonusUnitCount: bonusCount,
+        unitCostPaisa: costPaisa,
+        pricePaisa,
+      },
     };
 
     setDraft((current) => ({
@@ -279,6 +364,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     setCost(fields.cost);
     setExpiry(fields.expiry);
     setBatchNumber(fields.batchNumber);
+    setMrp(fields.mrp);
     setPrice(fields.price);
 
     const hit = index?.resolveBarcode(code);
@@ -328,7 +414,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
       return;
     }
     // Keydown runs before the field changes: this is the line as it stood.
-    before.current.push({ qty, bonus, cost, expiry, batchNumber, price });
+    before.current.push({ qty, bonus, cost, expiry, batchNumber, mrp, price });
     strokes.current.push({ key: event.key, at: now });
   }
 
@@ -371,6 +457,10 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
     refresh();
     focusSearch();
   }
+
+  const chosenUnit =
+    pending?.units.find((candidate) => candidate.key === unitKey) ?? pending?.units[0];
+  const unitLabel = chosenUnit?.name ?? pending?.baseUnitName ?? 'unit';
 
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
@@ -458,7 +548,38 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
           >
             <span className="min-w-40 self-center font-medium">{pending.productName}</span>
 
-            <Field label={`Qty (${pending.baseUnitName})`} width="w-24">
+            {/* [PCN-012] The unit it arrived in, as buttons — largest pack
+                first and pressed. Qty, bonus, cost and price all follow it. */}
+            {pending.units.length > 1 ? (
+              <div role="group" aria-label="Arrived in" className="flex self-end">
+                {pending.units.map((unit, index) => {
+                  const chosen = unit.key === chosenUnit?.key;
+                  return (
+                    <button
+                      key={unit.key}
+                      type="button"
+                      aria-pressed={chosen}
+                      onClick={() => {
+                        setUnitKey(unit.key);
+                        setPrice((unit.pricePaisa / 100).toFixed(2));
+                      }}
+                      className={[
+                        'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                        index === 0 ? 'rounded-l' : '-ml-px',
+                        index === pending.units.length - 1 ? 'rounded-r' : '',
+                        chosen
+                          ? 'bg-green-600 text-paper border-green-600 font-medium'
+                          : 'bg-paper text-ink hover:bg-green-100',
+                      ].join(' ')}
+                    >
+                      {unit.name}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <Field label={`Qty (${unitLabel})`} width="w-24">
               <input
                 ref={qtyRef}
                 value={qty}
@@ -470,7 +591,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
               />
             </Field>
 
-            <Field label="Bonus" width="w-20">
+            <Field label={`Bonus (${unitLabel})`} width="w-24">
               <input
                 value={bonus}
                 inputMode="numeric"
@@ -482,7 +603,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
               />
             </Field>
 
-            <Field label="Unit cost" width="w-24">
+            <Field label={`Unit cost (per ${unitLabel})`} width="w-28">
               <input
                 value={cost}
                 inputMode="decimal"
@@ -495,8 +616,15 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
 
             {/* W7: "expiry (always asked)" — asked every time, never required,
                 because a non-perishable genuinely has none (Phase 9 §4). */}
-            <Field label="Expiry" width="w-40">
+            <Field
+              label={
+                pending.fromPack.expiry && expiry === '' ? 'Expiry — type from the pack' : 'Expiry'
+              }
+              width="w-44"
+              attention={pending.fromPack.expiry && expiry === ''}
+            >
               <input
+                ref={expiryRef}
                 type="date"
                 value={expiry}
                 onChange={(event) => {
@@ -506,7 +634,15 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
               />
             </Field>
 
-            <Field label="Batch no." width="w-28">
+            <Field
+              label={
+                pending.fromPack.batch && batchNumber === ''
+                  ? 'Batch — type from the pack'
+                  : 'Batch no.'
+              }
+              width="w-40"
+              attention={pending.fromPack.batch && batchNumber === ''}
+            >
               <input
                 value={batchNumber}
                 onChange={(event) => {
@@ -516,7 +652,21 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
               />
             </Field>
 
-            <Field label="Sells for" width="w-24">
+            {/* The MRP printed on the pack, for the unit it arrived in (D4:
+                the pack in hand is authoritative). Optional; a price above it
+                is warned, never refused. */}
+            <Field label={`MRP on pack (per ${unitLabel})`} width="w-32">
+              <input
+                value={mrp}
+                inputMode="decimal"
+                onChange={(event) => {
+                  setMrp(event.target.value);
+                }}
+                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+              />
+            </Field>
+
+            <Field label={`Sells for (per ${unitLabel})`} width="w-28">
               <input
                 value={price}
                 inputMode="decimal"
@@ -587,7 +737,7 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
                 <th className="px-3 py-2 text-right font-medium">Qty</th>
                 <th className="px-3 py-2 text-right font-medium">Bonus</th>
                 <th className="px-3 py-2 text-right font-medium">Unit cost</th>
-                <th className="px-3 py-2 text-right font-medium">Effective</th>
+                <th className="px-3 py-2 text-right font-medium">Line cost</th>
                 <th className="px-3 py-2 font-medium">Expiry</th>
                 <th className="px-3 py-2 text-right font-medium">Sells for</th>
                 <th className="px-3 py-2" />
@@ -605,21 +755,42 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
                           {warningText(warning)}
                         </span>
                       ))}
+                      <MrpOffer
+                        line={line}
+                        product={index?.products.find((product) => product.id === line.productId)}
+                        isOwner={isOwner}
+                        onRecorded={refresh}
+                      />
                     </td>
-                    <td className="numeral px-3 py-2">{line.qtyBase}</td>
+                    {/* As the invoice reads: "10 box", cost and price per box.
+                        A draft saved before PCN-012 has no unit and reads in
+                        base units, as it was typed. */}
+                    <td className="numeral px-3 py-2">
+                      {line.entered
+                        ? `${line.entered.unitCount} ${line.entered.unitName}`
+                        : `${line.qtyBase} ${line.baseUnitName}`}
+                    </td>
                     <td className="numeral text-ink/60 px-3 py-2">
-                      {line.bonusQtyBase > 0 ? `+${line.bonusQtyBase}` : '—'}
+                      {line.entered
+                        ? line.entered.bonusUnitCount > 0
+                          ? `+${line.entered.bonusUnitCount} ${line.entered.unitName}`
+                          : '—'
+                        : line.bonusQtyBase > 0
+                          ? `+${line.bonusQtyBase}`
+                          : '—'}
                     </td>
-                    <td className="numeral px-3 py-2">{formatPaisa(paisa(line.unitCostPaisa))}</td>
-                    <td className="numeral text-ink/60 px-3 py-2">
-                      {/* The number margin will actually use — see costing.ts. */}
-                      {line.bonusQtyBase > 0
-                        ? `${formatPaisa(effectiveUnitCostPaisa(line))} × ${receivedQty(line)}`
-                        : '—'}
+                    <td className="numeral px-3 py-2">
+                      {formatPaisa(paisa(line.entered?.unitCostPaisa ?? line.unitCostPaisa))}
                     </td>
+                    <td className="numeral px-3 py-2">{formatPaisa(paisa(lineCostPaisa(line)))}</td>
                     <td className="text-ink/70 px-3 py-2">{line.expiryDate ?? '—'}</td>
                     <td className="numeral px-3 py-2">
-                      {formatPaisa(paisa(line.priceAtReceivingPaisa))}
+                      {formatPaisa(paisa(line.entered?.pricePaisa ?? line.priceAtReceivingPaisa))}
+                      {line.mrpAtReceivingPaisa !== null ? (
+                        <span className="text-ink/50 block text-xs">
+                          MRP {formatPaisa(paisa(line.mrpAtReceivingPaisa))}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <button
@@ -738,10 +909,13 @@ export function PurchaseEntry({ tenantId }: { tenantId: string }) {
 function Field({
   label,
   width,
+  attention = false,
   children,
 }: {
   label: string;
   width: string;
+  /** Asked of the operator specifically (read it off the pack): said in amber. */
+  attention?: boolean;
   children: React.ReactNode;
 }) {
   // The input is nested inside its label rather than wired by id: these fields
@@ -751,7 +925,11 @@ function Field({
   return (
     <div className={width}>
       <label className="block">
-        <span className="text-ink/60 mb-1 block text-xs">{label}</span>
+        <span
+          className={`mb-1 block text-xs ${attention ? 'text-amber font-medium' : 'text-ink/60'}`}
+        >
+          {label}
+        </span>
         {children}
       </label>
     </div>
@@ -770,4 +948,109 @@ function warningText(warning: PurchaseWarning): string {
     case 'expiry_in_past':
       return 'already expired';
   }
+}
+
+/**
+ * [PCN-012] The pack's MRP differs from the product's record: say so, and let
+ * the owner take it — with the new selling price when the line's differs —
+ * or leave the record as it is. Never applied silently (D4: the pack in hand
+ * is authoritative, but the price is the owner's decision).
+ */
+function MrpOffer({
+  line,
+  product,
+  isOwner,
+  onRecorded,
+}: {
+  line: DraftLine;
+  product: IndexedProduct | undefined;
+  isOwner: boolean;
+  onRecorded: () => void;
+}) {
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | { error: string }>('idle');
+  const entered = line.entered;
+  const onPack = line.mrpAtReceivingPaisa;
+  // Derived for an index cached before PCN-012, as everywhere else.
+  const units = product
+    ? unitsOf({
+        baseUnitName: product.baseUnitName,
+        packLevels: product.packLevels,
+        pricePerBasePaisa: product.pricePaisa,
+        units: product.units,
+      })
+    : [];
+  const unit = units.find((candidate) => candidate.key === entered?.unitKey);
+  if (!entered || onPack === null || !product || !unit) {
+    return null;
+  }
+  const recorded = recordedMrpFor(
+    { mrpPaisa: product.mrpPaisa, mrpUnit: product.mrpUnit ?? null, units },
+    unit,
+  );
+  if (state === 'done') {
+    return (
+      <span className="text-green-700 block text-xs" role="status">
+        Recorded on {product.name}.
+      </span>
+    );
+  }
+  if (recorded === onPack) {
+    return null;
+  }
+  const newPrice = entered.pricePaisa !== unit.pricePaisa ? entered.pricePaisa : null;
+
+  async function record(pricePaisa: number | null): Promise<void> {
+    if (!unit || onPack === null) return;
+    setState('busy');
+    const outcome = await recordDeliveredMrpAction({
+      productId: line.productId,
+      unitKey: unit.key,
+      mrpPaisa: onPack,
+      pricePaisa,
+    }).catch(() => ({ ok: false as const, message: 'Needs internet — try again.' }));
+    if (outcome.ok) {
+      setState('done');
+      onRecorded();
+    } else {
+      setState({ error: outcome.message });
+    }
+  }
+
+  return (
+    <span className="mt-1 block text-xs" role="note">
+      <span className="text-amber">
+        MRP on pack {formatPaisa(paisa(onPack))} per {unit.name} —{' '}
+        {recorded === null ? 'none on record' : `on record ${formatPaisa(paisa(recorded))}`}.
+      </span>
+      {isOwner ? (
+        <span className="ml-2 inline-flex gap-3">
+          {newPrice !== null ? (
+            <button
+              type="button"
+              disabled={state === 'busy'}
+              onClick={() => void record(newPrice)}
+              className="text-green-600 font-medium underline-offset-2 hover:underline"
+            >
+              Record it, and sell at {formatPaisa(paisa(newPrice))} per {unit.name}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={state === 'busy'}
+            onClick={() => void record(null)}
+            className="text-green-600 font-medium underline-offset-2 hover:underline"
+          >
+            {newPrice !== null ? 'Record the MRP only' : 'Record the MRP'}
+          </button>
+        </span>
+      ) : (
+        <span className="text-ink/50 ml-2">The owner can update it.</span>
+      )}
+      {typeof state === 'object' ? (
+        <span className="text-red ml-2" role="alert">
+          {state.error}
+        </span>
+      ) : null}
+    </span>
+  );
 }

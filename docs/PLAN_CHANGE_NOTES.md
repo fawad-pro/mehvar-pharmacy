@@ -1539,3 +1539,51 @@ units read as ticked), the owner decided:
 
 Out of scope here and unchanged: the purchase defaults (pack units only, the
 largest pack) and the remaining Session 2 items above.
+
+**Session 2 decisions** (owner, 2026-10-27, before stock coming in was built):
+
+- **D1, corrections restate past sales.** When a purchase is corrected
+  (PCN-009) after some of the batch has been sold or otherwise taken out, the
+  cost of what already left is restated from the batch's corrected total, as
+  reports already value it today. This replaces this note's "apply the same
+  rule to units taken afterwards". Allocation cost is therefore derived when
+  read, from the batch's current total and the running units taken, never
+  frozen at sale time, so a used-up batch adds up exactly to what was finally
+  paid.
+- **D2, every outflow takes its share.** Sales, write-offs (negative
+  adjustments) and supplier returns all take the cumulative cost share of the
+  units they remove; a customer return restocked to its batch gives back the
+  cost those units left with. Every batch reconciles exactly to what was paid,
+  whichever way its units left.
+- **Scope:** Receive Stock in packs (largest pack first; quantity, bonus and
+  cost in that unit; exact line and invoice totals), exact batch costs under
+  D1 and D2, MRP on pack per line (warn when Sells for is above it; offer to
+  update the product's price when it changes), "type from the pack" after a
+  1D scan, and opening stock entered as Boxes + Strips + Tablets.
+
+**Session 2 implemented** (2026-10-27, on `claude/epic-euler-jdspyu`):
+migration 0013 (entered units, line cost and price on `purchase_lines`; cost
+total and prices at receiving on `batches`; MRP per named unit on `products`;
+per-pack cost corrections). All nullable; no event row was rewritten.
+
+- Receive Stock in packs (largest first, never loose), bonus and cost per pack,
+  exact line cost; every invoice total and supplier balance sums
+  `purchaseLineCostSql`. The writer refuses a pack size the product does not
+  have.
+- Cumulative cost (`domain/inventory/batch-cost.ts`, `db/batch-cost-queries.ts`)
+  under D1 and D2; reports cost of goods sold from it and show stock written
+  off beside the margin. The crown suite now enters purchases in strips and
+  checks, at every step, that no batch's cost is understated and that every
+  used-up batch reconciles exactly. Effective per-unit cost is nominal and
+  rounds up (Day 6's floor retired).
+- MRP on pack, with the owner's offer to record it (and the new price).
+- "Type from the pack" after a 1D scan.
+- Opening stock counted per unit, costed per the largest unit, cost required
+  and pre-filled from the last purchase (decision 5).
+- Purchase corrections stated in the line's own unit.
+
+Not in this session: returns to the supplier and stock removals still count
+in base units; the product form's MRP field is still per base unit (it is kept
+in step when a delivery's MRP is recorded); the stock view's "12 boxes, 3
+strips, 7 tablets" wording (decision 8) and renames / "replace this product"
+(2d) remain.

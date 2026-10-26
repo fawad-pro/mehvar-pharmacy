@@ -244,6 +244,13 @@ export const products = pgTable(
     defaultPricePerBaseUnit: bigint('default_price_per_base_unit', { mode: 'number' }).notNull(),
     /** Reference ceiling, D4: the pack in hand is authoritative, not our data. */
     currentMrpPerBaseUnit: bigint('current_mrp_per_base_unit', { mode: 'number' }),
+    /**
+     * [PCN-012] MRP as printed, for the unit it is printed on (`mrpUnitKey`).
+     * Set from a delivery's "MRP on pack" when the owner accepts it; null on a
+     * product that only has the legacy per-base figure above.
+     */
+    mrpPaisa: bigint('mrp_paisa', { mode: 'number' }),
+    mrpUnitKey: text('mrp_unit_key'),
     minStockBaseUnits: integer('min_stock_base_units'),
     /** D3 — quick items are real products flagged for enrichment. */
     needsCompletion: boolean('needs_completion').notNull().default(false),
@@ -345,6 +352,17 @@ export const batches = pgTable(
     pricePerBaseUnitPaisa: bigint('price_per_base_unit_paisa', { mode: 'number' }).notNull(),
     qtyReceivedBase: integer('qty_received_base').notNull(),
     /**
+     * [PCN-012] What these units cost in total, exactly: what was paid for
+     * the purchase line (bonus units free), or the opening/counted units at
+     * their entered cost. Null on a batch from before PCN-012, which reads its
+     * total from its purchase line or `unit_cost_paisa × qty_received`.
+     * Corrections restate it through `purchase_corrections.invoice_delta_paisa`.
+     * `unit_cost_paisa` above is nominal from here on (rounded up).
+     */
+    costTotalPaisa: bigint('cost_total_paisa', { mode: 'number' }),
+    /** [PCN-012] Each unit's selling price when the batch arrived: `[{key, pricePaisa}]`. */
+    pricesAtReceiving: jsonb('prices_at_receiving').$type<{ key: string; pricePaisa: number }[]>(),
+    /**
      * THE single ADR-8 transactional cache. Everything else computes on read.
      *
      * Derivation contract (Phase 9 §4):
@@ -433,8 +451,29 @@ export const purchaseLines = pgTable(
     unitCostPaisa: bigint('unit_cost_paisa', { mode: 'number' }).notNull(),
     expiryDate: date('expiry_date'),
     batchNumber: text('batch_number'),
+    /**
+     * MRP printed on the pack: per the entered unit when the line has one
+     * (`unit_key`), per base unit on a line from before PCN-012.
+     */
     mrpAtReceivingPaisa: bigint('mrp_at_receiving_paisa', { mode: 'number' }),
+    /** Per base unit; nominal (rounded) when the line was entered per pack. */
     priceAtReceivingPaisa: bigint('price_at_receiving_paisa', { mode: 'number' }).notNull(),
+    /**
+     * [PCN-012] The line as invoiced, in the unit it was bought in: "10 boxes
+     * + 1 free at Rs 250 a box". Null on a line from before PCN-012, which
+     * reads as base units at `unit_cost_paisa` — exactly what it invoiced.
+     * `qty_base`/`bonus_qty_base` stay the base-unit truth stock runs on.
+     */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
+    bonusUnitCount: integer('bonus_unit_count'),
+    /** The cost of ONE entered unit, as invoiced. */
+    unitCostPaisaEntered: bigint('unit_cost_paisa_entered', { mode: 'number' }),
+    /** Exactly `unit_count × unit_cost_paisa_entered`: what this line cost. */
+    lineCostPaisa: bigint('line_cost_paisa', { mode: 'number' }),
+    /** What ONE entered unit sells for, as set at receiving. */
+    pricePaisaEntered: bigint('price_paisa_entered', { mode: 'number' }),
     createdAt: createdAt(),
   },
   (table) => [
@@ -442,6 +481,20 @@ export const purchaseLines = pgTable(
     index('purchase_lines_tenant_created_idx').on(table.tenantId, table.createdAt),
     check('purchase_lines_qty_positive', sql`${table.qtyBase} > 0`),
     check('purchase_lines_bonus_nonneg', sql`${table.bonusQtyBase} >= 0`),
+    // [PCN-012] An entered line is whole or absent, its cost is exactly count
+    // × cost, and its base quantities are whole multiples of one unit size —
+    // bonus in the same unit as the paid quantity.
+    check(
+      'purchase_lines_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.bonusUnitCount} IS NULL AND ${table.unitCostPaisaEntered} IS NULL
+           AND ${table.lineCostPaisa} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL
+           AND ${table.pricePaisaEntered} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.bonusUnitCount} >= 0 AND ${table.unitCostPaisaEntered} >= 0
+              AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL AND ${table.pricePaisaEntered} > 0
+              AND ${table.lineCostPaisa} = ${table.unitCount} * ${table.unitCostPaisaEntered}
+              AND ${table.qtyBase} % ${table.unitCount} = 0
+              AND ${table.bonusQtyBase} * ${table.unitCount} = ${table.bonusUnitCount} * ${table.qtyBase})`,
+    ),
   ],
 );
 
@@ -717,6 +770,13 @@ export const purchaseCorrections = pgTable(
     bonusDeltaBase: integer('bonus_delta_base').notNull().default(0),
     /** The corrected invoiced cost per base unit, when the cost was wrong. */
     correctedUnitCostPaisa: bigint('corrected_unit_cost_paisa', { mode: 'number' }),
+    /**
+     * [PCN-012] The corrected cost of ONE of the line's entered unit, when the
+     * line was bought per pack and its cost was wrong. Exactly one of this and
+     * `corrected_unit_cost_paisa` is set by a cost correction.
+     */
+    correctedUnitCostPaisaEntered: bigint('corrected_unit_cost_paisa_entered', { mode: 'number' }),
+    /** Nominal per received base unit (rounded up) since PCN-012; reports derive cost. */
     effectiveUnitCostPaisa: bigint('effective_unit_cost_paisa', { mode: 'number' }).notNull(),
     invoiceDeltaPaisa: bigint('invoice_delta_paisa', { mode: 'number' }).notNull(),
     note: text('note').notNull(),
@@ -731,7 +791,8 @@ export const purchaseCorrections = pgTable(
     index('purchase_corrections_batch_idx').on(table.tenantId, table.batchId),
     check(
       'purchase_corrections_changes_something',
-      sql`${table.qtyDeltaBase} <> 0 OR ${table.bonusDeltaBase} <> 0 OR ${table.correctedUnitCostPaisa} IS NOT NULL`,
+      sql`${table.qtyDeltaBase} <> 0 OR ${table.bonusDeltaBase} <> 0 OR ${table.correctedUnitCostPaisa} IS NOT NULL
+          OR ${table.correctedUnitCostPaisaEntered} IS NOT NULL`,
     ),
     check(
       'purchase_corrections_cost_nonneg',

@@ -52,6 +52,8 @@ export interface IndexProductRow {
   /** [PCN-012] Each unit with its own price, smallest first. */
   units: ProductUnit[];
   mrpPaisa: number | null;
+  /** [PCN-012] MRP as printed, for the unit it is printed on. */
+  mrpUnit: { key: string; paisa: number } | null;
   needsCompletion: boolean;
 }
 
@@ -200,6 +202,10 @@ function toIndexProduct(row: typeof products.$inferSelect): IndexProductRow {
     pricePaisa: row.defaultPricePerBaseUnit,
     units: unitsOfRow(row),
     mrpPaisa: row.currentMrpPerBaseUnit,
+    mrpUnit:
+      row.mrpPaisa !== null && row.mrpUnitKey !== null
+        ? { key: row.mrpUnitKey, paisa: row.mrpPaisa }
+        : null,
     needsCompletion: row.needsCompletion,
   };
 }

@@ -19,7 +19,9 @@ import {
   suppliers,
   users,
 } from './schema';
+import { purchaseLineCostSql } from './purchase-line-cost';
 
+import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
 import type { Uuid } from '@/lib/uuid';
 
 /* -------------------------------------------------------------------------- */
@@ -88,6 +90,56 @@ export async function insertPurchaseLines(
   await scope.insert(purchaseLines, rows as never);
 }
 
+/** [PCN-012] Each product's units, smallest first — what an entered line is checked against. */
+export async function productUnitsFor(
+  scope: TenantScope,
+  productIds: readonly string[],
+): Promise<Map<string, ProductUnit[]>> {
+  if (productIds.length === 0) {
+    return new Map();
+  }
+  const rows = await scope.select(products, inArray(products.id, [...productIds]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      unitsOf({
+        baseUnitName: row.baseUnitName,
+        packLevels: row.packLevels,
+        pricePerBasePaisa: row.defaultPricePerBaseUnit,
+        units: row.units,
+      }),
+    ]),
+  );
+}
+
+/**
+ * [PCN-012] The cost this product last arrived at — what opening stock's cost
+ * is pre-filled from (decision 5). Per the unit it was bought in when the line
+ * was entered per pack (`unitKey`), per base unit otherwise (`unitKey` null).
+ * Null when the product has never been bought.
+ */
+export async function lastPurchaseCost(
+  scope: TenantScope,
+  productId: string,
+): Promise<{ unitKey: string | null; costPaisa: number } | null> {
+  const [row] = await scope.db
+    .select({
+      unitKey: purchaseLines.unitKey,
+      unitCostPaisaEntered: purchaseLines.unitCostPaisaEntered,
+      unitCostPaisa: purchaseLines.unitCostPaisa,
+    })
+    .from(purchaseLines)
+    .where(scope.scopeOf(purchaseLines, eq(purchaseLines.productId, productId)))
+    .orderBy(desc(purchaseLines.createdAt))
+    .limit(1);
+  if (!row) {
+    return null;
+  }
+  return row.unitKey !== null && row.unitCostPaisaEntered !== null
+    ? { unitKey: row.unitKey, costPaisa: row.unitCostPaisaEntered }
+    : { unitKey: null, costPaisa: row.unitCostPaisa };
+}
+
 export async function insertBatches(
   scope: TenantScope,
   rows: ReadonlyArray<Omit<typeof batches.$inferInsert, 'tenantId'>>,
@@ -122,7 +174,7 @@ export async function listPurchases(scope: TenantScope, limit = 50): Promise<Pur
       // distributor, which is the figure that reconciles against the invoice
       // in the operator's hand. Bonus units are free and change per-unit cost,
       // never the total paid (see domain/purchases/costing.ts).
-      totalCostPaisa: sql<number>`coalesce(sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa}), 0)`,
+      totalCostPaisa: sql<number>`coalesce(sum(${purchaseLineCostSql}), 0)`,
     })
     .from(purchases)
     .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
@@ -250,6 +302,13 @@ export interface PurchaseDetailLine {
   readonly mrpAtReceivingPaisa: number | null;
   readonly expiryDate: string | null;
   readonly batchNumber: string | null;
+  /** [PCN-012] The line as invoiced per pack; all null on a line priced per base unit. */
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
+  readonly bonusUnitCount: number | null;
+  readonly unitCostPaisaEntered: number | null;
+  readonly lineCostPaisa: number | null;
+  readonly pricePaisaEntered: number | null;
 }
 
 export interface PurchaseDetail {
@@ -320,6 +379,12 @@ export async function findPurchase(
       mrpAtReceivingPaisa: purchaseLines.mrpAtReceivingPaisa,
       expiryDate: purchaseLines.expiryDate,
       batchNumber: purchaseLines.batchNumber,
+      unitName: purchaseLines.unitName,
+      unitCount: purchaseLines.unitCount,
+      bonusUnitCount: purchaseLines.bonusUnitCount,
+      unitCostPaisaEntered: purchaseLines.unitCostPaisaEntered,
+      lineCostPaisa: purchaseLines.lineCostPaisa,
+      pricePaisaEntered: purchaseLines.pricePaisaEntered,
     })
     .from(purchaseLines)
     .innerJoin(products, eq(products.id, purchaseLines.productId))

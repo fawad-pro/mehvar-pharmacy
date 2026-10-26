@@ -13,6 +13,7 @@
 import { requireCapability } from '@/auth/capabilities';
 import { currentSession, scopeFor } from '@/auth/session';
 import { batchesOnHand } from '@/db/adjustment-queries';
+import { lastPurchaseCost } from '@/db/purchase-queries';
 import { commitAdjustment, type AdjustmentCommand } from '@/domain/inventory/commit-adjustment';
 
 import { revalidateAfter } from '../../revalidate';
@@ -68,4 +69,15 @@ export async function adjustStockAction(command: AdjustmentCommand): Promise<Adj
   }
   revalidateAfter('stock');
   return { ok: true, resolvedPendingBase: result.value.resolvedPendingBase };
+}
+
+/** [PCN-012] What opening stock's cost is pre-filled from: the last purchase. */
+export async function lastPurchaseCostAction(
+  productId: string,
+): Promise<{ unitKey: string | null; costPaisa: number } | null> {
+  const session = await currentSession();
+  if (!session) {
+    return null;
+  }
+  return lastPurchaseCost(scopeFor(session), productId);
 }

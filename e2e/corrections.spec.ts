@@ -72,10 +72,11 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   await correction.getByLabel('Why').press('Enter');
   await expect(page.getByRole('status')).toContainText('correction recorded');
 
-  // Five go back to the distributor.
+  // Five strips go back to the distributor. The invoice was entered in strips
+  // (PCN-012); the return form counts tablets, so that is 50.
   await page.getByRole('button', { name: 'Return to supplier' }).click();
   const giveBack = page.getByRole('form', { name: `Return ${PRODUCT} to ${supplier}` });
-  await giveBack.getByLabel(/Quantity going back/).fill('5');
+  await giveBack.getByLabel(/Quantity going back/).fill('50');
   await giveBack.getByLabel('Note').fill('damaged in transit');
   await giveBack.getByLabel('Note').press('Enter');
   await expect(page.getByRole('status')).toContainText(`return to ${supplier} recorded`);

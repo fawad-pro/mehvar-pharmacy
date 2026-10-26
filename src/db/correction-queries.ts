@@ -34,6 +34,9 @@ export interface CorrectableLine {
   readonly qtyBase: number;
   readonly bonusQtyBase: number;
   readonly unitCostPaisa: number;
+  /** [PCN-012] Set when the line was bought per pack. */
+  readonly unitCount: number | null;
+  readonly unitCostPaisaEntered: number | null;
   readonly batchId: string;
   readonly batchRemainingBase: number;
 }
@@ -57,6 +60,8 @@ export async function lockLineForCorrection(
       qtyBase: purchaseLines.qtyBase,
       bonusQtyBase: purchaseLines.bonusQtyBase,
       unitCostPaisa: purchaseLines.unitCostPaisa,
+      unitCount: purchaseLines.unitCount,
+      unitCostPaisaEntered: purchaseLines.unitCostPaisaEntered,
       batchId: batches.id,
       batchRemainingBase: batches.qtyRemainingBase,
     })
@@ -75,13 +80,19 @@ export async function correctionsForLine(
   scope: TenantScope,
   purchaseLineId: Uuid,
 ): Promise<
-  Array<{ qtyDeltaBase: number; bonusDeltaBase: number; correctedUnitCostPaisa: number | null }>
+  Array<{
+    qtyDeltaBase: number;
+    bonusDeltaBase: number;
+    correctedUnitCostPaisa: number | null;
+    correctedUnitCostPaisaEntered: number | null;
+  }>
 > {
   return scope.db
     .select({
       qtyDeltaBase: purchaseCorrections.qtyDeltaBase,
       bonusDeltaBase: purchaseCorrections.bonusDeltaBase,
       correctedUnitCostPaisa: purchaseCorrections.correctedUnitCostPaisa,
+      correctedUnitCostPaisaEntered: purchaseCorrections.correctedUnitCostPaisaEntered,
     })
     .from(purchaseCorrections)
     .where(
@@ -178,6 +189,8 @@ export interface CorrectionRow {
   readonly qtyDeltaBase: number;
   readonly bonusDeltaBase: number;
   readonly correctedUnitCostPaisa: number | null;
+  /** [PCN-012] The corrected cost per pack, on a line bought per pack. */
+  readonly correctedUnitCostPaisaEntered: number | null;
   readonly invoiceDeltaPaisa: number;
   readonly note: string;
   readonly byName: string;
@@ -197,6 +210,7 @@ export async function correctionsForPurchase(
       qtyDeltaBase: purchaseCorrections.qtyDeltaBase,
       bonusDeltaBase: purchaseCorrections.bonusDeltaBase,
       correctedUnitCostPaisa: purchaseCorrections.correctedUnitCostPaisa,
+      correctedUnitCostPaisaEntered: purchaseCorrections.correctedUnitCostPaisaEntered,
       invoiceDeltaPaisa: purchaseCorrections.invoiceDeltaPaisa,
       note: purchaseCorrections.note,
       byName: users.name,

@@ -135,3 +135,22 @@ export function scalePriceBetweenUnits(
 export function nominalPricePerBase(pricePerUnit: Paisa, factor: PackFactor): Paisa {
   return paisa(Math.floor(pricePerUnit / factor));
 }
+
+/**
+ * [PCN-012] What `qty` base units cost at `costPerUnit` for a unit of size
+ * `unitFactor`: `cost × qty ÷ factor`, rounded UP to the paisa, once.
+ *
+ * Opening stock is counted as the shelf holds it ("2 boxes, 3 strips, 4
+ * tablets") and costed per box; the batch's exact total is this figure.
+ * Rounded once over the whole quantity rather than per unit, and upwards, so
+ * the cost on record is never understated (a low cost reports a margin better
+ * than the real one). BigInt, because `cost × qty` can pass 2^53.
+ */
+export function costOfBaseUnits(costPerUnit: Paisa, unitFactor: PackFactor, qty: BaseQty): Paisa {
+  if (!Number.isSafeInteger(costPerUnit) || costPerUnit < 0 || qty < 0) {
+    throw new RangeError(`A cost and a quantity must be non-negative: ${costPerUnit}, ${qty}`);
+  }
+  const numerator = BigInt(costPerUnit) * BigInt(qty);
+  const factor = BigInt(unitFactor);
+  return paisa(Number(numerator / factor + (numerator % factor === 0n ? 0n : 1n)));
+}

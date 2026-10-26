@@ -640,3 +640,20 @@ pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
   wherever reading junk as Rs 0 would record something (a drawer count, Paid
   now). `paisaFromRupeeInput` (zero for junk) is only for fields where zero
   commits nothing.
+
+## Things Session 2 (stock coming in) established
+
+- **A batch's cost is a total, not a rate.** No whole-paisa per-unit cost
+  multiplies back to what was paid (a box of 14 at Rs 250). Margin takes each
+  outflow's cumulative share — `C(n) = ⌈total × n ÷ received⌉`, cost =
+  `C(after) − C(before)` — from the batch's CURRENT total (D1: corrections
+  restate what already left). Every outflow is a movement (D2). Never multiply
+  `unit_cost_paisa` into a money figure again; it is nominal.
+- **A purchase line's cost has one expression.** `purchaseLineCostSql` in SQL,
+  `lineCostPaisa` in TypeScript. Summing `qty_base × unit_cost_paisa` is the
+  bug this replaced; the crown suite's own supplier check had it too, and went
+  red the moment pack lines appeared — which is how it should be found.
+- **Counts arrive in packs; the database keeps base units.** Every count is
+  turned into base units through `lib/quantity` (`levelToBaseUnits`,
+  `costOfBaseUnits`), and the writer refuses an entered pack whose size is not
+  the product's.

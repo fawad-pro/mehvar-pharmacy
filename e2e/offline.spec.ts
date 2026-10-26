@@ -138,7 +138,11 @@ test('W2 offline: a new customer and an udhaar sale both queue, and land in orde
   // The proof it truly reconciled: the customer and the debt are on the server.
   await page.keyboard.press('F3');
   await expect(page).toHaveURL(/\/customers$/);
-  await expect(page.getByRole('link', { name })).toBeVisible();
+  // Searched for, not expected on the first page: the suite shares one
+  // database and the book grows every run (CLAUDE.md, Day 20).
+  await page.getByRole('textbox', { name: 'Search customers' }).fill(name);
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByRole('link', { name })).toBeVisible({ timeout: 15_000 });
 });
 
 test('W6 offline: an unknown product becomes a real line without leaving the sale', async ({

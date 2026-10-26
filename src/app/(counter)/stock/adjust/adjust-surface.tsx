@@ -26,7 +26,8 @@ import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form
 import type { SearchHit } from '@/client/search/catalog-index';
 import { useCatalog } from '@/client/search/provider';
 import { useSync } from '@/client/sync/provider';
-import { paisaFromRupeeInput } from '@/domain/sales/cart';
+import { paisaFromRupeeInput, parseRupeeInput } from '@/domain/sales/cart';
+import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
 import {
   ADJUSTMENT_REASONS,
   REASON_LABELS,
@@ -34,11 +35,12 @@ import {
   type AdjustmentReason,
   type BatchOnHand,
 } from '@/domain/inventory/adjustment';
-import { paisa } from '@/lib/branded';
+import { baseQty, packFactor, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
+import { costOfBaseUnits, levelToBaseUnits, scalePriceBetweenUnits } from '@/lib/quantity';
 import { uuidv7 } from '@/lib/uuid';
 
-import { adjustStockAction, batchesOnHandAction } from './actions';
+import { adjustStockAction, batchesOnHandAction, lastPurchaseCostAction } from './actions';
 
 type Direction = 'remove' | 'add';
 
@@ -47,6 +49,13 @@ interface Chosen {
   productName: string;
   baseUnitName: string;
   pricePaisa: number;
+  /** [PCN-012] Every unit, largest first: stock arriving is counted as the shelf holds it. */
+  units: ProductUnit[];
+}
+
+/** [PCN-012] Units largest first — how a shelf is counted: boxes, then strips, then loose. */
+function largestFirst(units: readonly ProductUnit[]): ProductUnit[] {
+  return [...units].reverse();
 }
 
 export function AdjustSurface({ openingStock = false }: { openingStock?: boolean }) {
@@ -62,6 +71,8 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   const [batches, setBatches] = useState<BatchOnHand[]>([]);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [qty, setQty] = useState('');
+  /** [PCN-012] Counts per unit when stock arrives, keyed by unit key. */
+  const [counts, setCounts] = useState<Record<string, string>>({});
   const [reason, setReason] = useState<AdjustmentReason>(openingStock ? 'opening_stock' : 'damage');
   const [note, setNote] = useState('');
   const [cost, setCost] = useState('');
@@ -97,19 +108,60 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     };
   }, [chosen, direction]);
 
-  const onSelect = useCallback((hit: SearchHit) => {
-    setChosen({
-      productId: hit.product.id,
-      productName: hit.product.name,
-      baseUnitName: hit.product.baseUnitName,
-      pricePaisa: hit.product.pricePaisa,
-    });
-    setPrice((hit.product.pricePaisa / 100).toFixed(2));
+  /**
+   * A product chosen: counted in its own units, costed per its largest unit,
+   * that cost pre-filled from the last purchase when there was one (PCN-012
+   * decision 5) and its price from the product.
+   */
+  const choose = useCallback((product: Omit<Chosen, 'units'> & { units: ProductUnit[] }) => {
+    const costUnit = product.units[0];
+    setChosen(product);
+    setPrice(((costUnit?.pricePaisa ?? product.pricePaisa) / 100).toFixed(2));
     setQty('');
+    setCounts({});
+    setCost('');
     setError(null);
     setDone(null);
     qtyRef.current?.focus();
+    void lastPurchaseCostAction(product.productId)
+      .then((last) => {
+        if (!last || !costUnit) return;
+        const from = last.unitKey
+          ? product.units.find((unit) => unit.key === last.unitKey)
+          : { factor: 1 };
+        if (!from) return;
+        const prefill = scalePriceBetweenUnits(
+          paisa(last.costPaisa),
+          packFactor(from.factor),
+          packFactor(costUnit.factor),
+        );
+        // Only into an empty field: never over what the operator has typed.
+        setCost((current) => (current === '' ? (prefill / 100).toFixed(2) : current));
+      })
+      .catch(() => {
+        // Offline: the field stays empty and is asked for, as before.
+      });
   }, []);
+
+  const onSelect = useCallback(
+    (hit: SearchHit) => {
+      choose({
+        productId: hit.product.id,
+        productName: hit.product.name,
+        baseUnitName: hit.product.baseUnitName,
+        pricePaisa: hit.product.pricePaisa,
+        units: largestFirst(
+          unitsOf({
+            baseUnitName: hit.product.baseUnitName,
+            packLevels: hit.product.packLevels,
+            pricePerBasePaisa: hit.product.pricePaisa,
+            units: hit.product.units,
+          }),
+        ),
+      });
+    },
+    [choose],
+  );
 
   /**
    * Creating a product from here is what makes W9 usable at all.
@@ -148,18 +200,20 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
 
       addLocalProduct(product);
 
-      setChosen({
+      choose({
         productId: product.id,
         productName: product.name,
         baseUnitName: product.baseUnitName,
         pricePaisa: product.pricePaisa,
+        units: unitsOf({
+          baseUnitName: product.baseUnitName,
+          packLevels: [],
+          pricePerBasePaisa: product.pricePaisa,
+          units: null,
+        }),
       });
-      setPrice((product.pricePaisa / 100).toFixed(2));
-      setQty('');
-      setError(null);
-      setDone(null);
     },
-    [capture, addLocalProduct],
+    [capture, addLocalProduct, choose],
   );
 
   // Derived, not synchronised. Which reasons are legal follows from the
@@ -177,13 +231,42 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   // pick from and a stale list from a previous product must not show.
   const visibleBatches = direction === 'add' ? [] : batches;
 
+  // [PCN-012] Stock arriving, counted per unit: the base units it comes to,
+  // and — costed per the largest unit — exactly what it cost, rounded once.
+  const costUnit = chosen?.units[0];
+  const countedBase = chosen
+    ? chosen.units.reduce((sum, unit) => {
+        const count = Number((counts[unit.key] ?? '').trim() || '0');
+        return Number.isSafeInteger(count) && count >= 0
+          ? sum + levelToBaseUnits(count, { name: unit.name, factor: unit.factor })
+          : Number.NaN;
+      }, 0)
+    : 0;
+  const costPerUnitPaisa = parseRupeeInput(cost);
+  const costTotalPaisa =
+    costUnit && costPerUnitPaisa !== null && Number.isSafeInteger(countedBase) && countedBase > 0
+      ? costOfBaseUnits(costPerUnitPaisa, packFactor(costUnit.factor), baseQty(countedBase))
+      : null;
+
   async function commit(): Promise<void> {
     if (!chosen || busy) {
       return;
     }
-    const magnitude = Number(qty.trim());
+    const magnitude = direction === 'add' ? countedBase : Number(qty.trim());
     if (!Number.isSafeInteger(magnitude) || magnitude <= 0) {
-      setError('Enter how many units.');
+      setError(
+        direction === 'add'
+          ? 'Enter how many are on the shelf, as whole numbers.'
+          : 'Enter how many units.',
+      );
+      return;
+    }
+    // Decision 5: stock that appears must carry its cost, or every margin it
+    // touches is computed against nothing. A free item is entered as 0.
+    if (direction === 'add' && (costPerUnitPaisa === null || costTotalPaisa === null)) {
+      setError(
+        `Enter what this stock cost per ${costUnit?.name ?? 'unit'} — type 0 if it was free.`,
+      );
       return;
     }
 
@@ -197,10 +280,16 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
       reason: effectiveReason,
       batchId: direction === 'add' ? null : batchId,
       note: note.trim() === '' ? null : note.trim(),
-      ...(direction === 'add'
+      ...(direction === 'add' && costUnit && costTotalPaisa !== null
         ? {
-            unitCostPaisa: paisaFromRupeeInput(cost),
-            pricePerBaseUnitPaisa: paisaFromRupeeInput(price) || chosen.pricePaisa,
+            costTotalPaisa,
+            // Nominal per base unit (rounded up); the batch's total is exact.
+            unitCostPaisa: Math.ceil(costTotalPaisa / magnitude),
+            pricePerBaseUnitPaisa: scalePriceBetweenUnits(
+              paisaFromRupeeInput(price) || paisa(costUnit.pricePaisa),
+              packFactor(costUnit.factor),
+              packFactor(1),
+            ),
             expiryDate: expiry.trim() === '' ? null : expiry.trim(),
             batchNumber: null,
           }
@@ -223,6 +312,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     );
     setChosen(null);
     setQty('');
+    setCounts({});
     setNote('');
     refresh();
     searchRef.current?.focus();
@@ -291,21 +381,47 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
           <p className="font-medium">{chosen.productName}</p>
 
           <div className="flex flex-wrap items-end gap-3">
-            <div className="w-32">
-              <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-qty">
-                {direction === 'add' ? 'Units to add' : 'Units to remove'}
-              </label>
-              <input
-                id="adjust-qty"
-                ref={qtyRef}
-                value={qty}
-                inputMode="numeric"
-                onChange={(event) => {
-                  setQty(event.target.value);
-                }}
-                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
-              />
-            </div>
+            {direction === 'add' ? (
+              // [PCN-012] Counted as the shelf holds it, largest first, in the
+              // product's own words: "2 box, 3 strip, 4 tab".
+              <fieldset className="flex flex-wrap items-end gap-2">
+                <legend className="text-ink/60 mb-1 text-xs">
+                  {openingStock ? 'On the shelf' : 'Units to add'}
+                </legend>
+                {chosen.units.map((unit, index) => (
+                  <label key={unit.key} className="w-24">
+                    <span className="text-ink/60 block text-xs capitalize">{unit.name}</span>
+                    <input
+                      ref={index === 0 ? qtyRef : undefined}
+                      value={counts[unit.key] ?? ''}
+                      inputMode="numeric"
+                      placeholder="0"
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setCounts((current) => ({ ...current, [unit.key]: next }));
+                      }}
+                      className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+                    />
+                  </label>
+                ))}
+              </fieldset>
+            ) : (
+              <div className="w-32">
+                <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-qty">
+                  Units to remove
+                </label>
+                <input
+                  id="adjust-qty"
+                  ref={qtyRef}
+                  value={qty}
+                  inputMode="numeric"
+                  onChange={(event) => {
+                    setQty(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+                />
+              </div>
+            )}
 
             <div className="min-w-48 flex-1">
               <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-reason">
@@ -359,7 +475,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-28">
                 <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-cost">
-                  Unit cost
+                  Cost per {costUnit?.name ?? 'unit'}
                 </label>
                 <input
                   id="adjust-cost"
@@ -373,7 +489,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
               </div>
               <div className="w-28">
                 <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-price">
-                  Sells for
+                  Sells for (per {costUnit?.name ?? 'unit'})
                 </label>
                 <input
                   id="adjust-price"
@@ -399,6 +515,15 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                   className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
                 />
               </div>
+              {/* What the count comes to, said before saving. */}
+              {countedBase > 0 ? (
+                <p className="text-ink/60 w-full text-sm" role="status">
+                  {countedBase} {chosen.baseUnitName} in all
+                  {costTotalPaisa !== null
+                    ? ` · costs ${formatPaisa(paisa(costTotalPaisa), { withSymbol: true })}`
+                    : ''}
+                </p>
+              ) : null}
             </div>
           )}
 

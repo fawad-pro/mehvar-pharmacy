@@ -20,6 +20,8 @@ import {
   updateProduct,
 } from '@/db/catalog-queries';
 import type { TenantScope } from '@/db/scoped';
+import { packFactor, paisa } from '@/lib/branded';
+import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { legacyPricePerBase, unitsFromEnteredPrices, unitsOf, type ProductUnit } from './units';
@@ -285,6 +287,54 @@ export async function setProductActive(
     return { ok: false, conflict: 'not_found' };
   }
   await updateProduct(scope, productId, { isActive });
+  return { ok: true, value: undefined };
+}
+
+/**
+ * [PCN-012] Records the MRP printed on a delivered pack, and — when the owner
+ * chooses — the price that pack's unit now sells for.
+ *
+ * Offered on Receive Stock when the pack's MRP differs from the record (D4:
+ * the pack in hand is authoritative), never applied silently. Only the named
+ * unit's price changes; the owner's other unit prices stand as set. The
+ * legacy per-base columns are kept in step for one release (PCN-012 data
+ * model): the base price follows the base unit, and the per-base MRP is the
+ * pack's, rounded down so it is never a higher ceiling than the pack's.
+ */
+export async function recordDeliveredMrp(
+  scope: TenantScope,
+  productId: Uuid,
+  input: { unitKey: string; mrpPaisa: number; pricePaisa: number | null },
+): Promise<CatalogResult> {
+  const existing = await findProduct(scope, productId);
+  if (!existing) {
+    return { ok: false, conflict: 'not_found' };
+  }
+  const unit = existing.units.find((candidate) => candidate.key === input.unitKey);
+  if (
+    !unit ||
+    !Number.isSafeInteger(input.mrpPaisa) ||
+    input.mrpPaisa <= 0 ||
+    (input.pricePaisa !== null &&
+      (!Number.isSafeInteger(input.pricePaisa) || input.pricePaisa <= 0))
+  ) {
+    return { ok: false, rejections: [{ reason: 'price_required' }] };
+  }
+
+  const units =
+    input.pricePaisa === null
+      ? existing.units
+      : existing.units.map((candidate) =>
+          candidate.key === unit.key ? { ...candidate, pricePaisa: input.pricePaisa! } : candidate,
+        );
+  await updateProduct(scope, productId, {
+    mrpPaisa: input.mrpPaisa,
+    mrpUnitKey: unit.key,
+    currentMrpPerBaseUnit: nominalPricePerBase(paisa(input.mrpPaisa), packFactor(unit.factor)),
+    ...(input.pricePaisa === null
+      ? {}
+      : { units, defaultPricePerBaseUnit: legacyPricePerBase(units) }),
+  });
   return { ok: true, value: undefined };
 }
 

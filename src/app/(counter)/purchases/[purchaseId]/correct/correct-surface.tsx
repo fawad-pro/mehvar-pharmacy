@@ -16,7 +16,7 @@ import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { defaultReturnCreditPaisa } from '@/domain/suppliers/supplier-return';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity } from '@/lib/quantity';
+import { describeQuantity, levelToBaseUnits } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { correctPurchaseLineAction, returnToSupplierAction } from './actions';
@@ -30,6 +30,10 @@ export interface CorrectableLineView {
   packLevels: { name: string; factor: number }[];
   qtyBase: number;
   bonusQtyBase: number;
+  /** [PCN-012] The unit the line was bought in, and its size; the base unit, 1, on an older line. */
+  unitName: string;
+  factor: number;
+  /** The cost of ONE of `unitName`. */
   unitCostPaisa: number;
   onHandBase: number;
   effectiveUnitCostPaisa: number;
@@ -71,11 +75,13 @@ export function CorrectSurface({
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="font-medium">{line.productName}</span>
               <span className="text-ink/60 text-sm">
-                {describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
+                {line.factor === 1
+                  ? describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)
+                  : `${line.qtyBase / line.factor} ${line.unitName}`}
                 {line.bonusQtyBase > 0
-                  ? ` + ${line.bonusQtyBase} ${line.baseUnitName} bonus`
+                  ? ` + ${line.bonusQtyBase / line.factor} ${line.unitName} bonus`
                   : ''}{' '}
-                at {formatPaisa(paisa(line.unitCostPaisa))} / {line.baseUnitName}
+                at {formatPaisa(paisa(line.unitCostPaisa))} / {line.unitName}
               </span>
               <span className="text-ink/50 text-xs">
                 {line.onHandBase} {line.baseUnitName} on hand
@@ -154,12 +160,15 @@ function CorrectionForm({
   onDone: (message: string) => void;
 }) {
   const router = useRouter();
-  const [qty, setQty] = useState(String(line.qtyBase));
-  const [bonus, setBonus] = useState(String(line.bonusQtyBase));
+  // In the line's own unit: whole boxes for a box line (PCN-012).
+  const [qty, setQty] = useState(String(line.qtyBase / line.factor));
+  const [bonus, setBonus] = useState(String(line.bonusQtyBase / line.factor));
   const [cost, setCost] = useState(rupees(line.unitCostPaisa));
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const unitLevel = { name: line.unitName, factor: line.factor };
 
   async function save(): Promise<void> {
     if (busy) return;
@@ -176,8 +185,8 @@ function CorrectionForm({
     const outcome = await correctPurchaseLineAction({
       correctionId,
       purchaseLineId: line.lineId,
-      qtyBase: Number(qty.trim()),
-      bonusQtyBase: Number(bonus.trim()),
+      qtyBase: levelToBaseUnits(Number(qty.trim()), unitLevel),
+      bonusQtyBase: levelToBaseUnits(Number(bonus.trim()), unitLevel),
       unitCostPaisa: paisaFromRupeeInput(cost),
       note,
     });
@@ -200,7 +209,7 @@ function CorrectionForm({
       }}
     >
       <label className="text-ink/70 text-xs">
-        Quantity ({line.baseUnitName})
+        Quantity ({line.unitName})
         <input
           autoFocus
           inputMode="numeric"
@@ -210,7 +219,7 @@ function CorrectionForm({
         />
       </label>
       <label className="text-ink/70 text-xs">
-        Bonus ({line.baseUnitName})
+        Bonus ({line.unitName})
         <input
           inputMode="numeric"
           value={bonus}
@@ -219,7 +228,7 @@ function CorrectionForm({
         />
       </label>
       <label className="text-ink/70 text-xs">
-        Unit cost (Rs per {line.baseUnitName})
+        Unit cost (Rs per {line.unitName})
         <input
           inputMode="decimal"
           value={cost}

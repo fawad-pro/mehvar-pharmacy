@@ -269,9 +269,12 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
   // Added with the pack's own expiry (the draft table shows expiry, not batch).
   await expect(lines).toContainText('2028-03-31');
   await expect(page.getByLabel('Unit cost')).toHaveValue('');
-  await expect(page.getByLabel('Batch no.')).toHaveValue('');
-  await expect(page.getByLabel('Expiry')).toHaveValue('');
-  await expect(page.getByLabel(/^Qty/)).toBeFocused();
+  // The next product's code is 1D: it says nothing about expiry or batch, so
+  // both are asked for from the pack, and the cursor starts at its expiry
+  // (PCN-012, Session 2) — nothing carried over from the pack before.
+  await expect(page.getByLabel('Batch — type from the pack')).toHaveValue('');
+  await expect(page.getByLabel('Expiry — type from the pack')).toHaveValue('');
+  await expect(page.getByLabel('Expiry — type from the pack')).toBeFocused();
 });
 
 test('on Receive Stock, a barcode-sized number is refused as a quantity', async ({ page }) => {

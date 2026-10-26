@@ -68,5 +68,15 @@ export function usePrintReceipt() {
     });
   }, []);
 
-  return { receipt, print };
+  /**
+   * Takes the last printed slip out of the page. A sale that does not print
+   * (automatic printing off) must not leave the previous sale's slip mounted:
+   * the Sale screen's state can survive a navigation, and the browser's own
+   * print command would then print a receipt for a different sale.
+   */
+  const clear = useCallback(() => {
+    setReceipt(null);
+  }, []);
+
+  return { receipt, print, clear };
 }

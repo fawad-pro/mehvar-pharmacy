@@ -118,10 +118,11 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   const table = page.getByRole('table');
   await expect(table).toContainText('Panadol');
   await expect(table).toContainText('Brufen');
-  // The scheme line shows the blended cost it will actually carry, not the
-  // invoiced one — bonus-cost honesty, visible at entry time.
+  // The scheme line keeps its free units as their own count, and its line
+  // cost is what was paid for the 50 alone (PCN-012): the bonus is never
+  // charged, and never folded into the quantity.
   await expect(table).toContainText('+5');
-  await expect(table).toContainText('× 55');
+  await expect(table.getByRole('row').filter({ hasText: 'Brufen' })).toContainText('360.00');
 
   // A customer walks in mid-invoice. This is the case W7 exists for.
   await page.keyboard.press('F1');
@@ -264,7 +265,10 @@ test('W8: an adjustment needs a coded reason, and says who made it', async ({ pa
   await search(page).fill('panadol');
   await page.getByRole('option').first().click();
 
-  await page.getByLabel('Units to add').fill('24');
+  // [PCN-012] Counted as the shelf holds it — here, 24 loose tablets — and,
+  // like all stock that appears, costed (decision 5).
+  await page.getByLabel('tab', { exact: true }).fill('24');
+  await page.getByLabel(/^Cost per/).fill('250');
   await page.getByLabel('Reason').selectOption('count_correction');
   await page.getByLabel('Note (optional)').fill('found behind the counter');
   await page.getByRole('button', { name: /Save/ }).click();

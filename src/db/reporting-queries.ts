@@ -18,7 +18,7 @@ import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
 import { summariseBook } from '@/domain/udhaar/position';
 import { DEFAULT_TIME_ZONE } from '@/lib/business-day';
 
-import { correctedBatchCosts } from './correction-queries';
+import { batchCostLedger } from './batch-cost-queries';
 import type { TenantScope } from './scoped';
 import {
   adjustments,
@@ -30,7 +30,6 @@ import {
   purchaseLines,
   saleLineAllocations,
   saleLines,
-  saleReturnLines,
   saleReturns,
   sales,
   supplierReturns,
@@ -360,6 +359,7 @@ export async function purchaseCorrectionsInRange(
       qtyDeltaBase: purchaseCorrections.qtyDeltaBase,
       bonusDeltaBase: purchaseCorrections.bonusDeltaBase,
       correctedUnitCostPaisa: purchaseCorrections.correctedUnitCostPaisa,
+      correctedUnitCostPaisaEntered: purchaseCorrections.correctedUnitCostPaisaEntered,
       invoiceDeltaPaisa: purchaseCorrections.invoiceDeltaPaisa,
       note: purchaseCorrections.note,
       byName: users.name,
@@ -377,9 +377,10 @@ export async function purchaseCorrectionsInRange(
       ),
     )
     .orderBy(desc(purchaseCorrections.createdAt));
-  return rows.map(({ correctedUnitCostPaisa, ...row }) => ({
+  return rows.map(({ correctedUnitCostPaisa, correctedUnitCostPaisaEntered, ...row }) => ({
     ...row,
-    costCorrected: correctedUnitCostPaisa !== null,
+    // Either column: per base unit on an older line, per pack since PCN-012.
+    costCorrected: correctedUnitCostPaisa !== null || correctedUnitCostPaisaEntered !== null,
   }));
 }
 
@@ -627,14 +628,15 @@ export interface ReportFigures {
   readonly returnCount: number;
   /** Refunded in the range, so the net figures can show their own adjustment. */
   readonly returnedPaisa: number;
+  /** [PCN-012, D2] Stock written off or counted short in the range, at cost. */
+  readonly writtenOffPaisa: number;
 }
 
 /**
- * Margin is honest about two things Phase 9 §7 names: bonus units (cost
- * already carries the blended figure from `costing.ts`, nothing extra needed
- * here) and pending allocations (`unit_cost_paisa` is null while pending, and
- * `sum()` skips nulls — an unresolved shortfall simply contributes no cost
- * until a purchase or count correction gives it one).
+ * Margin is honest about two things Phase 9 §7 names: bonus units (a batch's
+ * total is what was paid, spread over every unit received, free ones
+ * included) and pending allocations (no batch yet, so no cost until a
+ * purchase or count correction gives it one).
  *
  * And now about a third: RETURNS.
  *
@@ -669,26 +671,25 @@ export async function reportFigures(
     .from(saleLines)
     .where(scope.scopeOf(saleLines, gte(saleLines.createdAt, from), lt(saleLines.createdAt, to)));
 
-  // Per batch rather than one sum, so a [PCN-009] cost correction can value
-  // every unit from a corrected batch at the corrected cost — including units
-  // sold before the mistake was found, which is the whole point of correcting.
-  const costByBatch = await scope.db
-    .select({
-      batchId: saleLineAllocations.batchId,
-      qty: sql<string>`sum(${saleLineAllocations.qtyBase})`,
-      total: sql<string>`sum(${saleLineAllocations.qtyBase} * ${saleLineAllocations.unitCostPaisa})`,
-    })
-    .from(saleLineAllocations)
-    .innerJoin(saleLines, eq(saleLineAllocations.saleLineId, saleLines.id))
-    .where(
-      scope.scopeOf(
-        saleLineAllocations,
-        gte(saleLines.createdAt, from),
-        lt(saleLines.createdAt, to),
-      ),
-    )
-    .groupBy(saleLineAllocations.batchId);
-  const corrected = await correctedBatchCosts(scope);
+  /*
+   * [PCN-012] Cost is each outflow's cumulative share of its batch's exact
+   * total (`batch-cost-queries.ts`): never understated, and a used-up batch
+   * costs exactly what was paid. Derived from the batch's CURRENT total, so a
+   * corrected invoice restates units sold before the correction (D1). Sales
+   * net of restocked returns are cost of goods sold; write-offs and other
+   * negative adjustments take their share too (D2) and are reported beside it.
+   * A pending allocation has no batch yet and costs nothing until resolved.
+   */
+  const ledger = await batchCostLedger(scope, to);
+  let soldCost = 0;
+  let returnedCost = 0;
+  let writtenOffPaisa = 0;
+  for (const movement of ledger.movements) {
+    if (movement.at < from) continue;
+    if (movement.kind === 'sale') soldCost += movement.costPaisa;
+    else if (movement.kind === 'restock') returnedCost -= movement.costPaisa;
+    else if (movement.kind === 'adjustment') writtenOffPaisa += movement.costPaisa;
+  }
 
   const [returnsRow] = await scope.db
     .select({
@@ -699,45 +700,6 @@ export async function reportFigures(
     .where(
       scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
     );
-
-  /*
-   * The cost of what came back, valued at the batch it was restocked into.
-   *
-   * That batch is the one `restockToBatch` actually put the units in, so its
-   * unit cost is the cost the system really reversed — not a re-derivation from
-   * the original allocations, which could span several batches and would give a
-   * figure the inventory never used.
-   */
-  const returnedByBatch = await scope.db
-    .select({
-      batchId: batches.id,
-      unitCostPaisa: batches.unitCostPaisa,
-      qty: sql<string>`sum(${saleReturnLines.qtyBase})`,
-    })
-    .from(saleReturnLines)
-    .innerJoin(saleReturns, eq(saleReturnLines.saleReturnId, saleReturns.id))
-    .innerJoin(batches, eq(saleReturnLines.restockBatchId, batches.id))
-    .where(
-      scope.scopeOf(
-        saleReturnLines,
-        gte(saleReturns.createdAt, from),
-        lt(saleReturns.createdAt, to),
-      ),
-    )
-    .groupBy(batches.id, batches.unitCostPaisa);
-
-  // A pending allocation (no batch) has no cost yet and contributes nothing,
-  // as before: `sum()` skipped its null cost, and `total` is null here too.
-  const soldCost = costByBatch.reduce((sum, row) => {
-    const correctedCost = row.batchId === null ? undefined : corrected.get(row.batchId);
-    return (
-      sum + (correctedCost !== undefined ? Number(row.qty) * correctedCost : Number(row.total ?? 0))
-    );
-  }, 0);
-  const returnedCost = returnedByBatch.reduce(
-    (sum, row) => sum + Number(row.qty) * (corrected.get(row.batchId) ?? row.unitCostPaisa),
-    0,
-  );
 
   const returnedPaisa = Number(returnsRow?.refunded ?? 0);
   const revenuePaisa = Number(salesRow?.total ?? 0) - returnedPaisa;
@@ -751,5 +713,6 @@ export async function reportFigures(
     unitsSold: Number(unitsRow?.total ?? 0),
     returnCount: Number(returnsRow?.count ?? 0),
     returnedPaisa,
+    writtenOffPaisa,
   };
 }

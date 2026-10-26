@@ -44,6 +44,12 @@ export interface AdjustmentCommand extends AdjustmentDraft {
   readonly batchNumber?: string | null;
   readonly unitCostPaisa?: number;
   readonly pricePerBaseUnitPaisa?: number;
+  /**
+   * [PCN-012] What the new batch's units cost in total, exactly — opening
+   * stock counted as boxes, strips and tablets and costed per box. When set,
+   * `unitCostPaisa` is derived from it (rounded up, nominal).
+   */
+  readonly costTotalPaisa?: number;
 }
 
 export interface AdjustmentCommitted {
@@ -111,7 +117,16 @@ async function writeAdjustment(
   const creating = materializesBatch(command);
   const batchId = creating ? uuidv7() : null;
   const received = command.qtyBaseDelta;
-  const unitCost = command.unitCostPaisa ?? 0;
+  const costTotal =
+    command.costTotalPaisa !== undefined &&
+    Number.isSafeInteger(command.costTotalPaisa) &&
+    command.costTotalPaisa >= 0
+      ? command.costTotalPaisa
+      : null;
+  const unitCost =
+    costTotal !== null && received > 0
+      ? Math.ceil(costTotal / received)
+      : (command.unitCostPaisa ?? 0);
 
   // The batch goes in first when there is one to create. The reference runs
   // both ways but only one of them is enforced: `adjustments.batch_id` is a
@@ -130,6 +145,7 @@ async function writeAdjustment(
       pricePerBaseUnitPaisa: command.pricePerBaseUnitPaisa ?? 0,
       qtyReceivedBase: received,
       qtyRemainingBase: received,
+      costTotalPaisa: costTotal,
     });
   }
 

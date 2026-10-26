@@ -37,6 +37,7 @@ import {
   suppliers,
   users,
 } from './schema';
+import { purchaseLineCostSql } from './purchase-line-cost';
 
 import { summariseSupplierBook, type SupplierBook } from '@/domain/suppliers/supplier-position';
 import type { Uuid } from '@/lib/uuid';
@@ -45,7 +46,7 @@ import type { Uuid } from '@/lib/uuid';
 export async function supplierBalance(scope: TenantScope, supplierId: Uuid): Promise<number> {
   const [lineCost] = await scope.db
     .select({
-      total: sql<string>`sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa})`,
+      total: sql<string>`sum(${purchaseLineCostSql})`,
     })
     .from(purchases)
     .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
@@ -106,7 +107,7 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
     scope.db
       .select({
         supplierId: purchases.supplierId,
-        total: sql<string>`sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa})`,
+        total: sql<string>`sum(${purchaseLineCostSql})`,
       })
       .from(purchases)
       .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
@@ -305,7 +306,7 @@ export async function supplierLedger(
         invoiceRef: purchases.invoiceRef,
         cashPaidPaisa: purchases.cashPaidPaisa,
         byName: users.name,
-        total: sql<string>`sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa})`,
+        total: sql<string>`sum(${purchaseLineCostSql})`,
       })
       .from(purchases)
       .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))

@@ -2,6 +2,36 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Session 2 — Stock comes in as the paper says (PCN-012)
+
+- **Receive Stock in packs.** Each line is entered in the pack it arrived in
+  (largest first; boxes and strips, never loose tablets): quantity, bonus and
+  cost per box, and "Sells for" per box, pre-filled from the product. The line
+  shows "2 box + 1 box" and its exact cost; the invoice total, the supplier's
+  balance and the invoice page add up to the paper to the paisa (a box of 14
+  at Rs 250 is Rs 250.00, never Rs 250.04).
+- **MRP on pack**, per line. A selling price above it is warned. When it
+  differs from the product's record, the owner is offered "Record it, and sell
+  at Rs X per box" or "Record the MRP only" — never applied silently.
+- **After a 1D barcode**, which carries only the product number, Expiry and
+  Batch are marked "type from the pack" and the cursor starts at Expiry. A 2D
+  code still fills both.
+- **Opening stock** is counted as the shelf holds it — boxes, strips and
+  tablets — costed per box. The cost is required (0 for free) and pre-filled
+  from the product's last purchase. The screen shows what the count comes to
+  ("234 tab in all · costs Rs 585.00") before saving.
+- **Exact margins (owner's decisions D1 and D2).** Each batch now keeps what
+  it cost in total, and every unit that leaves it — sold, written off or
+  returned to the supplier — takes its share, counted cumulatively: margin is
+  never better than the real one, and a used-up batch costs exactly what was
+  paid. Correcting an invoice restates the cost of units already sold. Stock
+  written off shows on the Day screen beside the margin, at cost.
+- **Corrections** to a line bought per pack are stated in that pack
+  (quantity in boxes, cost per box).
+- With automatic printing off, the previous sale's slip could stay hidden in
+  the Sale screen, so the browser's own print command would print a receipt
+  for a different sale. A sale that does not print now clears it.
+
 ## Session — One scan guard for every field
 
 - Patching amount fields one at a time kept leaving the next one open. At the

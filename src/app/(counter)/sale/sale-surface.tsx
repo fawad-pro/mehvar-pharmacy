@@ -114,7 +114,7 @@ export function SaleSurface() {
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const receiptContext = useReceiptContext();
-  const { receipt, print } = usePrintReceipt();
+  const { receipt, print, clear: clearPrinted } = usePrintReceipt();
   const { capture } = useSync();
 
   // Defect C5: the udhaar key belongs to Sale only while the cart has
@@ -363,6 +363,8 @@ export function SaleSurface() {
       // receipt one key away, from local state, exactly as before.
       if (receiptContext.autoPrintReceipt) {
         print(receiptData);
+      } else {
+        clearPrinted();
       }
 
       // Stock moved, so the index's advisory snapshot is stale. Harmless to ask
@@ -371,7 +373,19 @@ export function SaleSurface() {
       setBusy(false);
       focusSearch();
     },
-    [lines, busy, receiptContext, totals, customer, index, capture, refresh, focusSearch, print],
+    [
+      lines,
+      busy,
+      receiptContext,
+      totals,
+      customer,
+      index,
+      capture,
+      refresh,
+      focusSearch,
+      print,
+      clearPrinted,
+    ],
   );
 
   /**

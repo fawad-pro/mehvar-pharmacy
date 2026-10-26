@@ -27,8 +27,14 @@ export interface PurchasedQuantity {
   readonly qtyBase: number;
   /** Units received free with the scheme. Zero in an ordinary purchase. */
   readonly bonusQtyBase: number;
-  /** Per invoiced base unit, as the distributor billed it. */
+  /** Per invoiced base unit, as the distributor billed it (nominal on a pack line). */
   readonly unitCostPaisa: number;
+  /**
+   * [PCN-012] What the line cost exactly, when it was invoiced per pack
+   * ("10 boxes at Rs 250"). Absent on a line priced per base unit, whose cost
+   * is `qtyBase × unitCostPaisa` exactly.
+   */
+  readonly lineCostPaisa?: number | null | undefined;
 }
 
 /** Units that physically arrived and go on the shelf. */
@@ -38,36 +44,29 @@ export function receivedQty(line: PurchasedQuantity): number {
 
 /** What the shop actually paid: bonus units are free, so they are not in here. */
 export function invoicedCostPaisa(line: PurchasedQuantity): Paisa {
-  return paisa(line.qtyBase * line.unitCostPaisa);
+  return paisa(line.lineCostPaisa ?? line.qtyBase * line.unitCostPaisa);
 }
 
 /**
- * The cost each received unit really carries.
+ * The cost each received unit carries, as one figure: `paid ÷ received`,
+ * rounded UP to whole paisa. Ten at Rs 3.50 with one free is 3500 paisa for
+ * 11 units — 319 paisa each, not 350.
  *
- * `paid ÷ received`, floored to whole paisa. Ten at Rs 3.50 with one free is
- * 3500 paisa for 11 units — 318 paisa each, not 350.
- *
- * **The floor leaves a remainder, deliberately.** 11 × 318 = 3498, two paisa
- * short of the 3500 actually paid. There is no integer per-unit cost that
- * multiplies back exactly, and inventing a fractional one would put a float in
- * the money path, which Phase 9 §1 forbids outright. Flooring is the honest
- * direction for the residue to fall: it makes cost of goods very slightly
- * conservative, so the margin the owner is shown is never *better* than the
- * truth. `costResidualPaisa` exposes the remainder for anyone who needs the
- * exact figure — margin reporting on Day 7 should sum invoiced cost, not
- * multiply per-unit cost, when the exact number matters.
+ * **Nominal since PCN-012.** No whole-paisa figure multiplies back to what was
+ * paid, so margin no longer multiplies this: reports take each outflow's
+ * cumulative share of the batch's exact total (`inventory/batch-cost.ts`),
+ * which never understates cost and adds up exactly when the batch is used up.
+ * This figure is for display and for the columns older readers expect, and it
+ * rounds up for the same reason: a cost shown low reports a margin better
+ * than the real one. (Day 6 floored it and claimed the opposite; PCN-012
+ * corrected the reasoning.)
  */
 export function effectiveUnitCostPaisa(line: PurchasedQuantity): Paisa {
   const received = receivedQty(line);
   if (received <= 0) {
     return paisa(0);
   }
-  return paisa(Math.floor(invoicedCostPaisa(line) / received));
-}
-
-/** Paid, minus what the per-unit cost accounts for. Small, never negative. */
-export function costResidualPaisa(line: PurchasedQuantity): Paisa {
-  return paisa(invoicedCostPaisa(line) - effectiveUnitCostPaisa(line) * receivedQty(line));
+  return paisa(Math.ceil(invoicedCostPaisa(line) / received));
 }
 
 /**

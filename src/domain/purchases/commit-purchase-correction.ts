@@ -25,16 +25,24 @@ import { consumeFromBatch } from '@/db/sales-queries';
 import type { TenantScope } from '@/db/scoped';
 import type { Uuid } from '@/lib/uuid';
 
-import { correctedLine, planCorrection, type CorrectionRejection } from './purchase-correction';
+import {
+  correctedLine,
+  lineStateOf,
+  planCorrection,
+  type CorrectionRejection,
+} from './purchase-correction';
 
 export interface PurchaseCorrectionCommand {
   /** Client-generated. Idempotency key, as everywhere else. */
   readonly correctionId: Uuid;
   readonly purchaseLineId: Uuid;
-  /** What the line should have said: invoiced quantity, in base units. */
+  /**
+   * What the line should have said: invoiced and free quantities in base
+   * units — whole packs, for a line bought per pack (PCN-012).
+   */
   readonly qtyBase: number;
   readonly bonusQtyBase: number;
-  /** Invoiced cost per base unit. */
+  /** Invoiced cost of ONE of the line's unit: per pack, or per base unit on an older line. */
   readonly unitCostPaisa: number;
   /** Why — required, because a correction without a reason is an edit. */
   readonly note: string;
@@ -61,7 +69,7 @@ export async function commitPurchaseCorrection(
       return { ok: false, reason: 'unknown_line' } satisfies PurchaseCorrectionResult;
     }
 
-    const current = correctedLine(line, await correctionsForLine(tx, line.lineId));
+    const current = correctedLine(lineStateOf(line), await correctionsForLine(tx, line.lineId));
     const planned = planCorrection(
       current,
       {
@@ -95,6 +103,7 @@ export async function commitPurchaseCorrection(
       qtyDeltaBase: plan.qtyDeltaBase,
       bonusDeltaBase: plan.bonusDeltaBase,
       correctedUnitCostPaisa: plan.correctedUnitCostPaisa,
+      correctedUnitCostPaisaEntered: plan.correctedUnitCostPaisaEntered,
       effectiveUnitCostPaisa: plan.effectiveUnitCostPaisa,
       invoiceDeltaPaisa: plan.invoiceDeltaPaisa,
       note: command.note.trim(),

@@ -72,10 +72,7 @@ export default async function PurchaseDetailPage({
    * effective figure; showing it here would silently disagree with the
    * distributor's total and make a correct invoice look wrong.
    */
-  const totalCostPaisa = purchase.lines.reduce(
-    (sum, line) => sum + line.qtyBase * line.unitCostPaisa,
-    0,
-  );
+  const totalCostPaisa = purchase.lines.reduce((sum, line) => sum + lineCost(line), 0);
   const bonusBase = purchase.lines.reduce((sum, line) => sum + line.bonusQtyBase, 0);
   // [PCN-007] What was still owed to the supplier when this invoice was
   // received. A negative would be an overpayment; clamped, since "on credit"
@@ -133,11 +130,19 @@ export default async function PurchaseDetailPage({
                   </Link>
                 </td>
                 <td className="text-ink/70 px-3 py-2">
-                  {describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
+                  {/* [PCN-012] As invoiced: "10 box", never the 140 capsules
+                      they hold, so the line reads like the paper. */}
+                  {line.unitCount !== null && line.unitName !== null
+                    ? `${line.unitCount} ${line.unitName}`
+                    : describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
                   {/* Bonus is stated separately, never folded into the quantity:
                       it arrived free, and an owner comparing this screen to the
                       distributor's invoice needs the two numbers to match. */}
-                  {line.bonusQtyBase > 0 ? (
+                  {line.bonusUnitCount !== null && line.bonusUnitCount > 0 && line.unitName ? (
+                    <p className="text-green-700 text-xs">
+                      + {line.bonusUnitCount} {line.unitName} bonus
+                    </p>
+                  ) : line.unitCount === null && line.bonusQtyBase > 0 ? (
                     <p className="text-green-700 text-xs">
                       +{' '}
                       {describeQuantity(
@@ -156,10 +161,11 @@ export default async function PurchaseDetailPage({
                   ) : null}
                 </td>
                 <td className="numeral px-3 py-2 text-right">
-                  {formatPaisa(paisa(line.unitCostPaisa))}
+                  {formatPaisa(paisa(line.unitCostPaisaEntered ?? line.unitCostPaisa))}
+                  <p className="text-ink/50 text-xs">/ {line.unitName ?? line.baseUnitName}</p>
                 </td>
                 <td className="numeral px-3 py-2 text-right">
-                  {formatPaisa(paisa(line.priceAtReceivingPaisa))}
+                  {formatPaisa(paisa(line.pricePaisaEntered ?? line.priceAtReceivingPaisa))}
                   {line.mrpAtReceivingPaisa ? (
                     <p className="text-ink/50 text-xs">
                       MRP {formatPaisa(paisa(line.mrpAtReceivingPaisa))}
@@ -167,7 +173,7 @@ export default async function PurchaseDetailPage({
                   ) : null}
                 </td>
                 <td className="numeral px-3 py-2 text-right">
-                  {formatPaisa(paisa(line.qtyBase * line.unitCostPaisa))}
+                  {formatPaisa(paisa(lineCost(line)))}
                 </td>
               </tr>
             ))}
@@ -264,6 +270,13 @@ export default async function PurchaseDetailPage({
                     row.correctedUnitCostPaisa !== null
                       ? `cost now ${formatPaisa(paisa(row.correctedUnitCostPaisa))}`
                       : null,
+                    // [PCN-012] A line bought per pack is corrected per pack.
+                    row.correctedUnitCostPaisaEntered !== null
+                      ? `cost now ${formatPaisa(paisa(row.correctedUnitCostPaisaEntered))} per ${
+                          purchase.lines.find((line) => line.lineId === row.purchaseLineId)
+                            ?.unitName ?? 'unit'
+                        }`
+                      : null,
                   ]
                     .filter(Boolean)
                     .join(' · ')}
@@ -303,4 +316,13 @@ export default async function PurchaseDetailPage({
       ) : null}
     </section>
   );
+}
+
+/**
+ * What a line cost, as invoiced: exact for a line bought per pack, quantity ×
+ * cost per base unit for one from before PCN-012 — the same rule as
+ * `purchaseLineCostSql`.
+ */
+function lineCost(line: { lineCostPaisa: number | null; qtyBase: number; unitCostPaisa: number }) {
+  return line.lineCostPaisa ?? line.qtyBase * line.unitCostPaisa;
 }

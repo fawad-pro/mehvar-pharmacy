@@ -41,6 +41,8 @@ interface ThreeNumbers {
 interface ReportFigures {
   costPaisa: number;
   marginPaisa: number;
+  /** [PCN-012, D2] Written off or counted short in the range, at cost. */
+  writtenOffPaisa: number;
   saleCount: number;
   unitsSold: number;
   returnCount: number;
@@ -329,6 +331,17 @@ export function DaySurface({
             {formatPaisa(paisa(figures.marginPaisa), { withSymbol: true })}
           </span>
         </span>
+        {/* D2: stock that left without a sale is a loss at its cost, said
+            beside the margin rather than hidden in it. Only when there is one. */}
+        {figures.writtenOffPaisa > 0 ? (
+          <span>
+            Written off{' '}
+            <span className="numeral text-amber font-medium">
+              {formatPaisa(paisa(figures.writtenOffPaisa), { withSymbol: true })}
+            </span>{' '}
+            at cost
+          </span>
+        ) : null}
         {/* "How many sales" is exactly the moment an owner wants to see which
             ones — and this used to land on Returns, dropping someone reviewing
             the day into a refund workflow. It goes to Receipts now: a place to
