@@ -80,3 +80,45 @@ test('a code scanned into a settlement amount records no payment', async ({ page
   await expect(overlay.getByRole('button', { name: 'Settle — Enter' })).toBeVisible();
   await expect(overlay.getByRole('button', { name: 'Done — Esc' })).toHaveCount(0);
 });
+
+test('a code scanned into the quick item form saves nothing — name or price', async ({ page }) => {
+  await openCounter(page);
+  // Letters no earlier run's item shares, so search finds nothing and offers
+  // the quick item (the suite shares one database, CLAUDE.md Day 20).
+  const name = `Qx ${Date.now()
+    .toString(36)
+    .replace(/[0-9]/g, (digit) => 'bcdfghjklm'[Number(digit)]!)}`;
+  await search(page).fill(name);
+  await expect(page.getByRole('button', { name: /and keep selling/ })).toBeVisible();
+  await page.keyboard.press('Enter');
+  const form = page.getByRole('dialog', { name: 'Quick item' });
+  await expect(form).toBeVisible();
+
+  // Into the price, where focus starts.
+  await expect(form.getByLabel('Price')).toBeFocused();
+  await page.keyboard.type(EAN, { delay: 0 });
+  await page.keyboard.press('Enter');
+  await expect(form.getByRole('alert')).toContainText('That was a barcode');
+  await expect(form.getByLabel('Price')).toHaveValue('');
+
+  // Into the name: the name comes back as typed.
+  await form.getByLabel('Name').click();
+  await page.keyboard.press('End');
+  await page.keyboard.type(EAN, { delay: 0 });
+  await page.keyboard.press('Enter');
+  await expect(form.getByRole('alert')).toContainText('That was a barcode');
+  await expect(form.getByLabel('Name')).toHaveValue(name);
+  await expect(form).toBeVisible();
+
+  // A price typed like a person, but a crore: Enter does not save it.
+  await form.getByLabel('Price').pressSequentially('10000000', { delay: 120 });
+  await form.getByLabel('Price').press('Enter');
+  await expect(form.getByRole('alert')).toContainText('looks like a barcode');
+  await expect(form).toBeVisible();
+
+  // The real price saves on Enter, as ever.
+  await form.getByLabel('Price').fill('250');
+  await form.getByLabel('Price').press('Enter');
+  await expect(cart(page)).toContainText(name);
+  await expect(cart(page)).not.toContainText(EAN);
+});

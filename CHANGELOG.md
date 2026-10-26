@@ -12,6 +12,10 @@ All approved plan changes and implementation milestones will be recorded here.
   the screen says it was a barcode, and nothing is saved.
 - Backstop for a scan that slips past: an amount of Rs 1 crore or more is
   committed only by clicking the button, never by Enter. Nothing is refused.
+- The quick item form had the same hole: a code scanned into Price saved an
+  item priced at billions, and into Name saved it named after the code. Each
+  field now puts a scan back and saves nothing; a price of Rs 1 crore or more
+  saves only by a click.
 
 ## Session — A missed scan on Receive Stock no longer crashes the page
 
