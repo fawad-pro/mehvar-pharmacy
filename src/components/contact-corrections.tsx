@@ -14,6 +14,8 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { NO_ANSWER } from './load-failed';
+
 type Outcome = { ok: true } | { ok: false; message: string };
 
 export function ContactCorrections({
@@ -48,7 +50,7 @@ export function ContactCorrections({
   async function run(action: () => Promise<Outcome>, after: () => void) {
     setBusy(true);
     setError(null);
-    const outcome = await action();
+    const outcome = await action().catch((): Outcome => ({ ok: false, message: NO_ANSWER }));
     setBusy(false);
     // Answered either way: a refusal left on "Yes, remove" invites a second
     // press that cannot succeed.

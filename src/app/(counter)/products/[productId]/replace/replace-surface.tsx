@@ -16,6 +16,7 @@ import { useState } from 'react';
 
 import type { SearchHit } from '@/client/search/catalog-index';
 import { useCatalog } from '@/client/search/provider';
+import { NO_ANSWER } from '@/components/load-failed';
 import { ProductSearch } from '@/components/product-search';
 import { parsePackLevels } from '@/domain/catalog/product';
 import { unitsFromEnteredPrices } from '@/domain/catalog/units';
@@ -189,7 +190,7 @@ export function ReplaceSurface({
             intoProductId: into.id,
             batches: confirmed,
             note,
-          })
+          }).catch(() => ({ ok: false as const, message: NO_ANSWER }))
         : await replaceProductAction(product.id, {
             name,
             baseUnitName: baseUnit,
@@ -197,7 +198,7 @@ export function ReplaceSurface({
             unitPrices: structure.map((unit) => prices[unit.name] ?? ''),
             batches: confirmed,
             note,
-          });
+          }).catch(() => ({ ok: false as const, message: NO_ANSWER }));
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.message);

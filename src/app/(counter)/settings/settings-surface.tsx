@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { testReceipt } from '@/client/print/receipt';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
+import { LoadFailed, NO_ANSWER } from '@/components/load-failed';
 import { ReceiptView } from '@/components/receipt-view';
 import { DEFAULT_BILL_DISCOUNT_CAP_PERCENT } from '@/domain/sales/cart';
 import type { UserListItem } from '@/db/auth-queries';
@@ -60,22 +61,33 @@ function SellingSettings() {
   const [cap, setCap] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     // A late answer must never overwrite what the owner has already changed:
     // development runs this effect twice, and the second load landing after a
     // click silently saved the old value back. Only the live load applies.
     let cancelled = false;
-    void currentTenantSettingsAction().then((current) => {
-      if (current && !cancelled) {
+    currentTenantSettingsAction().then(
+      (current) => {
+        if (cancelled) return;
+        if (!current) {
+          setLoadFailed(true);
+          return;
+        }
         setStartsLoose(current.saleStartsLoose ?? false);
         setCap(String(current.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT));
-      }
-    });
+      },
+      () => {
+        if (!cancelled) setLoadFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   async function save(): Promise<void> {
     if (startsLoose === null || busy) {
@@ -83,23 +95,39 @@ function SellingSettings() {
     }
     setBusy(true);
     setDone(null);
+    setProblem(null);
     const capPercent = /^\d{1,3}$/.test(cap.trim()) ? Number(cap.trim()) : Number.NaN;
-    const outcome = await updateSellingSettingsAction({
-      saleStartsLoose: startsLoose,
-      billDiscountCapPercent: capPercent,
-    });
-    // The counter holds its settings for the session, as with the receipt.
-    if (outcome.ok) {
-      await receiptContext?.reload();
+    try {
+      const outcome = await updateSellingSettingsAction({
+        saleStartsLoose: startsLoose,
+        billDiscountCapPercent: capPercent,
+      });
+      // The counter holds its settings for the session, as with the receipt.
+      if (outcome.ok) {
+        await receiptContext?.reload();
+        setDone('Saved.');
+      } else {
+        setProblem(outcome.message);
+      }
+    } catch {
+      setProblem(NO_ANSWER);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setDone(outcome.ok ? 'Saved.' : outcome.message);
   }
 
   return (
     <div className="border-line rounded border p-4">
       <h2 className="text-green-900 mb-2 font-medium">Selling</h2>
-      {startsLoose === null ? (
+      {startsLoose === null && loadFailed ? (
+        <LoadFailed
+          what="The selling settings"
+          onRetry={() => {
+            setLoadFailed(false);
+            setAttempt((current) => current + 1);
+          }}
+        />
+      ) : startsLoose === null ? (
         <p className="text-ink/50 text-sm">Loading…</p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -153,11 +181,7 @@ function SellingSettings() {
             >
               {busy ? 'Saving…' : 'Save'}
             </button>
-            {done ? (
-              <p className="text-green-900 text-sm" role="status">
-                {done}
-              </p>
-            ) : null}
+            <SaveResult done={done} problem={problem} />
           </div>
         </div>
       )}
@@ -165,28 +189,55 @@ function SellingSettings() {
   );
 }
 
+/** A save's answer: confirmed quietly, refused in red (I7). */
+function SaveResult({ done, problem }: { done: string | null; problem: string | null }) {
+  if (problem) {
+    return (
+      <p className="text-red text-sm" role="alert">
+        {problem}
+      </p>
+    );
+  }
+  return done ? (
+    <p className="text-green-900 text-sm" role="status">
+      {done}
+    </p>
+  ) : null;
+}
+
 function ReceiptSettingsForm() {
   const receiptContext = useReceiptContext();
   const [settings, setSettings] = useState<ReceiptSettings | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     // See `SellingSettings`: only the live load may fill the form.
     let cancelled = false;
-    void currentTenantSettingsAction().then((current) => {
-      if (current && !cancelled) {
+    currentTenantSettingsAction().then(
+      (current) => {
+        if (cancelled) return;
+        if (!current) {
+          setLoadFailed(true);
+          return;
+        }
         setSettings({
           receiptHeader: current.receiptHeader,
           receiptFooter: current.receiptFooter,
           autoPrintReceipt: current.autoPrintReceipt ?? true,
         });
-      }
-    });
+      },
+      () => {
+        if (!cancelled) setLoadFailed(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   async function save(): Promise<void> {
     if (!settings || busy) {
@@ -194,20 +245,36 @@ function ReceiptSettingsForm() {
     }
     setBusy(true);
     setDone(null);
-    const outcome = await updateReceiptSettingsAction(settings);
-    // The counter holds these settings for the whole session; without this
-    // the change took effect only after a restart.
-    if (outcome.ok) {
-      await receiptContext?.reload();
+    setProblem(null);
+    try {
+      const outcome = await updateReceiptSettingsAction(settings);
+      // The counter holds these settings for the whole session; without this
+      // the change took effect only after a restart.
+      if (outcome.ok) {
+        await receiptContext?.reload();
+        setDone('Saved.');
+      } else {
+        setProblem(outcome.message);
+      }
+    } catch {
+      setProblem(NO_ANSWER);
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
-    setDone(outcome.ok ? 'Saved.' : outcome.message);
   }
 
   return (
     <div className="border-line rounded border p-4">
       <h2 className="text-green-900 mb-2 font-medium">Receipt</h2>
-      {!settings ? (
+      {!settings && loadFailed ? (
+        <LoadFailed
+          what="The receipt settings"
+          onRetry={() => {
+            setLoadFailed(false);
+            setAttempt((current) => current + 1);
+          }}
+        />
+      ) : !settings ? (
         <p className="text-ink/50 text-sm">Loading…</p>
       ) : (
         <div className="flex flex-col gap-3">
@@ -273,11 +340,7 @@ function ReceiptSettingsForm() {
             >
               {busy ? 'Saving…' : 'Save'}
             </button>
-            {done ? (
-              <p className="text-green-900 text-sm" role="status">
-                {done}
-              </p>
-            ) : null}
+            <SaveResult done={done} problem={problem} />
           </div>
         </div>
       )}
@@ -286,14 +349,24 @@ function ReceiptSettingsForm() {
 }
 
 function UsersAndPins() {
-  const [users, setUsers] = useState<UserListItem[]>([]);
+  /** Null until the list has answered: an empty list is not "no users". */
+  const [users, setUsers] = useState<UserListItem[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function refresh(): void {
-    void listUsersAction().then(setUsers);
+    listUsersAction().then(
+      (list) => {
+        setUsers(list);
+        setLoadFailed(false);
+      },
+      () => {
+        setLoadFailed(true);
+      },
+    );
   }
 
   useEffect(refresh, []);
@@ -304,20 +377,30 @@ function UsersAndPins() {
     }
     setBusy(true);
     setError(null);
-    const outcome = await addSalesmanAction({ name, pin });
-    setBusy(false);
-    if (!outcome.ok) {
-      setError(outcome.message);
-      return;
+    try {
+      const outcome = await addSalesmanAction({ name, pin });
+      if (!outcome.ok) {
+        setError(outcome.message);
+        return;
+      }
+      setName('');
+      setPin('');
+      refresh();
+    } catch {
+      setError(NO_ANSWER);
+    } finally {
+      setBusy(false);
     }
-    setName('');
-    setPin('');
-    refresh();
   }
 
   async function toggleActive(user: UserListItem): Promise<void> {
-    await setUserActiveAction(user.id, !user.isActive);
-    refresh();
+    setError(null);
+    try {
+      await setUserActiveAction(user.id, !user.isActive);
+      refresh();
+    } catch {
+      setError(NO_ANSWER);
+    }
   }
 
   async function resetPin(user: UserListItem): Promise<void> {
@@ -325,9 +408,14 @@ function UsersAndPins() {
     if (!newPin) {
       return;
     }
-    const outcome = await resetUserPinAction(user.id, newPin);
-    if (!outcome.ok) {
-      window.alert(outcome.message);
+    setError(null);
+    try {
+      const outcome = await resetUserPinAction(user.id, newPin);
+      if (!outcome.ok) {
+        window.alert(outcome.message);
+      }
+    } catch {
+      setError(NO_ANSWER);
     }
   }
 
@@ -335,35 +423,43 @@ function UsersAndPins() {
     <div className="border-line rounded border p-4">
       <h2 className="text-green-900 mb-2 font-medium">Users & PINs</h2>
 
-      <ul className="border-line divide-line divide-y rounded border text-sm">
-        {users.map((user) => (
-          <li key={user.id} className="flex items-center justify-between px-3 py-2">
-            <span>
-              <span className="font-medium">{user.name}</span>
-              <span className="text-ink/60 ml-2">{user.role}</span>
-              {!user.isActive ? <span className="text-ink/40 ml-2 text-xs">inactive</span> : null}
-            </span>
-            {user.role === 'salesman' ? (
-              <span className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => void resetPin(user)}
-                  className="text-ink/60 text-xs"
-                >
-                  Reset PIN
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void toggleActive(user)}
-                  className="text-ink/60 text-xs"
-                >
-                  {user.isActive ? 'Deactivate' : 'Reactivate'}
-                </button>
+      {users === null ? (
+        loadFailed ? (
+          <LoadFailed what="The list of users" onRetry={refresh} />
+        ) : (
+          <p className="text-ink/50 text-sm">Loading…</p>
+        )
+      ) : (
+        <ul className="border-line divide-line divide-y rounded border text-sm">
+          {users.map((user) => (
+            <li key={user.id} className="flex items-center justify-between px-3 py-2">
+              <span>
+                <span className="font-medium">{user.name}</span>
+                <span className="text-ink/60 ml-2">{user.role}</span>
+                {!user.isActive ? <span className="text-ink/40 ml-2 text-xs">inactive</span> : null}
               </span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
+              {user.role === 'salesman' ? (
+                <span className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void resetPin(user)}
+                    className="text-ink/60 text-xs"
+                  >
+                    Reset PIN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void toggleActive(user)}
+                    className="text-ink/60 text-xs"
+                  >
+                    {user.isActive ? 'Deactivate' : 'Reactivate'}
+                  </button>
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div
         className="mt-3 flex flex-wrap items-end gap-3"

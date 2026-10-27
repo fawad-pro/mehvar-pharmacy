@@ -12,6 +12,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { NO_ANSWER } from '@/components/load-failed';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { defaultReturnCreditPaisa } from '@/domain/suppliers/supplier-return';
 import { baseQty, paisa } from '@/lib/branded';
@@ -208,7 +209,7 @@ function CorrectionForm({
       bonusQtyBase: levelToBaseUnits(Number(bonus.trim()), unitLevel),
       unitCostPaisa: paisaFromRupeeInput(cost),
       note,
-    });
+    }).catch(() => ({ ok: false as const, message: NO_ANSWER }));
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.message);
@@ -344,7 +345,7 @@ function ReturnForm({
       creditPaisa: paisaFromRupeeInput(creditShown),
       note,
       entered: { unitKey: unit.key, unitName: unit.name, unitCount: count },
-    });
+    }).catch(() => ({ ok: false as const, message: NO_ANSWER }));
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.message);

@@ -18,6 +18,7 @@ import type { FoundSale, ReturnableLineRow } from '@/domain/sales/return-command
 import { refundForLine } from '@/domain/sales/return-command';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
+import { LoadFailed } from '@/components/load-failed';
 import { ReceiptView } from '@/components/receipt-view';
 import { formatPaisa } from '@/lib/money';
 import { baseQty, paisa } from '@/lib/branded';
@@ -68,6 +69,8 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  /** A search that got no answer — not the same as one that found nothing. */
+  const [searchFailed, setSearchFailed] = useState(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
   // Which sale the screen is showing now. A lines answer for any earlier pick
   // arrives too late to matter and is dropped — otherwise it overwrites the
@@ -75,7 +78,15 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   const selection = useRef(0);
 
   const search = useCallback((term: string) => {
-    void findSaleForReturnAction(term).then(setResults);
+    findSaleForReturnAction(term).then(
+      (found) => {
+        setResults(found);
+        setSearchFailed(false);
+      },
+      () => {
+        setSearchFailed(true);
+      },
+    );
   }, []);
 
   // Recent sales on mount — "search recent sales" is the default, not an
@@ -89,21 +100,28 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   useEffect(() => {
     if (prefillReceipt) {
       let cancelled = false;
-      void findSaleForReturnAction(prefillReceipt).then((found) => {
-        if (cancelled) {
-          return;
-        }
-        const exact = found.find((row) => row.receiptNumber === prefillReceipt);
-        if (exact) {
-          void selectSale(exact);
-        } else {
-          // The number did not resolve — fall back to the normal search rather
-          // than stranding the operator on an empty screen (P2).
+      findSaleForReturnAction(prefillReceipt).then(
+        (found) => {
+          if (cancelled) {
+            return;
+          }
+          const exact = found.find((row) => row.receiptNumber === prefillReceipt);
+          if (exact) {
+            void selectSale(exact);
+          } else {
+            // The number did not resolve — fall back to the normal search rather
+            // than stranding the operator on an empty screen (P2).
+            setQuery(prefillReceipt);
+            setResults(found);
+            searchRef.current?.focus();
+          }
+        },
+        () => {
+          if (cancelled) return;
           setQuery(prefillReceipt);
-          setResults(found);
-          searchRef.current?.focus();
-        }
-      });
+          setSearchFailed(true);
+        },
+      );
       return () => {
         cancelled = true;
       };
@@ -119,8 +137,17 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
     setReasonNote('');
     setError(null);
     setDone(null);
-    const rows = await returnableLinesAction(found.saleId);
+    // Another sale's lines must never stand under this sale's heading.
+    setLines([]);
+    setDrafts({});
+    const rows = await returnableLinesAction(found.saleId).catch(() => null);
     if (mine !== selection.current) {
+      return;
+    }
+    if (rows === null) {
+      setError(
+        'This sale’s items did not load — the shop’s computer did not answer. Pick it again.',
+      );
       return;
     }
     setLines(rows);
@@ -269,34 +296,44 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
             className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
           />
 
-          <ul className="border-line divide-line divide-y rounded border">
-            {results.length === 0 ? (
-              <li className="text-ink/50 px-3 py-3 text-sm">No sales found.</li>
-            ) : (
-              results.map((found) => (
-                <li key={found.saleId}>
-                  <button
-                    type="button"
-                    onClick={() => void selectSale(found)}
-                    className="hover:bg-green-100/50 flex w-full items-center justify-between px-3 py-2 text-left"
-                  >
-                    <span>
-                      <span className="font-medium">{found.receiptNumber}</span>
-                      {found.customerName ? (
-                        <span className="text-ink/60 ml-2 text-sm">{found.customerName}</span>
-                      ) : null}
-                    </span>
-                    <span className="numeral text-sm">
-                      {formatPaisa(paisa(found.totalPaisa))}
-                      <span className="text-ink/40 ml-2 text-xs">
-                        {found.createdAt.toLocaleDateString('en-PK')}
+          {searchFailed ? (
+            <LoadFailed
+              what="The sales"
+              onRetry={() => {
+                setSearchFailed(false);
+                search(query);
+              }}
+            />
+          ) : (
+            <ul className="border-line divide-line divide-y rounded border">
+              {results.length === 0 ? (
+                <li className="text-ink/50 px-3 py-3 text-sm">No sales found.</li>
+              ) : (
+                results.map((found) => (
+                  <li key={found.saleId}>
+                    <button
+                      type="button"
+                      onClick={() => void selectSale(found)}
+                      className="hover:bg-green-100/50 flex w-full items-center justify-between px-3 py-2 text-left"
+                    >
+                      <span>
+                        <span className="font-medium">{found.receiptNumber}</span>
+                        {found.customerName ? (
+                          <span className="text-ink/60 ml-2 text-sm">{found.customerName}</span>
+                        ) : null}
                       </span>
-                    </span>
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
+                      <span className="numeral text-sm">
+                        {formatPaisa(paisa(found.totalPaisa))}
+                        <span className="text-ink/40 ml-2 text-xs">
+                          {found.createdAt.toLocaleDateString('en-PK')}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
         </>
       ) : (
         <div className="flex flex-col gap-3">
