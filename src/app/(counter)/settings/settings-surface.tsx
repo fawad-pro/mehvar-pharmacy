@@ -59,11 +59,18 @@ function SellingSettings() {
   const [done, setDone] = useState<string | null>(null);
 
   useEffect(() => {
+    // A late answer must never overwrite what the owner has already changed:
+    // development runs this effect twice, and the second load landing after a
+    // click silently saved the old value back. Only the live load applies.
+    let cancelled = false;
     void currentTenantSettingsAction().then((current) => {
-      if (current) {
+      if (current && !cancelled) {
         setStartsLoose(current.saleStartsLoose ?? false);
       }
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function save(): Promise<void> {
@@ -135,8 +142,10 @@ function ReceiptSettingsForm() {
   const [done, setDone] = useState<string | null>(null);
 
   useEffect(() => {
+    // See `SellingSettings`: only the live load may fill the form.
+    let cancelled = false;
     void currentTenantSettingsAction().then((current) => {
-      if (current) {
+      if (current && !cancelled) {
         setSettings({
           receiptHeader: current.receiptHeader,
           receiptFooter: current.receiptFooter,
@@ -144,6 +153,9 @@ function ReceiptSettingsForm() {
         });
       }
     });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function save(): Promise<void> {

@@ -57,6 +57,11 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
 
   await expect(page.getByRole('status')).toContainText('Returned');
   await expect(printedReceipt(page)).toContainText('Panadol');
+  // A refund slip says so: no "Amount Due", no minus signs.
+  await expect(printedReceipt(page)).toContainText(`RETURN — against receipt ${receiptNumber!}`);
+  await expect(printedReceipt(page)).toContainText('Cash refunded');
+  await expect(printedReceipt(page)).not.toContainText('Amount Due');
+  await expect(printedReceipt(page)).not.toContainText(/-[\d,]+\.\d{2}/);
 });
 
 test('a quantity typed on Returns survives a late answer for the same sale', async ({ page }) => {

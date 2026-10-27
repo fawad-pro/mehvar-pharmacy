@@ -124,6 +124,9 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   // The sale is not refused; the shortfall is surfaced (D2).
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
   await expect(lastSale(page)).toContainText('Sold more than the system had');
+  // Said to the shop, never to the customer: the receipt is theirs to keep.
+  await expect(receipt(page)).toContainText('Rocephin');
+  await expect(receipt(page)).not.toContainText(/system|exception|stock/i);
 });
 
 test('receipt numbers advance per device and never repeat', async ({ page }) => {

@@ -341,9 +341,6 @@ export function SaleSurface() {
         ...(split.creditPaisa > 0 && soldCustomer
           ? { miniStatement: miniStatement(soldCustomer.balancePaisa, split.creditPaisa) }
           : {}),
-        ...(pendingUnits > 0
-          ? { pendingNote: 'Sold more than the system had. It is on the owner’s exception list.' }
-          : {}),
       };
 
       setLines([]);

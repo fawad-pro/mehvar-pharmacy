@@ -5,6 +5,10 @@
  * settlement), because Phase 10 §7 describes one template with an optional
  * body: "payment = cash/tendered/change or udhaar split; udhaar receipts and
  * settlements print the mini-statement." A settlement simply has no `lines`.
+ *
+ * The customer keeps this paper. Nothing here speaks to the shop's staff: a
+ * shortfall (D2), an expired pack or an unsynced sale is said on the counter's
+ * screen and on the owner's exception list, never on the receipt.
  */
 
 export interface ReceiptLine {
@@ -48,8 +52,13 @@ export interface ReceiptData {
   /** Present for an udhaar sale or a settlement (Phase 10 §7). */
   readonly miniStatement?: MiniStatementLine;
 
-  /** D2: sold more than the system had on hand — shown so it is never silent. */
-  readonly pendingNote?: string;
+  /**
+   * A return (W4): money going back to the customer. Amounts stay signed as
+   * the record has them (negative); the slip states them as a refund — the
+   * customer never reads "Amount Due -530.00", or a credit reduction called
+   * "Paid".
+   */
+  readonly refund?: { readonly againstReceiptNumber: string };
 
   /**
    * Test receipts only: two measured bars (50 mm and 72 mm) so the printout

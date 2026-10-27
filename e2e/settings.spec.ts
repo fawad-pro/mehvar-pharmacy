@@ -49,6 +49,16 @@ async function setAutoPrint(page: Page, on: boolean): Promise<void> {
   await box.setChecked(on);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Saved.' })).toBeVisible();
+  // What was saved is what the shop now has. A late load once overwrote the
+  // tick, saved the old value back, and left every later spec printing nothing.
+  // Read back from the server: away to Sale and back re-mounts the form, which
+  // loads what was stored. Same tab, so the print count is untouched.
+  await page.keyboard.press('F1');
+  await expect(page).toHaveURL(/\/sale$/);
+  await page.getByRole('link', { name: 'Settings' }).click();
+  const saved = page.getByRole('checkbox', { name: /Print a receipt for every sale/ });
+  await expect(saved).toBeVisible({ timeout: 15_000 });
+  await expect(saved).toBeChecked({ checked: on });
 }
 
 test('turning automatic printing off takes effect without restarting the counter', async ({

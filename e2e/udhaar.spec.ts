@@ -135,7 +135,9 @@ test('credit with nobody attached is blocked at the overlay, not silently discou
   await expect(overlay).toBeHidden();
 });
 
-test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', async ({ page }) => {
+test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', async ({
+  page,
+}) => {
   await openCounter(page);
 
   // The cart is empty — F8 has nothing of its own to do, so it falls back to
@@ -194,4 +196,43 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
 
   // Esc returned control to the counter, not to a full page reload.
   await expect(search(page)).toBeVisible();
+});
+
+test('W4: returning an udhaar sale prints a refund slip that reduces udhaar, never "Paid"', async ({
+  page,
+}) => {
+  await openCounter(page);
+  await search(page).fill('panadol');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('F4');
+  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const name = `Return Customer ${Date.now()}`;
+  await picker.getByPlaceholder('Name or phone…').fill(name);
+  await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
+  await expect(picker).toBeHidden();
+  await page.keyboard.press('F12');
+  const overlay = page.getByRole('dialog', { name: 'Payment' });
+  await overlay.getByLabel('Cash tendered').fill('0');
+  await page.keyboard.press('Enter');
+  const saved = await lastSale(page).textContent();
+  const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1] ?? '';
+  expect(receiptNumber).toBeTruthy();
+
+  await page.goto(`/returns?receipt=${receiptNumber}`);
+  await expect(page.getByRole('table')).toContainText('Panadol', { timeout: 30_000 });
+  await page.getByLabel(/Return quantity for Panadol/).fill('1');
+  await page
+    .getByRole('group', { name: 'Refund method' })
+    .getByRole('button', { name: 'Reduce credit' })
+    .click();
+  await page.getByRole('button', { name: 'Confirm return' }).click();
+  await expect(page.getByRole('status')).toContainText('Returned');
+
+  await expect(receipt(page)).toContainText(`RETURN — against receipt ${receiptNumber}`);
+  await expect(receipt(page)).toContainText('Refund');
+  await expect(receipt(page)).toContainText('Udhaar reduced');
+  await expect(receipt(page)).toContainText('Returned');
+  await expect(receipt(page)).not.toContainText('Amount Due');
+  await expect(receipt(page)).not.toContainText(/\bPaid\b/);
+  await expect(receipt(page)).not.toContainText(/-[\d,]+\.\d{2}/);
 });

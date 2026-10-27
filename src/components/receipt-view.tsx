@@ -31,6 +31,7 @@ import { paisa } from '@/lib/branded';
 import type { ReceiptData } from '@/client/print/receipt';
 
 export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
+  const refund = receipt.refund !== undefined;
   return (
     // Sized for a 203-dpi thermal head (print CSS: 72 mm, solid black). 13px
     // body with heavier weights: thin 11px strokes came out one dot wide. The
@@ -52,6 +53,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
 
       <Rule />
 
+      {receipt.refund ? (
+        <p className="text-center font-bold">
+          RETURN — against receipt {receipt.refund.againstReceiptNumber}
+        </p>
+      ) : null}
       {receipt.customerName ? <p>Customer: {receipt.customerName}</p> : null}
 
       {receipt.lines && receipt.lines.length > 0 ? (
@@ -66,7 +72,7 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
                 <span className="numeral">{line.quantity}</span>
                 <span className="font-bold break-words">{line.name}</span>
                 <span className="numeral text-right font-semibold">
-                  {formatPaisa(paisa(line.amountPaisa))}
+                  {formatPaisa(paisa(refund ? Math.abs(line.amountPaisa) : line.amountPaisa))}
                 </span>
               </Fragment>
             ))}
@@ -81,7 +87,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
             <Row label="Discount" amountPaisa={-receipt.discountPaisa} />
           ) : null}
           {receipt.totalPaisa !== undefined ? (
-            <Row label="Amount Due" amountPaisa={receipt.totalPaisa} emphasis />
+            refund ? (
+              <Row label="Refund" amountPaisa={Math.abs(receipt.totalPaisa)} emphasis />
+            ) : (
+              <Row label="Amount Due" amountPaisa={receipt.totalPaisa} emphasis />
+            )
           ) : null}
 
           {/* No change/remaining arithmetic on the printed slip — that
@@ -89,7 +99,16 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
               was paid, full stop (Phase 10 §7's own body: "…payment =
               cash/tendered/change or udhaar split" is the SCREEN's job; this
               is the paper). */}
-          {receipt.creditPaisa ? (
+          {refund ? (
+            <>
+              {receipt.cashPaisa ? (
+                <Row label="Cash refunded" amountPaisa={Math.abs(receipt.cashPaisa)} />
+              ) : null}
+              {receipt.creditPaisa ? (
+                <Row label="Udhaar reduced" amountPaisa={Math.abs(receipt.creditPaisa)} />
+              ) : null}
+            </>
+          ) : receipt.creditPaisa ? (
             <>
               {receipt.cashPaisa ? <Row label="Cash" amountPaisa={receipt.cashPaisa} /> : null}
               <Row label="Udhaar" amountPaisa={receipt.creditPaisa} />
@@ -106,15 +125,17 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           {/* T4/T5 — the dispute-ender: previous balance → this transaction → new. */}
           <Row label="Previous balance" amountPaisa={receipt.miniStatement.previousBalancePaisa} />
           <Row
-            label={receipt.miniStatement.amountPaisa >= 0 ? 'Udhaar (this sale)' : 'Paid'}
+            label={
+              refund
+                ? 'Returned'
+                : receipt.miniStatement.amountPaisa >= 0
+                  ? 'Udhaar (this sale)'
+                  : 'Paid'
+            }
             amountPaisa={Math.abs(receipt.miniStatement.amountPaisa)}
           />
           <Row label="New balance" amountPaisa={receipt.miniStatement.newBalancePaisa} bold />
         </>
-      ) : null}
-
-      {receipt.pendingNote ? (
-        <p className="mt-1 text-center text-[12px] italic">{receipt.pendingNote}</p>
       ) : null}
 
       <Rule />

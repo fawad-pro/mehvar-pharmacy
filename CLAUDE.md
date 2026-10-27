@@ -676,7 +676,15 @@ pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
   from.** A result shown on that page vanishes if the page's own render
   changes (the replace screen now renders "already replaced"); show the result
   where the user goes next.
-- **Test-database state outlives an interrupted run.** A run cut off inside
-  `settings.spec`'s `try` left auto-print off and failed four unrelated specs
-  on the next run. When printing specs fail together, check the demo tenant's
-  settings in `mehvar_ci` before the code.
+- **The receipt belongs to the customer.** A shortfall note (D2) printed on
+  every oversold sale's slip for months, and a refund slip read "Amount Due
+  -530.00" with an udhaar reduction labelled "Paid". Staff-facing notices go on
+  the counter screen and the exception list, never in `ReceiptData`; a
+  receipt-producing event that is not a sale says what it is (`refund`).
+- **A load must never overwrite what the user changed.** Settings filled its
+  form from an effect with no cancellation; development runs effects twice,
+  and the second answer landing after a click saved the old value back. That
+  left auto-print off for the rest of the E2E suite — first misdiagnosed as an
+  interrupted run. Every effect that fills editable state from a request
+  ignores a stale answer, and a spec that changes shared settings reads the
+  saved value back before trusting its own clean-up.

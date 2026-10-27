@@ -221,6 +221,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       tenantHeaderLines: receiptContext.tenantHeaderLines,
       tenantFooterLine: receiptContext.tenantFooterLine,
       ...(sale.customerName ? { customerName: sale.customerName } : {}),
+      refund: { againstReceiptNumber: sale.receiptNumber },
       lines: chosenLines.map((chosen) => {
         const original = lines.find((line) => line.saleLineId === chosen.saleLineId)!;
         return {

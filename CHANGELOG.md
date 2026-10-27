@@ -2,6 +2,18 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Receipts say only what the customer needs
+
+- **No internal notes on the slip.** Selling more than the system had no
+  longer prints "Sold more than the system had…" on the customer's receipt;
+  the counter screen and the owner's exception list still say it.
+- **Refund slips read as refunds.** A return prints "RETURN — against receipt
+  A-64", amounts without minus signs, "Refund" in place of "Amount Due", and
+  "Cash refunded" or "Udhaar reduced"; the balance section calls it
+  "Returned", never "Paid".
+- **Settings keeps what you change.** A slow load could overwrite a ticked box
+  on the Settings screen and save the old value back.
+
 ## PCN-012 final pass — units everywhere, renames, replace this product
 
 - **Stock in the product's own words**: "12 box, 3 strip, 7 tab", and
