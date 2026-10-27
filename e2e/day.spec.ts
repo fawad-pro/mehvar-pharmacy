@@ -64,6 +64,29 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
   await expect(printedReceipt(page)).not.toContainText(/-[\d,]+\.\d{2}/);
 });
 
+test('W4 by keyboard: a receipt number and Enter open the sale; a quantity and Enter refund it', async ({
+  page,
+}) => {
+  await openCounter(page);
+  const saved = await sellPanadol(page);
+  const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
+  expect(receiptNumber).toBeTruthy();
+
+  await page.goto('/returns');
+  const find = page.getByLabel('Receipt number or customer name');
+  await expect(find).toBeFocused({ timeout: 30_000 });
+  // Typed (or scanned) whole, then Enter: that sale opens. It used to do
+  // nothing until the result was clicked.
+  await find.fill(receiptNumber!);
+  await page.keyboard.press('Enter');
+  // And focus goes to how many came back, not to the page.
+  const qty = page.getByLabel(/Return quantity for Panadol/);
+  await expect(qty).toBeFocused({ timeout: 30_000 });
+  await page.keyboard.type('1', { delay: 120 });
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status')).toContainText('Returned');
+});
+
 test('a quantity typed on Returns survives a late answer for the same sale', async ({ page }) => {
   // React's development StrictMode loads the sale twice; in production the
   // same gap opens when the operator switches sales before the lines arrive.

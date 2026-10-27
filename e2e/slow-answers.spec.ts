@@ -59,3 +59,41 @@ test('the supplier picker: a new name and Enter add that supplier, however slow 
   await expect(picker).toBeHidden({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Supplier' })).toContainText(name);
 });
+
+test('Returns: a receipt number and Enter open that sale, however slow the answer', async ({
+  page,
+}) => {
+  await openCounter(page);
+  const sell = async () => {
+    await search(page).fill('disprin');
+    await expect(page.getByRole('option').first()).toContainText('Disprin', { timeout: 30_000 });
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('F12');
+    await page.keyboard.press('Enter');
+    const lastSale = page.getByRole('status', { name: 'Last sale' });
+    await expect(lastSale).toContainText(/Saved — /);
+    return (await lastSale.textContent())?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
+  };
+  // Two sales. One number is looked up first, so the list on screen is that
+  // single sale; then the other number is typed and Enter pressed before its
+  // answer arrives. Acting on the list on screen opens the wrong sale.
+  const first = await sell();
+  const second = await sell();
+  expect(first).toBeTruthy();
+  expect(second).not.toBe(first);
+
+  await page.goto('/returns');
+  const find = page.getByLabel('Receipt number or customer name');
+  await expect(find).toBeFocused({ timeout: 30_000 });
+  await find.fill(first!);
+  await expect(page.getByRole('button', { name: new RegExp(`^${first!}`) })).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page.getByRole('listitem')).toHaveCount(1);
+
+  await slowServerActions(page, 1_500);
+  await find.fill(second!);
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel(/Return quantity for Disprin/)).toBeFocused({ timeout: 15_000 });
+  await expect(page.locator('main').getByText(second!, { exact: true })).toBeVisible();
+});

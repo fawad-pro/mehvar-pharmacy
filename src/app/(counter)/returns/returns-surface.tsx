@@ -61,6 +61,13 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FoundSale[]>([]);
+  /** What `results` answers: Enter acts only on the answer for what is typed. */
+  const answeredFor = useRef<string | null>(null);
+  /** The term an Enter is waiting on, until its answer arrives. */
+  const enterFor = useRef<string | null>(null);
+  const searchTimer = useRef<number | undefined>(undefined);
+  /** The line whose quantity takes focus once the sale's lines are drawn. */
+  const focusLine = useRef<string | null>(null);
   const [sale, setSale] = useState<FoundSale | null>(null);
   const [lines, setLines] = useState<ReturnableLineRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, LineDraft>>({});
@@ -82,12 +89,31 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       (found) => {
         setResults(found);
         setSearchFailed(false);
+        answeredFor.current = term.trim();
+        if (enterFor.current === term.trim()) {
+          enterFor.current = null;
+          openFromSearch(found, term.trim());
+        }
       },
       () => {
         setSearchFailed(true);
       },
     );
+    // `openFromSearch` only reads its arguments and stable setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Enter in the search: the sale whose receipt number was typed or scanned,
+   * or the only one found. A receipt number + Enter used to do nothing; the
+   * placeholder says "Scan", and a scan ends in Enter.
+   */
+  function openFromSearch(found: readonly FoundSale[], term: string): void {
+    const exact = found.find((row) => row.receiptNumber.toLowerCase() === term.toLowerCase());
+    const only = found.length === 1 ? found[0] : undefined;
+    const pick = exact ?? only;
+    if (pick) void selectSale(pick);
+  }
 
   // Recent sales on mount — "search recent sales" is the default, not an
   // empty state the operator has to escape from.
@@ -151,6 +177,10 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       return;
     }
     setLines(rows);
+    // Straight to the first quantity: the next thing typed is how many came
+    // back. Focus used to fall to the page, and that number went nowhere.
+    focusLine.current =
+      rows.find((row) => row.qtyBase - row.alreadyReturnedBase > 0)?.saleLineId ?? null;
     setDrafts(
       Object.fromEntries(
         rows.map((row) => [
@@ -164,6 +194,12 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       ),
     );
   }
+
+  useEffect(() => {
+    if (focusLine.current === null) return;
+    document.getElementById(`return-qty-${focusLine.current}`)?.focus();
+    focusLine.current = null;
+  }, [lines]);
 
   function backToSearch(): void {
     selection.current += 1;
@@ -288,8 +324,23 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
             ref={searchRef}
             value={query}
             onChange={(event) => {
-              setQuery(event.target.value);
-              search(event.target.value);
+              const term = event.target.value;
+              setQuery(term);
+              // A pause after the last key: Next sends server actions one at a
+              // time, so a search per keystroke queues behind itself.
+              window.clearTimeout(searchTimer.current);
+              searchTimer.current = window.setTimeout(() => search(term), 200);
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              const term = query.trim();
+              if (answeredFor.current === term) {
+                openFromSearch(results, term);
+              } else {
+                // Not answered yet: act the moment it is, on that answer.
+                enterFor.current = term;
+              }
             }}
             placeholder="Scan or search…"
             data-scan-target=""
@@ -420,6 +471,12 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                             value={draft?.qty ?? ''}
                             inputMode="numeric"
                             disabled={remaining <= 0}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault();
+                                void confirm();
+                              }
+                            }}
                             onChange={(event) => {
                               setDrafts((current) => ({
                                 ...current,
@@ -536,7 +593,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                 disabled={busy || totalRefundPaisa <= 0 || !receiptContext}
                 className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
               >
-                {busy ? 'Saving…' : 'Confirm return'}
+                {busy ? 'Saving…' : 'Confirm return — Enter'}
               </button>
             </div>
           </div>
