@@ -32,6 +32,7 @@ import {
   productBarcodes,
   products,
   purchaseLines,
+  saleLineAllocations,
   saleLines,
 } from './schema';
 
@@ -568,6 +569,45 @@ export async function deleteBarcode(
     .delete(productBarcodes)
     .where(scope.scopeOf(productBarcodes, eq(productBarcodes.id, barcodeId)));
   await scope.update(products, {}, eq(products.id, productId));
+}
+
+/**
+ * Unlinks every barcode a product holds and returns what was unlinked.
+ *
+ * For a product being removed: a code left on a product nobody sells would
+ * scan as nothing, and would refuse to be linked to the right product
+ * (`barcode_taken`). Hard-deleted for the reason `deleteBarcode` gives — a
+ * mapping, not history.
+ */
+export async function deleteProductBarcodes(
+  scope: TenantScope,
+  productId: Uuid,
+): Promise<Array<{ barcode: string; unitLevelName: string }>> {
+  return scope.db
+    .delete(productBarcodes)
+    .where(scope.scopeOf(productBarcodes, eq(productBarcodes.productId, productId)))
+    .returning({ barcode: productBarcodes.barcode, unitLevelName: productBarcodes.unitLevelName });
+}
+
+/**
+ * Base units this product has sold that no batch stands behind yet (D2).
+ *
+ * A join, not a correlated subquery (CLAUDE.md, Day 3).
+ */
+export async function unresolvedPendingBase(scope: TenantScope, productId: Uuid): Promise<number> {
+  const [row] = await scope.db
+    .select({ total: sql<string>`sum(${saleLineAllocations.qtyBase})` })
+    .from(saleLineAllocations)
+    .innerJoin(saleLines, eq(saleLines.id, saleLineAllocations.saleLineId))
+    .where(
+      scope.scopeOf(
+        saleLineAllocations,
+        eq(saleLines.productId, productId),
+        isNull(saleLineAllocations.batchId),
+        isNull(saleLineAllocations.resolvedAt),
+      ),
+    );
+  return Number(row?.total ?? 0);
 }
 
 /**

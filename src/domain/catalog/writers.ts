@@ -12,12 +12,14 @@
 
 import {
   deleteBarcode as deleteBarcodeRow,
+  deleteProductBarcodes,
   findBarcodeOwner,
   findProduct,
   insertBarcode,
   insertProduct,
   productHasHistory,
   renameBarcodeUnits,
+  unresolvedPendingBase,
   updateProduct,
 } from '@/db/catalog-queries';
 import type { TenantScope } from '@/db/scoped';
@@ -310,21 +312,68 @@ export async function editProduct(
   return { ok: true, value: undefined };
 }
 
+export type RemoveProductResult =
+  | { ok: true; unlinked: Array<{ barcode: string; unitLevelName: string }> }
+  | { ok: false; refusal: 'not_found' }
+  /** Stock on hand, or below zero, would leave the count without a product to show it on. */
+  | { ok: false; refusal: 'has_stock'; stockBase: number }
+  /** A shortfall still waiting for stock (D2) would go unseen. */
+  | { ok: false; refusal: 'has_pending'; pendingBase: number };
+
 /**
- * Soft archive (Phase 9 §1) — never a delete. Sale history references products,
- * and that history has to keep resolving.
+ * Removes a product entered by mistake: a soft archive (Phase 9 §1), never a
+ * delete, because its history — if it has any — must keep resolving.
+ *
+ * Refused while it holds stock or an unresolved shortfall. Hiding either would
+ * take units out of every count with nothing to show where they went; the
+ * operator writes the stock off or moves it to the right product first, and
+ * that leaves a record. Its barcodes are unlinked so the right product can
+ * take them. Removing a product already removed changes nothing.
  */
-export async function setProductActive(
+export async function removeProduct(
   scope: TenantScope,
   productId: Uuid,
-  isActive: boolean,
-): Promise<CatalogResult> {
+): Promise<RemoveProductResult> {
+  return scope.transaction(async (tx) => {
+    const existing = await findProduct(tx, productId);
+    if (!existing) {
+      return { ok: false, refusal: 'not_found' };
+    }
+    if (!existing.isActive) {
+      return { ok: true, unlinked: [] };
+    }
+    if (existing.stockBase !== null && existing.stockBase !== 0) {
+      return { ok: false, refusal: 'has_stock', stockBase: existing.stockBase };
+    }
+    const pendingBase = await unresolvedPendingBase(tx, productId);
+    if (pendingBase > 0) {
+      return { ok: false, refusal: 'has_pending', pendingBase };
+    }
+    const unlinked = await deleteProductBarcodes(tx, productId);
+    await updateProduct(tx, productId, { isActive: false });
+    return { ok: true, unlinked };
+  });
+}
+
+export type RestoreProductResult =
+  | { ok: true }
+  /** Replaced (PCN-012): its stock and barcodes live on the replacement. */
+  | { ok: false; refusal: 'not_found' | 'replaced' };
+
+/** Puts a removed product back on sale. Its barcodes are not relinked. */
+export async function restoreProduct(
+  scope: TenantScope,
+  productId: Uuid,
+): Promise<RestoreProductResult> {
   const existing = await findProduct(scope, productId);
   if (!existing) {
-    return { ok: false, conflict: 'not_found' };
+    return { ok: false, refusal: 'not_found' };
   }
-  await updateProduct(scope, productId, { isActive });
-  return { ok: true, value: undefined };
+  if (existing.replacedByProductId !== null) {
+    return { ok: false, refusal: 'replaced' };
+  }
+  await updateProduct(scope, productId, { isActive: true });
+  return { ok: true };
 }
 
 /**

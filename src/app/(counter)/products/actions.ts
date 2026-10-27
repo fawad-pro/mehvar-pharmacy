@@ -16,7 +16,8 @@ import {
   createProduct,
   editProduct,
   removeBarcode,
-  setProductActive,
+  removeProduct,
+  restoreProduct,
   type CatalogResult,
 } from '@/domain/catalog/writers';
 import {
@@ -32,6 +33,8 @@ import {
   type ProductDraft,
 } from '@/domain/catalog/product';
 import { parseRupeeInput } from '@/domain/sales/cart';
+import { baseQty } from '@/lib/branded';
+import { describeQuantity } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
@@ -259,13 +262,70 @@ export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<v
   revalidateAfter('catalog');
 }
 
-export async function archiveProduct(productId: Uuid, isActive: boolean): Promise<void> {
+export type RemoveOutcome =
+  | { ok: true; unlinked: Array<{ barcode: string; unitLevelName: string }> }
+  | { ok: false; message: string; blockedBy?: 'stock' | 'pending' };
+
+/**
+ * Removes a product entered by mistake. The refusals say what to do next,
+ * in the product's own units (P9): a count that reads "40" when the shelf
+ * holds four strips sends the operator looking for the wrong thing.
+ */
+export async function removeProductAction(productId: Uuid): Promise<RemoveOutcome> {
   const gate = await requireAuthoring();
   if ('error' in gate) {
-    return;
+    return { ok: false, message: gate.error };
   }
-  await setProductActive(scopeFor(gate.session), productId, isActive);
+  const scope = scopeFor(gate.session);
+  const result = await removeProduct(scope, productId);
+  if (result.ok) {
+    revalidateAfter('catalog');
+    return { ok: true, unlinked: result.unlinked };
+  }
+  if (result.refusal === 'not_found') {
+    return { ok: false, message: 'That product no longer exists.' };
+  }
+  const product = await findProduct(scope, productId);
+  const counted = (base: number) =>
+    product
+      ? describeQuantity(baseQty(base), product.baseUnitName, product.packLevels)
+      : String(base);
+  if (result.refusal === 'has_stock') {
+    return {
+      ok: false,
+      blockedBy: 'stock',
+      message:
+        result.stockBase > 0
+          ? `It still has ${counted(result.stockBase)} on hand. Write that stock off, or move it to the right product, first.`
+          : `It is ${counted(-result.stockBase)} below zero. Correct the count first.`,
+    };
+  }
+  return {
+    ok: false,
+    blockedBy: 'pending',
+    message: `${counted(result.pendingBase)} sold with no stock behind it is still waiting. Receive or count that stock first.`,
+  };
+}
+
+export async function restoreProductAction(
+  productId: Uuid,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const gate = await requireAuthoring();
+  if ('error' in gate) {
+    return { ok: false, message: gate.error };
+  }
+  const result = await restoreProduct(scopeFor(gate.session), productId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      message:
+        result.refusal === 'replaced'
+          ? 'This product was replaced. Its stock and barcodes are on the replacement.'
+          : 'That product no longer exists.',
+    };
+  }
   revalidateAfter('catalog');
+  return { ok: true };
 }
 
 /**

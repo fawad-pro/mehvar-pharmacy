@@ -2,6 +2,20 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## A product entered by mistake can be removed
+
+- **Remove product**, on the product's page, takes it off the counter's
+  search and the Products list. Its past sales stay in every report.
+  It asks once more before removing.
+- **Refused while it has stock**, or while a sale is still waiting for stock.
+  The screen says how much, and links to writing it off or replacing it with
+  the right product.
+- **Its barcodes are unlinked**, and listed, so the right product can take
+  them. Before, a code left on the wrong product refused to link anywhere
+  else.
+- **Show removed products** on the Products list finds it again, with
+  **Restore**. A replaced product cannot be restored.
+
 ## Receipts say only what the customer needs
 
 - **No internal notes on the slip.** Selling more than the system had no
