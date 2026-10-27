@@ -1658,3 +1658,94 @@ shown beside it on the return form, the invoice page, the supplier account
 and the Day screen, with any difference ("12.00 below stock cost") said in
 words. This replaces the final pass's per-pack invoice price for the unit
 bought, which departed from PCN-009.
+
+## PCN-013 — a mistake typed into money or stock has no fix that tells the truth
+
+Session: pilot improvements · Raised: 2026-10-27 · Status: decided
+
+**Plan sections in tension.** T2 promises that every correction is a
+compensating entry, visible and attributable. ADR-1 forbids editing an event
+row. Phase 9 §1 makes reference entities soft-archived and editable on
+identity fields only. The pilot owner asked for a way to delete a product
+entered by mistake, which led to an audit of every place a typing mistake can
+land.
+
+**The contradiction or gap.** The audit (2026-10-27), entity by entity:
+
+| Typed wrong | Fix today |
+|---|---|
+| A sale | Return (W4) |
+| A purchase line | Correction / supplier return (PCN-009) |
+| A product's pack | Replace this product (PCN-012) |
+| A barcode | Unlink |
+| A staff account | Switch off |
+| A product entered by mistake | **Remove / Restore, built alongside this note** (soft archive; refused while it holds stock or a shortfall; its barcodes are unlinked so the right product can take them) |
+| A customer (name, phone, duplicate) | **None.** No edit, no removal. |
+| A supplier | **None.** No edit, no removal. |
+| An udhaar payment (Rs 5,000 for Rs 500) | **None.** The customer's balance stays wrong forever. |
+| A supplier payment | **None.** What is owed stays wrong forever. |
+| A cash movement (expense, withdrawal, float) | **None.** Expected cash stays wrong forever. |
+| Opening stock or a count typed too high | **Only "Count correction", which reports the excess as stock lost.** A typing mistake becomes a fake loss in the owner's margin and write-off figures. |
+| Stock on the wrong product, when the right product already exists | **Only Replace, which creates a new product.** The shop ends up with two. |
+| A purchase recorded against the wrong supplier | **None.** One distributor is owed too much, another too little. |
+
+The last seven rows are money and stock figures that cannot be made true
+again without a database edit — exactly what ADR-1 forbids and T2 promises
+will never be needed.
+
+**Options.**
+
+1. *Reference entities (customers, suppliers).* Edit name and phone, and
+   Remove / Restore, as products now have. Removal is refused while the
+   balance is not zero, for the same reason a product with stock cannot go.
+   No plan change: Phase 9 §1 already permits this. Listed here so the set is
+   decided together.
+
+2. *Reversing a payment, a supplier payment or a cash movement.*
+   - **A. A compensating row in the same table** (recommended). Add a nullable
+     `reverses_id` (unique, so one reversal per row) and let the amount be
+     negative only on a reversal row (`amount = −original`; cash movements
+     instead take the opposite direction). Every existing reader sums these
+     tables, so balances, ledgers, expected cash and the export are right
+     without touching any of them. The ledger shows both rows, the original
+     marked "reversed". A reversed udhaar payment gets its own receipt number
+     and prints a "Payment cancelled" slip, since the customer was handed a
+     slip for the original. Reversing the payment taken as part of a sale is
+     refused: that is a return.
+   - **B. One new `reversals` table** naming the target. Rejected: all 18
+     places that read these tables would have to learn to exclude reversed
+     rows, and missing one is the Day 8 bug (a figure and its expansion
+     disagreeing) waiting to happen.
+   - Either way: owner only, online only (not an outbox record kind, so
+     ADR-3's union does not grow), and shown on the exception list (T1).
+
+3. *Stock typed too high.*
+   - **A. A new adjustment reason, "Entered by mistake"** (recommended).
+     Negative only; outside the write-off and loss figures (it is stock that
+     never existed, not stock that was lost); owner only, because a reason
+     that hides a loss is the obvious way to hide theft; always on the
+     exception list, so the owner sees every use.
+   - B. Keep "Count correction". Rejected: the margin report lies.
+
+4. *Stock on the wrong product.* Extend Replace with "Move to a product I
+   already have": the same transfer (`product_replaced`, cost moved exactly,
+   PCN-012), into an existing product, counted in that product's units.
+   Allowed only when both products count the same base unit, so no quantity
+   is silently reinterpreted. Then the wrong product can be removed.
+
+5. *A purchase recorded against the wrong supplier.* "Move to another
+   supplier" on the purchase: a compensating pair (owed by A reduced, owed by
+   B increased), with stock and cost untouched. Proposed only — it needs the
+   supplier ledger design checked against PCN-007 and PCN-009 before a
+   recommendation is firm.
+
+**Recommendation.** 1, 2A, 3A and 4, built in that order, each with its tests
+(the crown suite gains payment and cash reversals as event kinds, and every
+balance is still checked against its expansion). 5 is decided after a short
+design check.
+
+**Decision.** 2026-10-27, the owner: options 1, 2A, 3A and 4, as
+recommended. Option 5 waits for its design check.
+
+**Applied.** Not yet. Product Remove / Restore (the table's product row) was
+built ahead of this note at the owner's request; it needs no plan change.
