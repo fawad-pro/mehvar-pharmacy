@@ -22,6 +22,7 @@ import type { SearchHit } from '@/client/search/catalog-index';
 import { useCatalog } from '@/client/search/provider';
 import {
   clearDraft,
+  draftHasContent,
   readDraft,
   writeDraft,
   type DraftLine,
@@ -107,6 +108,8 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   /** Bumped on a successful receive so the history below reloads. */
   const [receivedCount, setReceivedCount] = useState(0);
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const supplierRef = useRef<HTMLButtonElement>(null);
+  const invoiceRefRef = useRef<HTMLInputElement>(null);
 
   // The line being typed, before it joins the draft.
   const [pending, setPending] = useState<{
@@ -147,6 +150,10 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   // hydration. Reading it after mount is the correct shape for restoring
   // persisted state, and is what the rule below would otherwise push us away
   // from.
+  //
+  // Focus starts where W7's path does: at the supplier for a new invoice, at
+  // product search for one already under way. It used to start nowhere, so
+  // the first thing typed after F7 went nowhere either.
   useEffect(() => {
     const saved = readDraft(tenantId);
     if (saved) {
@@ -155,11 +162,12 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       setResumed(true);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
+    (saved?.supplierId ? searchRef : supplierRef).current?.focus();
   }, [tenantId]);
 
   // Persisted on every change, so there is no "save" the operator could forget.
   useEffect(() => {
-    if (draft.lines.length > 0) {
+    if (draftHasContent(draft)) {
       writeDraft(tenantId, draft);
     }
   }, [tenantId, draft]);
@@ -182,6 +190,12 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   const cashPaidUnreadable = cashPaidTyped && cashPaidParsed === null;
   const cashPaidPaisa = cashPaidParsed ?? invoiceTotal;
   const creditPaisa = cashPaidUnreadable ? 0 : Math.max(0, invoiceTotal - cashPaidPaisa);
+  /** One rule for the button and for Enter in Paid now. */
+  const canReceive =
+    draft.lines.length > 0 &&
+    !busy &&
+    !cashPaidUnreadable &&
+    !(creditPaisa > 0 && !draft.supplierId);
 
   const command = useMemo(
     () => ({
@@ -209,6 +223,19 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
     setPending(null);
     searchRef.current?.focus();
   }, []);
+
+  /**
+   * Enter in the invoice header goes on to the first line. The date is
+   * today's unless changed, and leaving a date field by Tab takes a key per
+   * part of the date — four keys, on every invoice, to skip a field that is
+   * almost always right.
+   */
+  function onHeaderEnter(event: React.KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      focusSearch();
+    }
+  }
 
   const onSelectProduct = useCallback((hit: SearchHit, rawQuery: string) => {
     // A pack's 2D code carries its own batch and expiry: scanning it fills
@@ -426,7 +453,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   }
 
   async function receive(): Promise<void> {
-    if (draft.lines.length === 0 || busy || cashPaidUnreadable) {
+    if (!canReceive) {
       return;
     }
     setBusy(true);
@@ -454,7 +481,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
     setResumed(false);
     // Stock moved, so the counter's advisory snapshot is stale.
     refresh();
-    focusSearch();
+    // The next invoice starts where every invoice does.
+    setPending(null);
+    supplierRef.current?.focus();
   }
 
   const chosenUnit =
@@ -482,6 +511,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             Supplier
           </span>
           <button
+            ref={supplierRef}
             type="button"
             aria-labelledby="supplier-label"
             onClick={() => {
@@ -498,9 +528,11 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             Invoice no.
           </label>
           <input
+            ref={invoiceRefRef}
             autoComplete="off"
             id="invoice-ref"
             value={draft.invoiceRef}
+            onKeyDown={onHeaderEnter}
             onChange={(event) => {
               setDraft((current) => ({ ...current, invoiceRef: event.target.value }));
             }}
@@ -516,6 +548,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             id="invoice-date"
             type="date"
             value={draft.invoiceDate}
+            onKeyDown={onHeaderEnter}
             onChange={(event) => {
               setDraft((current) => ({ ...current, invoiceDate: event.target.value }));
             }}
@@ -851,6 +884,14 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             onChange={(event) => {
               setDraft((current) => ({ ...current, cashPaidText: event.target.value }));
             }}
+            // Enter receives, as Enter in Cash tendered completes a sale. A
+            // figure that looks like a barcode still needs the click.
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                if (!needsClickToCommit(cashPaidPaisa)) void receive();
+              }
+            }}
             {...(cashPaidUnreadable || needsClickToCommit(cashPaidPaisa)
               ? { 'aria-describedby': 'cash-paid-problem' }
               : {})}
@@ -883,12 +924,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
         <button
           type="button"
           onClick={() => void receive()}
-          disabled={
-            draft.lines.length === 0 ||
-            busy ||
-            cashPaidUnreadable ||
-            (creditPaisa > 0 && !draft.supplierId)
-          }
+          disabled={!canReceive}
           className="bg-green-600 text-paper min-h-touch ml-auto rounded px-6 text-lg font-medium disabled:opacity-40"
         >
           {busy ? 'Receiving…' : 'Receive stock'}
@@ -917,9 +953,13 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
               supplierName: supplier.name,
             }));
             setPicking(false);
+            // On along W7's path: the invoice number comes next. Without this
+            // focus fell to the page, and Tab went to the key bar.
+            requestAnimationFrame(() => invoiceRefRef.current?.focus());
           }}
           onCancel={() => {
             setPicking(false);
+            requestAnimationFrame(() => supplierRef.current?.focus());
           }}
         />
       ) : null}

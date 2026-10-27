@@ -355,3 +355,82 @@ test('W12: the stock screen lists what is expiring, across horizons', async ({ p
   await expect(page).toHaveURL(/within=90/);
   await expect(page.getByRole('link', { name: '90 days' })).toHaveAttribute('aria-current', 'page');
 });
+
+test('W7 by keyboard alone: supplier, invoice, a line, received', async ({ page }) => {
+  const supplier = `Keyboard Distributor ${Date.now()}`;
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(PURCHASES_URL);
+  // A draft another spec left behind would start at search instead; this test
+  // is about a new invoice.
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.includes('purchase')) localStorage.removeItem(key);
+    }
+  });
+  await page.reload();
+
+  // Focus starts where W7's path does: the supplier. It used to start nowhere.
+  const supplierButton = page.getByRole('button', { name: 'Supplier' });
+  await expect(supplierButton).toBeFocused({ timeout: 30_000 });
+  await page.keyboard.press('Enter');
+  const picker = page.getByRole('dialog', { name: 'Supplier' });
+  await expect(picker.getByPlaceholder('Name or phone…')).toBeFocused();
+  await page.keyboard.type(supplier, { delay: 60 });
+  await page.keyboard.press('Enter');
+
+  // On to the invoice number; Enter there skips the date, which is today's.
+  await expect(page.getByLabel('Invoice no.')).toBeFocused({ timeout: 30_000 });
+  await expect(supplierButton).toContainText(supplier);
+  await page.keyboard.type('KB-1', { delay: 120 });
+  await page.keyboard.press('Enter');
+  await expect(search(page)).toBeFocused();
+
+  await page.keyboard.type('hydryllin', { delay: 60 });
+  await expect(page.getByRole('option').first()).toContainText('Hydryllin');
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel(/^Qty/)).toBeFocused();
+  await page.keyboard.type('2', { delay: 120 });
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await expect(page.getByLabel(/^Cost \//)).toBeFocused();
+  await page.keyboard.type('100', { delay: 120 });
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('table')).toContainText('Hydryllin');
+  await expect(search(page)).toBeFocused();
+
+  // Paid now, empty for paid in full; Enter receives.
+  await page.getByLabel('Paid now').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
+  // And the next invoice starts at the supplier again.
+  await expect(supplierButton).toBeFocused();
+});
+
+test('W7: an invoice number survives a customer before the first line', async ({ page }) => {
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(PURCHASES_URL);
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.includes('purchase')) localStorage.removeItem(key);
+    }
+  });
+  await page.reload();
+  await page.getByLabel('Invoice no.').fill('BEFORE-LINES-1');
+
+  // The delivery man waits; a customer is served first.
+  await page.keyboard.press('F1');
+  await expect(page).toHaveURL(/\/sale$/);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(PURCHASES_URL);
+  await expect(page.getByLabel('Invoice no.')).toHaveValue('BEFORE-LINES-1', { timeout: 30_000 });
+  await expect(page.getByText(/Resumed/)).toBeVisible();
+
+  // Left as found for the specs after this one.
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.includes('purchase')) localStorage.removeItem(key);
+    }
+  });
+});
