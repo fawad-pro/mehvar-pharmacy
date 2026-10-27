@@ -47,6 +47,7 @@ import { correctedLine, lineStateOf } from '@/domain/purchases/purchase-correcti
 import { commitSupplierReturn } from '@/domain/suppliers/commit-supplier-return';
 import { balancesBySupplier, supplierBalance } from '@/db/supplier-queries';
 import { commitAdjustment } from '@/domain/inventory/commit-adjustment';
+import { replaceProduct } from '@/domain/inventory/replace-product';
 import { commitReturn } from '@/domain/sales/commit-return';
 import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
 import { CASH_REASONS, directionFor } from '@/domain/cash/cash-command';
@@ -150,6 +151,8 @@ const observed = {
   packPurchaseLines: 0,
   /** [PCN-012] Batches checked fully used up, so the exact reconciliation ran. */
   batchesReconciled: 0,
+  /** [PCN-012] Products replaced mid-history, their stock and cost carried across. */
+  productsReplaced: 0,
 };
 
 /**
@@ -536,6 +539,49 @@ async function applyRandomEvent(world: World): Promise<void> {
     });
     if (committed.ok) {
       observed.supplierReturnsCommitted += 1;
+    }
+    return;
+  }
+
+  if (roll < 0.66) {
+    // [PCN-012] "Replace this product": every batch with stock moves to a new
+    // product at the same count, with its remaining cost. Later events sell,
+    // receive and adjust the replacement, so one history mixes both products.
+    const index = between(random, 0, world.products.length - 1);
+    const old = world.products[index]!;
+    const onHand = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.productId === old.id && batch.qtyRemainingBase > 0,
+    );
+    const replaced = await replaceProduct(tenant.scope, {
+      oldProductId: old.id,
+      product: {
+        name: `${old.name} (replaced)`,
+        globalProductId: null,
+        manufacturer: null,
+        form: null,
+        strength: null,
+        formulaText: null,
+        baseUnitName: 'tab',
+        packLevels: [{ name: 'strip', factor: 10 }],
+        pricePaisa: old.pricePaisa,
+        mrpPaisa: null,
+        minStockBaseUnits: null,
+        needsCompletion: false,
+      },
+      batches: onHand.map((batch) => ({
+        batchId: batch.id as Uuid,
+        expectedRemainingBase: batch.qtyRemainingBase,
+        newQtyBase: batch.qtyRemainingBase,
+      })),
+      note: 'generated replacement',
+    });
+    if (replaced.ok) {
+      observed.productsReplaced += 1;
+      world.products[index] = {
+        ...old,
+        id: replaced.value.newProductId,
+        name: `${old.name} (replaced)`,
+      };
     }
     return;
   }
@@ -991,6 +1037,7 @@ suite('rebuild equivalence — randomized histories', () => {
       observed.batchesReconciled,
       'no batch was ever used up — the exact cost reconciliation never ran',
     ).toBeGreaterThan(0);
+    expect(observed.productsReplaced, 'no product was ever replaced').toBeGreaterThan(0);
     expect(
       observed.adjustmentsRefused,
       'no adjustment was ever refused — the refusal path went untested',

@@ -6,6 +6,9 @@ import { threeNumbers } from '@/db/reporting-queries';
 import { listCustomers } from '@/db/udhaar-queries';
 import { businessDayBounds, businessDayOf } from '@/lib/business-day';
 
+import { baseQty } from '@/lib/branded';
+import { describeQuantity, type PackLevel } from '@/lib/quantity';
+
 import { OwnerSurface } from './owner-surface';
 
 /**
@@ -48,6 +51,12 @@ export default async function OwnerPage() {
         onHandBase: row.onHandBase,
         minStockBaseUnits: row.minStockBaseUnits,
         baseUnitName: row.baseUnitName,
+        // [PCN-012] Worded here, in the product's own units.
+        onHand: describeQuantity(
+          baseQty(row.onHandBase),
+          row.baseUnitName,
+          (row.packLevels as PackLevel[] | null) ?? [],
+        ),
       }))}
       expiring={expiring.map((row) => ({
         productName: row.productName,
@@ -59,6 +68,7 @@ export default async function OwnerPage() {
         productName: row.productName,
         pendingBase: row.pendingBase,
         baseUnitName: row.baseUnitName,
+        amount: describeQuantity(baseQty(row.pendingBase), row.baseUnitName, row.packLevels),
       }))}
       customers={udhaar.items}
     />

@@ -2,11 +2,8 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
-import {
-  batchesForPurchase,
-  correctedBatchCosts,
-  correctionsForPurchase,
-} from '@/db/correction-queries';
+import { batchCostPositions } from '@/db/batch-cost-queries';
+import { batchesForPurchase, correctionsForPurchase } from '@/db/correction-queries';
 import { findPurchase } from '@/db/purchase-queries';
 import { correctedLine, lineStateOf } from '@/domain/purchases/purchase-correction';
 
@@ -38,11 +35,15 @@ export default async function CorrectPurchasePage({
   if (!purchase) {
     notFound();
   }
-  const [corrections, lineBatches, correctedCosts] = await Promise.all([
+  const [corrections, lineBatches] = await Promise.all([
     correctionsForPurchase(scope, purchaseId),
     batchesForPurchase(scope, purchaseId),
-    correctedBatchCosts(scope),
   ]);
+  // [PCN-012] Each batch's cost position, for the exact suggested credit.
+  const positions = await batchCostPositions(
+    scope,
+    lineBatches.map((batch) => batch.batchId),
+  );
 
   const lines: CorrectableLineView[] = purchase.lines.flatMap((line) => {
     const batch = lineBatches.find((candidate) => candidate.lineId === line.lineId);
@@ -65,7 +66,10 @@ export default async function CorrectPurchasePage({
         factor: current.factor,
         unitCostPaisa: current.unitCostPaisa,
         onHandBase: batch.qtyRemainingBase,
-        effectiveUnitCostPaisa: correctedCosts.get(batch.batchId) ?? batch.unitCostPaisa,
+        costPosition: positions.get(batch.batchId) ?? {
+          basis: { totalPaisa: 0, receivedBase: 0 },
+          takenBase: 0,
+        },
         expiryDate: line.expiryDate,
       },
     ];

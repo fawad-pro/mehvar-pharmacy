@@ -23,7 +23,11 @@ import {
   insertAdjustment,
   materializeAdjustmentBatch,
 } from '@/db/adjustment-queries';
-import { pendingAllocationsForProducts, resolveAllocation } from '@/db/purchase-queries';
+import {
+  pendingAllocationsForProducts,
+  productUnitsFor,
+  resolveAllocation,
+} from '@/db/purchase-queries';
 import { consumeFromBatch } from '@/db/sales-queries';
 import type { TenantScope } from '@/db/scoped';
 import { uuidv7, type Uuid } from '@/lib/uuid';
@@ -71,6 +75,16 @@ export async function commitAdjustment(
   const validation = validateAdjustment(command);
   if (!validation.ok) {
     return validation;
+  }
+  // [PCN-012] "3 strip" means 3 × the product's strip, never a size the
+  // screen guessed: the entered unit must be one the product has, at its size.
+  if (command.entered) {
+    const unit = (await productUnitsFor(scope, [command.productId]))
+      .get(command.productId)
+      ?.find((candidate) => candidate.key === command.entered?.unitKey);
+    if (!unit || unit.factor * command.entered.unitCount !== Math.abs(command.qtyBaseDelta)) {
+      return { ok: false, reason: 'invalid_unit' };
+    }
   }
 
   try {
@@ -158,6 +172,13 @@ async function writeAdjustment(
     qtyBaseDelta: command.qtyBaseDelta,
     reason: command.reason,
     note: command.note,
+    ...(command.entered
+      ? {
+          unitKey: command.entered.unitKey,
+          unitName: command.entered.unitName,
+          unitCount: command.entered.unitCount,
+        }
+      : {}),
   });
 
   let resolvedPendingBase = 0;

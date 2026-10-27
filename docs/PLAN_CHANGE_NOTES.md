@@ -1587,3 +1587,74 @@ in base units; the product form's MRP field is still per base unit (it is kept
 in step when a delivery's MRP is recorded); the stock view's "12 boxes, 3
 strips, 7 tablets" wording (decision 8) and renames / "replace this product"
 (2d) remain.
+
+**Final-pass decisions** (owner, 2026-10-27, before the rest of PCN-012 was
+built):
+
+- **Stock wording uses unit names as the owner set them**: "12 box, 3 strip,
+  7 tab" and "Short by 2 strip" — the cart's and receipt's words, never a
+  guessed plural. Decision 8's example plurals are illustrative only.
+- **Replace this product**: each batch of the old product is listed with its
+  expiry, batch number and cost, its quantity pre-filled from the old count;
+  the owner confirms or corrects it in the new pack (boxes, strips, tablets)
+  before anything moves. Each batch's remaining cost moves across exactly.
+- **On replace**, barcodes move to the new product, matched by unit name;
+  any that cannot be matched are listed to link again. Sales, shortfalls and
+  every other record stay on the old product, which becomes inactive; its
+  unsettled shortfalls stay on the exception list (ADR-1: history never moves).
+- **Units offered** follow decision 4's table: a customer return offers the
+  sale's units, starting in the unit sold; a stock removal offers every unit,
+  starting in the unit the batch arrived in; a return to the supplier offers
+  packs only, starting in the unit bought.
+
+**Final pass implemented** (2026-10-27, on `claude/epic-euler-jdspyu`).
+PCN-012 is complete; migration `0014_units_everywhere`.
+
+- Stock is stated in the product's own units everywhere: "12 box, 3 strip,
+  7 tab", "Short by 2 strip" (Stock, owner surface, Adjust, corrections).
+- Customer returns, stock removals and returns to the supplier are counted in
+  units per decision 4's table, and each records the unit and count it was
+  entered in (`unit_key`, `unit_name`, `unit_count`, with a CHECK that the
+  count makes the base quantity). The writers check the unit against the
+  product's own size and refuse a mismatch. History rows (Day screen, Adjust,
+  invoice and supplier pages) read as entered ("5 strip").
+- The product form states MRP for a chosen unit ("MRP printed on: box"),
+  stored as printed with its unit key; the per-base column follows it,
+  rounded down.
+- A unit may be renamed after stock or sales exist; its size may not. Units
+  keep their keys, so nothing recorded changes meaning; the product's
+  barcodes are renamed in the same transaction (swap-safe); history keeps the
+  words it was written in.
+- "Replace this product" (owner, from the product page): the new pack and
+  prices, then every batch with stock counted in the new pack, pre-filled
+  from the old count by unit name. One transaction moves each batch through
+  two `product_replaced` adjustments with its remaining cost exactly (the
+  batch total less the cumulative cost already taken), moves barcodes by unit
+  name and lists the rest, and retires the old product
+  (`replaced_by_product_id`). The move is a `transfer` in the cost ledger,
+  never a write-off. A stale screen or a batch counted at zero is refused,
+  and nothing is written.
+
+Known gaps, not built:
+
+- A customer return of a sale made before the replacement restocks the OLD
+  product's batch, which is no longer sold. Visible on Stock and Day, but
+  those units are stranded until written off or counted onto the new product.
+- A cost correction to an old purchase invoice after a replacement restates
+  the old batch (D1); the batch it moved to keeps the cost it moved with.
+- The crown suite replaces products at the same pack size (its sale generator
+  assumes strips of 10); the size-changing path is covered by the
+  integration and E2E tests.
+
+**Supplier-return credit, stated exactly** (owner, 2026-10-27). Returns to
+the supplier stay packs only, starting in the unit bought; strips from a box
+delivery are a pack and are offered. The suggested credit follows PCN-009's
+rule ("quantity × that batch's effective unit cost") exactly: the cost the
+returned units carry out of their batch, `C(taken + returned) − C(taken)` on
+the batch's current total and units received (bonus and corrections
+included) — the figure the cost ledger books for the movement. No rounded
+per-unit cost is multiplied. The credit stays editable; the stock cost is
+shown beside it on the return form, the invoice page, the supplier account
+and the Day screen, with any difference ("12.00 below stock cost") said in
+words. This replaces the final pass's per-pack invoice price for the unit
+bought, which departed from PCN-009.

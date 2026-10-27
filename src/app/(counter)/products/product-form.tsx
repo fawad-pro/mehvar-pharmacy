@@ -35,6 +35,11 @@ export interface ProductFormValues {
   /** [PCN-012] Rupees per unit, keyed by unit name; blank for none typed. */
   unitPriceRupees: Readonly<Record<string, string>>;
   mrpRupees: string;
+  /**
+   * [PCN-012] The unit the MRP is printed on, by name; null for none recorded,
+   * which starts at the largest pack — where an MRP is printed.
+   */
+  mrpUnitName: string | null;
   minStock: string;
   needsCompletion: boolean;
   /**
@@ -70,6 +75,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
 
   const [prices, setPrices] = useState<Record<string, string>>({ ...initial.unitPriceRupees });
   const [mrp, setMrp] = useState(initial.mrpRupees);
+  const [mrpUnitName, setMrpUnitName] = useState(initial.mrpUnitName);
   const [baseUnit, setBaseUnit] = useState(initial.baseUnitName);
   const [packLevels, setPackLevels] = useState(initial.packLevels);
 
@@ -101,10 +107,12 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
   const typedPaisa = structure.map((unit) => parseRupeeInput(prices[unit.name] ?? ''));
   const suggested = unitsFromEnteredPrices(structure, typedPaisa) ?? [];
 
-  const overMrp = exceedsMrp(
-    suggested[0]?.pricePaisa ?? 0,
-    parseRupeeInput(mrp),
-  );
+  // [PCN-012] The MRP is stated for one unit; a unit that has gone from the
+  // pack levels while typing falls back to the largest, never to a guess.
+  const named = structure.findIndex((unit) => unit.name === mrpUnitName);
+  const mrpUnitAt = named >= 0 ? named : structure.length - 1;
+  const mrpUnit = structure[mrpUnitAt];
+  const overMrp = exceedsMrp(suggested[mrpUnitAt]?.pricePaisa ?? 0, parseRupeeInput(mrp));
 
   if (picking) {
     return (
@@ -119,6 +127,8 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           setBaseUnit(medicine.baseUnitName);
           setPackLevels(medicine.packLevels);
           setMrp(medicine.mrpRupees);
+          // The catalogue's reference MRP is per base unit.
+          setMrpUnitName(medicine.mrpRupees === '' ? null : medicine.baseUnitName);
           setPicking(false);
         }}
         onSkip={() => {
@@ -215,9 +225,9 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
         <PackLevelPreview baseUnit={baseUnit} levels={parsed} />
         {initial.unitsLocked ? (
           <p className="text-ink/70 text-sm leading-snug" role="note">
-            This product already has stock or sales, so its base unit and these pack sizes stay as
-            they are — everything recorded so far is counted in them. You can add a bigger pack at
-            the end, like a carton.
+            This product already has stock or sales, so its pack sizes stay as they are —
+            everything recorded so far is counted in them. You can rename a unit (pack to strip) or
+            add a bigger pack at the end, like a carton.
           </p>
         ) : null}
       </Section>
@@ -245,10 +255,39 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
             }}
           />
         ))}
+        {structure.length > 1 ? (
+          <div className="flex items-center gap-3">
+            <span className="text-ink/70 text-sm">MRP printed on</span>
+            <div role="group" aria-label="MRP printed on" className="flex">
+              {structure.map((unit, index) => {
+                const pressed = index === mrpUnitAt;
+                return (
+                  <button
+                    key={unit.name}
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => setMrpUnitName(unit.name)}
+                    className={[
+                      'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                      index === 0 ? 'rounded-l' : '-ml-px',
+                      index === structure.length - 1 ? 'rounded-r' : '',
+                      pressed
+                        ? 'bg-green-600 text-paper border-green-600 font-medium'
+                        : 'bg-paper text-ink hover:bg-green-100',
+                    ].join(' ')}
+                  >
+                    {unit.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        <input type="hidden" name="mrpUnit" value={mrpUnitAt < 0 ? '' : String(mrpUnitAt)} />
         <Field
           name="mrp"
-          label={`MRP per ${baseUnit || 'unit'}`}
-          hint={`In rupees, for one ${baseUnit || 'unit'}. Optional.`}
+          label={`MRP per ${mrpUnit?.name || 'unit'}`}
+          hint={`In rupees, as printed on one ${mrpUnit?.name || 'unit'}. Optional.`}
           type="number"
           step="0.01"
           value={mrp}
@@ -256,7 +295,8 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
         />
         {overMrp ? (
           <p className="text-amber text-sm">
-            This is above the MRP you recorded. That is allowed — the pack in hand is what counts.
+            The {mrpUnit?.name} price is above the MRP you recorded. That is allowed — the pack in
+            hand is what counts.
           </p>
         ) : null}
         <Field

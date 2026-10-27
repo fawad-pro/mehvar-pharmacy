@@ -29,9 +29,9 @@ test('a later payment to a supplier shows on their account and from the invoice'
   await search(page).fill('flagyl');
   await page.getByRole('option').first().click();
   await page.getByLabel(/^Qty/).fill('10');
-  await page.getByLabel('Unit cost').fill('150.00');
+  await page.getByLabel(/^Cost \//).fill('150.00');
   await page.getByLabel('Expiry').fill('2030-12-31');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).press('Enter');
   await page.getByLabel('Paid now').fill('1000');
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');

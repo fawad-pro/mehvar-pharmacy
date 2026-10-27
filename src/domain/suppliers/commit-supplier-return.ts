@@ -17,6 +17,7 @@ import {
   insertSupplierReturn,
   lockBatchForSupplierReturn,
 } from '@/db/correction-queries';
+import { productUnitsFor } from '@/db/purchase-queries';
 import { consumeFromBatch } from '@/db/sales-queries';
 import type { TenantScope } from '@/db/scoped';
 import type { Uuid } from '@/lib/uuid';
@@ -31,6 +32,8 @@ export interface SupplierReturnCommand {
   /** What the supplier credits for the goods. */
   readonly creditPaisa: number;
   readonly note: string | null;
+  /** [PCN-012] The amount as entered — "5 box" — for display. */
+  readonly entered?: { readonly unitKey: string; readonly unitName: string; readonly unitCount: number };
 }
 
 export type SupplierReturnResult =
@@ -61,6 +64,15 @@ export async function commitSupplierReturn(
     if (batch.supplierId === null) {
       return { ok: false, reason: 'no_supplier' } satisfies SupplierReturnResult;
     }
+    // [PCN-012] The entered pack must be the product's, at its size.
+    if (command.entered) {
+      const unit = (await productUnitsFor(tx, [batch.productId]))
+        .get(batch.productId)
+        ?.find((candidate) => candidate.key === command.entered?.unitKey);
+      if (!unit || unit.factor * command.entered.unitCount !== command.qtyBase) {
+        return { ok: false, reason: 'invalid_quantity' } satisfies SupplierReturnResult;
+      }
+    }
     if (!(await consumeFromBatch(tx, batch.batchId, command.qtyBase))) {
       return { ok: false, reason: 'more_than_on_hand' } satisfies SupplierReturnResult;
     }
@@ -73,6 +85,13 @@ export async function commitSupplierReturn(
       qtyBase: command.qtyBase,
       creditPaisa: command.creditPaisa,
       note: command.note?.trim() || null,
+      ...(command.entered
+        ? {
+            unitKey: command.entered.unitKey,
+            unitName: command.entered.unitName,
+            unitCount: command.entered.unitCount,
+          }
+        : {}),
     });
 
     return {

@@ -21,6 +21,7 @@ import {
   type CashReason,
 } from '@/domain/cash/cash-command';
 import { paisaFromRupeeInput, parseRupeeInput } from '@/domain/sales/cart';
+import { creditAgainstStockCost } from '@/domain/suppliers/supplier-return';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
@@ -91,6 +92,8 @@ interface AdjustmentExceptionRow {
   id: string;
   productName: string;
   qtyBaseDelta: number;
+  /** [PCN-012] The magnitude as counted: "5 strip". */
+  amount: string;
   reason: string;
   note: string | null;
   byName: string;
@@ -115,9 +118,11 @@ interface SupplierReturnExceptionRow {
   id: string;
   productName: string;
   supplierName: string;
-  qtyBase: number;
-  baseUnitName: string;
+  /** [PCN-012] As counted: "5 strip". */
+  amount: string;
   creditPaisa: number;
+  /** [PCN-012] What the return took out of its batch, at cost. */
+  stockCostPaisa: number;
   byName: string;
   createdAt: Date;
 }
@@ -484,11 +489,15 @@ export function DaySurface({
               {supplierReturns.map((row) => (
                 <Row key={row.id}>
                   <span className="font-medium">{row.productName}</span>
-                  <span className="numeral text-amber ml-2">
-                    -{row.qtyBase} {row.baseUnitName}
-                  </span>
+                  <span className="numeral text-amber ml-2">−{row.amount}</span>
                   <span className="text-ink/60 ml-2">to {row.supplierName}</span>
                   <span className="numeral ml-2">credit {formatPaisa(paisa(row.creditPaisa))}</span>
+                  <span className="numeral text-ink/60 ml-2">
+                    stock cost {formatPaisa(paisa(row.stockCostPaisa))}
+                    {creditAgainstStockCost(row.creditPaisa, row.stockCostPaisa)
+                      ? ` (${creditAgainstStockCost(row.creditPaisa, row.stockCostPaisa)})`
+                      : ''}
+                  </span>
                   <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
@@ -501,8 +510,8 @@ export function DaySurface({
                   <span
                     className={`numeral ml-2 ${row.qtyBaseDelta < 0 ? 'text-amber' : 'text-green-900'}`}
                   >
-                    {row.qtyBaseDelta > 0 ? '+' : ''}
-                    {row.qtyBaseDelta}
+                    {row.qtyBaseDelta > 0 ? '+' : '−'}
+                    {row.amount}
                   </span>
                   <span className="text-ink/60 ml-2">{row.reason.replaceAll('_', ' ')}</span>
                   <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>

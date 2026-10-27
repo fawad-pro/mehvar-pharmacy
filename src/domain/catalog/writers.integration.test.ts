@@ -8,16 +8,17 @@
  * trading pharmacy needs: prices, names, and a larger pack on top.
  */
 
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { findProduct } from '@/db/catalog-queries';
 import { commitSale } from '@/domain/sales/commit-sale';
-import { products } from '@/db/schema';
+import { products, saleLines } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { addOpeningStock, provisionTestTenant, type TestTenant } from '../../../tests/fixtures';
 import type { ProductDraft } from './product';
-import { createProduct, editProduct } from './writers';
+import { addBarcode, createProduct, editProduct } from './writers';
 
 const suite = process.env.DATABASE_URL ? describe : describe.skip;
 
@@ -78,12 +79,9 @@ suite('pack structure locks once a product has history (PCN-012)', () => {
     expect((await findProduct(tenant.scope, id))?.baseUnitName).toBe('capsule');
   });
 
-  it('once stock exists, the base unit and existing pack sizes are refused', async () => {
+  it('once stock exists, existing pack sizes are refused', async () => {
     const { id, base } = await created();
     await addOpeningStock(tenant.scope, id, 250);
-
-    const newBase = await editProduct(tenant.scope, id, { ...base, baseUnitName: 'strip' });
-    expect(rejectionReasons(newBase)).toEqual(['pack_structure_locked']);
 
     const newBox = await editProduct(tenant.scope, id, {
       ...base,
@@ -227,5 +225,128 @@ suite('pack structure locks once a product has history (PCN-012)', () => {
     expect((await findProduct(tenant.scope, id))?.units.map((unit) => unit.pricePaisa)).toEqual([
       1_786, 25_000, 250_000,
     ]);
+  });
+
+  it('an MRP is stored as printed, against the unit it is printed on (PCN-012)', async () => {
+    const { id, base } = await created({ mrpPaisa: 42_000, mrpUnitIndex: 2 });
+    const [row] = await tenant.scope.select(products, eq(products.id, id));
+    expect(row).toMatchObject({ mrpPaisa: 42_000, mrpUnitKey: 'u2', currentMrpPerBaseUnit: 420 });
+
+    // Restated on the strip: Rs 42.50 a strip, Rs 4.25 a tablet.
+    expect(
+      (await editProduct(tenant.scope, id, { ...base, mrpPaisa: 4_250, mrpUnitIndex: 1 })).ok,
+    ).toBe(true);
+    const [strip] = await tenant.scope.select(products, eq(products.id, id));
+    expect(strip).toMatchObject({ mrpPaisa: 4_250, mrpUnitKey: 'u1', currentMrpPerBaseUnit: 425 });
+
+    // Cleared clears every column; an MRP on a unit the product lacks is refused.
+    expect((await editProduct(tenant.scope, id, { ...base, mrpPaisa: null })).ok).toBe(true);
+    const [cleared] = await tenant.scope.select(products, eq(products.id, id));
+    expect(cleared).toMatchObject({
+      mrpPaisa: null,
+      mrpUnitKey: null,
+      currentMrpPerBaseUnit: null,
+    });
+    expect(
+      rejectionReasons(
+        await editProduct(tenant.scope, id, { ...base, mrpPaisa: 100, mrpUnitIndex: 3 }),
+      ),
+    ).toEqual(['mrp_unit_unknown']);
+  });
+
+  it('a unit renamed after stock and sales keeps its key; its barcodes follow and history keeps its words (PCN-012)', async () => {
+    const { id, base } = await created({
+      packLevels: [
+        { name: 'pack', factor: 10 },
+        { name: 'box', factor: 100 },
+      ],
+    });
+    await addOpeningStock(tenant.scope, id, 250);
+    const code = `REN${uuidv7().slice(-10)}`;
+    expect((await addBarcode(tenant.scope, id, { barcode: code, unitLevelName: 'pack' })).ok).toBe(
+      true,
+    );
+    const lineId = uuidv7();
+    const sold = await commitSale(tenant.scope, {
+      saleId: uuidv7(),
+      receiptNumber: `REN-${uuidv7().slice(-6)}`,
+      customerId: null,
+      lines: [
+        {
+          lineId,
+          productId: id,
+          qtyBase: 10,
+          enteredUnitLevel: 'pack',
+          unitKey: 'u1',
+          unitName: 'pack',
+          unitCount: 1,
+          unitPricePaisa: 350,
+          unitPricePaisaEntered: 3_500,
+          lineDiscountPaisa: 0,
+          priceOverridden: false,
+        },
+      ],
+      invoiceDiscountPaisa: 0,
+      cashPaisa: 3_500,
+      creditPaisa: 0,
+      changePaisa: 0,
+      origin: 'online',
+      clientSchemaVersion: 1,
+      clientCommittedAt: new Date(),
+    });
+    expect(sold.ok).toBe(true);
+
+    const renamed = await editProduct(tenant.scope, id, {
+      ...base,
+      baseUnitName: 'tablet',
+      packLevels: [
+        { name: 'strip', factor: 10 },
+        { name: 'box', factor: 100 },
+      ],
+    });
+    expect(renamed.ok).toBe(true);
+
+    const after = await findProduct(tenant.scope, id);
+    expect(after?.baseUnitName).toBe('tablet');
+    expect(after?.units.map((unit) => [unit.key, unit.name, unit.factor])).toEqual([
+      ['u0', 'tablet', 1],
+      ['u1', 'strip', 10],
+      ['u2', 'box', 100],
+    ]);
+    expect(after?.barcodes.map((barcode) => barcode.unitLevelName)).toEqual(['strip']);
+    expect(after?.stockBase).toBe(240);
+    // The receipt says what was sold then, in the word used then.
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.id, lineId));
+    expect(line).toMatchObject({ unitKey: 'u1', unitName: 'pack', qtyBase: 10 });
+  });
+
+  it('a rename that swaps two names moves each barcode with its own unit', async () => {
+    const { id, base } = await created();
+    const strip = `SWS${uuidv7().slice(-10)}`;
+    const box = `SWB${uuidv7().slice(-10)}`;
+    await addBarcode(tenant.scope, id, { barcode: strip, unitLevelName: 'strip' });
+    await addBarcode(tenant.scope, id, { barcode: box, unitLevelName: 'box' });
+    await addOpeningStock(tenant.scope, id, 100);
+
+    // A typo fix: the 10 was the box all along in this shop's words.
+    expect(
+      (
+        await editProduct(tenant.scope, id, {
+          ...base,
+          packLevels: [
+            { name: 'box', factor: 10 },
+            { name: 'strip', factor: 100 },
+          ],
+        })
+      ).ok,
+    ).toBe(true);
+    const codes = new Map(
+      (await findProduct(tenant.scope, id))?.barcodes.map((code) => [
+        code.barcode,
+        code.unitLevelName,
+      ]),
+    );
+    expect(codes.get(strip)).toBe('box');
+    expect(codes.get(box)).toBe('strip');
   });
 });

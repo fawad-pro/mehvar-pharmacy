@@ -13,7 +13,7 @@
 
 import 'server-only';
 
-import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { barcodeKeys } from '@/domain/catalog/barcode';
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
@@ -408,6 +408,10 @@ export interface ProductDetail extends ProductListItem {
   globalProductId: string | null;
   /** [PCN-012] Each unit with its own price, smallest first. */
   units: ProductUnit[];
+  /** [PCN-012] MRP as printed, for the unit it is printed on; null when per base or none. */
+  mrpUnit: { key: string; paisa: number } | null;
+  /** [PCN-012] Set once the product has been replaced by one with the right pack. */
+  replacedByProductId: string | null;
 }
 
 export async function findProduct(
@@ -438,6 +442,11 @@ export async function findProduct(
     pricePaisa: row.defaultPricePerBaseUnit,
     units: unitsOfRow(row),
     mrpPaisa: row.currentMrpPerBaseUnit,
+    mrpUnit:
+      row.mrpPaisa !== null && row.mrpUnitKey !== null
+        ? { key: row.mrpUnitKey, paisa: row.mrpPaisa }
+        : null,
+    replacedByProductId: row.replacedByProductId,
     minStockBaseUnits: row.minStockBaseUnits,
     needsCompletion: row.needsCompletion,
     isActive: row.isActive,
@@ -559,6 +568,82 @@ export async function deleteBarcode(
     .delete(productBarcodes)
     .where(scope.scopeOf(productBarcodes, eq(productBarcodes.id, barcodeId)));
   await scope.update(products, {}, eq(products.id, productId));
+}
+
+/**
+ * [PCN-012] Renames the unit a product's barcodes name, in step with a rename
+ * of the unit itself. Worked out per row and written once each, so a swap
+ * (strip ↔ box) cannot merge two units' codes into one.
+ */
+export async function renameBarcodeUnits(
+  scope: TenantScope,
+  productId: Uuid,
+  renames: readonly { from: string; to: string }[],
+): Promise<void> {
+  if (renames.length === 0) return;
+  const to = new Map(renames.map((rename) => [rename.from, rename.to]));
+  const codes = await scope.select(productBarcodes, eq(productBarcodes.productId, productId));
+  for (const code of codes) {
+    const renamed = to.get(code.unitLevelName);
+    if (renamed !== undefined) {
+      await scope.update(
+        productBarcodes,
+        { unitLevelName: renamed },
+        eq(productBarcodes.id, code.id),
+      );
+    }
+  }
+}
+
+/**
+ * [PCN-012] Marks a product as replaced, once. The guard is the concurrency
+ * control: a second replacement of the same product updates nothing and the
+ * caller rolls back, so two clicks never make two replacements.
+ */
+export async function markProductReplaced(
+  scope: TenantScope,
+  productId: Uuid,
+  replacedBy: Uuid,
+): Promise<boolean> {
+  const rows = await scope.update(
+    products,
+    { replacedByProductId: replacedBy, isActive: false },
+    eq(products.id, productId),
+    isNull(products.replacedByProductId),
+  );
+  return rows.length === 1;
+}
+
+/**
+ * [PCN-012] Moves a replaced product's barcodes to its replacement, each to the
+ * unit of the same name. A code whose unit the replacement does not have is
+ * unlinked and returned, so the owner can link it again knowingly — left on
+ * the old product it would scan as a product that is no longer sold.
+ */
+export async function moveBarcodesByUnitName(
+  scope: TenantScope,
+  fromProductId: Uuid,
+  toProductId: Uuid,
+  unitNames: readonly string[],
+): Promise<{ barcode: string; unitLevelName: string }[]> {
+  const names = new Set(unitNames);
+  const codes = await scope.select(productBarcodes, eq(productBarcodes.productId, fromProductId));
+  const unmatched: { barcode: string; unitLevelName: string }[] = [];
+  for (const code of codes) {
+    if (names.has(code.unitLevelName)) {
+      await scope.update(
+        productBarcodes,
+        { productId: toProductId },
+        eq(productBarcodes.id, code.id),
+      );
+    } else {
+      await scope.db
+        .delete(productBarcodes)
+        .where(scope.scopeOf(productBarcodes, eq(productBarcodes.id, code.id)));
+      unmatched.push({ barcode: code.barcode, unitLevelName: code.unitLevelName });
+    }
+  }
+  return unmatched;
 }
 
 /** Most recently touched products — the Products screen's default view. */

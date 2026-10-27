@@ -59,6 +59,11 @@ export const adjustmentReason = pgEnum('adjustment_reason', [
   'distributor_return',
   'count_correction',
   'opening_stock',
+  /**
+   * [PCN-012] Stock moved to the product that replaces one whose pack was
+   * entered wrong: out of the old product's batch, into the new one's.
+   */
+  'product_replaced',
 ]);
 
 export const cashDirection = pgEnum('cash_direction', ['in', 'out']);
@@ -251,6 +256,12 @@ export const products = pgTable(
      */
     mrpPaisa: bigint('mrp_paisa', { mode: 'number' }),
     mrpUnitKey: text('mrp_unit_key'),
+    /**
+     * [PCN-012] Set on a product whose pack was entered wrong and that was
+     * replaced: its stock moved to this product, and it became inactive. Its
+     * history stays on it (ADR-1).
+     */
+    replacedByProductId: uuid('replaced_by_product_id'),
     minStockBaseUnits: integer('min_stock_base_units'),
     /** D3 — quick items are real products flagged for enrichment. */
     needsCompletion: boolean('needs_completion').notNull().default(false),
@@ -827,6 +838,10 @@ export const supplierReturns = pgTable(
     qtyBase: integer('qty_base').notNull(),
     creditPaisa: bigint('credit_paisa', { mode: 'number' }).notNull(),
     note: text('note'),
+    /** [PCN-012] The amount as entered, for display ("5 box"); null in base units. */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -838,6 +853,12 @@ export const supplierReturns = pgTable(
     index('supplier_returns_batch_idx').on(table.tenantId, table.batchId),
     check('supplier_returns_qty_positive', sql`${table.qtyBase} > 0`),
     check('supplier_returns_credit_nonneg', sql`${table.creditPaisa} >= 0`),
+    check(
+      'supplier_returns_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL
+              AND ${table.qtyBase} % ${table.unitCount} = 0)`,
+    ),
   ],
 );
 
@@ -889,11 +910,21 @@ export const saleReturnLines = pgTable(
     qtyBase: integer('qty_base').notNull(),
     /** Known source batch, or null for a write-off. */
     restockBatchId: uuid('restock_batch_id').references(() => batches.id),
+    /** [PCN-012] The amount as entered, for display ("1 strip"); null in base units. */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
     createdAt: createdAt(),
   },
   (table) => [
     index('sale_return_lines_return_idx').on(table.tenantId, table.saleReturnId),
     check('sale_return_lines_qty_positive', sql`${table.qtyBase} > 0`),
+    check(
+      'sale_return_lines_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL
+              AND ${table.qtyBase} % ${table.unitCount} = 0)`,
+    ),
   ],
 );
 
@@ -911,6 +942,14 @@ export const adjustments = pgTable(
     qtyBaseDelta: integer('qty_base_delta').notNull(),
     reason: adjustmentReason('reason').notNull(),
     note: text('note'),
+    /**
+     * [PCN-012] The amount as entered, for display: "3 strip". Null when it
+     * was entered in base units or as a count across several units (opening
+     * stock); `qty_base_delta` stays the truth.
+     */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -920,6 +959,12 @@ export const adjustments = pgTable(
     index('adjustments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('adjustments_product_idx').on(table.tenantId, table.productId),
     check('adjustments_delta_nonzero', sql`${table.qtyBaseDelta} <> 0`),
+    check(
+      'adjustments_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL
+              AND abs(${table.qtyBaseDelta}) % ${table.unitCount} = 0)`,
+    ),
     /**
      * Phase 9 §5.4 — "signed-delta reason consistency". Stock leaves for damage,
      * expiry and distributor returns; opening stock only ever adds; a count
@@ -927,9 +972,12 @@ export const adjustments = pgTable(
      */
     check(
       'adjustments_reason_sign',
-      sql`(${table.reason} IN ('damage', 'expiry_writeoff', 'distributor_return') AND ${table.qtyBaseDelta} < 0)
-          OR (${table.reason} = 'opening_stock' AND ${table.qtyBaseDelta} > 0)
-          OR ${table.reason} = 'count_correction'`,
+      // Compared as text: a migration that adds an enum value cannot use it in
+      // the same transaction, and drizzle applies every pending migration in
+      // one — a cast literal would refuse the whole update (0014).
+      sql`(${table.reason}::text IN ('damage', 'expiry_writeoff', 'distributor_return') AND ${table.qtyBaseDelta} < 0)
+          OR (${table.reason}::text = 'opening_stock' AND ${table.qtyBaseDelta} > 0)
+          OR ${table.reason}::text IN ('count_correction', 'product_replaced')`,
     ),
   ],
 );

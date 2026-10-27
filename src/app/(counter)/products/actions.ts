@@ -8,7 +8,6 @@
  * server, never by hiding UI (Phase 12 §5).
  */
 
-
 import { requireCapability } from '@/auth/capabilities';
 import { currentSession, scopeFor } from '@/auth/session';
 import { keyFor } from '@/client/keyboard/registry';
@@ -20,7 +19,13 @@ import {
   setProductActive,
   type CatalogResult,
 } from '@/domain/catalog/writers';
-import { findBarcodeOwner, globalCatalogSize, searchGlobalCatalog } from '@/db/catalog-queries';
+import {
+  findBarcodeOwner,
+  findProduct,
+  globalCatalogSize,
+  searchGlobalCatalog,
+} from '@/db/catalog-queries';
+import { replaceProduct } from '@/domain/inventory/replace-product';
 import {
   parsePackLevels,
   type CatalogSearchResult,
@@ -94,6 +99,10 @@ function draftFromForm(form: FormData): ProductDraft {
     pricePaisa: unitPrices.some((price) => price !== null) ? 0 : Number.NaN,
     unitPrices,
     mrpPaisa: parseRupeeInput(mrp),
+    // [PCN-012] The unit the MRP is printed on, by position.
+    mrpUnitIndex: /^\d+$/.test(String(form.get('mrpUnit') ?? ''))
+      ? Number(form.get('mrpUnit'))
+      : null,
     minStockBaseUnits: minStock === '' ? null : Math.trunc(Number(minStock)),
     needsCompletion: form.get('needsCompletion') === 'on',
     globalProductId: String(form.get('globalProductId') ?? '').trim() || null,
@@ -118,6 +127,8 @@ function messageFor(result: Extract<CatalogResult<unknown>, { ok: false }>): str
       return 'Enter a price for at least one unit — the strip, the box or the single piece.';
     case 'price_negative':
       return 'A price cannot be negative.';
+    case 'mrp_unit_unknown':
+      return 'Choose which unit the MRP is printed on.';
     case 'min_stock_negative':
       return 'A minimum stock level cannot be negative.';
     case 'pack_level_name_required':
@@ -133,7 +144,7 @@ function messageFor(result: Extract<CatalogResult<unknown>, { ok: false }>): str
     case 'pack_level_not_nested':
       return `Each pack must hold a whole number of the one before it — this one is not a whole number of “${first.below}”. A box of 10 strips of 10 tablets is box:100.`;
     case 'pack_structure_locked':
-      return 'This product already has stock or sales, so its base unit and pack sizes cannot change — everything recorded so far is counted in them. You can add a bigger pack at the end. If the pack is wrong, add the product again with the right pack.';
+      return 'This product already has stock or sales, so its pack sizes cannot change — everything recorded so far is counted in them. You can rename a unit or add a bigger pack at the end. If a pack size is wrong, use “Replace this product”.';
     case 'barcode_required':
       return 'Scan or type the barcode.';
     case 'barcode_unknown_unit_level':
@@ -284,4 +295,109 @@ export async function searchCatalogAction(term: string): Promise<CatalogSearchRe
    * picker answered "nothing matches" to every query ever typed.
    */
   return { catalogLoaded: size > 0, matches };
+}
+
+export type ReplaceOutcome =
+  | {
+      ok: true;
+      newProductId: string;
+      unlinkedBarcodes: { barcode: string; unitLevelName: string }[];
+    }
+  | { ok: false; message: string };
+
+/**
+ * [PCN-012] "Replace this product": the old product's identity and settings
+ * carry across; the pack, prices and each batch's count are what the owner
+ * confirmed on the screen.
+ */
+export async function replaceProductAction(
+  oldProductId: Uuid,
+  input: {
+    name: string;
+    baseUnitName: string;
+    packLevels: string;
+    /** Rupees as typed per unit, smallest first; blank for not typed. */
+    unitPrices: string[];
+    batches: { batchId: string; expectedRemainingBase: number; newQtyBase: number }[];
+    note: string;
+  },
+): Promise<ReplaceOutcome> {
+  const gate = await requireAuthoring();
+  if ('error' in gate) {
+    return { ok: false, message: gate.error };
+  }
+  const scope = scopeFor(gate.session);
+  const old = await findProduct(scope, oldProductId);
+  if (!old) {
+    return { ok: false, message: 'That product no longer exists.' };
+  }
+
+  const packLevels = parsePackLevels(input.packLevels);
+  const unitPrices = input.unitPrices.map((price) => parseRupeeInput(price));
+  // The MRP carries across when the unit it is printed on is still there.
+  const names = [input.baseUnitName.trim(), ...packLevels.map((level) => level.name)];
+  const mrpName = old.mrpUnit
+    ? old.units.find((unit) => unit.key === old.mrpUnit?.key)?.name
+    : undefined;
+  const mrpUnitIndex = mrpName === undefined ? -1 : names.indexOf(mrpName);
+
+  const result = await replaceProduct(scope, {
+    oldProductId,
+    product: {
+      name: input.name,
+      manufacturer: old.manufacturer,
+      form: old.form,
+      strength: old.strength,
+      formulaText: old.formulaText,
+      baseUnitName: input.baseUnitName,
+      packLevels,
+      pricePaisa: unitPrices.some((price) => price !== null) ? 0 : Number.NaN,
+      unitPrices,
+      mrpPaisa: mrpUnitIndex >= 0 && old.mrpUnit ? old.mrpUnit.paisa : null,
+      mrpUnitIndex: mrpUnitIndex >= 0 ? mrpUnitIndex : null,
+      minStockBaseUnits: old.minStockBaseUnits,
+      needsCompletion: old.needsCompletion,
+      globalProductId: old.globalProductId,
+    },
+    batches: input.batches.map((batch) => ({
+      batchId: batch.batchId as Uuid,
+      expectedRemainingBase: batch.expectedRemainingBase,
+      newQtyBase: batch.newQtyBase,
+    })),
+    note: input.note.trim() === '' ? null : input.note.trim(),
+  });
+
+  if (!result.ok) {
+    switch (result.reason) {
+      case 'already_replaced':
+        return { ok: false, message: 'This product has already been replaced.' };
+      case 'stale_batches':
+        return {
+          ok: false,
+          message: 'Stock of this product changed while you were counting. Reload and count again.',
+        };
+      case 'invalid_count':
+        return {
+          ok: false,
+          message:
+            'Every batch needs a count above zero. If a batch is gone, write it off on Adjust first.',
+        };
+      case 'invalid_product':
+        return {
+          ok: false,
+          message: messageFor(
+            result.detail as Extract<CatalogResult<unknown>, { ok: false }>,
+          ),
+        };
+      default:
+        return { ok: false, message: 'That product no longer exists.' };
+    }
+  }
+
+  revalidateAfter('catalog', 'stock');
+  return {
+    ok: true,
+    newProductId: result.value.newProductId,
+    unlinkedBarcodes: result.value.unlinkedBarcodes,
+  };
 }

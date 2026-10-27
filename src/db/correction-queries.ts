@@ -26,6 +26,7 @@ import {
 } from './schema';
 
 import type { Uuid } from '@/lib/uuid';
+import type { PackLevel } from '@/lib/quantity';
 
 export interface CorrectableLine {
   readonly lineId: string;
@@ -231,6 +232,10 @@ export interface SupplierReturnRow {
   readonly supplierName: string;
   readonly qtyBase: number;
   readonly baseUnitName: string;
+  readonly packLevels: PackLevel[];
+  /** [PCN-012] As counted: "5 strip". Null on a return from before units. */
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
   readonly creditPaisa: number;
   readonly note: string | null;
   readonly byName: string;
@@ -251,6 +256,9 @@ export async function supplierReturnsForBatches(
       supplierName: suppliers.name,
       qtyBase: supplierReturns.qtyBase,
       baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
+      unitName: supplierReturns.unitName,
+      unitCount: supplierReturns.unitCount,
       creditPaisa: supplierReturns.creditPaisa,
       note: supplierReturns.note,
       byName: users.name,

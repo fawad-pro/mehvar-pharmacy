@@ -90,7 +90,11 @@ export default async function StockPage({
               <li key={incident.productId} className="flex flex-wrap items-baseline gap-x-3">
                 <span className="font-medium">{incident.productName}</span>
                 <span className="numeral text-amber">
-                  {incident.pendingBase} {incident.baseUnitName}
+                  {describeQuantity(
+                    baseQty(incident.pendingBase),
+                    incident.baseUnitName,
+                    incident.packLevels,
+                  )}
                 </span>
                 <span className="text-ink/50 text-xs">
                   since {incident.oldestAt.toLocaleDateString('en-PK')}
@@ -164,7 +168,11 @@ export default async function StockPage({
                         {expired ? ' — expired' : ''}
                       </td>
                       <td className="numeral px-3 py-2">
-                        {row.qtyRemainingBase} {row.baseUnitName}
+                        {describeQuantity(
+                          baseQty(row.qtyRemainingBase),
+                          row.baseUnitName,
+                          row.packLevels,
+                        )}
                       </td>
                       <td className="numeral px-3 py-2">
                         {formatPaisa(paisa(row.qtyRemainingBase * row.pricePerBaseUnitPaisa))}
@@ -197,7 +205,12 @@ export default async function StockPage({
                     (row.packLevels as PackLevel[] | null) ?? [],
                   )}
                   <span className="text-ink/50 ml-2 text-xs">
-                    min {row.minStockBaseUnits} {row.baseUnitName}
+                    min{' '}
+                    {describeQuantity(
+                      baseQty(row.minStockBaseUnits),
+                      row.baseUnitName,
+                      (row.packLevels as PackLevel[] | null) ?? [],
+                    )}
                   </span>
                 </span>
               </li>

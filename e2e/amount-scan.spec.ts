@@ -152,8 +152,8 @@ test('Receive Stock: a code in Paid now or a supplier Pay records nothing and cr
   await search(page).fill('flagyl');
   await page.getByRole('option').first().click();
   await page.getByLabel(/^Qty/).fill('10');
-  await page.getByLabel('Unit cost').fill('150.00');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).fill('150.00');
+  await page.getByLabel(/^Cost \//).press('Enter');
 
   // Paid now: a scan is put back; the same text typed by hand is "not an
   // amount" — never Rs 0 with the whole invoice silently on credit.

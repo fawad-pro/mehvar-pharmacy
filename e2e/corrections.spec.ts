@@ -31,9 +31,9 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   await search(page).fill(PRODUCT.toLowerCase());
   await page.getByRole('option').first().click();
   await page.getByLabel(/^Qty/).fill('50');
-  await page.getByLabel('Unit cost').fill('10.00');
+  await page.getByLabel(/^Cost \//).fill('10.00');
   await page.getByLabel('Expiry').fill('2030-12-31');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).press('Enter');
   await page.getByLabel('Paid now').fill('0');
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
@@ -72,11 +72,13 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   await correction.getByLabel('Why').press('Enter');
   await expect(page.getByRole('status')).toContainText('correction recorded');
 
-  // Five strips go back to the distributor. The invoice was entered in strips
-  // (PCN-012); the return form counts tablets, so that is 50.
+  // Five strips go back to the distributor, counted in strips — packs only,
+  // starting in the unit the invoice was entered in (PCN-012); the credit
+  // follows it. Lipitor has one pack, so there is nothing to choose.
   await page.getByRole('button', { name: 'Return to supplier' }).click();
   const giveBack = page.getByRole('form', { name: `Return ${PRODUCT} to ${supplier}` });
-  await giveBack.getByLabel(/Quantity going back/).fill('50');
+  await giveBack.getByLabel(/Quantity going back \(strip/).fill('5');
+  await expect(giveBack.getByLabel(/^Credit from/)).toHaveValue('40.00');
   await giveBack.getByLabel('Note').fill('damaged in transit');
   await giveBack.getByLabel('Note').press('Enter');
   await expect(page.getByRole('status')).toContainText(`return to ${supplier} recorded`);

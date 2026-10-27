@@ -41,6 +41,8 @@ function messageFor(reason: AdjustmentRejection | 'stale_batch_state'): string {
       return 'Choose which batch the stock is leaving.';
     case 'batch_not_allowed':
       return 'Stock being added creates its own batch — no batch to choose.';
+    case 'invalid_unit':
+      return 'That count no longer matches the product’s packs. Choose the product again.';
     case 'stale_batch_state':
       return 'That batch does not have that many left. Check the figure and try again.';
     default:

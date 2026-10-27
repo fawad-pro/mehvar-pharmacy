@@ -24,9 +24,9 @@ async function receiveExpired(page: Page): Promise<void> {
   await search(page).fill(PRODUCT.toLowerCase());
   await page.getByRole('option').first().click();
   await page.getByLabel(/^Qty/).fill('10');
-  await page.getByLabel('Unit cost').fill('5.00');
+  await page.getByLabel(/^Cost \//).fill('5.00');
   await page.getByLabel('Expiry').fill('2020-01-01');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).press('Enter');
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
 }

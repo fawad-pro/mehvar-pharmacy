@@ -97,6 +97,7 @@ export async function returnToSupplierAction(input: {
   qtyBase: number;
   creditPaisa: number;
   note: string;
+  entered?: { unitKey: string; unitName: string; unitCount: number };
 }): Promise<CorrectionOutcome> {
   const session = await currentSession();
   if (!session) {
@@ -116,6 +117,7 @@ export async function returnToSupplierAction(input: {
     qtyBase: input.qtyBase,
     creditPaisa: input.creditPaisa,
     note: input.note.trim() === '' ? null : input.note,
+    ...(input.entered ? { entered: input.entered } : {}),
   });
   if (!result.ok) {
     return { ok: false, message: returnMessage(result.reason) };

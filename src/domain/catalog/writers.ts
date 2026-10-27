@@ -17,6 +17,7 @@ import {
   insertBarcode,
   insertProduct,
   productHasHistory,
+  renameBarcodeUnits,
   updateProduct,
 } from '@/db/catalog-queries';
 import type { TenantScope } from '@/db/scoped';
@@ -27,6 +28,7 @@ import { uuidv7, type Uuid } from '@/lib/uuid';
 import { legacyPricePerBase, unitsFromEnteredPrices, unitsOf, type ProductUnit } from './units';
 import {
   packStructureChange,
+  unitRenames,
   validateBarcode,
   validateProductDraft,
   type BarcodeDraft,
@@ -81,6 +83,33 @@ function withUnits(
   return { draft, units: derived };
 }
 
+/**
+ * [PCN-012] The MRP columns for a saved draft. An MRP stated for a named unit
+ * is stored as printed, against that unit's key; the legacy per-base column
+ * follows it, rounded down so it is never a higher ceiling than the pack's.
+ * A draft from before PCN-012 states MRP per base unit, as it always did.
+ */
+function mrpColumns(
+  draft: ProductDraft,
+  units: readonly ProductUnit[],
+): { mrpPaisa: number | null; mrpUnitKey: string | null; currentMrpPerBaseUnit: number | null } {
+  if (draft.mrpPaisa === null) {
+    return { mrpPaisa: null, mrpUnitKey: null, currentMrpPerBaseUnit: null };
+  }
+  const unit =
+    draft.mrpUnitIndex === undefined || draft.mrpUnitIndex === null
+      ? undefined
+      : units[draft.mrpUnitIndex];
+  if (!unit) {
+    return { mrpPaisa: null, mrpUnitKey: null, currentMrpPerBaseUnit: draft.mrpPaisa };
+  }
+  return {
+    mrpPaisa: draft.mrpPaisa,
+    mrpUnitKey: unit.key,
+    currentMrpPerBaseUnit: nominalPricePerBase(paisa(draft.mrpPaisa), packFactor(unit.factor)),
+  };
+}
+
 export async function createProduct(
   scope: TenantScope,
   draft: ProductDraft,
@@ -108,7 +137,7 @@ export async function createProduct(
     packLevels: validated.value.packLevels,
     units: priced.units,
     defaultPricePerBaseUnit: validated.value.pricePaisa,
-    currentMrpPerBaseUnit: validated.value.mrpPaisa,
+    ...mrpColumns(validated.value, priced.units),
     minStockBaseUnits: validated.value.minStockBaseUnits,
     needsCompletion: validated.value.needsCompletion,
   });
@@ -255,19 +284,27 @@ export async function editProduct(
   }
 
   const { value } = validated;
-  await updateProduct(scope, productId, {
-    name: value.name,
-    manufacturer: value.manufacturer,
-    form: value.form,
-    strength: value.strength,
-    formulaText: value.formulaText,
-    baseUnitName: value.baseUnitName,
-    packLevels: value.packLevels,
-    units: priced.units,
-    defaultPricePerBaseUnit: value.pricePaisa,
-    currentMrpPerBaseUnit: value.mrpPaisa,
-    minStockBaseUnits: value.minStockBaseUnits,
-    needsCompletion: value.needsCompletion,
+  // [PCN-012] A renamed unit keeps its key, so nothing recorded changes
+  // meaning; its barcodes are renamed with it, in the same transaction, so a
+  // scan never names a unit the product no longer has. History keeps the
+  // words it was written in.
+  const renames = change === 'changed' ? [] : unitRenames(existing, value);
+  await scope.transaction(async (tx) => {
+    await updateProduct(tx, productId, {
+      name: value.name,
+      manufacturer: value.manufacturer,
+      form: value.form,
+      strength: value.strength,
+      formulaText: value.formulaText,
+      baseUnitName: value.baseUnitName,
+      packLevels: value.packLevels,
+      units: priced.units,
+      defaultPricePerBaseUnit: value.pricePaisa,
+      ...mrpColumns(value, priced.units),
+      minStockBaseUnits: value.minStockBaseUnits,
+      needsCompletion: value.needsCompletion,
+    });
+    await renameBarcodeUnits(tx, productId, renames);
   });
 
   return { ok: true, value: undefined };

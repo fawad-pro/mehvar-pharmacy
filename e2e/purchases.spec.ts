@@ -33,15 +33,15 @@ async function addLine(
   if (fields.bonus) {
     await page.getByLabel('Bonus').fill(fields.bonus);
   }
-  await page.getByLabel('Unit cost').fill(fields.cost);
+  await page.getByLabel(/^Cost \//).fill(fields.cost);
   if (fields.expiry) {
     await page.getByLabel('Expiry').fill(fields.expiry);
   }
   if (fields.price) {
-    await page.getByLabel('Sells for').fill(fields.price);
+    await page.getByLabel(/^Price \//).fill(fields.price);
   }
   // Enter from any field adds the line and returns focus to search.
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).press('Enter');
 }
 
 /**
@@ -89,8 +89,8 @@ test('the invoice total reflects the cost of every entered line', async ({ page 
   await expect(invoiceTotal).toContainText('0 lines');
 
   // With the cost entered, the line lands and the total is qty × cost.
-  await page.getByLabel('Unit cost').fill('2.80');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).fill('2.80');
+  await page.getByLabel(/^Cost \//).press('Enter');
   await expect(page.getByRole('table')).toContainText('Panadol');
   await expect(invoiceTotal).toContainText('Rs 280.00');
   await expect(invoiceTotal).toContainText('1 line');
@@ -328,10 +328,15 @@ test('W8: removing stock must name the batch it leaves from', async ({ page }) =
   const chosen = await batch.evaluate(
     (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent ?? '',
   );
-  const left = Number(/(\d+)\s[^·]*left\s*$/.exec(chosen)?.[1] ?? 0);
-  expect(left, `the chosen batch says how many are left: "${chosen}"`).toBeGreaterThan(0);
+  expect(chosen, 'the chosen batch says how much is left').toMatch(/\d+ \w+.* left\s*$/);
 
-  await page.getByLabel('Units to remove').fill(String(Math.min(3, left)));
+  // Counted in the product's own units (PCN-012). One of the smallest is
+  // always at most what the batch holds, whatever other specs sold.
+  const removeIn = page.getByRole('group', { name: 'Remove in' });
+  if (await removeIn.isVisible()) {
+    await removeIn.getByRole('button').last().click();
+  }
+  await page.getByLabel(/to remove$/).fill('1');
   await page.getByLabel('Reason').selectOption('damage');
   await page.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.', { exact: false })).toBeVisible();

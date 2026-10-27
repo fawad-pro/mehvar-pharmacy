@@ -292,9 +292,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
     // Checked on the typed number, before conversion: an amount past what a
     // number holds exactly converts to zero, which must never pass as "free".
     if (rupeesLookLikeBarcode(cost) || rupeesLookLikeBarcode(price) || rupeesLookLikeBarcode(mrp)) {
-      setError(
-        'That price looks like a barcode, not an amount. Check Unit cost, MRP and Sells for.',
-      );
+      setError('That price looks like a barcode, not an amount. Check Cost, MRP and Price.');
       return false;
     }
     const pricePaisa = paisaFromRupeeInput(price);
@@ -378,7 +376,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       fields.qty.trim() !== '' && fields.cost.trim() !== '' && fields.price.trim() !== '';
     if (!complete) {
       setError(
-        `Scanned ${hit.product.name}. Finish the ${pending?.productName ?? ''} line first — quantity and unit cost — or press Esc to drop it.`,
+        `Scanned ${hit.product.name}. Finish the ${pending?.productName ?? ''} line first — quantity and cost — or press Esc to drop it.`,
       );
       return;
     }
@@ -530,7 +528,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
         {pending ? (
           <div
-            className="mt-3 flex flex-wrap items-end gap-2"
+            className="mt-3 flex flex-col gap-2"
             // The line routes a scan to the next product itself, so the
             // counter's scan guard leaves its fields alone.
             data-scan-target=""
@@ -546,146 +544,151 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
               }
             }}
           >
-            <span className="min-w-40 self-center font-medium">{pending.productName}</span>
+            {/* Which product and which pack first; then the numbers, which
+                all follow the pack. */}
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="min-w-40 font-medium">{pending.productName}</span>
 
-            {/* [PCN-012] The unit it arrived in, as buttons — largest pack
+              {/* [PCN-012] The unit it arrived in, as buttons — largest pack
                 first and pressed. Qty, bonus, cost and price all follow it. */}
-            {pending.units.length > 1 ? (
-              <div role="group" aria-label="Arrived in" className="flex self-end">
-                {pending.units.map((unit, index) => {
-                  const chosen = unit.key === chosenUnit?.key;
-                  return (
-                    <button
-                      key={unit.key}
-                      type="button"
-                      aria-pressed={chosen}
-                      onClick={() => {
-                        setUnitKey(unit.key);
-                        setPrice((unit.pricePaisa / 100).toFixed(2));
-                      }}
-                      className={[
-                        'border-line h-touch min-w-11 border px-3 text-sm capitalize',
-                        index === 0 ? 'rounded-l' : '-ml-px',
-                        index === pending.units.length - 1 ? 'rounded-r' : '',
-                        chosen
-                          ? 'bg-green-600 text-paper border-green-600 font-medium'
-                          : 'bg-paper text-ink hover:bg-green-100',
-                      ].join(' ')}
-                    >
-                      {unit.name}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : null}
+              {pending.units.length > 1 ? (
+                <div role="group" aria-label="Arrived in" className="flex">
+                  {pending.units.map((unit, index) => {
+                    const chosen = unit.key === chosenUnit?.key;
+                    return (
+                      <button
+                        key={unit.key}
+                        type="button"
+                        aria-pressed={chosen}
+                        onClick={() => {
+                          setUnitKey(unit.key);
+                          setPrice((unit.pricePaisa / 100).toFixed(2));
+                        }}
+                        className={[
+                          'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                          index === 0 ? 'rounded-l' : '-ml-px',
+                          index === pending.units.length - 1 ? 'rounded-r' : '',
+                          chosen
+                            ? 'bg-green-600 text-paper border-green-600 font-medium'
+                            : 'bg-paper text-ink hover:bg-green-100',
+                        ].join(' ')}
+                      >
+                        {unit.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
 
-            <Field label={`Qty (${unitLabel})`} width="w-24">
-              <input
-                ref={qtyRef}
-                value={qty}
-                inputMode="numeric"
-                onChange={(event) => {
-                  setQty(event.target.value);
-                }}
-                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+            {/* One row from 1024px: a grid whose columns keep a readable
+                minimum (the date picker needs the most) and share any extra
+                width. Narrower, the fields wrap at their own widths. */}
+            <div className="flex flex-wrap items-end gap-2 lg:grid lg:grid-cols-[minmax(5rem,1fr)_minmax(5rem,1fr)_minmax(6.5rem,1fr)_minmax(9.5rem,1.3fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_auto]">
+              <Field label={`Qty (${unitLabel})`} width="w-24 lg:w-auto">
+                <input
+                  ref={qtyRef}
+                  value={qty}
+                  inputMode="numeric"
+                  onChange={(event) => {
+                    setQty(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            <Field label={`Bonus (${unitLabel})`} width="w-24">
-              <input
-                value={bonus}
-                inputMode="numeric"
-                placeholder="0"
-                onChange={(event) => {
-                  setBonus(event.target.value);
-                }}
-                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+              <Field label={`Bonus (${unitLabel})`} width="w-24 lg:w-auto">
+                <input
+                  value={bonus}
+                  inputMode="numeric"
+                  placeholder="0"
+                  onChange={(event) => {
+                    setBonus(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            <Field label={`Unit cost (per ${unitLabel})`} width="w-28">
-              <input
-                value={cost}
-                inputMode="decimal"
-                onChange={(event) => {
-                  setCost(event.target.value);
-                }}
-                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+              <Field label={`Cost / ${unitLabel}`} width="w-28 lg:w-auto">
+                <input
+                  value={cost}
+                  inputMode="decimal"
+                  onChange={(event) => {
+                    setCost(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            {/* W7: "expiry (always asked)" — asked every time, never required,
+              {/* W7: "expiry (always asked)" — asked every time, never required,
                 because a non-perishable genuinely has none (Phase 9 §4). */}
-            <Field
-              label={
-                pending.fromPack.expiry && expiry === '' ? 'Expiry — type from the pack' : 'Expiry'
-              }
-              width="w-44"
-              attention={pending.fromPack.expiry && expiry === ''}
-            >
-              <input
-                ref={expiryRef}
-                type="date"
-                value={expiry}
-                onChange={(event) => {
-                  setExpiry(event.target.value);
-                }}
-                className="border-line focus:border-green-600 h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+              <Field
+                label={pending.fromPack.expiry && expiry === '' ? 'Expiry — from pack' : 'Expiry'}
+                width="w-44 lg:w-auto"
+                attention={pending.fromPack.expiry && expiry === ''}
+              >
+                <input
+                  ref={expiryRef}
+                  type="date"
+                  value={expiry}
+                  onChange={(event) => {
+                    setExpiry(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            <Field
-              label={
-                pending.fromPack.batch && batchNumber === ''
-                  ? 'Batch — type from the pack'
-                  : 'Batch no.'
-              }
-              width="w-40"
-              attention={pending.fromPack.batch && batchNumber === ''}
-            >
-              <input
-                value={batchNumber}
-                onChange={(event) => {
-                  setBatchNumber(event.target.value);
-                }}
-                className="border-line focus:border-green-600 h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+              <Field
+                label={
+                  pending.fromPack.batch && batchNumber === '' ? 'Batch — from pack' : 'Batch no.'
+                }
+                width="w-40 lg:w-auto"
+                attention={pending.fromPack.batch && batchNumber === ''}
+              >
+                <input
+                  value={batchNumber}
+                  onChange={(event) => {
+                    setBatchNumber(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            {/* The MRP printed on the pack, for the unit it arrived in (D4:
+              {/* The MRP printed on the pack, for the unit it arrived in (D4:
                 the pack in hand is authoritative). Optional; a price above it
                 is warned, never refused. */}
-            <Field label={`MRP on pack (per ${unitLabel})`} width="w-32">
-              <input
-                value={mrp}
-                inputMode="decimal"
-                onChange={(event) => {
-                  setMrp(event.target.value);
-                }}
-                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+              <Field label={`MRP / ${unitLabel}`} width="w-32 lg:w-auto">
+                <input
+                  value={mrp}
+                  inputMode="decimal"
+                  onChange={(event) => {
+                    setMrp(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            <Field label={`Sells for (per ${unitLabel})`} width="w-28">
-              <input
-                value={price}
-                inputMode="decimal"
-                onChange={(event) => {
-                  setPrice(event.target.value);
-                }}
-                className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
-              />
-            </Field>
+              <Field label={`Price / ${unitLabel}`} width="w-28 lg:w-auto">
+                <input
+                  value={price}
+                  inputMode="decimal"
+                  onChange={(event) => {
+                    setPrice(event.target.value);
+                  }}
+                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                />
+              </Field>
 
-            <button
-              type="button"
-              onClick={() => {
-                addLine();
-              }}
-              className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium"
-            >
-              Add — Enter
-            </button>
+              <button
+                type="button"
+                onClick={() => {
+                  addLine();
+                }}
+                className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium whitespace-nowrap"
+              >
+                Add — Enter
+              </button>
+            </div>
           </div>
         ) : (
           <p className="text-ink/40 mt-2 text-xs">
@@ -925,8 +928,12 @@ function Field({
   return (
     <div className={width}>
       <label className="block">
+        {/* One line always: a label that wraps makes its field look like a
+            different level of the form. A long unit name is cut, in full on
+            hover. */}
         <span
-          className={`mb-1 block text-xs ${attention ? 'text-amber font-medium' : 'text-ink/60'}`}
+          title={label}
+          className={`mb-1 block truncate text-xs ${attention ? 'text-amber font-medium' : 'text-ink/60'}`}
         >
           {label}
         </span>

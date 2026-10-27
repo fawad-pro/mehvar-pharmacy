@@ -2,6 +2,31 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## PCN-012 final pass — units everywhere, renames, replace this product
+
+- **Stock in the product's own words**: "12 box, 3 strip, 7 tab", and
+  "Short by 2 strip" for a shortfall, on Stock, the owner surface, Adjust and
+  corrections.
+- **Returns and removals in units.** A customer return starts in the unit the
+  item was sold in; a stock removal starts in the unit the batch arrived in;
+  a return to the supplier offers packs only and pre-fills the credit at the
+  pack's cost. History shows each as entered ("5 strip returned").
+- **Returns to the supplier** suggest a credit at exactly what the units cost
+  (bonus and corrections included), and show that stock cost beside whatever
+  credit the supplier gave, with any difference stated.
+- **Receive Stock** keeps a line's fields on one row on a desktop-wide screen,
+  with one-line labels in one pattern — Qty (box), Bonus (box), Cost / box,
+  Expiry, Batch no., MRP / box, Price / box — that follow the pressed pack.
+  Narrower screens wrap as before.
+- **MRP printed on a unit** — the product form asks which pack the MRP is
+  printed on and keeps it exactly as printed.
+- **Rename a unit** (pack → strip) after stock and sales exist; barcodes
+  follow, past receipts keep their words. Pack sizes stay locked.
+- **Replace this product**, for a pack set up wrong: count each batch in the
+  new pack (pre-filled), confirm, and the stock moves with its exact cost;
+  barcodes follow by unit name; the old product keeps its history and stops
+  being sold.
+
 ## Session 2 — Stock comes in as the paper says (PCN-012)
 
 - **Receive Stock in packs.** Each line is entered in the pack it arrived in

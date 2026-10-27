@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   exceedsMrp,
   packStructureChange,
+  unitRenames,
   validateBarcode,
   validatePackLevels,
   validateProductDraft,
@@ -170,8 +171,7 @@ describe('what an edit does to a product’s units (PCN-012)', () => {
     ).toBe('extended');
   });
 
-  it('a new base unit, a new pack size, a removed pack, a rename or an insertion change it', () => {
-    expect(packStructureChange(current, { ...current, baseUnitName: 'strip' })).toBe('changed');
+  it('a new pack size, a removed pack or an insertion change it', () => {
     expect(
       packStructureChange(current, {
         ...current,
@@ -184,15 +184,6 @@ describe('what an edit does to a product’s units (PCN-012)', () => {
     expect(
       packStructureChange(current, { ...current, packLevels: [{ name: 'strip', factor: 10 }] }),
     ).toBe('changed');
-    expect(
-      packStructureChange(current, {
-        ...current,
-        packLevels: [
-          { name: 'Strip', factor: 10 },
-          { name: 'box', factor: 100 },
-        ],
-      }),
-    ).toBe('changed');
     // A level slipped in BELOW an existing one renumbers it, so it is not an extension.
     expect(
       packStructureChange(current, {
@@ -204,6 +195,56 @@ describe('what an edit does to a product’s units (PCN-012)', () => {
         ],
       }),
     ).toBe('changed');
+  });
+});
+
+describe('renaming a unit (PCN-012)', () => {
+  const current = {
+    baseUnitName: 'tab',
+    packLevels: [
+      { name: 'pack', factor: 10 },
+      { name: 'box', factor: 100 },
+    ],
+  };
+
+  it('a rename at the same size leaves the units unchanged, and is listed', () => {
+    const next = {
+      baseUnitName: 'tablet',
+      packLevels: [
+        { name: 'strip', factor: 10 },
+        { name: 'box', factor: 100 },
+      ],
+    };
+    expect(packStructureChange(current, next)).toBe('unchanged');
+    expect(unitRenames(current, next)).toEqual([
+      { from: 'tab', to: 'tablet' },
+      { from: 'pack', to: 'strip' },
+    ]);
+  });
+
+  it('a renamed unit with a larger pack on top still extends', () => {
+    const next = {
+      ...current,
+      packLevels: [
+        { name: 'strip', factor: 10 },
+        { name: 'box', factor: 100 },
+        { name: 'carton', factor: 1000 },
+      ],
+    };
+    expect(packStructureChange(current, next)).toBe('extended');
+    expect(unitRenames(current, next)).toEqual([{ from: 'pack', to: 'strip' }]);
+  });
+
+  it('a new size under an old name is a different unit, never a rename', () => {
+    const next = {
+      ...current,
+      packLevels: [
+        { name: 'pack', factor: 10 },
+        { name: 'carton', factor: 200 },
+      ],
+    };
+    expect(packStructureChange(current, next)).toBe('changed');
+    expect(unitRenames(current, next)).toEqual([]);
   });
 });
 

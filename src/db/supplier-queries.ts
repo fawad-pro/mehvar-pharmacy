@@ -40,6 +40,7 @@ import {
 import { purchaseLineCostSql } from './purchase-line-cost';
 
 import { summariseSupplierBook, type SupplierBook } from '@/domain/suppliers/supplier-position';
+import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 /** Positive = the pharmacy owes; negative = an advance sits with the supplier. */
@@ -282,6 +283,9 @@ export type SupplierLedgerRow =
       readonly productName: string;
       readonly qtyBase: number;
       readonly baseUnitName: string;
+      readonly packLevels: PackLevel[];
+      readonly unitName: string | null;
+      readonly unitCount: number | null;
       readonly note: string | null;
       readonly byName: string;
     }
@@ -353,6 +357,9 @@ export async function supplierLedger(
         productName: products.name,
         qtyBase: supplierReturns.qtyBase,
         baseUnitName: products.baseUnitName,
+        packLevels: products.packLevels,
+        unitName: supplierReturns.unitName,
+        unitCount: supplierReturns.unitCount,
         note: supplierReturns.note,
         byName: users.name,
       })
@@ -397,6 +404,9 @@ export async function supplierLedger(
       productName: row.productName,
       qtyBase: row.qtyBase,
       baseUnitName: row.baseUnitName,
+      packLevels: row.packLevels,
+      unitName: row.unitName,
+      unitCount: row.unitCount,
       note: row.note,
       byName: row.byName,
     })),

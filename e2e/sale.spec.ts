@@ -164,7 +164,10 @@ test('search results show the compact on-hand figure for every row', async ({ pa
   // Regardless of level: the suite shares a database, so the exact count moves
   // as other specs sell or receive it — only the shape is asserted here. The
   // existing colour-coded low/zero badge (StockBadge) is untouched by this.
-  await expect(page.getByRole('option').first()).toContainText(/On hand: -?\d+/);
+  // An amount in the product's units, or "Short by …" — never a minus sign
+  // (PCN-012 decision 8).
+  await expect(page.getByRole('option').first()).toContainText(/On hand: (Short by )?\d+ \w/);
+  await expect(page.getByRole('option').first()).not.toContainText(/On hand: -/);
 });
 
 test('a fixed PKR line discount reduces that line and the total, by keyboard', async ({ page }) => {

@@ -259,7 +259,7 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
   // then the next product scanned: the first line is added, the next opens with
   // nothing carried over from the pack before it.
   await page.getByLabel(/^Qty/).pressSequentially('5', { delay: 120 });
-  await page.getByLabel('Unit cost').pressSequentially('12', { delay: 120 });
+  await page.getByLabel(/^Cost \//).pressSequentially('12', { delay: 120 });
   // A person reaches for the scanner: never within 50 ms of their last key.
   await page.waitForTimeout(300);
   await page.keyboard.type(boxEan, { delay: 0 });
@@ -268,13 +268,13 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
   await expect(lines).toContainText(first!.name);
   // Added with the pack's own expiry (the draft table shows expiry, not batch).
   await expect(lines).toContainText('2028-03-31');
-  await expect(page.getByLabel('Unit cost')).toHaveValue('');
+  await expect(page.getByLabel(/^Cost \//)).toHaveValue('');
   // The next product's code is 1D: it says nothing about expiry or batch, so
   // both are asked for from the pack, and the cursor starts at its expiry
   // (PCN-012, Session 2) — nothing carried over from the pack before.
-  await expect(page.getByLabel('Batch — type from the pack')).toHaveValue('');
-  await expect(page.getByLabel('Expiry — type from the pack')).toHaveValue('');
-  await expect(page.getByLabel('Expiry — type from the pack')).toBeFocused();
+  await expect(page.getByLabel('Batch — from pack')).toHaveValue('');
+  await expect(page.getByLabel('Expiry — from pack')).toHaveValue('');
+  await expect(page.getByLabel('Expiry — from pack')).toBeFocused();
 });
 
 test('on Receive Stock, a barcode-sized number is refused as a quantity', async ({ page }) => {
@@ -286,8 +286,8 @@ test('on Receive Stock, a barcode-sized number is refused as a quantity', async 
 
   // Typed slowly, so it is not a scan — the backstop catches it on Add.
   await page.getByLabel(/^Qty/).pressSequentially('8961101721817', { delay: 60 });
-  await page.getByLabel('Unit cost').fill('10');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).fill('10');
+  await page.getByLabel(/^Cost \//).press('Enter');
   await expect(page.getByText(/That quantity looks like a barcode/)).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
 });
@@ -306,8 +306,8 @@ test('on Receive Stock, a barcode run into a price is refused, never a crash', a
 
   await page.getByLabel(/^Qty/).fill('5');
   // Typed slowly, so it is not a scan — the backstop catches it on Add.
-  await page.getByLabel('Unit cost').pressSequentially('122030297825992', { delay: 60 });
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).pressSequentially('122030297825992', { delay: 60 });
+  await page.getByLabel(/^Cost \//).press('Enter');
   await expect(page.getByText(/That price looks like a barcode/)).toBeVisible();
   await expect(page.getByRole('table')).toHaveCount(0);
   expect(crashes).toEqual([]);

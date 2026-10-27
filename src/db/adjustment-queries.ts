@@ -9,9 +9,18 @@ import 'server-only';
 import { and, asc, desc, eq, gt, isNull, lte, sql } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
-import { adjustments, batches, products, saleLineAllocations, saleLines, users } from './schema';
+import {
+  adjustments,
+  batches,
+  products,
+  purchaseLines,
+  saleLineAllocations,
+  saleLines,
+  users,
+} from './schema';
 
 import type { BatchOnHand } from '@/domain/inventory/adjustment';
+import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 /* -------------------------------------------------------------------------- */
@@ -69,9 +78,14 @@ export async function batchesOnHand(
       qtyRemainingBase: batches.qtyRemainingBase,
       unitCostPaisa: batches.unitCostPaisa,
       pricePerBaseUnitPaisa: batches.pricePerBaseUnitPaisa,
+      arrivedUnitKey: purchaseLines.unitKey,
     })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
+    .leftJoin(
+      purchaseLines,
+      and(eq(batches.source, 'purchase_line'), eq(purchaseLines.id, batches.sourceId)),
+    )
     .where(scope.scopeOf(batches, eq(batches.productId, productId), gt(batches.qtyRemainingBase, 0)))
     .orderBy(sql`${batches.expiryDate} asc nulls last`, asc(batches.createdAt));
 }
@@ -85,6 +99,8 @@ export interface NearExpiryRow {
   productId: string;
   productName: string;
   baseUnitName: string;
+  /** [PCN-012] So each batch's amount reads in the product's own units. */
+  packLevels: PackLevel[];
   batchNumber: string | null;
   expiryDate: string;
   qtyRemainingBase: number;
@@ -112,6 +128,7 @@ export async function nearExpiryBatches(
       productId: batches.productId,
       productName: products.name,
       baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
       batchNumber: batches.batchNumber,
       expiryDate: batches.expiryDate,
       qtyRemainingBase: batches.qtyRemainingBase,
@@ -188,6 +205,8 @@ export interface PendingIncidentRow {
   productId: string;
   productName: string;
   baseUnitName: string;
+  /** [PCN-012] So the shortfall reads in the product's own units. */
+  packLevels: PackLevel[];
   pendingBase: number;
   oldestAt: Date;
 }
@@ -204,6 +223,7 @@ export async function pendingIncidents(scope: TenantScope): Promise<PendingIncid
       productId: saleLines.productId,
       productName: products.name,
       baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
       pendingBase: sql<number>`sum(${saleLineAllocations.qtyBase})`,
       oldestAt: sql<Date>`min(${saleLineAllocations.createdAt})`,
     })
@@ -217,7 +237,8 @@ export async function pendingIncidents(scope: TenantScope): Promise<PendingIncid
         isNull(saleLineAllocations.resolvedAt),
       ),
     )
-    .groupBy(saleLines.productId, products.name, products.baseUnitName)
+    // By the product's key: the name, unit and pack levels follow from it.
+    .groupBy(saleLines.productId, products.id)
     .orderBy(desc(sql`sum(${saleLineAllocations.qtyBase})`));
 
   return rows.map((row) => ({
@@ -235,7 +256,11 @@ export interface AdjustmentListRow {
   id: string;
   productName: string;
   baseUnitName: string;
+  packLevels: PackLevel[];
   qtyBaseDelta: number;
+  /** [PCN-012] As entered ("3 strip"), when it was a count of one unit. */
+  unitName: string | null;
+  unitCount: number | null;
   reason: string;
   note: string | null;
   byName: string;
@@ -251,7 +276,10 @@ export async function recentAdjustments(
       id: adjustments.id,
       productName: products.name,
       baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
       qtyBaseDelta: adjustments.qtyBaseDelta,
+      unitName: adjustments.unitName,
+      unitCount: adjustments.unitCount,
       reason: adjustments.reason,
       note: adjustments.note,
       byName: users.name,

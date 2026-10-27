@@ -16,6 +16,7 @@
  * the database drags `server-only` into the browser bundle.
  */
 
+import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 import { storedLineGrossPaisa } from './sale-command';
@@ -29,6 +30,12 @@ export interface ReturnLineCommand {
    * `sale_return_lines.restock_batch_id`.
    */
   readonly restockBatchId: Uuid | null;
+  /** [PCN-012] As counted: "1 strip". The writer checks it against the product. */
+  readonly entered?: {
+    readonly unitKey: string;
+    readonly unitName: string;
+    readonly unitCount: number;
+  };
 }
 
 export interface ReturnCommand {
@@ -44,10 +51,7 @@ export interface ReturnCommand {
 }
 
 export type ReturnRejection =
-  | 'empty_return'
-  | 'invalid_quantity'
-  | 'exceeds_sold_quantity'
-  | 'credit_requires_customer';
+  'empty_return' | 'invalid_quantity' | 'exceeds_sold_quantity' | 'credit_requires_customer';
 
 /** What the writer needs to know about the sale and its lines to validate against. */
 export interface ReturnableSaleLine {
@@ -76,6 +80,15 @@ export function validateReturnCommand(
   const byId = new Map(lines.map((line) => [line.saleLineId, line]));
   for (const line of command.lines) {
     if (!Number.isSafeInteger(line.qtyBase) || line.qtyBase <= 0) {
+      return { ok: false, reason: 'invalid_quantity', saleLineId: line.saleLineId };
+    }
+    if (
+      line.entered &&
+      (!Number.isSafeInteger(line.entered.unitCount) ||
+        line.entered.unitCount <= 0 ||
+        line.entered.unitName.trim() === '' ||
+        line.qtyBase % line.entered.unitCount !== 0)
+    ) {
       return { ok: false, reason: 'invalid_quantity', saleLineId: line.saleLineId };
     }
     const original = byId.get(line.saleLineId);
@@ -140,5 +153,10 @@ export interface ReturnableLineRow extends ReturnableSaleLine {
   readonly productName: string;
   readonly baseUnitName: string;
   readonly enteredUnitLevel: string;
+  readonly packLevels: readonly PackLevel[];
+  /** [PCN-012] What a return may be counted in: the units sold, smallest first. */
+  readonly units: readonly { key: string; name: string; factor: number }[];
+  /** The unit this line was sold in — the return starts there. */
+  readonly soldUnitKey: string;
   readonly sourceBatches: readonly { batchId: Uuid; expiryDate: string | null }[];
 }

@@ -20,7 +20,8 @@ import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import { ReceiptView } from '@/components/receipt-view';
 import { formatPaisa } from '@/lib/money';
-import { paisa } from '@/lib/branded';
+import { baseQty, paisa } from '@/lib/branded';
+import { describeQuantity, levelToBaseUnits } from '@/lib/quantity';
 import { uuidv7 } from '@/lib/uuid';
 
 import { commitReturnAction, findSaleForReturnAction, returnableLinesAction } from './actions';
@@ -28,8 +29,29 @@ import { commitReturnAction, findSaleForReturnAction, returnableLinesAction } fr
 type RefundMethod = 'cash' | 'credit';
 
 interface LineDraft {
+  /** A count of `unitKey`, as typed. */
   qty: string;
+  unitKey: string;
   restockBatchId: string | null;
+}
+
+/**
+ * [PCN-012] The typed count in base units, with the unit it was counted in;
+ * null when nothing usable is typed.
+ */
+function countedOf(
+  line: ReturnableLineRow,
+  draft: LineDraft | undefined,
+): { qtyBase: number; unit: { key: string; name: string; factor: number }; count: number } | null {
+  const count = Number(draft?.qty ?? '');
+  if (!draft || !Number.isSafeInteger(count) || count <= 0) {
+    return null;
+  }
+  const unit = line.units.find((candidate) => candidate.key === draft.unitKey) ?? line.units[0];
+  if (!unit) {
+    return null;
+  }
+  return { qtyBase: levelToBaseUnits(count, unit), unit, count };
 }
 
 export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) {
@@ -106,7 +128,11 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       Object.fromEntries(
         rows.map((row) => [
           row.saleLineId,
-          { qty: '', restockBatchId: row.sourceBatches[0]?.batchId ?? null },
+          {
+            qty: '',
+            unitKey: row.soldUnitKey,
+            restockBatchId: row.sourceBatches[0]?.batchId ?? null,
+          },
         ]),
       ),
     );
@@ -126,9 +152,9 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
   const totalRefundPaisa = useMemo(() => {
     let total = 0;
     for (const line of lines) {
-      const qty = Number(drafts[line.saleLineId]?.qty ?? '');
-      if (Number.isSafeInteger(qty) && qty > 0) {
-        total += refundForLine(line, qty);
+      const counted = countedOf(line, drafts[line.saleLineId]);
+      if (counted) {
+        total += refundForLine(line, counted.qtyBase);
       }
     }
     return total;
@@ -141,20 +167,25 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
     const chosenLines = lines
       .map((line) => {
         const draft = drafts[line.saleLineId];
-        const qty = Number(draft?.qty ?? '');
-        if (!Number.isSafeInteger(qty) || qty <= 0) {
+        const counted = countedOf(line, draft);
+        if (!counted) {
           return null;
         }
         return {
           saleLineId: line.saleLineId,
-          qtyBase: qty,
+          qtyBase: counted.qtyBase,
           restockBatchId: draft?.restockBatchId ?? null,
+          entered: {
+            unitKey: counted.unit.key,
+            unitName: counted.unit.name,
+            unitCount: counted.count,
+          },
         };
       })
       .filter((line): line is NonNullable<typeof line> => line !== null);
 
     if (chosenLines.length === 0) {
-      setError('Enter how many units are being returned.');
+      setError('Enter how many are being returned.');
       return;
     }
 
@@ -194,7 +225,8 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
         const original = lines.find((line) => line.saleLineId === chosen.saleLineId)!;
         return {
           name: original.productName,
-          quantity: chosen.qtyBase,
+          // As counted: a strip returned prints 1, like the sale slip.
+          quantity: chosen.entered.unitCount,
           amountPaisa: -refundForLine(original, chosen.qtyBase),
         };
       }),
@@ -293,31 +325,73 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                 {lines.map((line) => {
                   const remaining = line.qtyBase - line.alreadyReturnedBase;
                   const draft = drafts[line.saleLineId];
+                  const amount = (qty: number) =>
+                    describeQuantity(baseQty(qty), line.baseUnitName, line.packLevels);
                   return (
                     <tr key={line.saleLineId} className="border-line border-t">
                       <td className="px-3 py-2 font-medium">{line.productName}</td>
-                      <td className="numeral px-3 py-2 text-right">{line.qtyBase}</td>
-                      <td className="numeral px-3 py-2 text-right">{remaining}</td>
+                      <td className="numeral px-3 py-2 text-right">{amount(line.qtyBase)}</td>
+                      <td className="numeral px-3 py-2 text-right">{amount(remaining)}</td>
                       <td className="px-3 py-2">
-                        <label className="sr-only" htmlFor={`return-qty-${line.saleLineId}`}>
-                          Return quantity for {line.productName}
-                        </label>
-                        <input
-                          id={`return-qty-${line.saleLineId}`}
-                          value={draft?.qty ?? ''}
-                          inputMode="numeric"
-                          disabled={remaining <= 0}
-                          onChange={(event) => {
-                            setDrafts((current) => ({
-                              ...current,
-                              [line.saleLineId]: {
-                                ...current[line.saleLineId]!,
-                                qty: event.target.value,
-                              },
-                            }));
-                          }}
-                          className="border-line focus:border-green-600 numeral h-touch w-20 rounded border px-2 outline-none disabled:opacity-40"
-                        />
+                        <div className="flex items-center gap-2">
+                          {line.units.length > 1 ? (
+                            <div
+                              role="group"
+                              aria-label={`Return ${line.productName} in`}
+                              className="flex"
+                            >
+                              {line.units.map((unit, index) => {
+                                const pressed = unit.key === draft?.unitKey;
+                                return (
+                                  <button
+                                    key={unit.key}
+                                    type="button"
+                                    aria-pressed={pressed}
+                                    disabled={remaining <= 0}
+                                    onClick={() => {
+                                      setDrafts((current) => ({
+                                        ...current,
+                                        [line.saleLineId]: {
+                                          ...current[line.saleLineId]!,
+                                          unitKey: unit.key,
+                                        },
+                                      }));
+                                    }}
+                                    className={[
+                                      'border-line h-touch min-w-11 border px-3 text-sm capitalize disabled:opacity-40',
+                                      index === 0 ? 'rounded-l' : '-ml-px',
+                                      index === line.units.length - 1 ? 'rounded-r' : '',
+                                      pressed
+                                        ? 'bg-green-600 text-paper border-green-600 font-medium'
+                                        : 'bg-paper text-ink hover:bg-green-100',
+                                    ].join(' ')}
+                                  >
+                                    {unit.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                          <label className="sr-only" htmlFor={`return-qty-${line.saleLineId}`}>
+                            Return quantity for {line.productName}
+                          </label>
+                          <input
+                            id={`return-qty-${line.saleLineId}`}
+                            value={draft?.qty ?? ''}
+                            inputMode="numeric"
+                            disabled={remaining <= 0}
+                            onChange={(event) => {
+                              setDrafts((current) => ({
+                                ...current,
+                                [line.saleLineId]: {
+                                  ...current[line.saleLineId]!,
+                                  qty: event.target.value,
+                                },
+                              }));
+                            }}
+                            className="border-line focus:border-green-600 numeral h-touch w-20 rounded border px-2 outline-none disabled:opacity-40"
+                          />
+                        </div>
                       </td>
                       <td className="px-3 py-2">
                         <label className="sr-only" htmlFor={`return-batch-${line.saleLineId}`}>

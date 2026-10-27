@@ -36,7 +36,12 @@ export interface CorrectableLineView {
   /** The cost of ONE of `unitName`. */
   unitCostPaisa: number;
   onHandBase: number;
-  effectiveUnitCostPaisa: number;
+  /**
+   * [PCN-012] The batch's cost position — its current total and units received
+   * (bonus and corrections included) and how many have left — from which the
+   * suggested credit is the exact cost of the units going back (PCN-009).
+   */
+  costPosition: { basis: { totalPaisa: number; receivedBase: number }; takenBase: number };
   expiryDate: string | null;
 }
 
@@ -84,7 +89,8 @@ export function CorrectSurface({
                 at {formatPaisa(paisa(line.unitCostPaisa))} / {line.unitName}
               </span>
               <span className="text-ink/50 text-xs">
-                {line.onHandBase} {line.baseUnitName} on hand
+                {describeQuantity(baseQty(line.onHandBase), line.baseUnitName, line.packLevels)} on
+                hand
                 {line.expiryDate ? ` · exp ${line.expiryDate}` : ''}
               </span>
               <span className="ml-auto flex gap-3 text-sm">
@@ -145,6 +151,19 @@ export function CorrectSurface({
       ) : null}
     </div>
   );
+}
+
+/**
+ * The units a supplier takes back: the product's packs, largest first, keyed
+ * as the product keys them (`u1` is the first pack level). Loose units only
+ * when there are no packs at all.
+ */
+function returnUnitsOf(line: CorrectableLineView): { key: string; name: string; factor: number }[] {
+  const packs = line.packLevels
+    .map((level, index) => ({ key: `u${index + 1}`, name: level.name, factor: level.factor }))
+    .filter((level) => level.factor > 1)
+    .sort((a, b) => b.factor - a.factor);
+  return packs.length > 0 ? packs : [{ key: 'u0', name: line.baseUnitName, factor: 1 }];
 }
 
 const fieldClass =
@@ -275,6 +294,13 @@ function ReturnForm({
   onDone: (message: string) => void;
 }) {
   const router = useRouter();
+  // [PCN-012] Goods go back to a supplier in packs, never loose; the unit the
+  // line was bought in is pressed. A product with no packs returns its base unit.
+  const units = returnUnitsOf(line);
+  const [unitKey, setUnitKey] = useState(
+    (units.find((unit) => unit.factor === line.factor) ?? units[0]!).key,
+  );
+  const unit = units.find((candidate) => candidate.key === unitKey) ?? units[0]!;
   const [qty, setQty] = useState('');
   const [credit, setCredit] = useState('');
   const [creditTouched, setCreditTouched] = useState(false);
@@ -282,17 +308,23 @@ function ReturnForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const qtyNumber = Number(qty);
-  const suggested =
-    Number.isInteger(qtyNumber) && qtyNumber > 0
-      ? rupees(defaultReturnCreditPaisa(qtyNumber, line.effectiveUnitCostPaisa))
-      : '';
+  const count = Number(qty);
+  const counted = WHOLE.test(qty.trim()) && count > 0;
+  const qtyBase = counted ? levelToBaseUnits(count, unit) : 0;
+  // What these units carry out of the batch, at cost — the suggestion, and
+  // the figure any edited credit is compared with.
+  const stockCostPaisa = counted
+    ? defaultReturnCreditPaisa(line.costPosition.basis, line.costPosition.takenBase, qtyBase)
+    : 0;
+  const suggested = counted ? rupees(stockCostPaisa) : '';
   const creditShown = creditTouched ? credit : suggested;
+  const creditPaisa = AMOUNT.test(creditShown.trim()) ? paisaFromRupeeInput(creditShown) : null;
+  const upTo = Math.floor(line.onHandBase / unit.factor);
 
   async function save(): Promise<void> {
     if (busy) return;
-    if (!WHOLE.test(qty.trim()) || qtyNumber <= 0) {
-      setError('Enter how many units are going back, as a whole number.');
+    if (!counted) {
+      setError(`Enter how many ${unit.name} are going back, as a whole number.`);
       return;
     }
     if (!AMOUNT.test(creditShown.trim())) {
@@ -304,9 +336,10 @@ function ReturnForm({
     const outcome = await returnToSupplierAction({
       returnId,
       batchId: line.batchId,
-      qtyBase: qtyNumber,
+      qtyBase,
       creditPaisa: paisaFromRupeeInput(creditShown),
       note,
+      entered: { unitKey: unit.key, unitName: unit.name, unitCount: count },
     });
     setBusy(false);
     if (!outcome.ok) {
@@ -326,8 +359,33 @@ function ReturnForm({
         void save();
       }}
     >
+      {units.length > 1 ? (
+        <div role="group" aria-label="Going back in" className="col-span-full flex">
+          {units.map((candidate, index) => {
+            const pressed = candidate.key === unit.key;
+            return (
+              <button
+                key={candidate.key}
+                type="button"
+                aria-pressed={pressed}
+                onClick={() => setUnitKey(candidate.key)}
+                className={[
+                  'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                  index === 0 ? 'rounded-l' : '-ml-px',
+                  index === units.length - 1 ? 'rounded-r' : '',
+                  pressed
+                    ? 'bg-green-600 text-paper border-green-600 font-medium'
+                    : 'bg-paper text-ink hover:bg-green-100',
+                ].join(' ')}
+              >
+                {candidate.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <label className="text-ink/70 text-xs">
-        Quantity going back ({line.baseUnitName}, up to {line.onHandBase})
+        Quantity going back ({unit.name}, up to {upTo})
         <input
           autoFocus
           inputMode="numeric"
@@ -348,6 +406,16 @@ function ReturnForm({
           className={`${fieldClass} numeral`}
         />
       </label>
+      {counted ? (
+        <p className="text-ink/60 col-span-full text-xs" role="status" aria-label="Stock cost">
+          These go back at a stock cost of {formatPaisa(paisa(stockCostPaisa))}
+          {creditPaisa !== null && creditPaisa !== stockCostPaisa
+            ? creditPaisa < stockCostPaisa
+              ? ` — the credit is ${formatPaisa(paisa(stockCostPaisa - creditPaisa))} less.`
+              : ` — the credit is ${formatPaisa(paisa(creditPaisa - stockCostPaisa))} more.`
+            : '.'}
+        </p>
+      ) : null}
       <label className="text-ink/70 text-xs">
         Note
         <input

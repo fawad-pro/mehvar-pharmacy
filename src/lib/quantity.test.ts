@@ -60,7 +60,8 @@ describe('unit levels', () => {
 
 describe('natural-language quantity (W5, Phase 10 §4)', () => {
   it('renders the cart string', () => {
-    expect(describeQuantity(baseQty(34), 'tab', PACK_LEVELS)).toBe('3 strip + 4 tab');
+    expect(describeQuantity(baseQty(34), 'tab', PACK_LEVELS)).toBe('3 strip, 4 tab');
+    expect(describeQuantity(baseQty(1_237), 'tab', PACK_LEVELS)).toBe('12 box, 3 strip, 7 tab');
     expect(describeQuantity(baseQty(100), 'tab', PACK_LEVELS)).toBe('1 box');
     expect(describeQuantity(baseQty(7), 'tab', PACK_LEVELS)).toBe('7 tab');
   });
@@ -73,8 +74,9 @@ describe('natural-language quantity (W5, Phase 10 §4)', () => {
     expect(describeQuantity(baseQty(0), 'tab', PACK_LEVELS)).toBe('0 tab');
   });
 
-  it('carries the sign for negative deltas (adjustments, D2 exposure)', () => {
-    expect(describeQuantity(baseQty(-14), 'tab', PACK_LEVELS)).toBe('-1 strip + -4 tab');
+  it('says "Short by" below zero, never a minus sign (PCN-012, D2 exposure)', () => {
+    expect(describeQuantity(baseQty(-14), 'tab', PACK_LEVELS)).toBe('Short by 1 strip, 4 tab');
+    expect(describeQuantity(baseQty(-20), 'tab', PACK_LEVELS)).toBe('Short by 2 strip');
     expect(decomposeQuantity(baseQty(-14), 'tab', PACK_LEVELS)).toEqual([
       { level: { name: 'strip', factor: 10 }, count: -1 },
       { level: { name: 'tab', factor: 1 }, count: -4 },

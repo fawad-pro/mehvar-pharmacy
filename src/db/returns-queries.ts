@@ -22,14 +22,12 @@ import {
   sales,
 } from './schema';
 
+import { unitsOf } from '@/domain/catalog/units';
 import type { FoundSale, ReturnableLineRow } from '@/domain/sales/return-command';
 import type { Uuid } from '@/lib/uuid';
 
 /** W4: "scan receipt number, or search recent sales" — one lookup for both. */
-export async function findSaleForReturn(
-  scope: TenantScope,
-  query: string,
-): Promise<FoundSale[]> {
+export async function findSaleForReturn(scope: TenantScope, query: string): Promise<FoundSale[]> {
   const trimmed = query.trim();
   const rows = await scope.db
     .select({
@@ -77,6 +75,10 @@ export async function returnableLinesForSale(
       unitPricePaisa: saleLines.unitPricePaisa,
       lineAmountPaisa: saleLines.lineAmountPaisa,
       lineDiscountPaisa: saleLines.lineDiscountPaisa,
+      soldUnitKey: saleLines.unitKey,
+      packLevels: products.packLevels,
+      pricePerBasePaisa: products.defaultPricePerBaseUnit,
+      storedUnits: products.units,
     })
     .from(saleLines)
     .innerJoin(products, eq(saleLines.productId, products.id))
@@ -123,11 +125,30 @@ export async function returnableLinesForSale(
     batchesByLine.set(row.saleLineId, list);
   }
 
-  return lines.map((line) => ({
-    ...line,
-    alreadyReturnedBase: returnedByLine.get(line.saleLineId) ?? 0,
-    sourceBatches: batchesByLine.get(line.saleLineId) ?? [],
-  }));
+  return lines.map(({ pricePerBasePaisa, storedUnits, soldUnitKey, ...line }) => {
+    const all = unitsOf({
+      baseUnitName: line.baseUnitName,
+      packLevels: line.packLevels,
+      pricePerBasePaisa,
+      units: storedUnits,
+    });
+    // [PCN-012] "As sale": the units the counter sells in, and always the unit
+    // this line was sold in, even if it has stopped being offered since.
+    // A line from before units names its unit only by `enteredUnitLevel`.
+    const sold =
+      all.find((unit) => unit.key === soldUnitKey) ??
+      all.find((unit) => unit.name === line.enteredUnitLevel) ??
+      all[0]!;
+    return {
+      ...line,
+      units: all
+        .filter((unit) => unit.sell || unit.key === sold.key)
+        .map(({ key, name, factor }) => ({ key, name, factor })),
+      soldUnitKey: sold.key,
+      alreadyReturnedBase: returnedByLine.get(line.saleLineId) ?? 0,
+      sourceBatches: batchesByLine.get(line.saleLineId) ?? [],
+    };
+  });
 }
 
 /** Idempotency (a flaky submit must not double-return). */

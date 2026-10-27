@@ -37,7 +37,12 @@ import {
 } from '@/domain/inventory/adjustment';
 import { baseQty, packFactor, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { costOfBaseUnits, levelToBaseUnits, scalePriceBetweenUnits } from '@/lib/quantity';
+import {
+  costOfBaseUnits,
+  describeQuantity,
+  levelToBaseUnits,
+  scalePriceBetweenUnits,
+} from '@/lib/quantity';
 import { uuidv7 } from '@/lib/uuid';
 
 import { adjustStockAction, batchesOnHandAction, lastPurchaseCostAction } from './actions';
@@ -51,6 +56,15 @@ interface Chosen {
   pricePaisa: number;
   /** [PCN-012] Every unit, largest first: stock arriving is counted as the shelf holds it. */
   units: ProductUnit[];
+}
+
+/** [PCN-012] An amount in the product's own units: "2 box, 3 strip, 4 tab". */
+function amountOf(product: Chosen, qty: number): string {
+  const packLevels = product.units
+    .filter((unit) => unit.factor > 1)
+    .map((unit) => ({ name: unit.name, factor: unit.factor }))
+    .sort((a, b) => a.factor - b.factor);
+  return describeQuantity(baseQty(qty), product.baseUnitName, packLevels);
 }
 
 /** [PCN-012] Units largest first — how a shelf is counted: boxes, then strips, then loose. */
@@ -70,6 +84,11 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   const [chosen, setChosen] = useState<Chosen | null>(null);
   const [batches, setBatches] = useState<BatchOnHand[]>([]);
   const [batchId, setBatchId] = useState<string | null>(null);
+  /**
+   * [PCN-012] The unit stock is removed in, once the operator picks one.
+   * Until then it follows the batch: the unit that batch arrived in.
+   */
+  const [removeUnitKey, setRemoveUnitKey] = useState<string | null>(null);
   const [qty, setQty] = useState('');
   /** [PCN-012] Counts per unit when stock arrives, keyed by unit key. */
   const [counts, setCounts] = useState<Record<string, string>>({});
@@ -96,6 +115,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
           setBatches(rows);
           // FEFO-ordered, so the first is the one the operator most likely means.
           setBatchId(rows[0]?.batchId ?? null);
+          setRemoveUnitKey(null);
         }
       })
       .catch(() => {
@@ -234,6 +254,12 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   // [PCN-012] Stock arriving, counted per unit: the base units it comes to,
   // and — costed per the largest unit — exactly what it cost, rounded once.
   const costUnit = chosen?.units[0];
+  const chosenBatch = batches.find((batch) => batch.batchId === batchId);
+  const removeUnit = chosen
+    ? (chosen.units.find((unit) => unit.key === removeUnitKey) ??
+      chosen.units.find((unit) => unit.key === chosenBatch?.arrivedUnitKey) ??
+      chosen.units[chosen.units.length - 1])
+    : undefined;
   const countedBase = chosen
     ? chosen.units.reduce((sum, unit) => {
         const count = Number((counts[unit.key] ?? '').trim() || '0');
@@ -252,7 +278,13 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     if (!chosen || busy) {
       return;
     }
-    const magnitude = direction === 'add' ? countedBase : Number(qty.trim());
+    const removeCount = Number(qty.trim());
+    const magnitude =
+      direction === 'add'
+        ? countedBase
+        : removeUnit && Number.isSafeInteger(removeCount) && removeCount > 0
+          ? levelToBaseUnits(removeCount, { name: removeUnit.name, factor: removeUnit.factor })
+          : Number.NaN;
     if (!Number.isSafeInteger(magnitude) || magnitude <= 0) {
       setError(
         direction === 'add'
@@ -277,6 +309,11 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
       adjustmentId: uuidv7(),
       productId: chosen.productId,
       qtyBaseDelta: direction === 'add' ? magnitude : -magnitude,
+      ...(direction === 'remove' && removeUnit
+        ? {
+            entered: { unitKey: removeUnit.key, unitName: removeUnit.name, unitCount: removeCount },
+          }
+        : {}),
       reason: effectiveReason,
       batchId: direction === 'add' ? null : batchId,
       note: note.trim() === '' ? null : note.trim(),
@@ -406,20 +443,50 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                 ))}
               </fieldset>
             ) : (
-              <div className="w-32">
-                <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-qty">
-                  Units to remove
-                </label>
-                <input
-                  id="adjust-qty"
-                  ref={qtyRef}
-                  value={qty}
-                  inputMode="numeric"
-                  onChange={(event) => {
-                    setQty(event.target.value);
-                  }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
-                />
+              <div className="flex flex-wrap items-end gap-2">
+                {/* [PCN-012] Every unit, starting in the one the batch arrived in. */}
+                {chosen.units.length > 1 ? (
+                  <div role="group" aria-label="Remove in" className="flex">
+                    {chosen.units.map((unit, index) => {
+                      const pressed = unit.key === removeUnit?.key;
+                      return (
+                        <button
+                          key={unit.key}
+                          type="button"
+                          aria-pressed={pressed}
+                          onClick={() => {
+                            setRemoveUnitKey(unit.key);
+                          }}
+                          className={[
+                            'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                            index === 0 ? 'rounded-l' : '-ml-px',
+                            index === chosen.units.length - 1 ? 'rounded-r' : '',
+                            pressed
+                              ? 'bg-green-600 text-paper border-green-600 font-medium'
+                              : 'bg-paper text-ink hover:bg-green-100',
+                          ].join(' ')}
+                        >
+                          {unit.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+                <div className="w-32">
+                  <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-qty">
+                    {removeUnit ? `${removeUnit.name} to remove` : 'Units to remove'}
+                  </label>
+                  <input
+                    id="adjust-qty"
+                    ref={qtyRef}
+                    value={qty}
+                    inputMode="numeric"
+                    onChange={(event) => {
+                      setQty(event.target.value);
+                    }}
+                    className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+                  />
+                </div>
               </div>
             )}
 
@@ -459,13 +526,14 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                   value={batchId ?? ''}
                   onChange={(event) => {
                     setBatchId(event.target.value);
+                    setRemoveUnitKey(null);
                   }}
                   className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
                 >
                   {visibleBatches.map((batch) => (
                     <option key={batch.batchId} value={batch.batchId}>
                       {batch.batchNumber ?? 'no batch no.'} · expires {batch.expiryDate ?? '—'} ·{' '}
-                      {batch.qtyRemainingBase} {chosen.baseUnitName} left
+                      {amountOf(chosen, batch.qtyRemainingBase)} left
                     </option>
                   ))}
                 </select>
@@ -518,7 +586,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
               {/* What the count comes to, said before saving. */}
               {countedBase > 0 ? (
                 <p className="text-ink/60 w-full text-sm" role="status">
-                  {countedBase} {chosen.baseUnitName} in all
+                  {amountOf(chosen, countedBase)} in all
                   {costTotalPaisa !== null
                     ? ` · costs ${formatPaisa(paisa(costTotalPaisa), { withSymbol: true })}`
                     : ''}

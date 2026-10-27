@@ -11,7 +11,9 @@ import { findPurchase } from '@/db/purchase-queries';
 import { supplierBalance } from '@/db/supplier-queries';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity } from '@/lib/quantity';
+import { describeCounted, describeQuantity } from '@/lib/quantity';
+import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
+import { creditAgainstStockCost } from '@/domain/suppliers/supplier-return';
 import type { Uuid } from '@/lib/uuid';
 
 /**
@@ -57,10 +59,13 @@ export default async function PurchaseDetailPage({
       ? supplierBalance(scope, purchase.supplierId as Uuid)
       : Promise.resolve(null),
   ]);
-  const returns = await supplierReturnsForBatches(
-    scope,
-    lineBatches.map((batch) => batch.batchId),
-  );
+  const [returns, stockCosts] = await Promise.all([
+    supplierReturnsForBatches(
+      scope,
+      lineBatches.map((batch) => batch.batchId),
+    ),
+    supplierReturnStockCosts(scope),
+  ]);
   const correctedDeltaPaisa = corrections.reduce((sum, row) => sum + row.invoiceDeltaPaisa, 0);
 
   /*
@@ -291,8 +296,14 @@ export default async function PurchaseDetailPage({
               <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
                 <span className="font-medium">{row.productName}</span>
                 <span className="text-ink/70">
-                  {row.qtyBase} {row.baseUnitName} returned to {row.supplierName}, credit{' '}
+                  {describeCounted(row)} returned to {row.supplierName}, credit{' '}
                   {formatPaisa(paisa(row.creditPaisa))}
+                  {/* [PCN-012] Beside the stock cost it took out, so a credit
+                      that differs from it is never hidden in the balance. */}
+                  {' · '}stock cost {formatPaisa(paisa(stockCosts.get(row.id) ?? 0))}
+                  {creditAgainstStockCost(row.creditPaisa, stockCosts.get(row.id) ?? 0)
+                    ? ` (${creditAgainstStockCost(row.creditPaisa, stockCosts.get(row.id) ?? 0)})`
+                    : ''}
                 </span>
                 {row.note ? <span className="text-ink/50">“{row.note}”</span> : null}
                 <span className="text-ink/40 ml-auto text-xs">

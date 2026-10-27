@@ -7,7 +7,7 @@ import { openCounter, search } from './support/counter';
  *
  *  - Receive Stock in the pack it arrived in — largest first, bonus in the
  *    same pack, cost per pack — with an exact line cost.
- *  - "MRP on pack" per line: a price above it is warned; an MRP that differs
+ *  - "MRP / box" per line: a price above it is warned; an MRP that differs
  *    from the record is offered to the owner, never applied silently.
  *  - Opening stock counted as the shelf holds it: boxes, strips, tablets.
  *
@@ -49,16 +49,16 @@ test('receive in boxes: bonus and cost per box, an exact line, and the MRP offer
     'aria-pressed',
     'true',
   );
-  await expect(page.getByLabel(/^Sells for/)).toHaveValue('400.00');
+  await expect(page.getByLabel(/^Price \//)).toHaveValue('400.00');
 
   await page.getByLabel(/^Qty/).fill('2');
   await page.getByLabel(/^Bonus/).fill('1');
-  await page.getByLabel(/^Unit cost/).fill('333.33');
+  await page.getByLabel(/^Cost \//).fill('333.33');
   await page.getByLabel('Expiry').fill('2030-12-31');
   // The box says Rs 420; this shop will sell at Rs 450 — above it, warned.
-  await page.getByLabel(/^MRP on pack/).fill('420');
-  await page.getByLabel(/^Sells for/).fill('450');
-  await page.getByLabel(/^Unit cost/).press('Enter');
+  await page.getByLabel(/^MRP \//).fill('420');
+  await page.getByLabel(/^Price \//).fill('450');
+  await page.getByLabel(/^Cost \//).press('Enter');
 
   const line = page.getByRole('table').getByRole('row').filter({ hasText: name });
   await expect(line).toContainText('2 box');
@@ -94,6 +94,11 @@ test('receive in boxes: bonus and cost per box, an exact line, and the MRP offer
   // Opened from the invoice line itself; the product list is not searched.
   await invoiceLine.getByRole('link', { name }).click();
   await expect(page.getByLabel('Price per box')).toHaveValue('450.00', { timeout: 30_000 });
+  // And the MRP reads as the box printed it, on the box (PCN-012).
+  await expect(
+    page.getByRole('group', { name: 'MRP printed on' }).getByRole('button', { name: 'box' }),
+  ).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('MRP per box')).toHaveValue('420.00');
 });
 
 test('opening stock counted as boxes, strips and tablets, costed per box', async ({ page }) => {
@@ -118,8 +123,166 @@ test('opening stock counted as boxes, strips and tablets, costed per box', async
   await page.getByLabel(/^Cost per box/).fill('250');
   // 234 tablets; Rs 250 a box of 100 makes them Rs 585.00, exactly.
   await expect(page.getByRole('status').filter({ hasText: 'in all' })).toHaveText(
-    '234 tab in all · costs Rs 585.00',
+    '2 box, 3 strip, 4 tab in all · costs Rs 585.00',
   );
   await page.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
+});
+
+/**
+ * The line being entered fits one row on a desktop-wide screen, and wraps —
+ * every field still usable, nothing off the side — on a narrow one.
+ */
+async function openLine(page: Page, name: string): Promise<void> {
+  await page.goto('/purchases');
+  await expect(search(page)).toBeVisible({ timeout: 30_000 });
+  await search(page).fill(name.toLowerCase());
+  await page.getByRole('option').first().click({ timeout: 30_000 });
+  await expect(page.getByRole('group', { name: 'Arrived in' })).toBeVisible();
+}
+
+function lineControls(page: Page) {
+  return [
+    page.getByLabel(/^Qty/),
+    page.getByLabel(/^Bonus/),
+    page.getByLabel(/^Cost \//),
+    page.getByLabel(/^Expiry/),
+    page.getByLabel(/^Batch/),
+    page.getByLabel(/^MRP \//),
+    page.getByLabel(/^Price \//),
+    page.getByRole('button', { name: 'Add — Enter' }),
+  ];
+}
+
+/** Every field's label is one line: the same height, none wrapped. */
+async function labelsOnOneLine(page: Page): Promise<void> {
+  const heights = await Promise.all(
+    lineControls(page)
+      .slice(0, 7)
+      .map((control) =>
+        control.evaluate(
+          (input) =>
+            input.closest('label')?.querySelector('span')?.getBoundingClientRect().height ?? 0,
+        ),
+      ),
+  );
+  expect(Math.max(...heights) - Math.min(...heights), `label heights: ${heights.join(', ')}`).toBe(
+    0,
+  );
+  expect(Math.max(...heights), 'a label wrapped onto a second line').toBeLessThan(24);
+}
+
+async function noSidewaysScroll(page: Page): Promise<void> {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow, 'the page scrolls sideways').toBeLessThanOrEqual(0);
+}
+
+test('the line fits one row at 1280×800 and wraps usably at 768px', async ({ page }) => {
+  const name = `Layout ${Date.now()}`;
+  await openCounter(page);
+  await newProduct(page, name);
+
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openLine(page, name);
+  const boxes = await Promise.all(lineControls(page).map((control) => control.boundingBox()));
+  const bottoms = boxes.map((box) => Math.round((box?.y ?? 0) + (box?.height ?? 0)));
+  // One row: every control ends on the same line (labels may wrap above).
+  expect(
+    Math.max(...bottoms) - Math.min(...bottoms),
+    `bottoms: ${bottoms.join(', ')}`,
+  ).toBeLessThanOrEqual(2);
+  // Readable, not squeezed: the date picker keeps room for its date.
+  expect(boxes[3]?.width ?? 0).toBeGreaterThanOrEqual(150);
+  for (const box of boxes) expect(box?.width ?? 0).toBeGreaterThanOrEqual(80);
+  await labelsOnOneLine(page);
+  // The unit is said once per field, in one pattern, and follows the pack.
+  await expect(page.getByLabel('Cost / box')).toBeVisible();
+  await expect(page.getByLabel('MRP / box')).toBeVisible();
+  await expect(page.getByLabel('Price / box')).toBeVisible();
+  await noSidewaysScroll(page);
+
+  await page.setViewportSize({ width: 768, height: 1024 });
+  for (const control of lineControls(page)) {
+    await expect(control).toBeVisible();
+    const box = await control.boundingBox();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(768);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(80);
+  }
+  await labelsOnOneLine(page);
+  await noSidewaysScroll(page);
+  // Still a working form: fill and add by keyboard.
+  await page.getByLabel(/^Qty/).fill('1');
+  await page.getByLabel(/^Cost \//).fill('300');
+  await page.getByLabel(/^Cost \//).press('Enter');
+  await expect(page.getByRole('table').getByRole('row').filter({ hasText: name })).toContainText(
+    '1 box',
+  );
+});
+
+test('damaged strips go back from a box delivery: credit at stock cost, any difference shown', async ({
+  page,
+}) => {
+  const name = `Stripback ${Date.now()}`;
+  const supplier = `Strip Distributor ${Date.now()}`;
+  await openCounter(page);
+  await newProduct(page, name);
+
+  // Two boxes on credit, Rs 640 a box.
+  await page.goto('/purchases');
+  await page.getByRole('button', { name: 'Supplier' }).click({ timeout: 30_000 });
+  await page.getByPlaceholder('Name or phone…').fill(supplier);
+  await page.getByRole('button', { name: `+ Add “${supplier}” as a new supplier` }).click();
+  await search(page).fill(name.toLowerCase());
+  await page.getByRole('option').first().click({ timeout: 30_000 });
+  await page.getByLabel(/^Qty/).fill('2');
+  await page.getByLabel(/^Cost \//).fill('640');
+  await page.getByLabel('Expiry').fill('2030-12-31');
+  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel('Paid now').fill('0');
+  await page.getByRole('button', { name: 'Receive stock' }).click();
+  await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
+
+  await page
+    .getByRole('region', { name: 'Received recently' })
+    .getByRole('link', { name: new RegExp(supplier) })
+    .first()
+    .click();
+  await page.getByRole('link', { name: /Correct this invoice or return goods/ }).click({
+    timeout: 30_000,
+  });
+  await page.getByRole('button', { name: 'Return to supplier' }).click({ timeout: 30_000 });
+  const giveBack = page.getByRole('form', { name: `Return ${name} to ${supplier}` });
+
+  // Packs only, starting in the unit it was bought in; strips are a pack.
+  const goingBackIn = giveBack.getByRole('group', { name: 'Going back in' });
+  await expect(goingBackIn.getByRole('button')).toHaveText(['box', 'strip'], { ignoreCase: true });
+  await expect(goingBackIn.getByRole('button', { name: 'box' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await goingBackIn.getByRole('button', { name: 'strip' }).click();
+  await giveBack.getByLabel(/Quantity going back \(strip, up to 20\)/).fill('3');
+  // Exactly what three strips cost: Rs 1,280 over 200 tablets, 30 of them.
+  await expect(giveBack.getByLabel(/^Credit from/)).toHaveValue('192.00');
+  await expect(giveBack.getByRole('status', { name: 'Stock cost' })).toHaveText(
+    'These go back at a stock cost of 192.00.',
+  );
+  // The distributor gives less; the difference is said, not absorbed.
+  await giveBack.getByLabel(/^Credit from/).fill('180');
+  await expect(giveBack.getByRole('status', { name: 'Stock cost' })).toContainText(
+    'the credit is 12.00 less',
+  );
+  await giveBack.getByLabel('Note').fill('damaged strips');
+  await giveBack.getByLabel('Note').press('Enter');
+  await expect(page.getByText(`${name}: return to ${supplier} recorded.`)).toBeVisible();
+  await expect(page.getByText('1 box, 7 strip on hand')).toBeVisible();
+
+  await page.getByRole('link', { name: '← Back to the invoice' }).click();
+  const history = page.getByRole('heading', { name: 'Corrections and returns' }).locator('..');
+  await expect(history).toContainText(`3 strip returned to ${supplier}, credit 180.00`, {
+    timeout: 30_000,
+  });
+  await expect(history).toContainText('stock cost 192.00 (12.00 below stock cost)');
 });

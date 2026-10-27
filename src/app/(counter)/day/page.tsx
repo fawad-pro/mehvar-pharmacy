@@ -17,6 +17,8 @@ import {
 } from '@/db/reporting-queries';
 import { supplierBook } from '@/db/supplier-queries';
 import { businessDayBounds, businessDayOf, type BusinessDay } from '@/lib/business-day';
+import { describeCounted } from '@/lib/quantity';
+import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
 
 import { DaySurface } from './day-surface';
 
@@ -93,6 +95,7 @@ export default async function DayPage({
     // now, whatever range is being viewed.
     supplierBook(scope),
   ]);
+  const stockCosts = supplierReturns.length > 0 ? await supplierReturnStockCosts(scope) : new Map();
 
   return (
     <DaySurface
@@ -105,9 +108,18 @@ export default async function DayPage({
       returns={returns}
       expiredSold={expiredSold}
       quickItems={quickItems}
-      adjustments={adjustments}
+      // [PCN-012] In the words they were counted in, worked out here so the
+      // client needs no pack arithmetic.
+      adjustments={adjustments.map((row) => ({
+        ...row,
+        amount: describeCounted({ ...row, qtyBase: row.qtyBaseDelta }),
+      }))}
       corrections={corrections}
-      supplierReturns={supplierReturns}
+      supplierReturns={supplierReturns.map((row) => ({
+        ...row,
+        amount: describeCounted(row),
+        stockCostPaisa: stockCosts.get(row.id) ?? 0,
+      }))}
       cashMovements={cashMovements}
       lateSynced={lateSynced}
       hasOpeningFloat={openingFloat}

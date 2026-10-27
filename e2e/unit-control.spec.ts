@@ -104,7 +104,8 @@ test('every unit on the line; buttons and keys change it; the next sale starts w
   await expect(lastSale(page)).toContainText('800.00');
 
   // Two boxes leave the shelf as 200 tablets. The product had no stock, so
-  // all 200 show as sold ahead of stock (D2) — the unit reached the ledger.
+  // all of it shows as sold ahead of stock (D2) — the unit reached the
+  // ledger — stated in the product's own units (PCN-012).
   await page.goto('/stock');
   await expect(
     page
@@ -113,7 +114,7 @@ test('every unit on the line; buttons and keys change it; the next sale starts w
       .filter({
         hasText: name,
       }),
-  ).toContainText('200 tab', { timeout: 30_000 });
+  ).toContainText('2 box', { timeout: 30_000 });
 
   // The next line of this product starts in the unit it was last sold in.
   await page.goto('/sale');

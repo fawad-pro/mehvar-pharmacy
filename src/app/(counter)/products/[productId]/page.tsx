@@ -12,8 +12,11 @@ import { BarcodePanel } from './barcode-panel';
 
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ productId: string }>;
+  /** [PCN-012] Set by "Replace this product" on arrival here. */
+  searchParams: Promise<{ replaced?: string; unlinked?: string }>;
 }) {
   const session = await currentSession();
   if (!session) {
@@ -21,6 +24,14 @@ export default async function ProductDetailPage({
   }
 
   const { productId } = await params;
+  const arrival = await searchParams;
+  const unlinked = (arrival.unlinked ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map((pair) => {
+      const at = pair.lastIndexOf(':');
+      return { barcode: pair.slice(0, at), unitLevelName: pair.slice(at + 1) };
+    });
   const scope = scopeFor(session);
   const [product, alternatives, hasHistory] = await Promise.all([
     findProduct(scope, productId),
@@ -49,6 +60,49 @@ export default async function ProductDetailPage({
             : `${describeQuantity(baseQty(product.stockBase), product.baseUnitName, product.packLevels)} on hand`}
         </p>
       </header>
+
+      {arrival.replaced !== undefined ? (
+        <div className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm" role="status" aria-label="Replaced">
+          <p className="text-green-900 font-medium">
+            Replaced.{' '}
+            {arrival.replaced === '1' ? '1 batch' : `${arrival.replaced} batches`} moved here with
+            their cost.
+          </p>
+          {unlinked.length > 0 ? (
+            <>
+              <p className="mt-1">Link these barcodes again — their unit is not on this pack:</p>
+              <ul className="numeral">
+                {unlinked.map((code) => (
+                  <li key={code.barcode}>
+                    {code.barcode} <span className="text-ink/60">(was on {code.unitLevelName})</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* [PCN-012] A replaced product is history: say where it went. */}
+      {product.replacedByProductId ? (
+        <p className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm" role="note">
+          Replaced — this product is no longer sold.{' '}
+          <Link
+            href={`/products/${product.replacedByProductId}`}
+            className="text-green-700 hover:underline"
+          >
+            Open its replacement
+          </Link>
+        </p>
+      ) : hasHistory ? (
+        <p className="text-ink/70 text-sm">
+          Pack sizes set up wrong?{' '}
+          <Link href={`/products/${product.id}/replace`} className="text-green-700 hover:underline">
+            Replace this product
+          </Link>{' '}
+          — the stock moves to a new product with the right pack.
+        </p>
+      ) : null}
 
       {/* "Panadol nahi hai — kya chalega?"
           
@@ -112,7 +166,9 @@ export default async function ProductDetailPage({
           unitPriceRupees: Object.fromEntries(
             product.units.map((unit) => [unit.name, (unit.pricePaisa / 100).toFixed(2)]),
           ),
-          mrpRupees: product.mrpPaisa === null ? '' : (product.mrpPaisa / 100).toFixed(2),
+          // [PCN-012] As printed, on the unit it is printed on; an MRP from
+          // before PCN-012 is per base unit.
+          ...mrpInitial(product),
           minStock: product.minStockBaseUnits === null ? '' : String(product.minStockBaseUnits),
           needsCompletion: product.needsCompletion,
           // [PCN-012] Said before Save, not discovered after it.
@@ -121,4 +177,21 @@ export default async function ProductDetailPage({
       />
     </section>
   );
+}
+
+function mrpInitial(product: {
+  mrpPaisa: number | null;
+  mrpUnit: { key: string; paisa: number } | null;
+  units: readonly { key: string; name: string }[];
+  baseUnitName: string;
+}): { mrpRupees: string; mrpUnitName: string | null } {
+  const named = product.mrpUnit
+    ? product.units.find((unit) => unit.key === product.mrpUnit?.key)
+    : undefined;
+  if (product.mrpUnit && named) {
+    return { mrpRupees: (product.mrpUnit.paisa / 100).toFixed(2), mrpUnitName: named.name };
+  }
+  return product.mrpPaisa === null
+    ? { mrpRupees: '', mrpUnitName: null }
+    : { mrpRupees: (product.mrpPaisa / 100).toFixed(2), mrpUnitName: product.baseUnitName };
 }

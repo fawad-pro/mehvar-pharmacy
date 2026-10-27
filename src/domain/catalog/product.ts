@@ -29,6 +29,7 @@ export type ProductRejection =
   /** PCN-012: the product has history, so its existing units cannot change. */
   | { reason: 'pack_structure_locked' }
   | { reason: 'min_stock_negative' }
+  | { reason: 'mrp_unit_unknown' }
   | { reason: 'barcode_required' }
   | { reason: 'barcode_unknown_unit_level'; unitLevelName: string };
 
@@ -44,7 +45,13 @@ export interface ProductDraft {
   packLevels: PackLevel[];
   /** Paisa per base unit. */
   pricePaisa: number;
+  /**
+   * MRP in paisa. [PCN-012] For the unit at `mrpUnitIndex` (0 the base unit,
+   * then each pack level) when that is set, as printed on that pack; per base
+   * unit when it is not — a caller from before PCN-012.
+   */
   mrpPaisa: number | null;
+  mrpUnitIndex?: number | null;
   minStockBaseUnits: number | null;
   needsCompletion: boolean;
   /**
@@ -145,11 +152,12 @@ export function validatePackLevels(
  *  - `extended`  — the same units with larger packs added on top (a carton
  *    over the box, or a quick item gaining its strip during completion):
  *    allowed, because nothing already recorded changes meaning;
- *  - `changed`   — anything else, including a rename: refused.
+ *  - `changed`   — anything else: refused.
  *
- * Renames are refused for now, stricter than PCN-012's end state: a unit's
- * name is also its identity today (barcodes and sale lines refer to it by
- * name). They become allowed once units carry stable keys.
+ * "The same units" means the same sizes in the same positions. A unit's NAME
+ * may change (a "pack" the owner would rather call a "strip"): units carry
+ * stable keys by position, so a rename reinterprets no quantity, and history
+ * keeps the words it was written in. See `unitRenames`.
  */
 export type PackStructureChange = 'unchanged' | 'extended' | 'changed';
 
@@ -162,24 +170,43 @@ export function packStructureChange(
   current: PackStructure,
   next: PackStructure,
 ): PackStructureChange {
-  if (current.baseUnitName.trim() !== next.baseUnitName.trim()) {
-    return 'changed';
-  }
+  // The base unit is always size 1, so renaming it changes no quantity.
   if (next.packLevels.length < current.packLevels.length) {
     return 'changed';
   }
   const kept = current.packLevels.every((level, index) => {
     const candidate = next.packLevels[index];
-    return (
-      candidate !== undefined &&
-      candidate.name.trim() === level.name.trim() &&
-      candidate.factor === level.factor
-    );
+    return candidate !== undefined && candidate.factor === level.factor;
   });
   if (!kept) {
     return 'changed';
   }
   return next.packLevels.length === current.packLevels.length ? 'unchanged' : 'extended';
+}
+
+/**
+ * [PCN-012] The units an edit renames, by position: the base unit, then each
+ * pack level the edit keeps at the same size. A rename is only ever of the
+ * same unit — a position whose size changed is a different unit, not a rename.
+ */
+export function unitRenames(
+  current: PackStructure,
+  next: PackStructure,
+): { from: string; to: string }[] {
+  const before = [
+    { name: current.baseUnitName.trim(), factor: 1 },
+    ...current.packLevels.map((level) => ({ name: level.name.trim(), factor: level.factor })),
+  ];
+  const after = [
+    { name: next.baseUnitName.trim(), factor: 1 },
+    ...next.packLevels.map((level) => ({ name: level.name.trim(), factor: level.factor })),
+  ];
+  return before.flatMap((unit, index) => {
+    const renamed = after[index];
+    return renamed && renamed.factor === unit.factor && renamed.name !== unit.name && renamed.name
+      ? [{ from: unit.name, to: renamed.name }]
+      : [];
+  });
 }
 
 /**
@@ -234,6 +261,17 @@ export function validateProductDraft(
   rejections.push(
     ...validatePackLevels(draft.packLevels, baseUnitName, options.nestingCheckedFrom ?? 0),
   );
+
+  if (
+    draft.mrpPaisa !== null &&
+    draft.mrpUnitIndex !== undefined &&
+    draft.mrpUnitIndex !== null &&
+    (!Number.isSafeInteger(draft.mrpUnitIndex) ||
+      draft.mrpUnitIndex < 0 ||
+      draft.mrpUnitIndex > draft.packLevels.length)
+  ) {
+    rejections.push({ reason: 'mrp_unit_unknown' });
+  }
 
   if (rejections.length > 0) {
     return { ok: false, rejections };

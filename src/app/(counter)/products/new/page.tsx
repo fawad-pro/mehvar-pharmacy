@@ -26,6 +26,7 @@ export default async function NewProductPage() {
           packLevels: 'strip:10',
           unitPriceRupees: {},
           mrpRupees: '',
+          mrpUnitName: null,
           minStock: '',
           needsCompletion: false,
         }}

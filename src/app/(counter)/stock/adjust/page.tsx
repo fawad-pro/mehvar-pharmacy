@@ -3,6 +3,9 @@ import { redirect } from 'next/navigation';
 import { currentSession, scopeFor } from '@/auth/session';
 import { recentAdjustments } from '@/db/adjustment-queries';
 
+import { baseQty } from '@/lib/branded';
+import { describeQuantity } from '@/lib/quantity';
+
 import { AdjustSurface } from './adjust-surface';
 import { AdjustmentHistory } from './adjustment-history';
 
@@ -42,6 +45,16 @@ export default async function AdjustPage({
           productName: row.productName,
           baseUnitName: row.baseUnitName,
           qtyBaseDelta: row.qtyBaseDelta,
+          // [PCN-012] As entered when it was "3 strip"; otherwise the amount in
+          // the product's own units. The sign is the history's, not an amount's.
+          amount:
+            row.unitName !== null && row.unitCount !== null
+              ? `${row.unitCount} ${row.unitName}`
+              : describeQuantity(
+                  baseQty(Math.abs(row.qtyBaseDelta)),
+                  row.baseUnitName,
+                  row.packLevels,
+                ),
           reason: row.reason,
           note: row.note,
           byName: row.byName,

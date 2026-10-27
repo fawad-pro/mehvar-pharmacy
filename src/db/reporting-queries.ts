@@ -17,6 +17,7 @@ import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
 
 import { summariseBook } from '@/domain/udhaar/position';
 import { DEFAULT_TIME_ZONE } from '@/lib/business-day';
+import type { PackLevel } from '@/lib/quantity';
 
 import { batchCostLedger } from './batch-cost-queries';
 import type { TenantScope } from './scoped';
@@ -390,6 +391,9 @@ export interface SupplierReturnExceptionRow {
   readonly supplierName: string;
   readonly qtyBase: number;
   readonly baseUnitName: string;
+  readonly packLevels: PackLevel[];
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
   readonly creditPaisa: number;
   readonly byName: string;
   readonly createdAt: Date;
@@ -408,6 +412,9 @@ export async function supplierReturnsInRange(
       supplierName: suppliers.name,
       qtyBase: supplierReturns.qtyBase,
       baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
+      unitName: supplierReturns.unitName,
+      unitCount: supplierReturns.unitCount,
       creditPaisa: supplierReturns.creditPaisa,
       byName: users.name,
       createdAt: supplierReturns.createdAt,
@@ -456,6 +463,10 @@ export interface AdjustmentExceptionRow {
   readonly id: string;
   readonly productName: string;
   readonly qtyBaseDelta: number;
+  readonly baseUnitName: string;
+  readonly packLevels: PackLevel[];
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
   readonly reason: string;
   readonly note: string | null;
   readonly byName: string;
@@ -483,6 +494,10 @@ export async function adjustmentsInRange(
       id: adjustments.id,
       productName: products.name,
       qtyBaseDelta: adjustments.qtyBaseDelta,
+      baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
+      unitName: adjustments.unitName,
+      unitCount: adjustments.unitCount,
       reason: adjustments.reason,
       note: adjustments.note,
       byName: users.name,

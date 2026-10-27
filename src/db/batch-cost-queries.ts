@@ -36,7 +36,7 @@ import {
   supplierReturns,
 } from './schema';
 
-export type MovementKind = 'sale' | 'adjustment' | 'supplier_return' | 'restock';
+export type MovementKind = 'sale' | 'adjustment' | 'supplier_return' | 'restock' | 'transfer';
 
 export interface CostedMovement {
   readonly id: string;
@@ -136,6 +136,7 @@ export async function batchCostLedger(
       batchId: adjustments.batchId,
       at: adjustments.createdAt,
       delta: adjustments.qtyBaseDelta,
+      reason: adjustments.reason,
     })
     .from(adjustments)
     .where(
@@ -155,7 +156,9 @@ export async function batchCostLedger(
       qtyBase: supplierReturns.qtyBase,
     })
     .from(supplierReturns)
-    .where(scope.scopeOf(supplierReturns, until ? lt(supplierReturns.createdAt, until) : undefined));
+    .where(
+      scope.scopeOf(supplierReturns, until ? lt(supplierReturns.createdAt, until) : undefined),
+    );
 
   const restocked = await scope.db
     .select({
@@ -182,7 +185,9 @@ export async function batchCostLedger(
       batchId: row.batchId!,
       at: row.at,
       qtyBase: -row.delta,
-      kind: 'adjustment' as const,
+      // [PCN-012] Units carried to a replacement product are not lost: they
+      // leave with exactly the cost the new batch starts from.
+      kind: row.reason === 'product_replaced' ? ('transfer' as const) : ('adjustment' as const),
     })),
     ...returnedToSupplier.map((row) => ({ ...row, kind: 'supplier_return' as const })),
     ...restocked.map((row) => ({
@@ -214,4 +219,47 @@ export async function batchCostLedger(
     basis,
     movements: raw.map((movement) => ({ ...movement, costPaisa: costs.get(movement.id) ?? 0 })),
   };
+}
+
+/**
+ * [PCN-012] Where each batch stands in its cost: its basis and how many base
+ * units have left it so far (net of restocks). What a supplier return's
+ * suggested credit is worked out from (PCN-009's effective cost, exactly).
+ */
+export async function batchCostPositions(
+  scope: TenantScope,
+  batchIds: readonly string[],
+): Promise<Map<string, { basis: BatchCostBasis; takenBase: number }>> {
+  const ledger = await batchCostLedger(scope);
+  const wanted = new Set(batchIds);
+  const taken = new Map<string, number>();
+  for (const movement of ledger.movements) {
+    if (wanted.has(movement.batchId)) {
+      taken.set(movement.batchId, (taken.get(movement.batchId) ?? 0) + movement.qtyBase);
+    }
+  }
+  return new Map(
+    batchIds.map((batchId) => [
+      batchId,
+      {
+        basis: ledger.basis.get(batchId) ?? { totalPaisa: 0, receivedBase: 0 },
+        takenBase: taken.get(batchId) ?? 0,
+      },
+    ]),
+  );
+}
+
+/**
+ * [PCN-012] What each return to a supplier took out of its batch, at cost —
+ * the movement's cumulative share, as currently corrected (D1). Shown beside
+ * the credit the supplier gave, so a difference between the two is never
+ * hidden in the supplier balance.
+ */
+export async function supplierReturnStockCosts(scope: TenantScope): Promise<Map<string, number>> {
+  const ledger = await batchCostLedger(scope);
+  return new Map(
+    ledger.movements
+      .filter((movement) => movement.kind === 'supplier_return')
+      .map((movement) => [movement.id, movement.costPaisa]),
+  );
 }

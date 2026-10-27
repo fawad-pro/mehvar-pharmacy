@@ -5,6 +5,9 @@ import { currentSession, scopeFor } from '@/auth/session';
 import { findSupplier, supplierBalance, supplierLedger } from '@/db/supplier-queries';
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
+import { describeCounted } from '@/lib/quantity';
+import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
+import { creditAgainstStockCost } from '@/domain/suppliers/supplier-return';
 import type { Uuid } from '@/lib/uuid';
 
 import { SupplierPayRow } from './pay-row';
@@ -35,9 +38,10 @@ export default async function SupplierAccountPage({
     notFound();
   }
 
-  const [balancePaisa, ledger] = await Promise.all([
+  const [balancePaisa, ledger, stockCosts] = await Promise.all([
     supplierBalance(scope, supplierId as Uuid),
     supplierLedger(scope, supplierId as Uuid),
+    supplierReturnStockCosts(scope),
   ]);
 
   const rows = ledger.reduce<Array<(typeof ledger)[number] & { runningPaisa: number }>>(
@@ -99,7 +103,7 @@ export default async function SupplierAccountPage({
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <LedgerWhat row={row} />
+                    <LedgerWhat row={row} stockCostPaisa={stockCosts.get(row.id)} />
                   </td>
                   <td className="text-ink/70 px-3 py-2">{row.byName}</td>
                   <td
@@ -160,7 +164,14 @@ function RunningPosition({ balancePaisa }: { balancePaisa: number }) {
   return <span className="text-green-900">settled</span>;
 }
 
-function LedgerWhat({ row }: { row: Awaited<ReturnType<typeof supplierLedger>>[number] }) {
+function LedgerWhat({
+  row,
+  stockCostPaisa,
+}: {
+  row: Awaited<ReturnType<typeof supplierLedger>>[number];
+  /** [PCN-012] For a return: what it took out of its batch, at cost. */
+  stockCostPaisa: number | undefined;
+}) {
   switch (row.kind) {
     case 'invoice':
       return (
@@ -187,7 +198,15 @@ function LedgerWhat({ row }: { row: Awaited<ReturnType<typeof supplierLedger>>[n
     case 'return':
       return (
         <>
-          Returned {row.qtyBase} {row.baseUnitName} {row.productName}
+          Returned {describeCounted(row)} {row.productName}
+          {stockCostPaisa !== undefined ? (
+            <span className="text-ink/50 ml-1 text-xs">
+              stock cost {formatPaisa(paisa(stockCostPaisa))}
+              {creditAgainstStockCost(-row.amountPaisa, stockCostPaisa)
+                ? ` · credit ${creditAgainstStockCost(-row.amountPaisa, stockCostPaisa)}`
+                : ''}
+            </span>
+          ) : null}
           {row.note ? <span className="text-ink/50 ml-1 text-xs">“{row.note}”</span> : null}
         </>
       );

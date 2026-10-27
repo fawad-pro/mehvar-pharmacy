@@ -92,4 +92,30 @@ suite('commitAdjustment against Postgres', () => {
     expect(batch?.qtyRemainingBase).toBe(0);
     expect((await verifyBatches(tenant.scope)).mismatches).toEqual([]);
   });
+
+  it('a removal counted in strips is recorded as counted; a wrong strip size is refused (PCN-012)', async () => {
+    const batchId = await addOpeningStock(tenant.scope, product.id, 30);
+
+    const wrong = await commitAdjustment(tenant.scope, {
+      ...damage(batchId, 5),
+      entered: { unitKey: 'u1', unitName: 'strip', unitCount: 1 },
+    });
+    expect(wrong).toEqual({ ok: false, reason: 'invalid_unit' });
+
+    const command = {
+      ...damage(batchId, 20),
+      entered: { unitKey: 'u1', unitName: 'strip', unitCount: 2 },
+    };
+    expect((await commitAdjustment(tenant.scope, command)).ok).toBe(true);
+    const [row] = await tenant.scope.select(adjustments, eq(adjustments.id, command.adjustmentId));
+    expect(row).toMatchObject({
+      qtyBaseDelta: -20,
+      unitKey: 'u1',
+      unitName: 'strip',
+      unitCount: 2,
+    });
+    const [batch] = await tenant.scope.select(batches, eq(batches.id, batchId));
+    expect(batch?.qtyRemainingBase).toBe(10);
+    expect((await verifyBatches(tenant.scope)).ok).toBe(true);
+  });
 });

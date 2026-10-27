@@ -16,9 +16,15 @@ import { commitPurchase, type PurchaseCommand } from '@/domain/purchases/commit-
 import { commitPurchaseCorrection } from '@/domain/purchases/commit-purchase-correction';
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
 import { commitSupplierReturn } from '@/domain/suppliers/commit-supplier-return';
+import { defaultReturnCreditPaisa } from '@/domain/suppliers/supplier-return';
+import {
+  batchCostLedger,
+  batchCostPositions,
+  supplierReturnStockCosts,
+} from '@/db/batch-cost-queries';
 import { verifyBatches } from '@/domain/inventory/rebuild';
 import { reportFigures } from '@/db/reporting-queries';
-import { batches, purchaseCorrections, suppliers, supplierReturns } from '@/db/schema';
+import { batches, products, purchaseCorrections, suppliers, supplierReturns } from '@/db/schema';
 import { balancesBySupplier, supplierBalance } from '@/db/supplier-queries';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -262,5 +268,102 @@ suite('purchase corrections and supplier returns against Postgres', () => {
       }),
     ).toEqual({ ok: false, reason: 'no_supplier' });
     expect(await remaining(batchId)).toBe(100);
+  });
+
+  it('a return counted in strips is recorded as counted; a wrong strip size is refused (PCN-012)', async () => {
+    const { batchId } = await receive();
+    expect(
+      await commitSupplierReturn(tenant.scope, {
+        returnId: uuidv7(),
+        batchId: batchId as Uuid,
+        qtyBase: 5,
+        creditPaisa: 0,
+        note: null,
+        entered: { unitKey: 'u1', unitName: 'strip', unitCount: 1 },
+      }),
+    ).toEqual({ ok: false, reason: 'invalid_quantity' });
+
+    const returnId = uuidv7();
+    const result = await commitSupplierReturn(tenant.scope, {
+      returnId,
+      batchId: batchId as Uuid,
+      qtyBase: 30,
+      creditPaisa: 8_400,
+      note: null,
+      entered: { unitKey: 'u1', unitName: 'strip', unitCount: 3 },
+    });
+    expect(result.ok).toBe(true);
+    expect(await remaining(batchId)).toBe(70);
+    const [row] = await tenant.scope.select(supplierReturns, eq(supplierReturns.id, returnId));
+    expect(row).toMatchObject({ qtyBase: 30, unitKey: 'u1', unitName: 'strip', unitCount: 3 });
+    expect((await verifyBatches(tenant.scope)).ok).toBe(true);
+  });
+
+  it('strips back from a box delivery: suggested credit equals the stock cost removed, and the batch still reconciles (PCN-012)', async () => {
+    // 2 boxes of 10 strips of 10 tablets at Rs 640 a box, 1 box free. A box
+    // added on top of the strip; the earliest expiry, so FEFO sells it first.
+    await tenant.scope.update(
+      products,
+      {
+        packLevels: [
+          { name: 'strip', factor: 10 },
+          { name: 'box', factor: 100 },
+        ],
+      },
+      eq(products.id, product.id),
+    );
+    const { batchId } = await receive({
+      cashPaidPaisa: 0,
+      lines: [
+        {
+          lineId: uuidv7(),
+          productId: product.id,
+          qtyBase: 200,
+          bonusQtyBase: 100,
+          unitCostPaisa: 427,
+          expiryDate: '2029-01-31',
+          batchNumber: null,
+          mrpAtReceivingPaisa: null,
+          priceAtReceivingPaisa: 500,
+          entered: {
+            unitKey: 'u2',
+            unitName: 'box',
+            unitCount: 2,
+            bonusUnitCount: 1,
+            unitCostPaisa: 64_000,
+            pricePaisa: 70_000,
+          },
+        },
+      ],
+    });
+    await commitSale(tenant.scope, sale(7));
+
+    const position = (await batchCostPositions(tenant.scope, [batchId])).get(batchId)!;
+    expect(position.basis).toEqual({ totalPaisa: 128_000, receivedBase: 300 });
+    expect(position.takenBase).toBe(7);
+    // 3 strips: C(37) − C(7) = ⌈128,000 × 37 ÷ 300⌉ − ⌈128,000 × 7 ÷ 300⌉ = 15,787 − 2,987.
+    const suggested = defaultReturnCreditPaisa(position.basis, position.takenBase, 30);
+    expect(suggested).toBe(12_800);
+
+    const returnId = uuidv7();
+    const returned = await commitSupplierReturn(tenant.scope, {
+      returnId,
+      batchId: batchId as Uuid,
+      qtyBase: 30,
+      creditPaisa: suggested,
+      note: 'damaged strips',
+      entered: { unitKey: 'u1', unitName: 'strip', unitCount: 3 },
+    });
+    expect(returned.ok).toBe(true);
+    expect(await remaining(batchId)).toBe(263);
+    // The movement the ledger books is the suggestion, to the paisa.
+    expect((await supplierReturnStockCosts(tenant.scope)).get(returnId)).toBe(suggested);
+
+    // Selling out the rest, every paisa paid is accounted for.
+    await commitSale(tenant.scope, sale(263));
+    const ledger = await batchCostLedger(tenant.scope);
+    const ofBatch = ledger.movements.filter((movement) => movement.batchId === batchId);
+    expect(ofBatch.reduce((sum, movement) => sum + movement.costPaisa, 0)).toBe(128_000);
+    expect((await verifyBatches(tenant.scope)).ok).toBe(true);
   });
 });

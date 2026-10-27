@@ -657,3 +657,26 @@ pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
   turned into base units through `lib/quantity` (`levelToBaseUnits`,
   `costOfBaseUnits`), and the writer refuses an entered pack whose size is not
   the product's.
+
+## Things the PCN-012 final pass established
+
+- **A movement records the words it was entered in.** Returns, removals and
+  supplier returns carry `unit_key`/`unit_name`/`unit_count` beside the base
+  quantity; display them with `describeCounted`, and let the writer check the
+  unit against the product rather than trusting the screen.
+- **A unit's key is its identity; its name is a label.** Renames are allowed,
+  size changes are not. Anything that finds a unit from a history row matches
+  by key, or by size — never by the name the row was written with.
+- **Moving stock between products is a transfer, not a loss.**
+  `product_replaced` adjustments are a `transfer` in `batchCostLedger`; a
+  write-off figure that counted them would report a loss that never happened.
+  The moved cost is the batch total less what already left, so both batches
+  reconcile exactly.
+- **A server action that revalidates re-renders the page it was called
+  from.** A result shown on that page vanishes if the page's own render
+  changes (the replace screen now renders "already replaced"); show the result
+  where the user goes next.
+- **Test-database state outlives an interrupted run.** A run cut off inside
+  `settings.spec`'s `try` left auto-print off and failed four unrelated specs
+  on the next run. When printing specs fail together, check the demo tenant's
+  settings in `mehvar_ci` before the code.

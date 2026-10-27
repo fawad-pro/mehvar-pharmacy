@@ -87,19 +87,45 @@ export function decomposeQuantity(
 }
 
 /**
- * Natural-language quantity for the cart, receipts and reports — Phase 10 §4's
- * "1 strip + 4 tab" (W5). Zero renders in base units so a line never reads blank.
+ * An amount of stock in the product's own units — PCN-012 decision 8, as the
+ * owner decided it: "12 box, 3 strip, 7 tab", largest first, only the parts
+ * that are not zero, unit names exactly as the owner set them (never a guessed
+ * plural).
+ *
+ * It says HOW MUCH, and nothing about condition: no "loose", "open" or
+ * "sealed", because Mehvar does not record which packs are opened. The
+ * remainder always shows in the smallest unit, sold or not, because hiding it
+ * would understate stock. Below zero it reads "Short by 2 strip" — never a
+ * minus sign. Zero reads "0 tab", so a line is never blank.
  */
 export function describeQuantity(
   quantity: BaseQty,
   baseUnitName: string,
   packLevels: readonly PackLevel[] = [],
 ): string {
-  const parts = decomposeQuantity(quantity, baseUnitName, packLevels);
+  const parts = decomposeQuantity(baseQty(Math.abs(quantity)), baseUnitName, packLevels);
   if (parts.length === 0) {
     return `0 ${baseUnitName}`;
   }
-  return parts.map(({ level, count }) => `${count} ${level.name}`).join(' + ');
+  const amount = parts.map(({ level, count }) => `${count} ${level.name}`).join(', ');
+  return quantity < 0 ? `Short by ${amount}` : amount;
+}
+
+/**
+ * [PCN-012] A recorded movement in the words it was entered in — "5 strip" —
+ * or, for a row from before units were recorded, its base units described.
+ * Always a magnitude; the caller says which way it went.
+ */
+export function describeCounted(row: {
+  readonly qtyBase: number;
+  readonly baseUnitName: string;
+  readonly packLevels: readonly PackLevel[];
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
+}): string {
+  return row.unitName && row.unitCount
+    ? `${row.unitCount} ${row.unitName}`
+    : describeQuantity(baseQty(Math.abs(row.qtyBase)), row.baseUnitName, row.packLevels);
 }
 
 /**
