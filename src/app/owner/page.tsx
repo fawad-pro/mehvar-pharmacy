@@ -59,10 +59,12 @@ export default async function OwnerPage() {
         ),
       }))}
       expiring={expiring.map((row) => ({
+        batchId: row.batchId,
         productName: row.productName,
         expiryDate: row.expiryDate,
         qtyRemainingBase: row.qtyRemainingBase,
         baseUnitName: row.baseUnitName,
+        amount: describeQuantity(baseQty(row.qtyRemainingBase), row.baseUnitName, row.packLevels),
       }))}
       incidents={incidents.map((row) => ({
         productName: row.productName,

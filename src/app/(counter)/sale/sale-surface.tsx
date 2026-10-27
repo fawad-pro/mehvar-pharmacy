@@ -348,6 +348,20 @@ export function SaleSurface() {
           : {}),
       };
 
+      // The sale is already committed and the receipt already built; whether
+      // paper comes out is a shop's preference, not a step in the workflow.
+      // A shop that prints on request rather than by default still has the
+      // receipt one key away, from local state, exactly as before.
+      //
+      // Printed BEFORE the screen says "Saved": while the browser prints, the
+      // page takes no keys, and "Saved" is when the operator presses the next
+      // one. Until then the payment screen stays up, busy.
+      if (receiptContext.autoPrintReceipt) {
+        await print(receiptData);
+      } else {
+        clearPrinted();
+      }
+
       setLines([]);
       setExpiredPack(null);
       setCustomer(null);
@@ -358,16 +372,6 @@ export function SaleSurface() {
         pendingUnits,
         receipt: receiptData,
       });
-
-      // The sale is already committed and the receipt already built; whether
-      // paper comes out is a shop's preference, not a step in the workflow.
-      // A shop that prints on request rather than by default still has the
-      // receipt one key away, from local state, exactly as before.
-      if (receiptContext.autoPrintReceipt) {
-        print(receiptData);
-      } else {
-        clearPrinted();
-      }
 
       // Stock moved, so the index's advisory snapshot is stale. Harmless to ask
       // for while offline: the refresh fails and the cached catalog stands.

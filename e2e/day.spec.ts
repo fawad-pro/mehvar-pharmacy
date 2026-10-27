@@ -185,6 +185,12 @@ test('a salesman cannot reach Day & Reports or Settings', async ({ page }) => {
 });
 
 test('W11: the owner phone view answers the three questions in one glance', async ({ page }) => {
+  // React's duplicate-key warning: two batches of one product with the same
+  // expiry shared a row key, so one could be drawn twice or not at all.
+  const keyWarnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.text().includes('two children with the same key')) keyWarnings.push(message.text());
+  });
   await page.goto('/owner/login');
   await page.getByLabel('Pharmacy code').fill('demo');
   await page.getByLabel('Password').fill('owner-demo-password');
@@ -202,6 +208,7 @@ test('W11: the owner phone view answers the three questions in one glance', asyn
 
   await page.getByRole('button', { name: 'Stock' }).click();
   await expect(page.getByText('Running low')).toBeVisible();
+  expect(keyWarnings).toEqual([]);
 });
 
 test('Settings: receipt config, users & PINs, and the export link', async ({ page }) => {
