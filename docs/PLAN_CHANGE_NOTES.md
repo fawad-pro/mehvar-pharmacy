@@ -1969,5 +1969,19 @@ rounding shortcut for now.
   as a correction (ADR-1): the app role still cannot update it. The crown
   suite checks every stored share against the rule and that a sale's shares
   sum to its discount.
-- Steps 3–4 (the counter, cap and approval; Day screen and receipt page): not
-  yet.
+- *Step 3, the counter (2026-10-27).* On the payment screen `%` — the key a
+  line discount already uses — or "Bill discount" opens "Amount to collect";
+  Enter applies it (`billDiscountFromCollect`: a final figure, refused above
+  the bill, junk never read as Rs 0). F12, Enter still sells at the full
+  amount. Once a discount is given the screen's largest figure reads
+  "Collect", with "Bill … · Discount …" beneath. `billDiscountNeedsApproval`
+  measures all discounts together against the bill before any discount; over
+  the limit the owner's PIN is asked for there (`approveAsOwner`: owners only,
+  the PIN switch's lockout), and the sale records the approver
+  (`sales.invoice_discount_approved_by`, migration 0018), kept only if it names
+  one of the shop's owners — never refused, since the receipt has printed.
+  Offline, approval is unavailable and the counter says so. The limit is set
+  under Settings → Selling (`billDiscountCapPercent`, 10 when absent). The
+  receipt prints Item Discount and Bill Discount as rows of their own. Item
+  discounts alone are not gated, as before.
+- Step 4 (Day screen and receipt page): not yet.

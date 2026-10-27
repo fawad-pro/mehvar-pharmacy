@@ -41,6 +41,8 @@ export interface ReceiptData {
   readonly lines?: readonly ReceiptLine[];
   readonly subtotalPaisa?: number;
   readonly discountPaisa?: number;
+  /** [PCN-014] The bill discount, on a row of its own after item discounts. */
+  readonly billDiscountPaisa?: number;
   readonly totalPaisa?: number;
 
   /** Present for a sale: the tendered/change or cash/credit split. */

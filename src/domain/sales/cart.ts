@@ -307,3 +307,58 @@ export function parseDiscountInput(raw: string, basisPaisa: Paisa): Paisa {
 
   return paisa(Math.max(0, Math.min(amount, basisPaisa)));
 }
+
+/* -------------------------------------------------------------------------- */
+/* [PCN-014] The bill discount                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** The cap a tenant that never set one gets: 10% (the owner's decision). */
+export const DEFAULT_BILL_DISCOUNT_CAP_PERCENT = 10;
+
+export type CollectRejection =
+  /** Not an amount at all — junk is never read as Rs 0 (the scan guard's rule). */
+  | 'not_an_amount'
+  /** More than the bill: a bill discount cannot raise the price. */
+  | 'above_bill';
+
+/**
+ * The bill discount the salesperson asked for, by typing the amount to
+ * collect. A final figure, not an amount off: typing "2000" twice is still
+ * Rs 2,000, so a discount cannot be given twice by accident. Collecting the
+ * whole bill clears the discount.
+ */
+export function billDiscountFromCollect(
+  subtotalPaisa: Paisa,
+  collectInput: string,
+): { ok: true; discountPaisa: Paisa } | { ok: false; reason: CollectRejection } {
+  const collect = parseRupeeInput(collectInput);
+  if (collect === null) {
+    return { ok: false, reason: 'not_an_amount' };
+  }
+  if (collect > subtotalPaisa) {
+    return { ok: false, reason: 'above_bill' };
+  }
+  return { ok: true, discountPaisa: subtractPaisa(subtotalPaisa, collect) };
+}
+
+/**
+ * Whether this bill discount needs the owner's PIN.
+ *
+ * The cap measures every discount on the bill together — item discounts and
+ * the bill discount — against the bill before any discount, so a large item
+ * discount cannot be stacked under a "10%" bill discount (PCN-014, decision
+ * 1). A cap of 0 means every bill discount needs the owner (decision 2). Item
+ * discounts alone, with no bill discount, are not gated here.
+ */
+export function billDiscountNeedsApproval(input: {
+  readonly grossPaisa: Paisa;
+  readonly itemDiscountPaisa: Paisa;
+  readonly billDiscountPaisa: Paisa;
+  readonly capPercent: number;
+}): boolean {
+  if (input.billDiscountPaisa <= 0) {
+    return false;
+  }
+  const cap = Math.floor((input.grossPaisa * Math.max(0, input.capPercent)) / 100);
+  return input.itemDiscountPaisa + input.billDiscountPaisa > cap;
+}

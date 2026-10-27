@@ -32,6 +32,7 @@ import {
   insertSaleLines,
   lockBatchesForProducts,
 } from '@/db/sales-queries';
+import { findUser } from '@/db/auth-queries';
 import { customerBalance } from '@/db/udhaar-queries';
 import type { TenantScope } from '@/db/scoped';
 import { packFactor, paisa, type Paisa } from '@/lib/branded';
@@ -125,12 +126,21 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
         ? paisa(await customerBalance(tx, command.customerId))
         : undefined;
 
+    // [PCN-014] An approval names one of this shop's owners, or it is not
+    // kept. Never refused: the receipt has already printed (Phase 7 rule 3);
+    // a sale over the limit without a valid approver is the day list's job.
+    const approver =
+      command.invoiceDiscountPaisa > 0 && command.invoiceDiscountApprovedBy
+        ? await findUser(tx, command.invoiceDiscountApprovedBy)
+        : undefined;
+
     await insertSale(tx, {
       id: command.saleId,
       receiptNumber: command.receiptNumber,
       customerId: command.customerId,
       subtotalPaisa: validation.subtotalPaisa,
       invoiceDiscountPaisa: command.invoiceDiscountPaisa,
+      invoiceDiscountApprovedBy: approver?.role === 'owner' ? approver.id : null,
       totalPaisa: validation.totalPaisa,
       cashPaisa: command.cashPaisa,
       creditPaisa: command.creditPaisa,

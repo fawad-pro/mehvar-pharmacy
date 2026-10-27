@@ -38,6 +38,10 @@ const PASSWORD_FIELDS = [
   { file: 'src/components/pin-switch-overlay.tsx', what: 'the PIN switch overlay (F10)' },
   { file: 'src/app/login/page.tsx', what: 'the device pairing screen' },
   { file: 'src/app/(counter)/settings/settings-surface.tsx', what: 'a new salesman’s PIN' },
+  {
+    file: 'src/app/(counter)/sale/payment-overlay.tsx',
+    what: 'the owner’s PIN for a bill discount (PCN-014)',
+  },
 ];
 
 /**

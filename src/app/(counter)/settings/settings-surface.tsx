@@ -11,6 +11,7 @@ import { testReceipt } from '@/client/print/receipt';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { ReceiptView } from '@/components/receipt-view';
+import { DEFAULT_BILL_DISCOUNT_CAP_PERCENT } from '@/domain/sales/cart';
 import type { UserListItem } from '@/db/auth-queries';
 
 import { LicenceSection } from './licence-section';
@@ -21,7 +22,7 @@ import {
   resetUserPinAction,
   setUserActiveAction,
   updateReceiptSettingsAction,
-  updateSaleStartsLooseAction,
+  updateSellingSettingsAction,
 } from './actions';
 
 /** Just the two fields this screen edits — see actions.ts for why this is not
@@ -55,6 +56,8 @@ export function SettingsSurface() {
 function SellingSettings() {
   const receiptContext = useReceiptContext();
   const [startsLoose, setStartsLoose] = useState<boolean | null>(null);
+  /** [PCN-014] As typed; checked on Save. */
+  const [cap, setCap] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
 
@@ -66,6 +69,7 @@ function SellingSettings() {
     void currentTenantSettingsAction().then((current) => {
       if (current && !cancelled) {
         setStartsLoose(current.saleStartsLoose ?? false);
+        setCap(String(current.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT));
       }
     });
     return () => {
@@ -79,7 +83,11 @@ function SellingSettings() {
     }
     setBusy(true);
     setDone(null);
-    const outcome = await updateSaleStartsLooseAction(startsLoose);
+    const capPercent = /^\d{1,3}$/.test(cap.trim()) ? Number(cap.trim()) : Number.NaN;
+    const outcome = await updateSellingSettingsAction({
+      saleStartsLoose: startsLoose,
+      billDiscountCapPercent: capPercent,
+    });
     // The counter holds its settings for the session, as with the receipt.
     if (outcome.ok) {
       await receiptContext?.reload();
@@ -111,6 +119,24 @@ function SellingSettings() {
                 Off: a sale starts in the strip (the smallest pack). Either way every unit is one
                 tap away on the line, and each product starts in the unit it was last sold in.
               </span>
+            </span>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Discount limit without the owner (%)
+            <input
+              autoComplete="off"
+              inputMode="numeric"
+              value={cap}
+              onChange={(event) => {
+                setCap(event.target.value);
+                setDone(null);
+              }}
+              className="border-line focus:border-green-600 h-touch w-24 rounded border px-3 outline-none"
+            />
+            <span className="text-ink/50 text-xs">
+              All discounts on a bill together — item discounts and the bill discount — as a share
+              of the bill before any discount. A bill discount over this needs the owner&rsquo;s
+              PIN. 0 means every bill discount does.
             </span>
           </label>
           <div className="flex items-center gap-3">

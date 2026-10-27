@@ -1,0 +1,2 @@
+ALTER TABLE "sales" ADD COLUMN "invoice_discount_approved_by" uuid;--> statement-breakpoint
+ALTER TABLE "sales" ADD CONSTRAINT "sales_invoice_discount_approved_by_users_id_fk" FOREIGN KEY ("invoice_discount_approved_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;

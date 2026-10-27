@@ -42,6 +42,7 @@ import { defaultSaleUnit, unitsOf } from '@/domain/catalog/units';
 import {
   addToCart,
   cartTotals,
+  DEFAULT_BILL_DISCOUNT_CAP_PERCENT,
   grossSubtotalPaisa,
   isPriceOverridden,
   lineTotal,
@@ -58,7 +59,7 @@ import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
-import { PaymentOverlay, type PaymentSplit } from './payment-overlay';
+import { PaymentOverlay, type BillDiscount, type PaymentSplit } from './payment-overlay';
 
 interface Committed {
   receiptNumber: string;
@@ -128,9 +129,9 @@ export function SaleSurface() {
       : null,
   );
 
-  // Discounts are per-line (`CartLine.lineDiscountPaisa`), so `cartTotals`
-  // needs no invoice-level discount argument — the subtotal it computes is
-  // already net of every line's own discount (`lineTotal` subtracts it).
+  // The cart's figures before payment: the subtotal is already net of every
+  // line's own discount (`lineTotal` subtracts it). [PCN-014] A bill discount
+  // is given on the payment screen, which owns it until the sale commits.
   const totals = useMemo(() => cartTotals(lines), [lines]);
 
   const stockByProduct = useMemo(() => {
@@ -225,13 +226,14 @@ export function SaleSurface() {
    * re-derivable from records at any time (Phase 5 invariant 3).
    */
   const commitWithSplit = useCallback(
-    async (split: PaymentSplit) => {
+    async (split: PaymentSplit, bill: BillDiscount) => {
       if (lines.length === 0 || busy || !receiptContext) {
         return;
       }
 
       const soldLines = lines;
-      const soldTotals = totals;
+      // [PCN-014] The bill discount given on the payment screen.
+      const soldTotals = cartTotals(lines, bill.discountPaisa);
       const soldCustomer = customer;
       const receiptNumber = receiptContext.nextReceiptNumber();
 
@@ -258,6 +260,7 @@ export function SaleSurface() {
           priceOverridden: isPriceOverridden(line),
         })),
         invoiceDiscountPaisa: soldTotals.invoiceDiscountPaisa,
+        invoiceDiscountApprovedBy: (bill.approvedBy?.id as Uuid | undefined) ?? null,
         cashPaisa: split.cashPaisa,
         creditPaisa: split.creditPaisa,
         changePaisa: split.changePaisa,
@@ -328,10 +331,12 @@ export function SaleSurface() {
         // discount — never `soldTotals.subtotalPaisa`, which sums `lineTotal`
         // (already net) and made Subtotal read identical to TOTAL whenever a
         // line was discounted. Discount is every line's own discount summed
-        // into the one row the receipt shows (no invoice-level discount UI
-        // exists any more, so `soldTotals.invoiceDiscountPaisa` is always 0).
+        // into one row; [PCN-014] the bill discount has a row of its own.
         subtotalPaisa: grossSubtotalPaisa(soldLines),
         discountPaisa: totalLineDiscountPaisa(soldLines),
+        ...(soldTotals.invoiceDiscountPaisa > 0
+          ? { billDiscountPaisa: soldTotals.invoiceDiscountPaisa }
+          : {}),
         totalPaisa: soldTotals.totalPaisa,
         cashPaisa: split.cashPaisa,
         tenderedPaisa: split.tenderedPaisa,
@@ -374,7 +379,6 @@ export function SaleSurface() {
       lines,
       busy,
       receiptContext,
-      totals,
       customer,
       index,
       capture,
@@ -695,15 +699,18 @@ export function SaleSurface() {
 
       {paying ? (
         <PaymentOverlay
-          totalPaisa={totals.totalPaisa}
+          subtotalPaisa={totals.subtotalPaisa}
+          grossPaisa={grossSubtotalPaisa(lines)}
+          itemDiscountPaisa={totalLineDiscountPaisa(lines)}
+          capPercent={receiptContext?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT}
           customerName={customer?.name ?? null}
           busy={busy}
           onCancel={() => {
             setPaying(false);
             focusSearch();
           }}
-          onCommit={(split) => {
-            void commitWithSplit(split);
+          onCommit={(split, bill) => {
+            void commitWithSplit(split, bill);
           }}
         />
       ) : null}

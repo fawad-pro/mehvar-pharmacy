@@ -147,6 +147,11 @@ export interface SaleCommand {
   readonly customerId: Uuid | null;
   readonly lines: readonly SaleLineCommand[];
   readonly invoiceDiscountPaisa: number;
+  /**
+   * [PCN-014] The owner who approved a bill discount over the limit, by PIN.
+   * Optional: absent on records captured before it existed.
+   */
+  readonly invoiceDiscountApprovedBy?: Uuid | null;
   readonly cashPaisa: number;
   readonly creditPaisa: number;
   readonly changePaisa: number;

@@ -127,6 +127,13 @@
       "when": 1793123321799,
       "tag": "0017_invoice_discount_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793124103620,
+      "tag": "0018_bill_discount_approval",
+      "breakpoints": true
     }
   ]
 }

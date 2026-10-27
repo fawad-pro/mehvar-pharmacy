@@ -131,6 +131,12 @@ export interface TenantSettings {
    * way. Absent reads as off: the strip, today's behaviour.
    */
   saleStartsLoose?: boolean;
+  /**
+   * [PCN-014] The most all discounts on a bill together may come to, as a
+   * percentage of the bill before any discount, before a bill discount needs
+   * the owner's PIN. Absent reads as 10; 0 means every bill discount does.
+   */
+  billDiscountCapPercent?: number;
 }
 
 /* ========================================================================== */
@@ -533,6 +539,13 @@ export const sales = pgTable(
     customerId: uuid('customer_id').references(() => customers.id),
     subtotalPaisa: bigint('subtotal_paisa', { mode: 'number' }).notNull(),
     invoiceDiscountPaisa: bigint('invoice_discount_paisa', { mode: 'number' }).notNull().default(0),
+    /**
+     * [PCN-014] The owner who approved a bill discount over the shop's limit
+     * with their PIN at the counter. Null when none was needed — or when a
+     * sale arrived claiming an approver who is not one of the shop's owners,
+     * which the owner's day list then shows as unapproved.
+     */
+    invoiceDiscountApprovedBy: uuid('invoice_discount_approved_by').references(() => users.id),
     totalPaisa: bigint('total_paisa', { mode: 'number' }).notNull(),
     cashPaisa: bigint('cash_paisa', { mode: 'number' }).notNull().default(0),
     creditPaisa: bigint('credit_paisa', { mode: 'number' }).notNull().default(0),

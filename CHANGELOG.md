@@ -2,6 +2,17 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## A bill discount at the counter (PCN-014)
+
+- **Charge Rs 2,000 for a Rs 2,080 bill.** On the payment screen press `%`
+  (or tap **Bill discount**), type the amount to collect, press Enter. The
+  screen then shows **Collect 2,000.00** as its biggest figure, with the bill
+  and the discount beneath. Typing it again never doubles the discount.
+- **A limit the owner sets.** Settings → Selling, 10% to start: all discounts
+  on a bill together. Over it, the owner types their PIN on the payment screen
+  and the screen says who approved; without it, Esc sells at the full amount.
+- **The receipt shows it.** Item Discount and Bill Discount are separate rows.
+
 ## Refunds give back what was paid (PCN-014, step 1)
 
 - **A return from a discounted bill refunds what was actually paid.** A bill

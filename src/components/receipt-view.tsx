@@ -90,7 +90,14 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
             <Row label="Subtotal" amountPaisa={receipt.subtotalPaisa} />
           ) : null}
           {receipt.discountPaisa ? (
-            <Row label="Discount" amountPaisa={-receipt.discountPaisa} />
+            <Row
+              label={receipt.billDiscountPaisa ? 'Item Discount' : 'Discount'}
+              amountPaisa={-receipt.discountPaisa}
+            />
+          ) : null}
+          {/* [PCN-014] Its own row, after the item discounts it comes after. */}
+          {receipt.billDiscountPaisa ? (
+            <Row label="Bill Discount" amountPaisa={-receipt.billDiscountPaisa} />
           ) : null}
           {receipt.totalPaisa !== undefined ? (
             refund ? (
