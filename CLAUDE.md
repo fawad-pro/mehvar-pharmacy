@@ -707,6 +707,23 @@ exception visibility.
   nowhere — twice — never showed. A spec that clicks is not evidence of a
   keyboard path (I1).
 
+## Things selling hardening part 3 established
+
+- **Once a step is awaited, clear what it used, not everything.** Awaiting
+  the print moved the cart's clear after it, and `setLines([])` then threw
+  away anything added meanwhile. Remove exactly the sold lines.
+- **A mutation that passes is a test that does not test.** The first slow-
+  answer Returns test passed with the guard removed, because the list on
+  screen already held the typed receipt. The case that needs the guard is a
+  list of ONE from an earlier search; build that case, then watch the
+  mutation fail.
+- **A unique test name must differ in letters, not digits.** `Shelf Item
+  <timestamp>` was found by search as the previous run's item; fuzzy search
+  forgives a digit. Use random letters.
+- **Every modal is an `OverlayBackdrop`.** The payment and settlement screens
+  had their own copies of its markup, so the focus trap would have missed
+  the two that matter most.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

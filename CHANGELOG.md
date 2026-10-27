@@ -2,6 +2,20 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Selling hardening, part 3: udhaar and returns
+
+- **"Saved" says where the money went.** An udhaar sale's confirmation now
+  reads "Rs 15.00 cash · Rs 20.00 on Rashid Sahib's udhaar"; it read exactly
+  like a cash sale.
+- **A return by keyboard.** On Returns, a typed or scanned receipt number and
+  Enter open that sale, and focus goes straight to how many came back; Enter
+  there confirms. Before, Enter did nothing and the typed quantity went
+  nowhere.
+- **Tab stays inside an open dialog.** It walked out of the payment screen
+  into the key bar behind it, where Enter left the sale.
+- **A sale clears only what it sold.** The cart was emptied after printing,
+  so a line added during the print was thrown away.
+
 ## Selling and receiving hardening, part 2
 
 - **Picking a customer or supplier by name and Enter picks the right one,
