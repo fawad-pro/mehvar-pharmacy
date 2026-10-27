@@ -22,6 +22,7 @@ import { miniStatement } from '@/domain/udhaar/settlement';
 import { settlementEffect } from '@/domain/udhaar/position';
 import { BalanceInline } from '@/components/balance-figure';
 import { CustomerPicker } from '@/components/customer-picker';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
@@ -135,12 +136,7 @@ export function SettleUdhaarOverlay({
           onCancel={onClose}
         />
       ) : (
-        <div
-          className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Settle udhaar"
-        >
+        <OverlayBackdrop label="Settle udhaar">
           <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
             <h2 className="text-green-900 mb-1 text-lg font-semibold">Settle udhaar</h2>
             <p className="text-ink/60 mb-4 text-sm">{step.customer.name}</p>
@@ -257,10 +253,7 @@ export function SettleUdhaarOverlay({
                     vocabulary; only "Paid" is a plain amount, because it is a
                     transaction rather than a position. */}
                 <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-3 text-sm">
-                  <BalanceRow
-                    label="Before"
-                    balancePaisa={step.statement.previousBalancePaisa}
-                  />
+                  <BalanceRow label="Before" balancePaisa={step.statement.previousBalancePaisa} />
                   <Row label="Paid" amountPaisa={Math.abs(step.statement.amountPaisa)} />
                   <BalanceRow label="Now" balancePaisa={step.statement.newBalancePaisa} bold />
                 </div>
@@ -278,7 +271,7 @@ export function SettleUdhaarOverlay({
               </>
             )}
           </div>
-        </div>
+        </OverlayBackdrop>
       )}
 
       {receipt ? <ReceiptView receipt={receipt} /> : null}

@@ -362,7 +362,11 @@ export function SaleSurface() {
         clearPrinted();
       }
 
-      setLines([]);
+      // Exactly the lines this sale sold, not whatever the cart holds now:
+      // the print above is awaited, and a line added meanwhile is the next
+      // sale's, which a blanket clear threw away.
+      const sold = new Set(soldLines.map((line) => line.lineId));
+      setLines((current) => current.filter((line) => !sold.has(line.lineId)));
       setExpiredPack(null);
       setCustomer(null);
       setPaying(false);
@@ -660,6 +664,17 @@ export function SaleSurface() {
               <p className="numeral text-ink/70">
                 {formatPaisa(paisa(lastSale.totalPaisa), { withSymbol: true })}
               </p>
+              {/* Where the money went, said where the operator looks: an
+                  udhaar sale read exactly like a cash one. */}
+              {(lastSale.receipt.creditPaisa ?? 0) > 0 && lastSale.receipt.customerName ? (
+                <p className="numeral text-ink/70">
+                  {(lastSale.receipt.cashPaisa ?? 0) > 0
+                    ? `${formatPaisa(paisa(lastSale.receipt.cashPaisa ?? 0), { withSymbol: true })} cash · `
+                    : ''}
+                  {formatPaisa(paisa(lastSale.receipt.creditPaisa ?? 0), { withSymbol: true })} on{' '}
+                  {lastSale.receipt.customerName}&rsquo;s udhaar
+                </p>
+              ) : null}
               {/* D2 made visible at the moment it happens, not only in the day view. */}
               {lastSale.pendingUnits > 0 ? (
                 <p className="text-amber mt-1">

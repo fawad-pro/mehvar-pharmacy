@@ -30,6 +30,7 @@ import {
   splitPayment,
 } from '@/domain/sales/cart';
 import { keyFor } from '@/client/keyboard/registry';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { formatPaisa, subtractPaisa } from '@/lib/money';
 import { ZERO_PAISA, type Paisa } from '@/lib/branded';
@@ -172,12 +173,8 @@ export function PaymentOverlay({
   const discounted = bill.discountPaisa > 0;
 
   return (
-    <div
-      className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Payment"
-    >
+    // No onDismiss: Esc, deliberately pressed, is the only way out of this one.
+    <OverlayBackdrop label="Payment">
       <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
         <h2 className="text-green-900 mb-4 text-lg font-semibold">Payment</h2>
 
@@ -394,6 +391,6 @@ export function PaymentOverlay({
           </button>
         </div>
       </div>
-    </div>
+    </OverlayBackdrop>
   );
 }
