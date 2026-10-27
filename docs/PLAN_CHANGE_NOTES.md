@@ -1859,9 +1859,12 @@ go wrong:
 
   | Item | Price | Item discount | Line total | Share of bill discount | Paid |
   |---|---|---|---|---|---|
-  | Panadol | 500 | −50 | 450 | −17 | 433 |
-  | Augmentin | 1,630 | — | 1,630 | −63 | 1,567 |
-  | **Bill** | 2,130 | −50 | **2,080** | **−80** | **2,000** |
+  | Panadol | 500.00 | −50.00 | 450.00 | −17.31 | 432.69 |
+  | Augmentin | 1,630.00 | — | 1,630.00 | −62.69 | 1,567.31 |
+  | **Bill** | 2,130.00 | −50.00 | **2,080.00** | **−80.00** | **2,000.00** |
+
+  (Shares are worked in paisa, so they are exact to the paisa, not rounded
+  to rupees.)
 
 - **Refunds** are worked out cumulatively from what each line paid, the same
   way stock is costed (Session 2): returning `n` of `q` units
@@ -1940,4 +1943,21 @@ the bill before any discount, 10% by default and set by the owner in
 Settings; a cap of 0 means every bill discount needs the owner's PIN; no
 rounding shortcut for now.
 
-**Applied.** Not yet.
+**Applied.** In steps, on `claude/inspiring-brahmagupta-cf9nfj`.
+
+- *Step 1, refunds (2026-10-27).* `invoiceDiscountShares` (`domain/sales/
+  sale-command.ts`) is the one rule for how a bill discount falls on a sale's
+  lines; until step 2 stores the shares, `returnableLinesForSale` computes
+  them from the sale. `refundForLine` is cumulative from what the line paid
+  (`linePaidPaisa`), and a return may not name the same line twice. The return
+  receipt page now shows each line's refund by the same rule: it had shown the
+  line's charge before its item discount, so its lines did not add up to the
+  refund. All five integration tests failed on the previous code (a full
+  return of the note's bill refunded Rs 2,080). The crown suite now gives udhaar
+  sales bill discounts too, sometimes returns a sale whole, and asserts
+  that a sale's refunds never exceed its total and that a sale returned whole
+  refunds exactly it; with the share ignored it fails. It runs 16 histories
+  instead of 4, because the guard that checks each rare event was actually
+  generated failed on some seeds with fewer; it now passes on 25 seeds.
+- Steps 2–4 (stored shares and backfill; the counter, cap and approval; Day
+  screen and receipt page): not yet.

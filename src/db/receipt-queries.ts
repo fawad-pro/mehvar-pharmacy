@@ -29,6 +29,7 @@ import 'server-only';
 
 import { desc, eq, ilike, inArray, or, sum } from 'drizzle-orm';
 
+import { returnableLinesForSale } from './returns-queries';
 import type { TenantScope } from './scoped';
 import {
   customers,
@@ -41,7 +42,7 @@ import {
   users,
 } from './schema';
 
-import { storedLineGrossPaisa } from '@/domain/sales/sale-command';
+import { refundForLine } from '@/domain/sales/return-command';
 import type { Uuid } from '@/lib/uuid';
 
 /**
@@ -507,6 +508,7 @@ export async function findReceipt(
     const lineRows = await scope.db
       .select({
         lineId: saleReturnLines.id,
+        saleLineId: saleReturnLines.saleLineId,
         productId: saleLines.productId,
         productName: products.name,
         qtyBase: saleReturnLines.qtyBase,
@@ -514,8 +516,6 @@ export async function findReceipt(
         packLevels: products.packLevels,
         enteredUnitLevel: saleLines.enteredUnitLevel,
         unitPricePaisa: saleLines.unitPricePaisa,
-        originalQtyBase: saleLines.qtyBase,
-        originalLineAmountPaisa: saleLines.lineAmountPaisa,
         lineDiscountPaisa: saleLines.lineDiscountPaisa,
         priceOverridden: saleLines.priceOverridden,
       })
@@ -523,6 +523,34 @@ export async function findReceipt(
       .innerJoin(saleLines, eq(saleReturnLines.saleLineId, saleLines.id))
       .innerJoin(products, eq(saleLines.productId, products.id))
       .where(scope.scopeOf(saleReturnLines, eq(saleReturnLines.saleReturnId, saleReturn.id)));
+
+    // The sold lines as a refund reads them (their bill-discount shares
+    // included), and what returns made BEFORE this one had already taken.
+    const soldBy = new Map(
+      (await returnableLinesForSale(scope, saleReturn.againstSaleId as Uuid)).map((line) => [
+        line.saleLineId,
+        line,
+      ]),
+    );
+    const earlier = await scope.db
+      .select({
+        saleLineId: saleReturnLines.saleLineId,
+        qtyBase: saleReturnLines.qtyBase,
+        returnId: saleReturns.id,
+        at: saleReturns.createdAt,
+      })
+      .from(saleReturnLines)
+      .innerJoin(saleReturns, eq(saleReturnLines.saleReturnId, saleReturns.id))
+      .where(scope.scopeOf(saleReturnLines, eq(saleReturns.saleId, saleReturn.againstSaleId)));
+    const returnedBefore = new Map<string, number>();
+    for (const row of earlier) {
+      const before =
+        row.at.getTime() < saleReturn.createdAt.getTime() ||
+        (row.at.getTime() === saleReturn.createdAt.getTime() && row.returnId < saleReturn.id);
+      if (before) {
+        returnedBefore.set(row.saleLineId, (returnedBefore.get(row.saleLineId) ?? 0) + row.qtyBase);
+      }
+    }
 
     return {
       kind: 'return',
@@ -535,27 +563,25 @@ export async function findReceipt(
       origin: 'online',
       // A return's own lines are what came back; nothing comes back from a
       // return, so the column is structurally zero rather than queried.
-      lines: lineRows.map(({ originalQtyBase, originalLineAmountPaisa, ...row }) => ({
-        ...row,
-        returnedBase: 0,
-        unitName: null,
-        unitCount: null,
-        unitPricePaisaEntered: null,
-        // [PCN-012] The returned share of what the original line charged,
-        // rounded down — the same share `refundForLine` refunds.
-        lineAmountPaisa:
-          originalQtyBase > 0
-            ? Math.floor(
-                (storedLineGrossPaisa({
-                  lineAmountPaisa: originalLineAmountPaisa,
-                  unitPricePaisa: row.unitPricePaisa,
-                  qtyBase: originalQtyBase,
-                }) *
-                  row.qtyBase) /
-                  originalQtyBase,
+      lines: lineRows.map(({ saleLineId, ...row }) => {
+        const sold = soldBy.get(saleLineId);
+        return {
+          ...row,
+          returnedBase: 0,
+          unitName: null,
+          unitCount: null,
+          unitPricePaisaEntered: null,
+          // [PCN-014] What this return refunded for the line — the same
+          // cumulative share `commitReturn` paid, counted from what earlier
+          // returns had already taken, so the lines add up to the refund.
+          lineAmountPaisa: sold
+            ? refundForLine(
+                { ...sold, alreadyReturnedBase: returnedBefore.get(saleLineId) ?? 0 },
+                row.qtyBase,
               )
             : 0,
-      })),
+        };
+      }),
       againstReceiptNumber: saleReturn.againstReceiptNumber,
       againstSaleId: saleReturn.againstSaleId,
       cashOutPaisa: saleReturn.cashOutPaisa,

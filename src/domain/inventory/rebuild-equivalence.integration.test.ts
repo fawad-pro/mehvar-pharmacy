@@ -69,6 +69,7 @@ import {
   purchases,
   saleLineAllocations,
   saleLines,
+  saleReturnLines,
   saleReturns,
   sales,
   supplierPayments,
@@ -96,7 +97,13 @@ const suite = process.env.DATABASE_URL ? describe : describe.skip;
 
 /** Deterministic by default; override to reproduce a reported failure. */
 const SEED = Number(process.env.REBUILD_SEED ?? 20260730);
-const HISTORIES = Number(process.env.REBUILD_HISTORIES ?? 4);
+/*
+ * 16 since PCN-013/014: with that many rare event kinds (cancellations, moves
+ * into an existing product, returns against a bill discount), 4 histories of
+ * 40 events left some unreached on some seeds, and the "actually exercised"
+ * guard below — rightly — failed. Checked across ten seeds.
+ */
+const HISTORIES = Number(process.env.REBUILD_HISTORIES ?? 16);
 const EVENTS_PER_HISTORY = Number(process.env.REBUILD_EVENTS ?? 40);
 
 /**
@@ -164,6 +171,9 @@ const observed = {
   paymentsReversed: 0,
   supplierPaymentsReversed: 0,
   cashMovementsReversed: 0,
+  /** [PCN-014] Returns against a sale with a bill discount, and such sales returned whole. */
+  returnsAgainstBillDiscounts: 0,
+  discountedSalesReturnedWhole: 0,
   /** [PCN-013] Products whose stock moved into another the shop already had. */
   productsMovedInto: 0,
   /** [PCN-013] Stock removed as entered by mistake, and refused on invoiced stock. */
@@ -340,7 +350,6 @@ async function applyRandomEvent(world: World): Promise<void> {
     if (withStock.length === 0) {
       return;
     }
-    const batch = pick(random, withStock);
     // Now and then the operator asks for more than the batch has — a typo, or
     // a sale that took the units while the screen was open. The refusal must
     // leave no adjustment behind, or the next verification sees a mismatch.
@@ -353,11 +362,21 @@ async function applyRandomEvent(world: World): Promise<void> {
       'entered_by_mistake',
     ] as const);
     // [PCN-013] Only stock typed in by hand may be removed as never there.
-    const [origin] =
-      batch.source === 'adjustment'
-        ? await tenant.scope.select(adjustments, eq(adjustments.id, batch.sourceId))
-        : [];
-    const byHand = origin?.reason === 'opening_stock' || origin?.reason === 'count_correction';
+    // Such batches are a minority, so "entered by mistake" usually aims at
+    // one half the time — and otherwise at any batch, so the refusal is reached too.
+    const handTyped = new Set(
+      (await tenant.scope.select(adjustments))
+        .filter((row) => row.reason === 'opening_stock' || row.reason === 'count_correction')
+        .map((row) => row.id),
+    );
+    const isByHand = (candidate: (typeof withStock)[number]) =>
+      candidate.source === 'adjustment' && handTyped.has(candidate.sourceId);
+    const typedBatches = withStock.filter(isByHand);
+    const batch =
+      reason === 'entered_by_mistake' && typedBatches.length > 0 && random() < 0.5
+        ? pick(random, typedBatches)
+        : pick(random, withStock);
+    const byHand = isByHand(batch);
 
     const result = await commitAdjustment(tenant.scope, {
       adjustmentId: uuidv7(),
@@ -402,7 +421,11 @@ async function applyRandomEvent(world: World): Promise<void> {
     const lines = Array.from({ length: lineCount }, () =>
       randomSaleLine(random, pick(random, world.products), 0, false),
     );
-    const total = lines.reduce((sum, line) => sum + lineGross(line), 0);
+    const subtotal = lines.reduce((sum, line) => sum + lineGross(line), 0);
+    // [PCN-014] Bill discounts on udhaar sales too: the customer owes the
+    // discounted total, and a return of it gives back what each line paid.
+    const invoiceDiscount = random() < 0.3 ? Math.min(subtotal, between(random, 1, 300)) : 0;
+    const total = subtotal - invoiceDiscount;
     // Sometimes fully on credit, sometimes a cash/credit split.
     const cashPaisa = random() < 0.4 ? 0 : between(random, 0, total);
     const creditPaisa = total - cashPaisa;
@@ -412,7 +435,7 @@ async function applyRandomEvent(world: World): Promise<void> {
       receiptNumber: `A-${(world.receiptCounter += 1)}`,
       customerId,
       lines,
-      invoiceDiscountPaisa: 0,
+      invoiceDiscountPaisa: invoiceDiscount,
       cashPaisa,
       creditPaisa,
       changePaisa: 0,
@@ -475,13 +498,39 @@ async function applyRandomEvent(world: World): Promise<void> {
     // are the fallback, so `issued` is overwhelmingly cash. Randomness is
     // worth keeping; leaving a whole refund path to chance is not.
     const creditSales = world.issued.filter((sale) => sale.customerId !== null);
+    // [PCN-014] Likewise a sale with a bill discount, often enough that one
+    // is returned whole: only then can a refund exceed what it collected.
+    const discountedSales = world.issued.filter((sale) => sale.invoiceDiscountPaisa > 0);
+    const which = random();
     const chosen =
-      creditSales.length > 0 && random() < 0.5
-        ? pick(random, creditSales)
-        : pick(random, world.issued);
+      discountedSales.length > 0 && which < 0.25
+        ? pick(random, discountedSales)
+        : creditSales.length > 0 && which < 0.75
+          ? pick(random, creditSales)
+          : pick(random, world.issued);
     const lines = await returnableLinesForSale(tenant.scope, chosen.saleId);
     const returnable = lines.filter((line) => line.qtyBase - line.alreadyReturnedBase > 0);
     if (returnable.length === 0) {
+      return;
+    }
+    if (random() < (chosen.invoiceDiscountPaisa > 0 ? 0.6 : 0.3)) {
+      // Everything still on the sale comes back, in one return.
+      const whole = await commitReturn(tenant.scope, {
+        returnId: uuidv7(),
+        saleId: chosen.saleId,
+        receiptNumber: `A-${(world.receiptCounter += 1)}`,
+        lines: returnable.map((each) => ({
+          saleLineId: each.saleLineId,
+          qtyBase: each.qtyBase - each.alreadyReturnedBase,
+          restockBatchId: each.sourceBatches[0]?.batchId ?? null,
+        })),
+        refundMethod: chosen.customerId && random() < 0.6 ? 'credit' : 'cash',
+        reasonNote: null,
+      });
+      if (whole.ok) {
+        observed.returnsCommitted += 1;
+        if (whole.value.creditReducedPaisa > 0) observed.creditReducingReturns += 1;
+      }
       return;
     }
     const line = pick(random, returnable);
@@ -490,7 +539,7 @@ async function applyRandomEvent(world: World): Promise<void> {
     // Sometimes a write-off (no source batch known, or the operator chooses
     // not to restock), sometimes back onto the shelf.
     const restockBatchId = random() < 0.7 ? (line.sourceBatches[0]?.batchId ?? null) : null;
-    const refundMethod = chosen.customerId && random() < 0.4 ? 'credit' : 'cash';
+    const refundMethod = chosen.customerId && random() < 0.6 ? 'credit' : 'cash';
 
     const result = await commitReturn(tenant.scope, {
       returnId: uuidv7(),
@@ -509,10 +558,13 @@ async function applyRandomEvent(world: World): Promise<void> {
     return;
   }
 
-  if (roll < 0.56 && random() < 0.25) {
-    // [PCN-013] A cash movement typed wrong, cancelled.
-    const recorded = await tenant.scope.select(cashMovements);
-    if (recorded.length === 0) return;
+  const recordedMovements =
+    roll >= 0.52 && roll < 0.56 ? await tenant.scope.select(cashMovements) : [];
+  if (roll < 0.56 && recordedMovements.length > 0 && random() < 0.5) {
+    // [PCN-013] A cash movement typed wrong, cancelled. With nothing yet to
+    // cancel the band records a movement instead: returning empty-handed
+    // left whole runs of histories without a single cancellation.
+    const recorded = recordedMovements;
     const cancelled = await commitCashReversal(tenant.scope, {
       reversalId: uuidv7(),
       movementId: pick(random, recorded).id as Uuid,
@@ -617,28 +669,6 @@ async function applyRandomEvent(world: World): Promise<void> {
     const onHand = (await tenant.scope.select(batches)).filter(
       (batch) => batch.productId === old.id && batch.qtyRemainingBase > 0,
     );
-    const others = world.products.filter((product) => product.id !== old.id);
-    if (others.length > 0 && random() < 0.4) {
-      // [PCN-013] Into a product the shop already has — which may have sold
-      // short, so the moved stock answers its shortfalls (D2).
-      const into = pick(random, others);
-      const moved = await replaceIntoProduct(tenant.scope, {
-        oldProductId: old.id,
-        intoProductId: into.id,
-        batches: onHand.map((batch) => ({
-          batchId: batch.id as Uuid,
-          expectedRemainingBase: batch.qtyRemainingBase,
-          newQtyBase: batch.qtyRemainingBase,
-        })),
-        note: 'generated move into an existing product',
-      });
-      if (moved.ok) {
-        observed.productsMovedInto += 1;
-        observed.resolvedPendingBase += moved.value.resolvedPendingBase;
-        world.products[index] = into;
-      }
-      return;
-    }
     const replaced = await replaceProduct(tenant.scope, {
       oldProductId: old.id,
       product: {
@@ -694,6 +724,36 @@ async function applyRandomEvent(world: World): Promise<void> {
       purchaseId: null,
       note: null,
     });
+    return;
+  }
+
+  if (roll < 0.72) {
+    // [PCN-013] Stock moved into a product the shop already has — which may
+    // have sold short, so the moved stock answers its shortfalls (D2). A band
+    // of its own: as a share of the replace band it was too rare to rely on.
+    const index = between(random, 0, world.products.length - 1);
+    const old = world.products[index]!;
+    const others = world.products.filter((product) => product.id !== old.id);
+    if (others.length === 0) return;
+    const onHand = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.productId === old.id && batch.qtyRemainingBase > 0,
+    );
+    const into = pick(random, others);
+    const moved = await replaceIntoProduct(tenant.scope, {
+      oldProductId: old.id,
+      intoProductId: into.id,
+      batches: onHand.map((batch) => ({
+        batchId: batch.id as Uuid,
+        expectedRemainingBase: batch.qtyRemainingBase,
+        newQtyBase: batch.qtyRemainingBase,
+      })),
+      note: 'generated move into an existing product',
+    });
+    if (moved.ok) {
+      observed.productsMovedInto += 1;
+      observed.resolvedPendingBase += moved.value.resolvedPendingBase;
+      world.products[index] = into;
+    }
     return;
   }
 
@@ -984,6 +1044,38 @@ async function assertInvariants(world: World, label: string): Promise<void> {
     );
   }
 
+  /* [PCN-014] A sale's refunds never exceed what it collected, and a sale
+     returned whole refunds exactly that — whatever its item and bill
+     discounts, and however many returns it took. */
+  const returnedBySale = new Map<string, number>();
+  for (const row of allReturns) {
+    returnedBySale.set(
+      row.saleId,
+      (returnedBySale.get(row.saleId) ?? 0) + row.cashOutPaisa + row.creditReducedPaisa,
+    );
+  }
+  const soldLines = await tenant.scope.select(saleLines);
+  const returnedLines = await tenant.scope.select(saleReturnLines);
+  const returnedByLine = new Map<string, number>();
+  for (const row of returnedLines) {
+    returnedByLine.set(row.saleLineId, (returnedByLine.get(row.saleLineId) ?? 0) + row.qtyBase);
+  }
+  for (const sale of allSales) {
+    const refunded = returnedBySale.get(sale.id) ?? 0;
+    expect(
+      refunded,
+      `${label}: ${sale.receiptNumber} refunded more than it collected`,
+    ).toBeLessThanOrEqual(sale.totalPaisa);
+    const own = soldLines.filter((line) => line.saleId === sale.id);
+    const wholeBack =
+      own.length > 0 && own.every((line) => (returnedByLine.get(line.id) ?? 0) === line.qtyBase);
+    if (wholeBack) {
+      expect(refunded, `${label}: ${sale.receiptNumber} returned whole`).toBe(sale.totalPaisa);
+      if (sale.invoiceDiscountPaisa > 0) observed.discountedSalesReturnedWhole += 1;
+    }
+    if (refunded > 0 && sale.invoiceDiscountPaisa > 0) observed.returnsAgainstBillDiscounts += 1;
+  }
+
   /* PCN-002/PCN-003 — sales, payments and returns share one receipt sequence:
      no number may appear on more than one of the three. */
   const saleReceipts = new Set(allSales.map((sale) => sale.receiptNumber));
@@ -1177,6 +1269,14 @@ suite('rebuild equivalence — randomized histories', () => {
       'no adjustment was ever refused — the refusal path went untested',
     ).toBeGreaterThan(0);
     expect(observed.paymentsReversed, 'no udhaar payment was ever cancelled').toBeGreaterThan(0);
+    expect(
+      observed.returnsAgainstBillDiscounts,
+      'no return was ever made against a sale with a bill discount',
+    ).toBeGreaterThan(0);
+    expect(
+      observed.discountedSalesReturnedWhole,
+      'no sale with a bill discount was ever returned whole — the refund cap proved nothing',
+    ).toBeGreaterThan(0);
     expect(
       observed.supplierPaymentsReversed,
       'no supplier payment was ever cancelled',

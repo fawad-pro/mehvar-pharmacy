@@ -86,6 +86,60 @@ export function storedLineGrossPaisa(line: {
   return line.lineAmountPaisa ?? line.unitPricePaisa * line.qtyBase;
 }
 
+/**
+ * [PCN-014] How a bill discount falls on the lines of its sale.
+ *
+ * In proportion to each line's total after its own item discount, by largest
+ * remainder, so the shares add up to exactly the discount; equal remainders
+ * go to the line whose id sorts first, so the answer never depends on the
+ * order the lines happen to be read in. One rule for the counter's receipt,
+ * the stored shares, the backfill and every refund.
+ */
+export function invoiceDiscountShares(
+  lines: readonly { readonly id: string; readonly totalPaisa: number }[],
+  discountPaisa: number,
+): Map<string, number> {
+  const shares = new Map(lines.map((line) => [line.id, 0]));
+  const base = lines.reduce((sum, line) => sum + Math.max(0, line.totalPaisa), 0);
+  if (discountPaisa <= 0 || base <= 0) return shares;
+
+  // BigInt: discount × line total can pass 2^53 on a large enough bill.
+  const discount = BigInt(Math.min(discountPaisa, base));
+  const whole = BigInt(base);
+  const parts = lines.map((line) => {
+    const exact = discount * BigInt(Math.max(0, line.totalPaisa));
+    return { id: line.id, share: exact / whole, remainder: exact % whole };
+  });
+  let left = discount - parts.reduce((sum, part) => sum + part.share, 0n);
+  const byRemainder = [...parts].sort((a, b) =>
+    a.remainder === b.remainder ? (a.id < b.id ? -1 : 1) : a.remainder > b.remainder ? -1 : 1,
+  );
+  for (const part of byRemainder) {
+    if (left === 0n) break;
+    part.share += 1n;
+    left -= 1n;
+  }
+  for (const part of parts) shares.set(part.id, Number(part.share));
+  return shares;
+}
+
+/**
+ * [PCN-014] What a sold line actually paid: its charge, less its own item
+ * discount, less its share of the bill discount. Never negative.
+ */
+export function linePaidPaisa(line: {
+  readonly lineAmountPaisa: number | null;
+  readonly unitPricePaisa: number;
+  readonly qtyBase: number;
+  readonly lineDiscountPaisa: number;
+  readonly invoiceDiscountSharePaisa: number;
+}): number {
+  return Math.max(
+    0,
+    storedLineGrossPaisa(line) - line.lineDiscountPaisa - line.invoiceDiscountSharePaisa,
+  );
+}
+
 export interface SaleCommand {
   /** Client-generated (ADR-3). The idempotency key. */
   readonly saleId: Uuid;

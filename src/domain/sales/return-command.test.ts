@@ -15,6 +15,7 @@ const LINE: ReturnableSaleLine = {
   unitPricePaisa: 350,
   lineAmountPaisa: null,
   lineDiscountPaisa: 0,
+  invoiceDiscountSharePaisa: 0,
 };
 
 function command(overrides: Partial<ReturnCommand> = {}): ReturnCommand {
@@ -76,6 +77,7 @@ describe('totalRefundPaisa', () => {
       unitPricePaisa: 720,
       lineAmountPaisa: null,
       lineDiscountPaisa: 0,
+      invoiceDiscountSharePaisa: 0,
     };
     const cmd = command({
       lines: [
@@ -137,6 +139,20 @@ describe('validateReturnCommand', () => {
       reason: 'exceeds_sold_quantity',
       saleLineId: 'line-1',
     });
+  });
+
+  it('[PCN-014] rejects a line named twice, which could return more than was sold', () => {
+    const result = validateReturnCommand(
+      command({
+        lines: [
+          { saleLineId: 'line-1', qtyBase: 6, restockBatchId: null },
+          { saleLineId: 'line-1', qtyBase: 6, restockBatchId: null },
+        ],
+      }),
+      { hasCustomer: false },
+      [LINE],
+    );
+    expect(result).toEqual({ ok: false, reason: 'invalid_quantity' });
   });
 
   it('rejects a credit refund against a sale with no customer', () => {

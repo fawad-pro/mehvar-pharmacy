@@ -2,6 +2,18 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Refunds give back what was paid (PCN-014, step 1)
+
+- **A return from a discounted bill refunds what was actually paid.** A bill
+  of Rs 2,080 charged Rs 2,000 used to refund Rs 2,080 when returned whole;
+  each item now carries its share of the bill discount, and the whole bill
+  refunds exactly Rs 2,000.
+- **Returning in parts ends at the right amount.** Three tablets of a
+  Rs 10.00 line returned one at a time used to refund Rs 9.99; they now refund
+  Rs 10.00.
+- **A return receipt's lines add up to its refund.** They showed each item's
+  price before its discount.
+
 ## Every typing mistake has a fix that tells the truth (PCN-013)
 
 - **Customers and suppliers can be corrected.** Fix a name or phone from
