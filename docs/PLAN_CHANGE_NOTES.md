@@ -1787,3 +1787,157 @@ each writer was broken on purpose and seen to fail it.
 Not addressed: option 5 (a purchase against the wrong supplier) awaits its
 design check. A reversal is not an outbox record, so it needs a connection to
 the shop's computer.
+
+## PCN-014 — a bill-level discount the counter can give, and the accounts can carry
+
+Session: pilot improvements · Raised: 2026-10-27 · Status: decided
+
+**Plan sections in tension.** Phase 5 §2 gives each sale line "discount (line
+or invoice level)" and invariant 4 states "Sale total = Σ line totals −
+invoice discount". Phase 9 carries `sales.invoice_discount_paisa`, with a
+CHECK that `total = subtotal − invoice_discount`. I1 lists discount among the
+things a sale completes by keyboard; T1 says every discount is visible in the
+owner's daily view. Phase 10's right rail shows "TOTAL … then discount".
+
+**The contradiction or gap.** The plan allows a bill discount, but the product
+does not support one, and if it were simply switched back on the books would
+go wrong:
+
+1. **No way to give one.** The counter's bill-discount field was removed on
+   2026-09-22 (`9dc7906`) in favour of per-line discounts. The column, the
+   CHECK and `SaleCommand.invoiceDiscountPaisa` remain, so every sale since
+   carries 0. The pilot owner wants it: a bill of Rs 2,080 is charged Rs 2,000,
+   and the Rs 80 is a discount. Line discounts stay.
+2. **Refunds ignore it.** `refundForLine` refunds each line's own net amount
+   and never learns about the bill discount. Return everything from a
+   Rs 2,000 bill that was Rs 2,080 before its discount and Rs 2,080 is
+   refunded: Rs 80 leaves the drawer that never came in, expected cash is
+   wrong by that much, and revenue drops by more than the sale earned. The
+   crown suite already generates bill discounts on one cash sale in five and
+   returns against them, but nothing asserts that a sale's refunds stay within
+   what it collected, so it has never failed.
+3. **Partial refunds round each return separately.** A return refunds
+   `⌊charged × returned ÷ sold⌋`. Returned one tablet at a time, a Rs 10.00 line
+   of 3 refunds 3.33 + 3.33 + 3.33 = Rs 9.99, a paisa short of what was paid.
+   This matters little today, but every return will include a share of a bill
+   discount once this note is built, so the paisa errors stop being rare.
+4. **A bill discount is invisible to the owner.** `overridesAndDiscountsInRange`
+   lists line discounts and price overrides only (T1). The receipt and the
+   receipt page fold every discount into one "Discount" figure, so days later
+   nobody can tell an item discount from a bill discount, or how a bill
+   discount fell on each item.
+5. **Nothing bounds it.** A salesperson could take a bill to zero, and nobody
+   would see it.
+
+**How it works** (the owner's direction of 2026-10-27, stated as rules):
+
+- **Order.** Item discounts come off first; the bill discount comes off what is
+  left. `subtotal` stays Σ line totals, already net of item discounts, as
+  Phase 9 has it; `total = subtotal − invoice_discount`.
+- **Entry.** The salesperson types the **amount to collect** ("2000"); Mehvar
+  works out the discount (`subtotal − amount`). The field holds a final
+  figure, not something to take off, so typing it twice is still Rs 2,000 and
+  a discount cannot be added twice by accident. There is one bill discount per
+  sale; entering again replaces it. An amount above the subtotal is refused; an
+  amount equal to it clears the discount.
+- **Cap.** A setting the owner controls in Settings, **10% by default**, of the
+  bill after item discounts. Within the cap the sale goes through. Above it,
+  the owner's PIN is required at the counter, and the sale records who approved
+  it (`invoice_discount_approved_by`).
+- **The amount to pay is unmistakable.** On the payment screen **"Collect
+  Rs 2,000"** is the largest figure, with "Bill Rs 2,080 · Discount Rs 80"
+  beneath. The receipt prints Subtotal / Item discounts / Bill discount /
+  **TOTAL**, each only when it applies.
+- **Each line's share.** The bill discount is shared across the lines in
+  proportion to their totals after item discounts, by largest remainder, so
+  the shares add up to exactly the discount. Each share is stored on its
+  `sale_lines` row when the sale is committed (`invoice_discount_share_paisa`,
+  new). A row's figures never change after it is written (ADR-1), and storing
+  the share means a later change to the rule cannot change past refunds. Every
+  line therefore has a **paid** amount: its total after the item discount,
+  minus its share.
+
+  | Item | Price | Item discount | Line total | Share of bill discount | Paid |
+  |---|---|---|---|---|---|
+  | Panadol | 500 | −50 | 450 | −17 | 433 |
+  | Augmentin | 1,630 | — | 1,630 | −63 | 1,567 |
+  | **Bill** | 2,130 | −50 | **2,080** | **−80** | **2,000** |
+
+- **Refunds** are worked out cumulatively from what each line paid, the same
+  way stock is costed (Session 2): returning `n` of `q` units
+  refunds `R(after) − R(before)`, where `R(k) = ⌊paid × k ÷ q⌋`. Every
+  partial return rounds against the customer, never in their favour, and a
+  line returned whole refunds exactly what it paid. So a full return of the
+  bill above refunds exactly Rs 2,000.
+- **Revenue and margin** need no new rule: revenue already sums
+  `sales.total_paisa` (after the discount) less refunds, and cost is
+  unchanged, so profit falls by the full discount. Once refunds are fixed, a
+  returned item takes out what was actually paid for it.
+- **Udhaar.** The discount comes off before the cash/udhaar split, so the
+  customer owes the discounted total.
+- **Visible to the owner (T1).** Every bill discount joins "Discounts and price
+  changes" on the Day screen, with who gave it, who approved it if it was over
+  the cap, and the bill before and after. The Day screen states the day's
+  total discount. The receipt page shows each line's price, item discount,
+  share of the bill discount and amount paid, so a bill can be checked days
+  later.
+- **Offline (ADR-3, ADR-5).** `SaleCommand` already carries the discount; the
+  share is computed by one pure function in `domain/sales`, which the counter
+  uses for the receipt and `commitSale` for the stored rows, so both agree. A
+  discount within the cap works offline. The owner PIN is checked by the
+  server, so a discount over the cap needs a connection; offline, the counter
+  says so and the sale goes through at the full amount or within the cap
+  (P2). Sync never refuses a sale over the cap: its receipt is already
+  printed. It is recorded, and the exception list flags it if it arrives
+  without an approval.
+- **History.** Sales made before 2026-09-22 may carry a bill discount (the
+  field existed then). The migration fills their shares with the same rule,
+  and a test pins the SQL and the TypeScript to the same answer.
+
+**Options.**
+
+- **A. As above** (recommended): store each line's share, refund cumulatively
+  from what each line paid, set the cap in Settings, and require the owner's
+  PIN above it.
+- B. Work shares out when a return is made, with nothing stored. Rejected:
+  every past refund would depend on the code that runs today, and the receipt
+  page and the export would each need the same rule repeated.
+- C. Treat the bill discount as a separate kind of record. Rejected: Phase 5
+  and Phase 9 already make it part of the sale, and every report already uses
+  the total after the discount.
+
+**Recommendation.** A, built as: the refund fix and its tests first (they are
+wrong today in histories the crown suite already generates), then the share
+column and its backfill, then the counter field, cap, approval, payment
+screen and receipt, then the Day screen and receipt page.
+
+Tests: a sale's refunds never exceed its total; a full return refunds exactly
+the total; shares sum exactly to the discount; refunds in one go and in parts
+end at the same amount. Each is watched fail on today's code before it counts.
+The crown suite adds bill discounts to udhaar sales, and the "actually
+exercised" check gains a counter for returns against discounted sales.
+
+**Decisions put to the owner.**
+
+1. **What the cap measures.** Recommended: **all discounts on the bill
+   together** (item discounts plus the bill discount) as a share of the bill
+   before any discount. Otherwise a 20% item discount plus a 10% bill discount
+   passes a "10%" cap. The alternative is to cap only the bill discount.
+2. **When the cap is 0.** Recommended: no bill discounts without the owner's
+   PIN, rather than none at all.
+3. **Rounding to the note.** Offer "round down to the nearest Rs 10 / 50 /
+   100" as a one-key shortcut beside "amount to collect"? Recommended: not
+   now. Typing the amount is one field, and a shortcut is a second way to do
+   the same thing.
+
+**Not covered.** A discount given while settling udhaar (a customer paying
+Rs 1,950 against Rs 2,000 owed) writes off part of a debt, not part of a sale.
+It is a separate question, left to its own note.
+
+**Decision.** 2026-10-27, the owner: **A**, with every recommendation above —
+the cap measures all discounts on the bill together (item and bill) against
+the bill before any discount, 10% by default and set by the owner in
+Settings; a cap of 0 means every bill discount needs the owner's PIN; no
+rounding shortcut for now.
+
+**Applied.** Not yet.
