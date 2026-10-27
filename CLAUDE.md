@@ -690,6 +690,23 @@ exception visibility.
   batches of one product with one expiry shared `name-date`; key by the row's
   identity, and show what tells them apart.
 
+## Things selling hardening part 2 established
+
+- **A key must mean the same thing on a slow connection as on a fast one.**
+  The pickers' Enter acted on the last list to arrive, so its meaning was a
+  race against the server: the right customer locally, a duplicate customer
+  or the wrong supplier over slow Wi-Fi. Results carry the term they answer
+  (as `catalog-picker.tsx` already did), and Enter waits for the answer to
+  what is typed. Test it by slowing the server (`slow-answers.spec.ts`); a
+  local server answers too fast for the race to show.
+- **Next sends server actions one at a time, so a search per keystroke
+  queues.** Thirty letters on a slow link is thirty searches ahead of the
+  one that matters. Every type-ahead pauses for typing first.
+- **Walk a workflow by keyboard and log where focus lands after each key.**
+  The receiving spec picked products with a mouse click, so focus starting
+  nowhere — twice — never showed. A spec that clicks is not evidence of a
+  keyboard path (I1).
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

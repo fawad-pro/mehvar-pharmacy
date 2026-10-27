@@ -2,6 +2,22 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Selling and receiving hardening, part 2
+
+- **Picking a customer or supplier by name and Enter picks the right one,
+  however slow the connection.** Enter used whatever list had last arrived:
+  on a slow answer, "Rashid" + Enter created a second customer called
+  "Rashid" and put the udhaar on them, and a new supplier's name + Enter put
+  the delivery on another supplier. Enter now waits for the answer to what is
+  typed, and searching waits for a pause in typing.
+- **Receiving stock works from the keyboard alone.** F7 starts at the
+  supplier; choosing one goes on to the invoice number; Enter there goes to
+  the first line, skipping the date (today's, unless changed); Enter in Paid
+  now receives the invoice. Before, focus fell to nowhere twice before the
+  first line.
+- **A supplier or invoice number typed before the first line is kept** when
+  the operator serves a customer and comes back.
+
 ## Selling hardening, part 1
 
 - **The key pressed straight after a sale is never lost.** F5 (or any key)
