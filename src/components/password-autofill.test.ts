@@ -23,8 +23,8 @@
  * guard, so it is the one that exists.
  */
 
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -37,7 +37,14 @@ import { describe, expect, it } from 'vitest';
 const PASSWORD_FIELDS = [
   { file: 'src/components/pin-switch-overlay.tsx', what: 'the PIN switch overlay (F10)' },
   { file: 'src/app/login/page.tsx', what: 'the device pairing screen' },
+  { file: 'src/app/(counter)/settings/settings-surface.tsx', what: 'a new salesman’s PIN' },
 ];
+
+/**
+ * Password inputs that ARE a person's login, where a browser saving and
+ * filling the password is wanted. Nothing on the counter belongs here.
+ */
+const REAL_LOGINS = ['src/app/owner/login/page.tsx'];
 
 /**
  * Tokens a browser honours as "do not offer a saved credential here".
@@ -46,6 +53,29 @@ const PASSWORD_FIELDS = [
  * this bug shipped.
  */
 const RESPECTED = ['one-time-code', 'new-password'];
+
+/** Every source file under `src` that renders a password input. */
+function filesWithPasswordInputs(dir = join(process.cwd(), 'src')): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return filesWithPasswordInputs(path);
+    if (!/\.tsx$/.test(entry.name) || /\.test\./.test(entry.name)) return [];
+    return /type=["'{]?["']?password/.test(readFileSync(path, 'utf8'))
+      ? [relative(process.cwd(), path)]
+      : [];
+  });
+}
+
+describe('every password input is accounted for', () => {
+  // The Settings PIN field shipped without an opt-out because the list above
+  // was written by hand and nobody added it. Chrome then filled the device's
+  // saved login into "New salesman's name" and "PIN". Now a new password
+  // input fails here until someone decides which list it belongs in.
+  it('is either opted out of autofill or a real login', () => {
+    const known = new Set([...PASSWORD_FIELDS.map((field) => field.file), ...REAL_LOGINS]);
+    expect(filesWithPasswordInputs().filter((file) => !known.has(file))).toEqual([]);
+  });
+});
 
 describe('password fields do not invite credential autofill', () => {
   for (const { file, what } of PASSWORD_FIELDS) {

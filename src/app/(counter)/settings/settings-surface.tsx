@@ -349,6 +349,7 @@ function UsersAndPins() {
           <input
             id="new-user-name"
             value={name}
+            autoComplete="off"
             onChange={(event) => {
               setName(event.target.value);
             }}
@@ -364,6 +365,11 @@ function UsersAndPins() {
             value={pin}
             inputMode="numeric"
             type="password"
+            // A name field then a password field reads to Chrome as a login:
+            // it filled the device's saved login into the new salesman's name
+            // and PIN. `one-time-code` is a token it honours; `off` is not
+            // (see password-autofill.test.ts).
+            autoComplete="one-time-code"
             onChange={(event) => {
               setPin(event.target.value);
             }}

@@ -209,3 +209,30 @@ test('Day: a drawer count that is not an amount is said, never recorded', async 
   await expect(page.getByRole('button', { name: 'Record over/short' })).toBeDisabled();
   expect(crashes).toEqual([]);
 });
+
+test('browser autofill is not a keystroke: no crash, and the guard still works after it', async ({
+  page,
+}) => {
+  const crashes = watchCrashes(page);
+  await openCounter(page);
+  await page.getByRole('link', { name: 'Settings' }).click();
+  const footer = page.getByLabel(/Footer/);
+  await expect(footer).toBeVisible({ timeout: 15_000 });
+  const before = await footer.inputValue();
+
+  // What Chrome sends when it fills a saved PIN or password: a bare keydown
+  // Event with no key. The guard used to read `.length` off it and throw.
+  await footer.evaluate((field) => {
+    field.dispatchEvent(new Event('keydown', { bubbles: true }));
+    field.dispatchEvent(new Event('keydown', { bubbles: true }));
+  });
+  expect(crashes).toEqual([]);
+
+  // And a scan into the same field is still put back.
+  await footer.click();
+  await footer.press('End');
+  await scan(page, EAN);
+  await expect(guardNotice(page)).toBeVisible();
+  await expect(footer).toHaveValue(before);
+  expect(crashes).toEqual([]);
+});

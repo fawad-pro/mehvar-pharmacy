@@ -688,3 +688,10 @@ pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
   interrupted run. Every effect that fills editable state from a request
   ignores a stale answer, and a spec that changes shared settings reads the
   saved value back before trusting its own clean-up.
+- **A hand-kept list of risky fields misses the next one.** The Settings PIN
+  field shipped without an autofill opt-out because `password-autofill.test.ts`
+  checked a list nobody updated; Chrome filled the device's saved login into a
+  new salesman's name and PIN. The test now finds every password input in
+  `src` and fails until each is declared opted-out or a real login. The same
+  autofill sends a key-less `keydown`: a native key listener must not assume
+  `event.key` is a string.

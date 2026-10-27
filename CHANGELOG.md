@@ -11,6 +11,9 @@ All approved plan changes and implementation milestones will be recorded here.
   A-64", amounts without minus signs, "Refund" in place of "Amount Due", and
   "Cash refunded" or "Udhaar reduced"; the balance section calls it
   "Returned", never "Paid".
+- **Chrome no longer fills the device login into a new salesman's name and
+  PIN** on Settings, and browser autofill no longer throws an error in the
+  barcode guard.
 - **Settings keeps what you change.** A slow load could overwrite a ticked box
   on the Settings screen and save the old value back.
 

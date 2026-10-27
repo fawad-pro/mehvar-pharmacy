@@ -79,6 +79,12 @@ export function installScanFieldGuard(): () => void {
   };
 
   const onKeyDown = (event: KeyboardEvent) => {
+    // Browser autofill (Chrome filling a saved PIN or password) sends a bare
+    // "keydown" Event with no key at all. It is not a keystroke, so it is not
+    // part of a scan — and reading `.length` off it threw on every autofill.
+    if (typeof event.key !== 'string') {
+      return;
+    }
     const target = guardedField(event.target);
     if (target === null) {
       reset();
