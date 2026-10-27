@@ -12,6 +12,10 @@ All approved plan changes and implementation milestones will be recorded here.
   on a bill together. Over it, the owner types their PIN on the payment screen
   and the screen says who approved; without it, Esc sells at the full amount.
 - **The receipt shows it.** Item Discount and Bill Discount are separate rows.
+- **The owner sees every one afterwards.** Day & Reports lists each bill
+  discount with who gave it and who approved it, totals the period's
+  discounts beside the margin, and marks in red any over the limit without
+  approval. The receipt page shows each item's share and what it paid.
 
 ## Refunds give back what was paid (PCN-014, step 1)
 

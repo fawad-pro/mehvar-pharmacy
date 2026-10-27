@@ -46,6 +46,9 @@ interface ReportFigures {
   marginPaisa: number;
   /** [PCN-012, D2] Written off or counted short in the range, at cost. */
   writtenOffPaisa: number;
+  /** [PCN-014] Discounts given in the range. */
+  itemDiscountPaisa: number;
+  billDiscountPaisa: number;
   saleCount: number;
   unitsSold: number;
   returnCount: number;
@@ -58,6 +61,20 @@ interface OverrideRow {
   unitPricePaisa: number;
   lineDiscountPaisa: number;
   priceOverridden: boolean;
+  byName: string;
+  createdAt: Date;
+}
+
+/** [PCN-014] — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface BillDiscountRow {
+  saleId: string;
+  receiptNumber: string;
+  byName: string;
+  approvedByName: string | null;
+  billPaisa: number;
+  discountPaisa: number;
+  totalPaisa: number;
+  unapprovedOverLimit: boolean;
   createdAt: Date;
 }
 
@@ -169,6 +186,7 @@ export function DaySurface({
   numbers,
   figures,
   overrides,
+  billDiscounts,
   returns,
   expiredSold,
   quickItems,
@@ -189,6 +207,8 @@ export function DaySurface({
   numbers: ThreeNumbers;
   figures: ReportFigures;
   overrides: OverrideRow[];
+  /** [PCN-014] Bills charged less than they came to. */
+  billDiscounts: BillDiscountRow[];
   returns: ReturnExceptionRow[];
   /** PCN-008: sold from a batch already past its expiry date. */
   expiredSold: ExpiredSaleRow[];
@@ -217,6 +237,7 @@ export function DaySurface({
   const exceptionCount =
     expiredSold.length +
     overrides.length +
+    billDiscounts.length +
     returns.length +
     quickItems.length +
     adjustments.length +
@@ -336,7 +357,7 @@ export function DaySurface({
         count={exceptionCount}
         parts={[
           [expiredSold.length, 'expired sale'],
-          [overrides.length, 'discount'],
+          [overrides.length + billDiscounts.length, 'discount'],
           [returns.length, 'return'],
           [quickItems.length, 'quick item'],
           [adjustments.length, 'adjustment'],
@@ -358,6 +379,23 @@ export function DaySurface({
             {formatPaisa(paisa(figures.marginPaisa), { withSymbol: true })}
           </span>
         </span>
+        {/* [PCN-014] What discounts gave away in the range, said beside the
+            margin they came out of. Only when there were any. */}
+        {figures.itemDiscountPaisa + figures.billDiscountPaisa > 0 ? (
+          <span>
+            Discounts{' '}
+            <span className="numeral text-amber font-medium">
+              {formatPaisa(paisa(figures.itemDiscountPaisa + figures.billDiscountPaisa), {
+                withSymbol: true,
+              })}
+            </span>
+            <span className="text-ink/50 text-xs">
+              {' '}
+              ({formatPaisa(paisa(figures.itemDiscountPaisa))} on items,{' '}
+              {formatPaisa(paisa(figures.billDiscountPaisa))} on bills)
+            </span>
+          </span>
+        ) : null}
         {/* D2: stock that left without a sale is a loss at its cost, said
             beside the margin rather than hidden in it. Only when there is one. */}
         {figures.writtenOffPaisa > 0 ? (
@@ -441,7 +479,38 @@ export function DaySurface({
               ))}
             </ExceptionGroup>
 
-            <ExceptionGroup title="Discounts and overrides" rows={overrides} empty={false}>
+            <ExceptionGroup
+              title="Discounts and overrides"
+              rows={[...billDiscounts, ...overrides]}
+              empty={false}
+            >
+              {/* [PCN-014] Whole bills first: the larger act, and the one an
+                  owner's PIN may have approved. */}
+              {billDiscounts.map((row) => (
+                <Row key={row.saleId}>
+                  <span className="font-medium">Bill discount</span>
+                  <Link
+                    href={`/receipts/${encodeURIComponent(row.receiptNumber)}`}
+                    className="text-green-700 ml-2 hover:underline"
+                  >
+                    {row.receiptNumber}
+                  </Link>
+                  <span className="numeral text-ink/60 ml-2 text-xs">
+                    {formatPaisa(paisa(row.billPaisa))} → {formatPaisa(paisa(row.totalPaisa))}
+                  </span>
+                  {row.approvedByName ? (
+                    <span className="text-ink/50 ml-2 text-xs">
+                      approved by {row.approvedByName}
+                    </span>
+                  ) : row.unapprovedOverLimit ? (
+                    <span className="text-red ml-2 text-xs">over the limit, not approved</span>
+                  ) : null}
+                  <span className="numeral text-amber ml-auto">
+                    -{formatPaisa(paisa(row.discountPaisa))}
+                  </span>
+                  <span className="text-ink/40 ml-2 text-xs">{row.byName}</span>
+                </Row>
+              ))}
               {overrides.map((row) => (
                 <Row key={row.saleLineId}>
                   <span className="font-medium">{row.productName}</span>
@@ -454,6 +523,11 @@ export function DaySurface({
                       -{formatPaisa(paisa(row.lineDiscountPaisa))}
                     </span>
                   ) : null}
+                  <span
+                    className={`text-ink/40 text-xs ${row.lineDiscountPaisa > 0 ? 'ml-2' : 'ml-auto'}`}
+                  >
+                    {row.byName}
+                  </span>
                 </Row>
               ))}
             </ExceptionGroup>

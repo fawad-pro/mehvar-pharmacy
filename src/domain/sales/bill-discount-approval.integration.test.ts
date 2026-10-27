@@ -13,6 +13,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { approveAsOwner } from '@/auth/owner-approval';
 import { hashPin, MAX_PIN_ATTEMPTS } from '@/auth/pin';
+import { findReceipt } from '@/db/receipt-queries';
+import { billDiscountsInRange, reportFigures } from '@/db/reporting-queries';
 import { sales, users } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -86,6 +88,10 @@ suite('approving a bill discount over the limit (PCN-014)', () => {
     return saleId;
   }
 
+  async function receiptOf(saleId: Uuid): Promise<string> {
+    return (await tenant.scope.selectOne(sales, eq(sales.id, saleId)))!.receiptNumber;
+  }
+
   async function approverOf(saleId: Uuid): Promise<string | null | undefined> {
     return (await tenant.scope.selectOne(sales, eq(sales.id, saleId)))?.invoiceDiscountApprovedBy;
   }
@@ -123,5 +129,48 @@ suite('approving a bill discount over the limit (PCN-014)', () => {
       { failedPinAttempts: 0, pinLockedUntil: null },
       eq(users.id, tenant.userId),
     );
+  });
+
+  describe('what the owner sees afterwards (step 4)', () => {
+    const EVER = [new Date('2000-01-01'), new Date('2100-01-01')] as const;
+
+    it('the day list shows each bill discount, who approved it, and flags one that should have been', async () => {
+      const approved = await discountedSale(tenant.userId);
+      const unapproved = await discountedSale(salesmanId);
+      const rows = await billDiscountsInRange(tenant.scope, ...EVER, 10);
+      const row = (saleId: Uuid) => rows.find((each) => each.saleId === saleId);
+
+      expect(row(approved)).toMatchObject({
+        approvedByName: 'Owner approval',
+        billPaisa: 10_000,
+        discountPaisa: 3_000,
+        totalPaisa: 7_000,
+        unapprovedOverLimit: false,
+      });
+      // 30% with no owner: the counter cannot produce it, so it is flagged.
+      expect(row(unapproved)).toMatchObject({ approvedByName: null, unapprovedOverLimit: true });
+      // Under a limit that allows it, nothing is wrong with it.
+      const relaxed = await billDiscountsInRange(tenant.scope, ...EVER, 50);
+      expect(relaxed.find((each) => each.saleId === unapproved)?.unapprovedOverLimit).toBe(false);
+    });
+
+    it('the day’s figures state the bill discounts given', async () => {
+      const before = await reportFigures(tenant.scope, ...EVER);
+      await discountedSale(tenant.userId);
+      const after = await reportFigures(tenant.scope, ...EVER);
+      expect(after.billDiscountPaisa - before.billDiscountPaisa).toBe(3_000);
+      expect(after.itemDiscountPaisa).toBe(before.itemDiscountPaisa);
+    });
+
+    it('the receipt page shows the line’s share and the approver', async () => {
+      const saleId = await discountedSale(tenant.userId);
+      const detail = await findReceipt(tenant.scope, await receiptOf(saleId));
+      expect(detail).toMatchObject({
+        kind: 'sale',
+        invoiceDiscountPaisa: 3_000,
+        invoiceDiscountApprovedByName: 'Owner approval',
+      });
+      expect(detail?.lines?.[0]?.invoiceDiscountSharePaisa).toBe(3_000);
+    });
   });
 });

@@ -13,9 +13,12 @@
 
 import 'server-only';
 
-import { desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql, sum } from 'drizzle-orm';
+import { desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, sql, sum } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
+import { billDiscountNeedsApproval } from '@/domain/sales/cart';
 import { summariseBook } from '@/domain/udhaar/position';
+import { paisa } from '@/lib/branded';
 import { DEFAULT_TIME_ZONE } from '@/lib/business-day';
 import type { PackLevel } from '@/lib/quantity';
 
@@ -213,6 +216,8 @@ export interface OverrideRow {
   readonly unitPricePaisa: number;
   readonly lineDiscountPaisa: number;
   readonly priceOverridden: boolean;
+  /** [PCN-014] Who sold it — T1: attributed, not just visible. */
+  readonly byName: string;
   readonly createdAt: Date;
 }
 
@@ -231,11 +236,13 @@ export async function overridesAndDiscountsInRange(
       unitPricePaisa: saleLines.unitPricePaisa,
       lineDiscountPaisa: saleLines.lineDiscountPaisa,
       priceOverridden: saleLines.priceOverridden,
+      byName: users.name,
       createdAt: saleLines.createdAt,
     })
     .from(saleLines)
     .innerJoin(sales, eq(saleLines.saleId, sales.id))
     .innerJoin(products, eq(saleLines.productId, products.id))
+    .innerJoin(users, eq(sales.createdBy, users.id))
     .where(
       scope.scopeOf(
         saleLines,
@@ -245,6 +252,94 @@ export async function overridesAndDiscountsInRange(
       ),
     )
     .orderBy(desc(saleLines.createdAt));
+}
+
+/**
+ * [PCN-014] Bills charged less than they came to — T1: a discount on a whole
+ * bill is the largest discount the counter can give, and the owner sees every
+ * one, who gave it, who approved it, and the bill before and after.
+ *
+ * `unapprovedOverLimit` is measured against the limit set now (the limit a
+ * sale was given under is not stored): a bill discount over it with no owner
+ * approval is the case the counter is meant to make impossible, so it can
+ * only mean the limit was raised since, or a record arrived without one.
+ */
+export interface BillDiscountRow {
+  readonly saleId: string;
+  readonly receiptNumber: string;
+  readonly byName: string;
+  readonly approvedByName: string | null;
+  /** The bill after item discounts — what the bill discount came off. */
+  readonly billPaisa: number;
+  readonly discountPaisa: number;
+  readonly totalPaisa: number;
+  readonly unapprovedOverLimit: boolean;
+  readonly createdAt: Date;
+}
+
+export async function billDiscountsInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+  capPercent: number,
+): Promise<BillDiscountRow[]> {
+  const approver = alias(users, 'approver');
+  const rows = await scope.db
+    .select({
+      saleId: sales.id,
+      receiptNumber: sales.receiptNumber,
+      byName: users.name,
+      approvedByName: approver.name,
+      billPaisa: sales.subtotalPaisa,
+      discountPaisa: sales.invoiceDiscountPaisa,
+      totalPaisa: sales.totalPaisa,
+      createdAt: sales.createdAt,
+    })
+    .from(sales)
+    .innerJoin(users, eq(sales.createdBy, users.id))
+    .leftJoin(approver, eq(sales.invoiceDiscountApprovedBy, approver.id))
+    .where(
+      scope.scopeOf(
+        sales,
+        gt(sales.invoiceDiscountPaisa, 0),
+        gte(sales.createdAt, from),
+        lt(sales.createdAt, to),
+      ),
+    )
+    .orderBy(desc(sales.createdAt));
+  if (rows.length === 0) return [];
+
+  // Each bill's figure before any discount, and its item discounts: one
+  // grouped aggregate over the lines (never a correlated subquery, Day 3).
+  const lineTotals = await scope.db
+    .select({
+      saleId: saleLines.saleId,
+      gross: sql<string>`sum(coalesce(${saleLines.lineAmountPaisa}, ${saleLines.unitPricePaisa} * ${saleLines.qtyBase}))`,
+      itemDiscount: sum(saleLines.lineDiscountPaisa).as('itemDiscount'),
+    })
+    .from(saleLines)
+    .where(
+      scope.scopeOf(
+        saleLines,
+        inArray(
+          saleLines.saleId,
+          rows.map((row) => row.saleId),
+        ),
+      ),
+    )
+    .groupBy(saleLines.saleId);
+  const bySale = new Map(lineTotals.map((row) => [row.saleId, row]));
+
+  return rows.map((row) => {
+    const lines = bySale.get(row.saleId);
+    const needed = billDiscountNeedsApproval({
+      grossPaisa: paisa(Number(lines?.gross ?? 0)),
+      itemDiscountPaisa: paisa(Number(lines?.itemDiscount ?? 0)),
+      billDiscountPaisa: paisa(row.discountPaisa),
+      capPercent,
+    });
+    return { ...row, unapprovedOverLimit: needed && row.approvedByName === null };
+  });
 }
 
 export interface ReturnExceptionRow {
@@ -757,6 +852,9 @@ export interface ReportFigures {
   readonly returnedPaisa: number;
   /** [PCN-012, D2] Stock written off or counted short in the range, at cost. */
   readonly writtenOffPaisa: number;
+  /** [PCN-014] Discounts given in the range: off items, and off whole bills. */
+  readonly itemDiscountPaisa: number;
+  readonly billDiscountPaisa: number;
 }
 
 /**
@@ -789,12 +887,19 @@ export async function reportFigures(
   to: Date,
 ): Promise<ReportFigures> {
   const [salesRow] = await scope.db
-    .select({ total: sum(sales.totalPaisa).as('total'), count: sql<string>`count(*)` })
+    .select({
+      total: sum(sales.totalPaisa).as('total'),
+      count: sql<string>`count(*)`,
+      billDiscount: sum(sales.invoiceDiscountPaisa).as('billDiscount'),
+    })
     .from(sales)
     .where(scope.scopeOf(sales, gte(sales.createdAt, from), lt(sales.createdAt, to)));
 
   const [unitsRow] = await scope.db
-    .select({ total: sum(saleLines.qtyBase).as('total') })
+    .select({
+      total: sum(saleLines.qtyBase).as('total'),
+      itemDiscount: sum(saleLines.lineDiscountPaisa).as('itemDiscount'),
+    })
     .from(saleLines)
     .where(scope.scopeOf(saleLines, gte(saleLines.createdAt, from), lt(saleLines.createdAt, to)));
 
@@ -841,5 +946,7 @@ export async function reportFigures(
     returnCount: Number(returnsRow?.count ?? 0),
     returnedPaisa,
     writtenOffPaisa,
+    itemDiscountPaisa: Number(unitsRow?.itemDiscount ?? 0),
+    billDiscountPaisa: Number(salesRow?.billDiscount ?? 0),
   };
 }

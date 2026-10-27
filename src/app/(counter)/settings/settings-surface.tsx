@@ -121,11 +121,13 @@ function SellingSettings() {
               </span>
             </span>
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Discount limit without the owner (%)
+          <div className="flex flex-col gap-1 text-sm">
+            <label htmlFor="bill-discount-cap">Discount limit without the owner (%)</label>
             <input
+              id="bill-discount-cap"
               autoComplete="off"
               inputMode="numeric"
+              aria-describedby="bill-discount-cap-help"
               value={cap}
               onChange={(event) => {
                 setCap(event.target.value);
@@ -133,12 +135,14 @@ function SellingSettings() {
               }}
               className="border-line focus:border-green-600 h-touch w-24 rounded border px-3 outline-none"
             />
-            <span className="text-ink/50 text-xs">
+            {/* Described, not part of the label: a label is the field's name,
+                and this one would otherwise be called "…owner's PIN…". */}
+            <p id="bill-discount-cap-help" className="text-ink/50 text-xs">
               All discounts on a bill together — item discounts and the bill discount — as a share
               of the bill before any discount. A bill discount over this needs the owner&rsquo;s
               PIN. 0 means every bill discount does.
-            </span>
-          </label>
+            </p>
+          </div>
           <div className="flex items-center gap-3">
             <button
               type="button"

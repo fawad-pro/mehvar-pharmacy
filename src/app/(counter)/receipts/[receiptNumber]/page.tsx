@@ -78,9 +78,7 @@ export default async function ReceiptDetailPage({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">{heading}</p>
-          <h1 className="text-green-900 numeral text-2xl font-semibold">
-            {receipt.receiptNumber}
-          </h1>
+          <h1 className="text-green-900 numeral text-2xl font-semibold">{receipt.receiptNumber}</h1>
           <p className="text-ink/60 mt-1 text-sm">
             {receipt.createdAt.toLocaleString('en-PK', {
               weekday: 'short',
@@ -193,6 +191,14 @@ export default async function ReceiptDetailPage({
                         −{formatPaisa(paisa(line.lineDiscountPaisa))} off
                       </p>
                     ) : null}
+                    {/* [PCN-014] How the bill discount fell on this line, and
+                        so what it paid — what a return of it gives back. */}
+                    {line.invoiceDiscountSharePaisa > 0 ? (
+                      <p className="text-ink/50 text-xs">
+                        −{formatPaisa(paisa(line.invoiceDiscountSharePaisa))} bill discount · paid{' '}
+                        {formatPaisa(paisa(lineTotal(line) - line.invoiceDiscountSharePaisa))}
+                      </p>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -205,14 +211,23 @@ export default async function ReceiptDetailPage({
         {receipt.kind === 'sale' ? (
           <>
             <Line label="Subtotal" amountPaisa={subtotalPaisa} />
-            {/* One row for every discount that reduced this sale — the sum of
-                each line's own discount, plus any invoice-level discount an
-                older record might carry (the UI no longer writes one). */}
-            {lineDiscountTotalPaisa + (receipt.invoiceDiscountPaisa ?? 0) > 0 ? (
+            {/* [PCN-014] Item discounts and the bill discount, each on a row of
+                its own, in the order they came off — as the printed receipt. */}
+            {lineDiscountTotalPaisa > 0 ? (
               <Line
-                label="Discount"
-                amountPaisa={-(lineDiscountTotalPaisa + (receipt.invoiceDiscountPaisa ?? 0))}
+                label={receipt.invoiceDiscountPaisa ? 'Item discounts' : 'Discount'}
+                amountPaisa={-lineDiscountTotalPaisa}
               />
+            ) : null}
+            {receipt.invoiceDiscountPaisa ? (
+              <>
+                <Line label="Bill discount" amountPaisa={-receipt.invoiceDiscountPaisa} />
+                {receipt.invoiceDiscountApprovedByName ? (
+                  <p className="text-ink/50 text-xs">
+                    Approved by {receipt.invoiceDiscountApprovedByName}
+                  </p>
+                ) : null}
+              </>
             ) : null}
             <Line label="Total" amountPaisa={receipt.totalPaisa ?? 0} bold />
             {receipt.cashPaisa ? <Line label="Cash" amountPaisa={receipt.cashPaisa} /> : null}
@@ -302,10 +317,9 @@ export default async function ReceiptDetailPage({
                     </td>
                     <td className="text-ink/60 px-3 py-2 text-sm">{entry.reasonNote ?? '—'}</td>
                     <td className="numeral px-3 py-2 text-right">
-                      {formatPaisa(
-                        paisa(entry.cashOutPaisa + entry.creditReducedPaisa),
-                        { withSymbol: true },
-                      )}
+                      {formatPaisa(paisa(entry.cashOutPaisa + entry.creditReducedPaisa), {
+                        withSymbol: true,
+                      })}
                     </td>
                   </tr>
                 ))}

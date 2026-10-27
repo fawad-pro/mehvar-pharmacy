@@ -1984,4 +1984,14 @@ rounding shortcut for now.
   under Settings → Selling (`billDiscountCapPercent`, 10 when absent). The
   receipt prints Item Discount and Bill Discount as rows of their own. Item
   discounts alone are not gated, as before.
-- Step 4 (Day screen and receipt page): not yet.
+- *Step 4, what the owner sees (2026-10-27).* The Day screen's "Discounts
+  and overrides" lists each bill discount: receipt, bill → total, the
+  discount, who gave it and who approved it (`billDiscountsInRange`). A sale
+  over the shop's limit with no approver is marked in red; the counter cannot
+  produce one, so it means something to look into. Next to Margin, the range's
+  discounts are stated, split into items and bills (`reportFigures`). Line
+  discounts and price changes now name who gave them too. The receipt page
+  shows the bill discount on its own row with its approver, and each line its
+  share and what it paid. The cap's help text moved out of its label, so
+  "Owner's PIN" and "PIN" stay distinct labels to a screen reader. The
+  integration tests failed with the flag and the total mutated.

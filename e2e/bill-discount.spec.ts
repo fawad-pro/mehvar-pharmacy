@@ -105,6 +105,27 @@ test('over the limit: the owner’s PIN approves, and the screen says who', asyn
   await expect(lastSale(page)).toContainText('Rs 80.00');
   await expect(receipt(page)).toContainText('Bill Discount');
   await expect(receipt(page)).toContainText('-25.00');
+
+  // Step 4: the owner sees it afterwards — on the day's list, and on the
+  // receipt page, each line showing its share and what it paid.
+  const number = (await lastSale(page).textContent())?.match(/Saved — ([A-Z]+-\d+)/)?.[1];
+  expect(number).toBeTruthy();
+  await page.keyboard.press('F9');
+  await expect(page).toHaveURL(/\/day$/);
+  const row = page.getByRole('listitem').filter({ hasText: number! });
+  await expect(row).toContainText('Bill discount', { timeout: 30_000 });
+  await expect(row).toContainText('105.00 → 80.00');
+  await expect(row).toContainText(`approved by ${DEMO.owner}`);
+  await expect(row).toContainText('-25.00');
+  await expect(page.getByText(/Discounts Rs/)).toBeVisible();
+
+  await row.getByRole('link', { name: number! }).click();
+  // Until the receipt page arrives, the day's list is what matches: every
+  // earlier run's bill discounts are rows on it.
+  await expect(page).toHaveURL(new RegExp(`/receipts/${number!}$`), { timeout: 30_000 });
+  await expect(page.getByText('Bill discount', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(`Approved by ${DEMO.owner}`)).toBeVisible();
+  await expect(page.getByText('−25.00 bill discount · paid 80.00')).toBeVisible();
 });
 
 test('more than the bill is refused, and junk is never read as Rs 0', async ({ page }) => {

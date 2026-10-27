@@ -28,6 +28,7 @@
 import 'server-only';
 
 import { desc, eq, ilike, inArray, or, sum } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
 import { returnableLinesForSale } from './returns-queries';
 import type { TenantScope } from './scoped';
@@ -264,6 +265,8 @@ export interface ReceiptDetailLine {
   readonly unitPricePaisaEntered: number | null;
   readonly lineAmountPaisa: number | null;
   readonly lineDiscountPaisa: number;
+  /** [PCN-014] This line's share of the bill discount (0 on a return's lines). */
+  readonly invoiceDiscountSharePaisa: number;
   readonly priceOverridden: boolean;
   /** How much of this line has since come back — the "what happened after". */
   readonly returnedBase: number;
@@ -291,6 +294,8 @@ export interface ReceiptDetail {
   /** Sale only. */
   readonly lines?: readonly ReceiptDetailLine[];
   readonly invoiceDiscountPaisa?: number;
+  /** [PCN-014] The owner who approved a bill discount over the limit, if one did. */
+  readonly invoiceDiscountApprovedByName?: string | null;
   readonly totalPaisa?: number;
   readonly cashPaisa?: number;
   readonly creditPaisa?: number;
@@ -327,6 +332,7 @@ export async function findReceipt(
 ): Promise<ReceiptDetail | null> {
   const trimmed = receiptNumber.trim();
   if (trimmed === '') return null;
+  const approver = alias(users, 'approver');
 
   const [sale] = await scope.db
     .select({
@@ -338,6 +344,7 @@ export async function findReceipt(
       customerName: customers.name,
       origin: sales.origin,
       invoiceDiscountPaisa: sales.invoiceDiscountPaisa,
+      invoiceDiscountApprovedByName: approver.name,
       totalPaisa: sales.totalPaisa,
       cashPaisa: sales.cashPaisa,
       creditPaisa: sales.creditPaisa,
@@ -346,6 +353,7 @@ export async function findReceipt(
     .from(sales)
     .leftJoin(customers, eq(sales.customerId, customers.id))
     .leftJoin(users, eq(sales.createdBy, users.id))
+    .leftJoin(approver, eq(sales.invoiceDiscountApprovedBy, approver.id))
     .where(scope.scopeOf(sales, eq(sales.receiptNumber, trimmed)))
     .limit(1);
 
@@ -365,6 +373,7 @@ export async function findReceipt(
         unitPricePaisaEntered: saleLines.unitPricePaisaEntered,
         lineAmountPaisa: saleLines.lineAmountPaisa,
         lineDiscountPaisa: saleLines.lineDiscountPaisa,
+        invoiceDiscountSharePaisa: saleLines.invoiceDiscountSharePaisa,
         priceOverridden: saleLines.priceOverridden,
       })
       .from(saleLines)
@@ -425,6 +434,7 @@ export async function findReceipt(
         returnedBase: returnedByLine.get(row.lineId) ?? 0,
       })),
       invoiceDiscountPaisa: sale.invoiceDiscountPaisa,
+      invoiceDiscountApprovedByName: sale.invoiceDiscountApprovedByName,
       totalPaisa: sale.totalPaisa,
       cashPaisa: sale.cashPaisa,
       creditPaisa: sale.creditPaisa,
@@ -568,6 +578,7 @@ export async function findReceipt(
         return {
           ...row,
           returnedBase: 0,
+          invoiceDiscountSharePaisa: 0,
           unitName: null,
           unitCount: null,
           unitPricePaisaEntered: null,
