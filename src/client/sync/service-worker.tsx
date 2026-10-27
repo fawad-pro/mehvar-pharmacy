@@ -18,9 +18,48 @@
 
 import { useEffect } from 'react';
 
+/** `public/sw.js`'s cache name, without its version. */
+const SHELL_CACHE_PREFIX = 'mehvar-shell-';
+
+/**
+ * Not registering in development is half of the rule above. The installed
+ * app runs at the same address as `npm run dev` (localhost:3000), and a
+ * worker it registered stays registered for that address, controlling the
+ * dev server's pages and answering their script requests from its cache. So
+ * in development any worker found is removed, and the page loaded once more
+ * without it. The outbox lives in IndexedDB and is not touched.
+ */
+async function removeLeftoverWorker(): Promise<void> {
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map((registration) => registration.unregister()));
+  if (navigator.serviceWorker.controller) {
+    // This page was served by that worker. It runs as the shell mounts,
+    // before anything is typed, and once: the next load has no worker.
+    console.warn('Removed a service worker left by the installed app; reloading.');
+    window.location.reload();
+    return;
+  }
+  // Only now: a worker still controlling the page refills its cache.
+  if ('caches' in window) {
+    const names = await caches.keys();
+    await Promise.all(
+      names
+        .filter((name) => name.startsWith(SHELL_CACHE_PREFIX))
+        .map((name) => caches.delete(name)),
+    );
+  }
+}
+
 export function ServiceWorker() {
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) {
+    // Absent on a page opened over plain http from another machine.
+    if (!('serviceWorker' in navigator)) {
+      return;
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      void removeLeftoverWorker().catch(() => {
+        // Dev convenience only; a leftover worker is visible in DevTools.
+      });
       return;
     }
 
