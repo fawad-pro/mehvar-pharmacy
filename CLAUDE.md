@@ -649,6 +649,47 @@ exception visibility.
   a scan, and the scan guard rightly keeps it out of an ordinary field. Type
   at a person's speed (`{ delay }`) in a spec; never weaken the guard.
 
+## Things the no-answer fix established
+
+- **A request has two outcomes, and a screen must show both.** Settings filled
+  four sections from `void action().then(fill)`: no rejection handler, so a
+  request with no answer left each one on "Loading…" for good, its Save dead,
+  and the user list an empty list that read as "no users". A load that fails
+  says so and offers Try again (`components/load-failed.tsx`); a save that
+  throws says it did not save. An empty result and no result are different
+  states.
+- **Dev at the installed app's address inherits its service worker.** Both run
+  on localhost:3000, and a registered worker outlives the build that made it,
+  controlling dev pages and caching their scripts. Not registering in
+  development was only half the rule: `service-worker.tsx` now removes one.
+- **Never `unroute` to end a simulated outage.** A request reaching the route
+  handler while it was removed stayed open for good, and Next sends server
+  actions one at a time, so every later action queued behind it — about one
+  run in twenty. Cut with a switch (`no-answer.spec.ts`). The same queueing
+  means one hung request in production stalls every later action; that
+  belongs to the online/offline decision.
+- **`pkill -f` matches the shell that runs it** when the pattern is in its own
+  command line, killing the rest of the command silently — including a
+  `git stash pop`. Stop servers by PID or exact process name.
+
+## Things selling hardening established
+
+- **The page takes no keys while `window.print()` runs, and drops them.** The
+  receipt printed two frames after "Saved" appeared, so the operator's next
+  key — pressed on seeing "Saved" — was lost about one time in six; it never
+  reached even a capture listener on `window`. The refresh guard
+  (`navigation/intent.ts`) fixed a real, different cause; this was what it
+  left. `print()`
+  now resolves when printing has returned, and the Sale screen says "Saved"
+  after it. A screen's confirmation means it is ready for the next key.
+- **Instrument from the outside in before theorising.** A capture-phase
+  listener installed by the test (`addInitScript`) answered in one run what
+  reading Next's action queue could only guess at: whether the key reached the
+  page at all.
+- **A list keyed by what it displays breaks when two rows look alike.** Two
+  batches of one product with one expiry shared `name-date`; key by the row's
+  identity, and show what tells them apart.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

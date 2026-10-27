@@ -2,6 +2,32 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Selling hardening, part 1
+
+- **The key pressed straight after a sale is never lost.** F5 (or any key)
+  pressed the moment "Saved" appeared did nothing about one time in six: the
+  browser takes no keys while it prints, and the receipt printed just after
+  "Saved" showed. The sale now prints first and says "Saved" once the counter
+  can take the next key.
+- **The owner's phone view lists every expiring batch**, with how much is
+  left. Two batches of one product with the same expiry could show as one row
+  or twice.
+- **Correcting a purchase, returning to a supplier, replacing a product or
+  editing a customer or supplier** says it did not save when the shop's
+  computer does not answer, instead of staying on "busy".
+
+## A request with no answer says so
+
+- **Settings no longer sits on "Loading…" for good.** When the shop's computer
+  does not answer, each section says it did not load and offers Try again.
+  Save used to do nothing, and the user list looked like a shop with no users.
+- **A save with no answer says it did not save**, in red, and Save works again.
+- **Returns and Add product** say the search got no answer, instead of "No
+  sales found" or "Nothing in the catalogue matches". Removing a barcode that
+  got no answer says so.
+- **Development only:** a service worker left by the installed app at the same
+  address is removed, so `npm run dev` runs the current code.
+
 ## A bill discount at the counter (PCN-014)
 
 - **Charge Rs 2,000 for a Rs 2,080 bill.** On the payment screen press `%`
