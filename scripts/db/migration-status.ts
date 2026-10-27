@@ -75,23 +75,31 @@ export function compareJournal(
  *
  * Names the database, and says what changed — including saying plainly that
  * nothing did, which is the case the old message made indistinguishable from
- * every other.
+ * every other. `recordedOnly` names migrations recorded rather than run
+ * (`renumbered-migrations.ts`); they are not reported as applied, because
+ * nothing about the schema changed for them.
  */
 export function describeRun(
   databaseLabel: string,
   before: MigrationReport,
   after: MigrationReport,
+  recordedOnly: readonly string[] = [],
 ): string {
   const applied = before.missing.filter(
-    (entry) => !after.missing.some((left) => left.when === entry.when),
+    (entry) =>
+      !after.missing.some((left) => left.when === entry.when) && !recordedOnly.includes(entry.tag),
   );
 
-  if (applied.length === 0) {
+  if (applied.length === 0 && recordedOnly.length === 0) {
     return `${databaseLabel}: already up to date (${after.appliedCount} migration(s) applied previously).`;
   }
 
+  const recorded =
+    recordedOnly.length === 0
+      ? ''
+      : `; recorded ${recordedOnly.length} it had already applied under an earlier number`;
   return [
-    `${databaseLabel}: applied ${applied.length} migration(s).`,
+    `${databaseLabel}: applied ${applied.length} migration(s)${recorded}.`,
     ...applied.map((entry) => `  + ${entry.tag}`),
   ].join('\n');
 }

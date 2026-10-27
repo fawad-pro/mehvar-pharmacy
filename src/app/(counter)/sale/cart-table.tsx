@@ -19,24 +19,25 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { nextUnitLevel, resolveQuantity } from '@/client/search/quantity-grammar';
 import {
   isPriceOverridden,
   lineGrossPaisa,
   lineTotal,
   parseDiscountInput,
   type CartLine,
+  type updateLine,
 } from '@/domain/sales/cart';
-import { baseQty, paisa } from '@/lib/branded';
+import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity, unitLevels } from '@/lib/quantity';
 
 export interface CartTableProps {
   lines: readonly CartLine[];
   selectedLineId: string | null;
   stockByProduct: Readonly<Record<string, number | null>>;
+  /** PCN-008: expired stock on hand per product, from the index snapshot. */
+  expiredByProduct?: Readonly<Record<string, { qtyBase: number; expiryDate: string } | null>>;
   onSelect: (lineId: string | null) => void;
-  onChange: (lineId: string, patch: Partial<CartLine>) => void;
+  onChange: (lineId: string, patch: Parameters<typeof updateLine>[2]) => void;
   onRemove: (lineId: string) => void;
   onLeaveCart: () => void;
   /** Phase 10 §4: "Space or F12 from cart" opens the payment overlay. */
@@ -47,6 +48,7 @@ export function CartTable({
   lines,
   selectedLineId,
   stockByProduct,
+  expiredByProduct = {},
   onSelect,
   onChange,
   onRemove,
@@ -139,9 +141,6 @@ export function CartTable({
 
   function handleKey(event: React.KeyboardEvent<HTMLTableRowElement>, line: CartLine): void {
     const index = lines.findIndex((candidate) => candidate.lineId === line.lineId);
-    const levels = unitLevels(line.baseUnitName, [...line.packLevels]);
-    const level = levels.find((candidate) => candidate.name === line.enteredUnitLevel) ?? levels[0];
-    const step = level?.factor ?? 1;
 
     switch (event.key) {
       case 'ArrowDown': {
@@ -170,16 +169,15 @@ export function CartTable({
         event.preventDefault();
         // Steps by the entered unit: pressing + on a strip line adds a strip,
         // not a tablet. That is what the operator means.
-        onChange(line.lineId, { qtyBase: baseQty(line.qtyBase + step) });
+        onChange(line.lineId, { unitCount: line.unitCount + 1 });
         break;
       }
       case '-': {
         event.preventDefault();
-        const reduced = line.qtyBase - step;
-        if (reduced <= 0) {
+        if (line.unitCount <= 1) {
           onRemove(line.lineId);
         } else {
-          onChange(line.lineId, { qtyBase: baseQty(reduced) });
+          onChange(line.lineId, { unitCount: line.unitCount - 1 });
         }
         break;
       }
@@ -200,20 +198,17 @@ export function CartTable({
         break;
       }
       case 'Tab': {
-        // Cycles the unit level and re-expresses the same count at the new one,
-        // so Tab on "2 strip" reads "2 box" rather than silently changing 20 to 2.
+        // Cycles the unit and keeps the count, so Tab on "2 strip" reads
+        // "2 box" at the box's own price (PCN-012), never 20 tablets.
         if (event.shiftKey) {
           return;
         }
         event.preventDefault();
-        const target = nextUnitLevel(line.enteredUnitLevel, line.baseUnitName, [
-          ...line.packLevels,
-        ]);
-        const count = Math.max(1, Math.round(line.qtyBase / step));
-        onChange(line.lineId, {
-          enteredUnitLevel: target,
-          qtyBase: resolveQuantity(count, target, line.baseUnitName, [...line.packLevels]),
-        });
+        const at = line.units.findIndex((unit) => unit.key === line.unitKey);
+        const target = line.units[(at + 1) % line.units.length];
+        if (target) {
+          onChange(line.lineId, { unitKey: target.key });
+        }
         break;
       }
       default:
@@ -238,6 +233,12 @@ export function CartTable({
           const stock = stockByProduct[line.productId] ?? null;
           // D2: the line proceeds; the chip is exposure, not a block.
           const short = stock !== null && stock < line.qtyBase;
+          // PCN-008: allocation reaches expired batches only after every
+          // unexpired one, so the line touches expired stock exactly when it
+          // asks for more than the unexpired part. Warned, never blocked.
+          const expired = expiredByProduct[line.productId] ?? null;
+          const fromExpired =
+            expired !== null && stock !== null && line.qtyBase > stock - expired.qtyBase;
 
           return (
             <tr
@@ -263,6 +264,14 @@ export function CartTable({
                 {isPriceOverridden(line) ? (
                   <span className="text-amber ml-2 text-xs">price changed</span>
                 ) : null}
+                {fromExpired ? (
+                  <span className="text-amber ml-2 text-xs font-medium" role="alert">
+                    {expired !== null && stock !== null && stock - expired.qtyBase <= 0
+                      ? 'only expired stock left'
+                      : 'part from expired stock'}{' '}
+                    — expired {expired?.expiryDate}
+                  </span>
+                ) : null}
                 {short ? (
                   <span className="text-amber ml-2 text-xs">
                     {stock !== null && stock <= 0 ? 'not in stock' : 'more than in stock'}
@@ -270,16 +279,25 @@ export function CartTable({
                 ) : null}
               </td>
               <td className="px-3 py-1.5">
-                {/* W5: always natural language, never database thinking. */}
-                {describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels])}
-                {selected ? (
-                  <span className="text-ink/40 ml-2 text-xs">
-                    +/− · Tab {line.enteredUnitLevel} · % disc · Del
-                  </span>
-                ) : null}
+                <QuantityControl
+                  line={line}
+                  selected={selected}
+                  onUnit={(unitKey) => {
+                    onSelect(line.lineId);
+                    onChange(line.lineId, { unitKey });
+                  }}
+                  onStep={(delta) => {
+                    onSelect(line.lineId);
+                    if (line.unitCount + delta < 1) {
+                      onRemove(line.lineId);
+                    } else {
+                      onChange(line.lineId, { unitCount: line.unitCount + delta });
+                    }
+                  }}
+                />
               </td>
               <td className="numeral px-3 py-1.5 text-right">
-                {formatPaisa(paisa(line.unitPricePaisa))}
+                {formatPaisa(paisa(line.pricePerUnitPaisa))}
               </td>
               <td className="numeral px-3 py-1.5 text-right">
                 {editingDiscount?.lineId === line.lineId ? (
@@ -336,5 +354,112 @@ export function CartTable({
         })}
       </tbody>
     </table>
+  );
+}
+
+/**
+ * The quantity cell — Phase 10 §4 as amended by PCN-012 (and the owner's
+ * 2026-10-26 decision): every unit the product has as a button beside
+ * − count +, because a tablet has no Tab key and no plus key. The keyboard
+ * path is unchanged (the row's own keys); these are the same edits for a
+ * finger or a mouse.
+ *
+ * Every button keeps focus where it was (`onMouseDown` prevented) and is out
+ * of the tab order, so the row stays the one keyboard target, exactly as the
+ * Discount cell does.
+ */
+function QuantityControl({
+  line,
+  selected,
+  onUnit,
+  onStep,
+}: {
+  line: CartLine;
+  selected: boolean;
+  onUnit: (unitKey: string) => void;
+  onStep: (delta: 1 | -1) => void;
+}) {
+  const offered = line.units;
+  const keepFocus = (event: React.MouseEvent) => {
+    event.preventDefault();
+  };
+  const step =
+    'border-line text-ink h-11 w-11 shrink-0 rounded border text-lg leading-none hover:bg-green-100';
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {offered.length > 1 ? (
+        <div role="group" aria-label={`Unit for ${line.name}`} className="flex">
+          {offered.map((unit, index) => {
+            const chosen = unit.key === line.unitKey;
+            return (
+              <button
+                key={unit.key}
+                type="button"
+                tabIndex={-1}
+                aria-pressed={chosen}
+                onMouseDown={keepFocus}
+                onClick={() => {
+                  if (!chosen) onUnit(unit.key);
+                }}
+                className={[
+                  'border-line h-11 min-w-11 border px-3 text-sm capitalize',
+                  index === 0 ? 'rounded-l' : '-ml-px',
+                  index === offered.length - 1 ? 'rounded-r' : '',
+                  chosen
+                    ? 'bg-green-600 text-paper border-green-600 font-medium'
+                    : 'bg-paper text-ink hover:bg-green-100',
+                ].join(' ')}
+              >
+                {unit.name}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+      <div className="flex items-center gap-1.5">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={
+            line.unitCount <= 1 ? `Remove ${line.name}` : `One ${line.enteredUnitLevel} less`
+          }
+          onMouseDown={keepFocus}
+          onClick={() => {
+            onStep(-1);
+          }}
+          className={step}
+        >
+          −
+        </button>
+        {/* W5: always natural language. The pressed button already says the
+            unit, so beside the buttons it is said only to a screen reader —
+            "2 strip", never a bare "2". */}
+        <span className="min-w-8 text-center">
+          <span className="numeral">{line.unitCount}</span>
+          <span className={offered.length > 1 ? 'sr-only' : 'text-ink/60'}>
+            {' '}
+            {line.enteredUnitLevel}
+          </span>
+        </span>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label={`One ${line.enteredUnitLevel} more`}
+          onMouseDown={keepFocus}
+          onClick={() => {
+            onStep(1);
+          }}
+          className={step}
+        >
+          +
+        </button>
+      </div>
+      {selected ? (
+        <span className="text-ink/40 text-xs">
+          {offered.length > 1 ? '+/− · Tab unit · % disc · Del' : '+/− · % disc · Del'}
+        </span>
+      ) : null}
+    </div>
   );
 }

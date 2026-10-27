@@ -46,6 +46,8 @@ export interface QuickItemCommand {
   readonly name: string;
   readonly pricePaisa: number;
   readonly baseUnitName: string;
+  /** The scanned code, when added from an unknown scan. Absent on older records. */
+  readonly barcode?: string | null;
 }
 
 export interface CustomerCommand {

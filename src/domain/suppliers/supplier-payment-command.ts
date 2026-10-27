@@ -1,5 +1,5 @@
 /**
- * [PCN-006] The supplier-payment command and its rules — pure (Phase 11 §2).
+ * [PCN-007] The supplier-payment command and its rules — pure (Phase 11 §2).
  *
  * The payable mirror of `settlement.ts`: a payment the pharmacy makes to a
  * distributor to reduce what it owes. Kept apart from the writer for the same

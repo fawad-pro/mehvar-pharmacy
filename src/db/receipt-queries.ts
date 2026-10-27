@@ -41,6 +41,7 @@ import {
   users,
 } from './schema';
 
+import { storedLineGrossPaisa } from '@/domain/sales/sale-command';
 import type { Uuid } from '@/lib/uuid';
 
 /**
@@ -246,7 +247,18 @@ export interface ReceiptDetailLine {
   /** So the screen can render W5's "1 strip + 4 tab" rather than a base count. */
   readonly packLevels: readonly { name: string; factor: number }[];
   readonly enteredUnitLevel: string;
+  /** Per base unit — nominal since PCN-012; money is `lineAmountPaisa`. */
   readonly unitPricePaisa: number;
+  /*
+   * [PCN-012] As entered and charged. Null on a line from before PCN-012 (its
+   * amount is per-base price × base quantity). On a return's lines, the count
+   * is null (a return is in base units) and the amount is the returned share
+   * of what the original line charged.
+   */
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
+  readonly unitPricePaisaEntered: number | null;
+  readonly lineAmountPaisa: number | null;
   readonly lineDiscountPaisa: number;
   readonly priceOverridden: boolean;
   /** How much of this line has since come back — the "what happened after". */
@@ -340,6 +352,10 @@ export async function findReceipt(
         packLevels: products.packLevels,
         enteredUnitLevel: saleLines.enteredUnitLevel,
         unitPricePaisa: saleLines.unitPricePaisa,
+        unitName: saleLines.unitName,
+        unitCount: saleLines.unitCount,
+        unitPricePaisaEntered: saleLines.unitPricePaisaEntered,
+        lineAmountPaisa: saleLines.lineAmountPaisa,
         lineDiscountPaisa: saleLines.lineDiscountPaisa,
         priceOverridden: saleLines.priceOverridden,
       })
@@ -472,6 +488,8 @@ export async function findReceipt(
         packLevels: products.packLevels,
         enteredUnitLevel: saleLines.enteredUnitLevel,
         unitPricePaisa: saleLines.unitPricePaisa,
+        originalQtyBase: saleLines.qtyBase,
+        originalLineAmountPaisa: saleLines.lineAmountPaisa,
         lineDiscountPaisa: saleLines.lineDiscountPaisa,
         priceOverridden: saleLines.priceOverridden,
       })
@@ -491,7 +509,27 @@ export async function findReceipt(
       origin: 'online',
       // A return's own lines are what came back; nothing comes back from a
       // return, so the column is structurally zero rather than queried.
-      lines: lineRows.map((row) => ({ ...row, returnedBase: 0 })),
+      lines: lineRows.map(({ originalQtyBase, originalLineAmountPaisa, ...row }) => ({
+        ...row,
+        returnedBase: 0,
+        unitName: null,
+        unitCount: null,
+        unitPricePaisaEntered: null,
+        // [PCN-012] The returned share of what the original line charged,
+        // rounded down — the same share `refundForLine` refunds.
+        lineAmountPaisa:
+          originalQtyBase > 0
+            ? Math.floor(
+                (storedLineGrossPaisa({
+                  lineAmountPaisa: originalLineAmountPaisa,
+                  unitPricePaisa: row.unitPricePaisa,
+                  qtyBase: originalQtyBase,
+                }) *
+                  row.qtyBase) /
+                  originalQtyBase,
+              )
+            : 0,
+      })),
       againstReceiptNumber: saleReturn.againstReceiptNumber,
       againstSaleId: saleReturn.againstSaleId,
       cashOutPaisa: saleReturn.cashOutPaisa,

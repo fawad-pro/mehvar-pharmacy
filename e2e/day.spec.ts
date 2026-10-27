@@ -1,6 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
-import { cart, DEMO, lastSale, openCounter, printedReceipt, search } from './support/counter';
+import { cart, DEMO, openCounter, payAndSettle, printedReceipt, search } from './support/counter';
 
 /**
  * Day 7's screens: W4 returns, W10 day close, W11 the owner phone view, and
@@ -11,18 +11,21 @@ import { cart, DEMO, lastSale, openCounter, printedReceipt, search } from './sup
  * so F9/F2/Settings are reachable here without a PIN switch first.
  */
 
+/** Sells one Panadol and waits for it to settle — see `payAndSettle`. */
+async function sellPanadol(page: Page): Promise<string | null> {
+  await search(page).fill('panadol');
+  await page.keyboard.press('Enter');
+  await expect(cart(page)).toContainText('Panadol');
+  return payAndSettle(page);
+}
+
 test('W4: a return finds the sale, restocks a batch, and prints a refund receipt', async ({
   page,
 }) => {
   await openCounter(page);
 
   // Sell something to return.
-  await search(page).fill('panadol');
-  await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText('Panadol');
-  await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
-  const saved = await lastSale(page).textContent();
+  const saved = await sellPanadol(page);
   // The receipt number and the total are adjacent sibling <p> elements with no
   // separating whitespace in the DOM, so `textContent` joins them with none
   // either — `\S+` alone would swallow the total too. The receipt format
@@ -54,6 +57,49 @@ test('W4: a return finds the sale, restocks a batch, and prints a refund receipt
 
   await expect(page.getByRole('status')).toContainText('Returned');
   await expect(printedReceipt(page)).toContainText('Panadol');
+  // A refund slip says so: no "Amount Due", no minus signs.
+  await expect(printedReceipt(page)).toContainText(`RETURN — against receipt ${receiptNumber!}`);
+  await expect(printedReceipt(page)).toContainText('Cash refunded');
+  await expect(printedReceipt(page)).not.toContainText('Amount Due');
+  await expect(printedReceipt(page)).not.toContainText(/-[\d,]+\.\d{2}/);
+});
+
+test('a quantity typed on Returns survives a late answer for the same sale', async ({ page }) => {
+  // React's development StrictMode loads the sale twice; in production the
+  // same gap opens when the operator switches sales before the lines arrive.
+  // Every repeat of a server action is held back here, so any late answer
+  // lands after the quantity is typed — and must not wipe it.
+  await openCounter(page);
+  const saved = await sellPanadol(page);
+  const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1] ?? '';
+  expect(receiptNumber).toBeTruthy();
+
+  const seen = new Set<string>();
+  await page.route(/\/returns\?receipt=/, async (route) => {
+    const action = route.request().headers()['next-action'];
+    if (route.request().method() === 'POST' && action) {
+      if (seen.has(action)) {
+        await new Promise((resolve) => setTimeout(resolve, 1_500));
+      }
+      seen.add(action);
+    }
+    await route.continue();
+  });
+
+  await page.keyboard.press('F2');
+  await expect(page).toHaveURL(/\/receipts$/);
+  await page.getByLabel('Find a receipt').fill(receiptNumber);
+  await page.getByRole('link', { name: receiptNumber }).first().click();
+  await page.getByRole('link', { name: 'Start a return' }).click();
+  await expect(page.getByRole('table')).toContainText('Panadol');
+
+  const quantity = page.getByLabel(/Return quantity for Panadol/);
+  await quantity.fill('1');
+  // Long enough for every held answer to land, twice over.
+  await page.waitForTimeout(4_000);
+  await expect(quantity).toHaveValue('1');
+  await expect(page.getByRole('button', { name: 'Confirm return' })).toBeEnabled();
+  await page.unrouteAll({ behavior: 'wait' });
 });
 
 test('W10: the three numbers, a cash movement, and the drawer count', async ({ page }) => {

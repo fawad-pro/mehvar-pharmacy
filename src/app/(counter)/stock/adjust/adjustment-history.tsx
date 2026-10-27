@@ -22,6 +22,8 @@ interface Row {
   productName: string;
   baseUnitName: string;
   qtyBaseDelta: number;
+  /** The amount moved, worded: "3 strip", "2 box, 4 tab". */
+  amount: string;
   reason: string;
   note: string | null;
   byName: string;
@@ -43,8 +45,8 @@ export function AdjustmentHistory({ rows }: { rows: Row[] }) {
                   second look — a correction downward is the one that can hide a
                   loss (I7: a colour means one thing). */}
               <span className={`numeral ${row.qtyBaseDelta < 0 ? 'text-amber' : 'text-green-900'}`}>
-                {row.qtyBaseDelta > 0 ? '+' : ''}
-                {row.qtyBaseDelta} {row.baseUnitName}
+                {row.qtyBaseDelta > 0 ? '+' : '−'}
+                {row.amount}
               </span>
               <span className="text-ink/60">{row.reason.replaceAll('_', ' ')}</span>
               {row.note ? <span className="text-ink/50 text-xs">“{row.note}”</span> : null}

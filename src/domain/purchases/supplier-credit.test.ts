@@ -1,5 +1,5 @@
 /**
- * [PCN-006] Pure rules for purchases on supplier credit.
+ * [PCN-007] Pure rules for purchases on supplier credit.
  *
  * The invoice-cost and paid-in-full derivations, and the two new rejections,
  * checked without a database — they are arithmetic and guards, exactly the

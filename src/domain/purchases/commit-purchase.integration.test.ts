@@ -160,9 +160,11 @@ suite('commitPurchase against Postgres', () => {
     const [batch] = await tenant.scope.select(batches, eq(batches.id, result.value.batchIds[0]!));
     // Eleven units on the shelf, not ten.
     expect(batch?.qtyReceivedBase).toBe(11);
-    // 35,000 paisa paid ÷ 11 = 3,181 each. Recording 3,500 would overstate cost
-    // of goods on every scheme purchase, permanently.
-    expect(batch?.unitCostPaisa).toBe(3_181);
+    // 35,000 paisa paid ÷ 11 = 3,181.8, so 3,182 each (rounded up, PCN-012).
+    // Recording 3,500 would overstate cost of goods on every scheme purchase,
+    // permanently. The exact total is what reports cost from.
+    expect(batch?.unitCostPaisa).toBe(3_182);
+    expect(batch?.costTotalPaisa).toBe(35_000);
 
     // And the invoice keeps saying what the distributor actually billed.
     const [line] = await tenant.scope.select(

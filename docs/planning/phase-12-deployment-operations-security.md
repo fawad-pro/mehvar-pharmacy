@@ -9,74 +9,190 @@ This document answers P8's test directly: *describe the worst thing that can hap
 
 ## 1. Topology & environments
 
-**Production:** Railway — one Next.js service, one PostgreSQL instance, one region. Custom domain under the parent brand (Phase 4 §6). TLS terminated at the platform; HTTPS only, HSTS on.
+> **Rewritten 2026-10-22 by PCN-010** for the local install PCN-004 chose. The
+> cloud-era text it replaces (Railway production, platform TLS, Sentry and an
+> uptime check, platform snapshots) is in this file's history and in PCN-004.
 
-**Environments:** `local` (developer machine), `staging` (Railway, own database, seeded demo pharmacy — doubles as the sales demo environment per Phase 11 §5), `production`. Three, no more; each additional environment is maintenance a solo founder pays for weekly.
+**Production: the Mehvar Node — one Windows machine per pharmacy**, installed by
+one `MehvarSetup` `.exe`. It bundles the Next.js standalone build, a pinned Node
+runtime, PostgreSQL as a Windows service (`MehvarPostgres`, port 5433,
+listening on `localhost` only), the counter service (`MehvarNode`, port 3000,
+hosted by WinSW), the nightly backup task and the support tools. Both services
+start automatically and restart on failure. Data lives in
+`C:\ProgramData\Mehvar`; program files in `C:\Program Files\Mehvar`.
 
-**Configuration:** environment variables only, held in Railway; no secrets in the repository, no `.env` committed. Secret rotation is a documented manual procedure at this scale (P6).
+**Counters.** The pilot runs **one counter**: Chrome in kiosk mode against
+`localhost` on the Node itself. Further counters are browsers on the shop LAN
+(wired or Wi-Fi; no internet needed), and are **not yet possible**: they need a
+way to add a counter with its own receipt prefix, a session that works over
+plain HTTP on a LAN (the session cookie is `Secure`, which browsers keep only
+on HTTPS or `localhost`), a search index that refreshes while open, and a test
+of two counters selling at once.
+
+**Railway is retained** for the sales demo and for the cloud services roadmap
+Phase 3 adds (offsite backup, owner remote view, licence and update services).
+Nothing on it is on the path of a sale.
+
+**Environments:** `local` (developer machine), `staging`/demo (Railway), and
+each pharmacy's Node.
+
+**Configuration:** `C:\ProgramData\Mehvar\.env`, written by the installer with
+an ACL restricted to SYSTEM and Administrators. The installer owns its keys
+(credentials, paths, port) and rewrites them on every install; every other line
+is the shop's and is kept verbatim across updates. The build machine's `.env`
+never enters the payload (stripped, then refused if present). No secrets in the
+repository.
 
 ## 2. Release procedure (P8 made operational)
 
-1. **Release window:** deploys happen late night (after 11pm PKT) or Sunday mornings — never during counter hours, never mid-rush. This is a rule, not a preference.
-2. **Forward-only migrations, committed with their feature** (Phase 11 §4). Every migration must be additive-safe: new columns nullable or defaulted, no destructive column drops in the same release that stops using them (drop in a later release, once verified). Deploys therefore never require a maintenance window.
-3. **Pre-deploy gate:** typecheck + full test suite green, `db:reset && db:migrate && db:seed` clean from zero, W1 E2E passing (Phase 11 §3.5).
-4. **Post-deploy verification:** run the ADR-8 rebuild verifier against production immediately after migration; confirm the sale path with one test transaction on the demo tenant; confirm receipt renders.
-5. **Rollback posture:** application rollback is a platform redeploy of the previous image (minutes). Because migrations are additive-safe, the previous image runs against the migrated schema — this is *why* additive-safety is mandatory rather than tidy. Data is never rolled back; append-only records make forward correction the only honest repair (ADR-1).
-6. **Client version skew:** the counter client may be running yesterday's build when a deploy lands. Offline-captured records carry client IDs and a schema version; ingestion accepts prior-version payloads for at least one release cycle (ADR-3 idempotency plus tolerance). A hard-refresh prompt appears only between sales, never mid-cart.
+1. **Updates are installer-based through the pilot** (PCN-010). An update is the
+   newer `MehvarSetup` run over the old one, by the founder or with the founder
+   on a call. Setup, in order: dumps the database to `backups\pre-update\` and
+   **stops with nothing changed** if it cannot; stops both services, and stops
+   with nothing changed if either refuses; replaces the files; migrates and
+   re-applies grants; restarts and verifies. The shop name and PIN pages are
+   skipped on an existing pharmacy.
+2. **Forward-only migrations, committed with their feature** (Phase 11 §4),
+   additive-safe: new columns nullable or defaulted, no destructive drop in the
+   release that stops using a column. A migration is never renumbered once it
+   has run anywhere (Day 19).
+3. **Release gate:** `npm run verify` green with the database suites running;
+   the E2E suite green; the installer built from a clean commit (a dirty tree is
+   refused) and stamped `<version>+<commit>`; the Windows validation checklist
+   run on real hardware for any release that changes the installer.
+4. **Post-install verification** is built into Setup: services running and
+   automatic, the counter answering, event tables immutable for the app role,
+   the ADR-8 verifier clean, a backup taken and restore-drilled, the nightly
+   task scheduled, and the default printer checked (a warning, not a failure).
+5. **Rollback posture:** the pre-update dump plus the previous installer.
+   Because migrations are additive-safe, the previous build runs against the
+   migrated schema; data is never rolled back — append-only records make
+   forward correction the only honest repair (ADR-1).
+6. **The in-app updater is deferred** to roadmap Phase 2, when installs outrun
+   the founder's visits. Its acceptance criteria stand: a signed manifest, a
+   code-signed installer, **no restart while the counter holds unsynced
+   records**, a backup before migrating, staged rollout and a rehearsed
+   rollback.
+7. **Client version skew:** offline-captured records carry client IDs and a
+   schema version; ingestion accepts prior-version payloads for at least one
+   release (ADR-3).
 
-**P8 answer:** the counter client holds its catalog index locally and can capture sales without us (ADR-3/4). If our service is down at 9am, the pharmacy opens, sells, prints, and syncs later. If our latest release is broken, the previous image is minutes away and the schema still accepts it. Nothing about tomorrow's trading depends on tonight going well.
+**P8 answer:** the counter sells from its local index and captures offline
+(ADR-3/4), so a stopped Node during an update or a crash means the counter keeps
+selling and syncs when the service returns. A broken release is undone by the
+previous installer and the pre-update dump.
 
 ## 3. Backups & recovery
 
-The pharmacy's entire business lives in one database; backup is a trust feature (T3), not an IT chore.
+The pharmacy's entire business lives in one database on one machine; backup is
+a trust feature (T3), not an IT chore.
 
-- **Platform backups:** Railway automated daily snapshots, retained per plan.
-- **Independent nightly dump:** `pg_dump` to separate object storage outside the hosting provider, 30-day retention. One provider failure must not take the backups with the database — this is the single most important line in this document.
-- **Targets:** RPO ≤ 24 hours for catastrophic loss (realistically minutes, since counter clients retain unsynced local records and the loss window is server-side only); RTO ≤ 4 hours to a restored, verified service.
-- **Restore drill:** performed once before first paying customer and quarterly thereafter — restore latest dump into a scratch database, run the ADR-8 verifier, confirm invariants (Phase 5 §5) hold. An untested backup is not a backup.
-- **Tenant self-service export** (Phase 3 §5.2, Phase 9 §8) is always available, in every payment state. It is simultaneously the trust argument, the retention ethic, and a customer-side backup we don't have to operate.
+- **Nightly dump:** `pg_dump` at 02:30 by the `Mehvar\NightlyBackup` task, to
+  `MEHVAR_BACKUP_DIR` (a USB drive is the recommended target — PCN-010
+  decision 5), 30-day retention, refusing to keep an empty dump.
+- **Pre-update and pre-restore dumps:** every update and every restore dumps the
+  live database first, and refuses to proceed without it.
+- **Visible to the owner — not yet built.** The last successful backup's age
+  belongs on the Day screen, and the backup folder belongs in Settings; today a
+  failing backup is silent in the app and the folder is set by editing `.env`.
+- **Offsite copy:** encrypted, outside the shop — **in deficit until roadmap
+  Phase 3.** Local and USB copies are the accepted, time-boxed cost of a local
+  install, and who owns a dead disk with no checked backup is a commercial
+  question still open (`commercialization.md`, open question 2).
+- **Restore drill:** run by Setup at install, and quarterly — the newest dump
+  restored into a scratch database, migrated, granted, checked for immutability
+  and verified as the app role. An untested backup is not a backup.
+- **Replacing the counter PC:** install, then `mehvar-restore.cmd <dump>
+  --replace`. The backup proves itself in a scratch database before it replaces
+  anything; the replaced database is kept and dumped; a new pairing key is shown
+  once; the licence moves from Settings → Licence.
+- **Owner export** (Phase 3 §5.2, Phase 9 §8) is available in every licence
+  state.
+- **Targets:** RPO ≤ 24 hours (the nightly dump); RTO ≤ 4 hours to a restored,
+  verified Node, given the USB drive and a Windows PC.
 
 ## 4. Monitoring & the verifier
 
-- **Error tracking** (Sentry or platform-equivalent) with a hard rule: any exception on the sale commit or sync ingestion path pages the founder. Everything else is a queue reviewed daily.
-- **Uptime check** on the sale surface, 5-minute interval, alerting to phone.
-- **ADR-8 rebuild verifier on schedule** (nightly) and after every sync-ingestion batch. A mismatch is sev-1: it means a derived number disagreed with the records, which is precisely the promise the product sells (P4/T4). Alert loudly, investigate before anything else ships.
-- **Business-health glance** (founder-side, weekly): tenants active, sales volume per tenant, unsynced-record ages, pending-layer backlog, quick-item completion queue depth. Unsynced ages and pending backlogs are early warnings of a pharmacy quietly falling out of the system — the churn signal that matters more than logins.
+There is no cloud monitoring in a local install, and nothing phones home.
+
+- **Logs** in `C:\ProgramData\Mehvar\logs` (installer, services, backups),
+  credentials masked before they are written.
+- **Support bundle** (Start menu → Mehvar → Support bundle): build identity,
+  verifier result, backup age, licence state and log tails, with secrets
+  redacted, sent over WhatsApp.
+- **ADR-8 verifier:** runs in post-install verification and in every restore
+  drill. A **nightly run beside the backup, with a mismatch shown in the app, is
+  not yet built**; until it is, a mismatch surfaces only when someone runs it. A
+  mismatch is sev-1: a derived number disagreed with the records.
+- **Founder glance** (weekly, from support bundles during the pilot): backup
+  age, pending-layer backlog, unsynced-record ages, quick-item queue.
 
 ## 5. Security posture
 
 Scaled honestly to a two-role, single-shop product holding no clinical data.
 
-- **Tenant isolation:** the `scoped.ts` chokepoint (ADR-2, Phase 11 §1) is the guarantee; a test asserts that no query path constructs without tenant context. Postgres RLS remains the documented post-V1 hardening step.
-- **Sessions:** device-bound long-lived session cookie for the counter (HttpOnly, Secure, SameSite=Lax), short-lived sessions for owner remote logins. PIN switching (ADR-7) changes the acting user within the device session; PINs are hashed (Argon2id), rate-limited, lockout after repeated failures with owner override.
-- **Authorization** is enforced server-side per role on every mutation — never by hiding UI. Salesman scope per Phase 5 §2.
-- **Data minimization as a genuine asset:** the product stores customer *name and phone only* (charter boundary) and no health or prescription data whatsoever. This is worth stating in sales conversations — there is no sensitive patient dataset to leak, by design.
-- **Transport & storage:** HTTPS only; database encrypted at rest by the platform; backup dumps encrypted before upload to independent storage.
-- **Counter machine hygiene** (documented in the setup guide, not enforceable by us): dedicated browser profile, no shared personal browsing, screen lock, UPS. Physical access to the counter machine is the realistic threat model, which is exactly why PIN attribution exists (T1).
-- **Dependencies:** lockfile committed; monthly patch review; no unmaintained packages in the money path.
+- **Tenant isolation:** the `scoped.ts` chokepoint (ADR-2); kept in a
+  single-tenant install so one codebase serves both homes.
+- **Database:** the app connects as a non-owning role; event tables are
+  INSERT-only for it (PCN-001), proven at install by an UPDATE that must be
+  refused. PostgreSQL listens on `localhost` only, with SCRAM authentication.
+- **Sessions:** a long-lived device session for the counter, a 12-hour session
+  for the owner's remote view; cookies are HttpOnly and SameSite=Lax, and
+  `Secure` in production — which works on `localhost` and **blocks LAN counters
+  and the owner's phone until the LAN-session decision is made and built.**
+- **PINs and passwords:** Argon2id; four-digit PINs; five wrong PINs lock that
+  person out for five minutes. The owner's password is generated at install.
+  **Changing the owner's password or the owner's own PIN is not yet built.**
+- **Authorization** is enforced server-side per role on every mutation, never by
+  hiding UI; licence capabilities are checked at the action.
+- **Data minimization:** customer name and phone only; no health or prescription
+  data (Phase 2). There is no patient dataset to leak, by design.
+- **Secrets:** none in the repository or the installer payload; the installer
+  log and the support bundle mask credentials, pairing keys and passwords.
+- **The machine:** physical access to the counter PC is the realistic threat,
+  which is why PIN attribution exists (T1). Dedicated browser profile, screen
+  lock, UPS — documented, not enforceable by us.
+- **Dependencies:** lockfile committed; monthly patch review.
 
 ## 6. Counter setup guide (onboarding artifact)
 
-A one-page, screenshot-led document the founder or channel partner follows per pharmacy:
+Founder-done for the first pharmacies (PCN-010 decision 1). One page,
+screenshot-led:
 
-1. Hardware check: PC minimums, 80mm (or 58mm) thermal printer, USB scanner, UPS.
-2. Printer install; print a test receipt from the app.
-3. Browser: dedicated profile, `--kiosk-printing` shortcut created (ADR-6), app pinned, PWA installed, autostart on boot.
-4. Scanner: verify it emits Enter after the code; scan test.
-5. Tenant setup: receipt header/footer, users and PINs, expiry horizons.
-6. Opening stock (W9) — assisted, the adoption gate.
-7. First live sale together, with the salesman driving.
-8. Hand over: WhatsApp support number, the one-page keyboard cheat sheet (Phase 10 §3) printed and taped to the counter.
+1. Hardware: 64-bit Windows 10/11, 4 GB RAM, SSD, a dedicated machine; an
+   80 mm thermal printer (58 mm is not yet supported); a USB scanner that sends
+   Enter; a UPS.
+2. Printer driver installed, a Windows test page printed, the receipt printer
+   set as the Windows default (Setup warns if the default is a PDF or similar).
+3. Run `MehvarSetup` attended (a silent first install is not supported); enter
+   the shop name and owner PIN; note the pairing key.
+4. Open the counter, pair it, print a test receipt from Settings.
+5. Settings: receipt header/footer, users & PINs, the licence.
+6. Point backups at the USB drive (`MEHVAR_BACKUP_DIR` in `.env` until Settings
+   has it) and confirm one lands.
+7. Opening stock (W9), assisted — the adoption gate.
+8. First live sale together, with the salesman driving.
+9. Hand over: WhatsApp support number and the keyboard cheat sheet.
 
 ## 7. Support model
 
-WhatsApp-first, founder-answered, at V1 scale — the channel this market already lives in. Response expectation set explicitly at sale: same-day for questions, immediate for anything blocking selling. Every support contact is logged in one place with its cause; recurring causes become product fixes, not FAQ entries (P5/P6 discipline). Remote assistance uses the owner surface plus screen-share; no remote-control software installed on counter machines.
+WhatsApp-first, founder-answered. Same-day for questions, immediate for anything
+blocking selling. Every contact logged with its cause; recurring causes become
+fixes. The support bundle is the first thing asked for. **Open (PCN-010):**
+whether remote screen-share is allowed for non-technical shops; this section
+previously excluded remote-control software.
 
 ## 8. Incident posture
 
-Severity 1 = selling is blocked, or a derived number disagrees with records (verifier mismatch). Response: acknowledge to affected pharmacies by WhatsApp within minutes, restore selling first (the offline path usually means selling never stopped — say so plainly, it is reassurance backed by architecture), diagnose second. Corrections to data are always compensating records (ADR-1/T2), never edits, even during incidents. Every sev-1 gets a written note to self: cause, fix, and the test or guard that prevents recurrence.
+Severity 1 = selling is blocked, or the verifier disagrees with the records.
+Acknowledge on WhatsApp within minutes, restore selling first (usually the
+counter never stopped — say so), diagnose second. Corrections to data are always
+compensating records (ADR-1/T2), never edits, even during incidents. Every sev-1
+gets a written note: cause, fix, and the test or guard that prevents recurrence.
 
 ## 9. Exports
 
-- Phase 13: restore drill and printer setup are scheduled items in the launch sequence, not implied work.
-- Master plan: this document owns every operational promise the commercial strategy makes (Phase 3 §5.3 suspension outcome, §5.2 export, uptime posture behind the subscription).
+- Phase 13: Windows validation, the restore drill and printer setup are
+  scheduled pilot-readiness items, not implied work.
+- Master plan: this document owns every operational promise the commercial
+  strategy makes (Phase 3 §5.3 suspension outcome, §5.2 export).

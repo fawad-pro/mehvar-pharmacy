@@ -132,6 +132,7 @@ export function ReceiptsSurface({
       </header>
 
       <input
+        autoComplete="off"
         ref={field}
         value={term}
         onChange={(event) => {

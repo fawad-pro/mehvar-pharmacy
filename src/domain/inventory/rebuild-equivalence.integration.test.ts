@@ -39,9 +39,15 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
+import { saleLineGrossPaisa, type SaleLineCommand } from '@/domain/sales/sale-command';
 import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
-import { commitPurchase } from '@/domain/purchases/commit-purchase';
+import { commitPurchase, type PurchaseLineCommand } from '@/domain/purchases/commit-purchase';
+import { commitPurchaseCorrection } from '@/domain/purchases/commit-purchase-correction';
+import { correctedLine, lineStateOf } from '@/domain/purchases/purchase-correction';
+import { commitSupplierReturn } from '@/domain/suppliers/commit-supplier-return';
+import { balancesBySupplier, supplierBalance } from '@/db/supplier-queries';
 import { commitAdjustment } from '@/domain/inventory/commit-adjustment';
+import { replaceProduct } from '@/domain/inventory/replace-product';
 import { commitReturn } from '@/domain/sales/commit-return';
 import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
 import { CASH_REASONS, directionFor } from '@/domain/cash/cash-command';
@@ -51,10 +57,16 @@ import {
   batches,
   customers,
   payments,
+  purchaseCorrections,
+  purchaseLines,
+  purchases,
   saleLineAllocations,
   saleLines,
   saleReturns,
   sales,
+  supplierPayments,
+  supplierReturns,
+  suppliers,
 } from '@/db/schema';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
@@ -71,6 +83,7 @@ import {
 } from '../../../tests/fixtures';
 import { derivedStock, rebuildQuantity, verifyBatches } from './rebuild';
 import { batchLedger } from '@/db/sales-queries';
+import { batchCostLedger } from '@/db/batch-cost-queries';
 
 const suite = process.env.DATABASE_URL ? describe : describe.skip;
 
@@ -78,6 +91,14 @@ const suite = process.env.DATABASE_URL ? describe : describe.skip;
 const SEED = Number(process.env.REBUILD_SEED ?? 20260730);
 const HISTORIES = Number(process.env.REBUILD_HISTORIES ?? 4);
 const EVENTS_PER_HISTORY = Number(process.env.REBUILD_EVENTS ?? 40);
+
+/**
+ * Expiry dates for generated batches. One is always in the past and one is
+ * absent, so every history mixes expired, unexpired and non-perishable stock:
+ * PCN-008 changed the order sales consume them in, and the rebuild has to
+ * agree whatever that order is.
+ */
+const EXPIRY_CHOICES = ['2020-01-01', '2030-01-01', '2030-06-01', null] as const;
 
 interface World {
   tenant: TestTenant;
@@ -98,6 +119,8 @@ interface World {
    * payments share one sequence (PCN-002), so both draw from this counter.
    */
   receiptCounter: number;
+  /** [PCN-009] One distributor per history, so returns have someone to credit. */
+  supplierId: Uuid;
 }
 
 /**
@@ -117,7 +140,65 @@ const observed = {
   /** Returns that actually gave credit back — the ledger's third term. */
   creditReducingReturns: 0,
   cashMovementsCommitted: 0,
+  /** [PCN-009] Corrections and supplier returns that actually committed. */
+  correctionsCommitted: 0,
+  supplierReturnsCommitted: 0,
+  /** [PCN-012] Sale lines entered as a count of strips at the strip's own price. */
+  unitPricedLines: 0,
+  /** Adjustments asking for more than the batch had, and refused. */
+  adjustmentsRefused: 0,
+  /** [PCN-012] Purchase lines entered per strip, at a strip cost of their own. */
+  packPurchaseLines: 0,
+  /** [PCN-012] Batches checked fully used up, so the exact reconciliation ran. */
+  batchesReconciled: 0,
+  /** [PCN-012] Products replaced mid-history, their stock and cost carried across. */
+  productsReplaced: 0,
 };
+
+/**
+ * [PCN-012] A random sale line: half the time a version-1 line (base units at
+ * the per-base price), half the time strips at a strip price of their own —
+ * sometimes cheaper than ten tablets, so the two pricing paths cannot agree by
+ * accident. One history mixes both, as a real outbox does across an update.
+ */
+function randomSaleLine(
+  random: () => number,
+  product: TestProduct,
+  lineDiscountPaisa: number,
+  priceOverridden: boolean,
+): SaleLineCommand {
+  if (random() < 0.5) {
+    return {
+      lineId: uuidv7(),
+      productId: product.id,
+      qtyBase: between(random, 1, 60),
+      enteredUnitLevel: pick(random, ['tab', 'strip']),
+      unitPricePaisa: product.pricePaisa,
+      lineDiscountPaisa,
+      priceOverridden,
+    };
+  }
+  observed.unitPricedLines += 1;
+  const count = between(random, 1, 6);
+  const stripPrice = product.pricePaisa * 10 - between(random, 0, 50);
+  return {
+    lineId: uuidv7(),
+    productId: product.id,
+    qtyBase: count * 10,
+    enteredUnitLevel: 'strip',
+    unitPricePaisa: Math.floor(stripPrice / 10),
+    unitKey: 'u1',
+    unitName: 'strip',
+    unitCount: count,
+    unitPricePaisaEntered: stripPrice,
+    lineDiscountPaisa,
+    priceOverridden,
+  };
+}
+
+function lineGross(line: SaleLineCommand): number {
+  return saleLineGrossPaisa(line) ?? 0;
+}
 
 /**
  * One random event against the world.
@@ -136,8 +217,35 @@ async function applyRandomEvent(world: World): Promise<void> {
     // invoice, often with scheme bonus units, and always with the chance of
     // resolving whatever the pending layer is currently holding.
     const lineCount = between(random, 1, 3);
-    const lines = Array.from({ length: lineCount }, () => {
+    const lines: PurchaseLineCommand[] = Array.from({ length: lineCount }, () => {
       const product = pick(random, world.products);
+      if (random() < 0.5) {
+        // [PCN-012] Bought per strip at a strip cost that is often not a
+        // whole number of paisa per tablet, so only exact costing reconciles.
+        observed.packPurchaseLines += 1;
+        const count = between(random, 1, 20);
+        const bonusCount = random() < 0.3 ? between(random, 1, 2) : 0;
+        const stripCost = between(random, 800, 5_000);
+        return {
+          lineId: uuidv7(),
+          productId: product.id,
+          qtyBase: count * 10,
+          bonusQtyBase: bonusCount * 10,
+          unitCostPaisa: Math.ceil(stripCost / 10),
+          expiryDate: pick(random, EXPIRY_CHOICES),
+          batchNumber: null,
+          mrpAtReceivingPaisa: null,
+          priceAtReceivingPaisa: product.pricePaisa,
+          entered: {
+            unitKey: 'u1',
+            unitName: 'strip',
+            unitCount: count,
+            bonusUnitCount: bonusCount,
+            unitCostPaisa: stripCost,
+            pricePaisa: product.pricePaisa * 10,
+          },
+        };
+      }
       return {
         lineId: uuidv7(),
         productId: product.id,
@@ -146,7 +254,7 @@ async function applyRandomEvent(world: World): Promise<void> {
         // the blended-cost path gets exercised constantly rather than rarely.
         bonusQtyBase: random() < 0.3 ? between(random, 1, 5) : 0,
         unitCostPaisa: between(random, 100, 500),
-        expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
+        expiryDate: pick(random, EXPIRY_CHOICES),
         batchNumber: random() < 0.5 ? `B-${between(random, 1, 9999)}` : null,
         mrpAtReceivingPaisa: null,
         priceAtReceivingPaisa: product.pricePaisa,
@@ -154,13 +262,17 @@ async function applyRandomEvent(world: World): Promise<void> {
     });
     observed.schemeLines += lines.filter((line) => line.bonusQtyBase > 0).length;
 
+    // Most invoices name the history's distributor, and some are bought on
+    // credit, so supplier balances and supplier returns have real history.
+    const withSupplier = random() < 0.7;
     const received = await commitPurchase(tenant.scope, {
       purchaseId: uuidv7(),
-      supplierId: null,
+      supplierId: withSupplier ? world.supplierId : null,
       invoiceRef: `INV-${world.receiptCounter}`,
       invoiceDate: null,
       note: null,
       lines,
+      ...(withSupplier && random() < 0.4 ? { cashPaidPaisa: 0 } : {}),
     });
     if (received.ok) {
       observed.resolvedPendingBase += received.value.resolvedPendingBase;
@@ -183,7 +295,7 @@ async function applyRandomEvent(world: World): Promise<void> {
       note: null,
       unitCostPaisa: between(random, 100, 500),
       pricePerBaseUnitPaisa: product.pricePaisa,
-      expiryDate: pick(random, ['2026-09-01', '2027-01-01', '2027-06-01', null]),
+      expiryDate: pick(random, EXPIRY_CHOICES),
       batchNumber: null,
     });
     if (corrected.ok) {
@@ -203,12 +315,18 @@ async function applyRandomEvent(world: World): Promise<void> {
       return;
     }
     const batch = pick(random, withStock);
+    // Now and then the operator asks for more than the batch has — a typo, or
+    // a sale that took the units while the screen was open. The refusal must
+    // leave no adjustment behind, or the next verification sees a mismatch.
+    const overshoot = random() < 0.15;
 
-    await commitAdjustment(tenant.scope, {
+    const result = await commitAdjustment(tenant.scope, {
       adjustmentId: uuidv7(),
       productId: batch.productId,
       batchId: batch.id,
-      qtyBaseDelta: -between(random, 1, Math.min(batch.qtyRemainingBase, 20)),
+      qtyBaseDelta: overshoot
+        ? -(batch.qtyRemainingBase + between(random, 1, 5))
+        : -between(random, 1, Math.min(batch.qtyRemainingBase, 20)),
       reason: pick(random, [
         'damage',
         'expiry_writeoff',
@@ -217,6 +335,10 @@ async function applyRandomEvent(world: World): Promise<void> {
       ] as const),
       note: null,
     });
+    if (overshoot) {
+      expect(result).toEqual({ ok: false, reason: 'stale_batch_state' });
+      observed.adjustmentsRefused += 1;
+    }
     return;
   }
 
@@ -238,19 +360,10 @@ async function applyRandomEvent(world: World): Promise<void> {
     // account rather than being paid in cash.
     const customerId = pick(random, world.customers);
     const lineCount = between(random, 1, 3);
-    const lines = Array.from({ length: lineCount }, () => {
-      const product = pick(random, world.products);
-      return {
-        lineId: uuidv7(),
-        productId: product.id,
-        qtyBase: between(random, 1, 60),
-        enteredUnitLevel: pick(random, ['tab', 'strip']),
-        unitPricePaisa: product.pricePaisa,
-        lineDiscountPaisa: 0,
-        priceOverridden: false,
-      };
-    });
-    const total = lines.reduce((sum, line) => sum + line.unitPricePaisa * line.qtyBase, 0);
+    const lines = Array.from({ length: lineCount }, () =>
+      randomSaleLine(random, pick(random, world.products), 0, false),
+    );
+    const total = lines.reduce((sum, line) => sum + lineGross(line), 0);
     // Sometimes fully on credit, sometimes a cash/credit split.
     const cashPaisa = random() < 0.4 ? 0 : between(random, 0, total);
     const creditPaisa = total - cashPaisa;
@@ -363,24 +476,130 @@ async function applyRandomEvent(world: World): Promise<void> {
     return;
   }
 
+  if (roll < 0.6) {
+    // [PCN-009] A purchase correction: the cost, the quantity or the bonus of a
+    // received line, stated as what the line should have said. Reductions can
+    // exceed what the batch still holds, and are then refused.
+    const received = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.source === 'purchase_line',
+    );
+    if (received.length === 0) {
+      return;
+    }
+    const batch = pick(random, received);
+    const [line] = await tenant.scope.select(purchaseLines, eq(purchaseLines.id, batch.sourceId));
+    if (!line) {
+      return;
+    }
+    const current = correctedLine(
+      lineStateOf(line),
+      await tenant.scope.select(
+        purchaseCorrections,
+        eq(purchaseCorrections.purchaseLineId, line.id),
+      ),
+    );
+    const which = random();
+    const committed = await commitPurchaseCorrection(tenant.scope, {
+      correctionId: uuidv7(),
+      purchaseLineId: line.id as Uuid,
+      // Whole packs of the line's own unit (1 for a per-base line, PCN-012).
+      qtyBase:
+        which < 0.4
+          ? Math.max(0, current.qtyBase + between(random, -15, 15) * current.factor)
+          : current.qtyBase,
+      bonusQtyBase:
+        which >= 0.4 && which < 0.6
+          ? Math.max(0, current.bonusQtyBase + between(random, -3, 3) * current.factor)
+          : current.bonusQtyBase,
+      unitCostPaisa: which >= 0.6 ? between(random, 100, 500) : current.unitCostPaisa,
+      note: 'generated correction',
+    });
+    if (committed.ok && !committed.value.alreadyCommitted) {
+      observed.correctionsCommitted += 1;
+    }
+    return;
+  }
+
+  if (roll < 0.64) {
+    // [PCN-009] Goods back to the distributor, from a batch that arrived on one
+    // of its invoices — the credit reduces what is owed.
+    const stocked = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.source === 'purchase_line' && batch.qtyRemainingBase > 0,
+    );
+    if (stocked.length === 0) {
+      return;
+    }
+    const batch = pick(random, stocked);
+    const committed = await commitSupplierReturn(tenant.scope, {
+      returnId: uuidv7(),
+      batchId: batch.id as Uuid,
+      qtyBase: between(random, 1, Math.min(batch.qtyRemainingBase, 10)),
+      creditPaisa: between(random, 0, 3_000),
+      note: null,
+    });
+    if (committed.ok) {
+      observed.supplierReturnsCommitted += 1;
+    }
+    return;
+  }
+
+  if (roll < 0.66) {
+    // [PCN-012] "Replace this product": every batch with stock moves to a new
+    // product at the same count, with its remaining cost. Later events sell,
+    // receive and adjust the replacement, so one history mixes both products.
+    const index = between(random, 0, world.products.length - 1);
+    const old = world.products[index]!;
+    const onHand = (await tenant.scope.select(batches)).filter(
+      (batch) => batch.productId === old.id && batch.qtyRemainingBase > 0,
+    );
+    const replaced = await replaceProduct(tenant.scope, {
+      oldProductId: old.id,
+      product: {
+        name: `${old.name} (replaced)`,
+        globalProductId: null,
+        manufacturer: null,
+        form: null,
+        strength: null,
+        formulaText: null,
+        baseUnitName: 'tab',
+        packLevels: [{ name: 'strip', factor: 10 }],
+        pricePaisa: old.pricePaisa,
+        mrpPaisa: null,
+        minStockBaseUnits: null,
+        needsCompletion: false,
+      },
+      batches: onHand.map((batch) => ({
+        batchId: batch.id as Uuid,
+        expectedRemainingBase: batch.qtyRemainingBase,
+        newQtyBase: batch.qtyRemainingBase,
+      })),
+      note: 'generated replacement',
+    });
+    if (replaced.ok) {
+      observed.productsReplaced += 1;
+      world.products[index] = {
+        ...old,
+        id: replaced.value.newProductId,
+        name: `${old.name} (replaced)`,
+      };
+    }
+    return;
+  }
+
   // A cash sale. Quantities deliberately overshoot available stock sometimes,
   // so the pending layer is exercised rather than assumed.
   const lineCount = between(random, 1, 3);
-  const lines = Array.from({ length: lineCount }, () => {
-    const product = pick(random, world.products);
-    return {
-      lineId: uuidv7(),
-      productId: product.id,
-      qtyBase: between(random, 1, 60),
-      enteredUnitLevel: pick(random, ['tab', 'strip']),
-      unitPricePaisa: product.pricePaisa,
-      lineDiscountPaisa: random() < 0.2 ? between(random, 1, 100) : 0,
-      priceOverridden: random() < 0.1,
-    };
-  });
+  const lines = Array.from({ length: lineCount }, () =>
+    randomSaleLine(
+      random,
+      pick(random, world.products),
+      random() < 0.2 ? between(random, 1, 100) : 0,
+      random() < 0.1,
+    ),
+  );
 
   const subtotal = lines.reduce(
-    (sum, line) => sum + Math.max(0, line.unitPricePaisa * line.qtyBase - line.lineDiscountPaisa),
+    (sum, line) => sum + Math.max(0, lineGross(line) - line.lineDiscountPaisa),
     0,
   );
   const invoiceDiscount = random() < 0.2 ? Math.min(subtotal, between(random, 1, 200)) : 0;
@@ -430,6 +649,66 @@ async function assertInvariants(world: World, label: string): Promise<void> {
     );
   }
 
+  /* [PCN-012] Cost reconciliation (D1, D2). Every batch's movements — sales,
+     write-offs, supplier returns, restocks — costed cumulatively from its
+     CURRENT basis: never less than the exact proportional cost, and exactly
+     what was paid once the batch is used up. */
+  const costLedger = await batchCostLedger(tenant.scope);
+  const byBatch = new Map<string, { taken: number; cost: number }>();
+  for (const movement of costLedger.movements) {
+    const running = byBatch.get(movement.batchId) ?? { taken: 0, cost: 0 };
+    running.taken += movement.qtyBase;
+    running.cost += movement.costPaisa;
+    byBatch.set(movement.batchId, running);
+  }
+  for (const [batchId, { taken, cost }] of byBatch) {
+    const basis = costLedger.basis.get(batchId);
+    if (!basis || basis.receivedBase <= 0) continue;
+    expect(
+      cost * basis.receivedBase,
+      `${label}: batch ${batchId} cost understated`,
+    ).toBeGreaterThanOrEqual(basis.totalPaisa * taken);
+    if (taken === basis.receivedBase) {
+      expect(cost, `${label}: used-up batch ${batchId} does not reconcile`).toBe(basis.totalPaisa);
+      observed.batchesReconciled += 1;
+    }
+  }
+
+  /* [PCN-009] The supplier balance, recomputed from the raw rows — tracked
+     invoices as corrected, less cash paid, supplier payments and the credit for
+     goods sent back — must equal both the one-supplier figure and the
+     all-suppliers expansion (Day 8: a figure and its expansion are one thing). */
+  const tracked = (await tenant.scope.select(purchases)).filter(
+    (row) => row.supplierId === world.supplierId && row.creditTracked,
+  );
+  const trackedIds = new Set(tracked.map((row) => row.id));
+  const trackedLines = (await tenant.scope.select(purchaseLines)).filter((row) =>
+    trackedIds.has(row.purchaseId),
+  );
+  const trackedLineIds = new Set(trackedLines.map((row) => row.id));
+  const expectedOwed =
+    trackedLines.reduce(
+      (sum, row) => sum + (row.lineCostPaisa ?? row.qtyBase * row.unitCostPaisa),
+      0,
+    ) +
+    (await tenant.scope.select(purchaseCorrections))
+      .filter((row) => trackedLineIds.has(row.purchaseLineId))
+      .reduce((sum, row) => sum + row.invoiceDeltaPaisa, 0) -
+    tracked.reduce((sum, row) => sum + row.cashPaidPaisa, 0) -
+    (await tenant.scope.select(supplierPayments))
+      .filter((row) => row.supplierId === world.supplierId)
+      .reduce((sum, row) => sum + row.amountPaisa, 0) -
+    (await tenant.scope.select(supplierReturns))
+      .filter((row) => row.supplierId === world.supplierId)
+      .reduce((sum, row) => sum + row.creditPaisa, 0);
+  expect(await supplierBalance(tenant.scope, world.supplierId), `${label}: supplier balance`).toBe(
+    expectedOwed,
+  );
+  expect(
+    (await balancesBySupplier(tenant.scope))[world.supplierId] ?? 0,
+    `${label}: supplier balances expansion`,
+  ).toBe(expectedOwed);
+
   /* Invariant 2 — batch quantity ≥ 0; the pending layer is the only construct
      that may represent unresolved negative consumption. */
   expect(report.negativeBatches, `${label}: a batch went negative`).toEqual([]);
@@ -460,8 +739,15 @@ async function assertInvariants(world: World, label: string): Promise<void> {
 
   for (const sale of allSales) {
     const own = linesBySale.get(sale.id) ?? [];
+    // [PCN-012] The stored amount when the line has one, else per-base × base
+    // quantity — exactly what each kind of line charged.
     const subtotal = own.reduce(
-      (sum, line) => sum + Math.max(0, line.unitPricePaisa * line.qtyBase - line.lineDiscountPaisa),
+      (sum, line) =>
+        sum +
+        Math.max(
+          0,
+          (line.lineAmountPaisa ?? line.unitPricePaisa * line.qtyBase) - line.lineDiscountPaisa,
+        ),
       0,
     );
     expect(sale.subtotalPaisa, `${label}: subtotal of ${sale.receiptNumber}`).toBe(subtotal);
@@ -626,6 +912,13 @@ suite('rebuild equivalence — randomized histories', () => {
         );
       }
 
+      const supplierId = uuidv7();
+      await tenant.scope.insert(suppliers, {
+        id: supplierId,
+        name: `Distributor ${uuidv7().slice(-6)}`,
+        phone: null,
+      });
+
       const world: World = {
         tenant,
         products,
@@ -634,6 +927,7 @@ suite('rebuild equivalence — randomized histories', () => {
         issued: [],
         issuedPayments: [],
         receiptCounter: 0,
+        supplierId,
       };
 
       for (let event = 0; event < EVENTS_PER_HISTORY; event += 1) {
@@ -728,5 +1022,25 @@ suite('rebuild equivalence — randomized histories', () => {
     expect(observed.cashMovementsCommitted, 'no cash movement was ever committed').toBeGreaterThan(
       0,
     );
+    expect(observed.correctionsCommitted, 'no purchase correction ever committed').toBeGreaterThan(
+      0,
+    );
+    expect(observed.supplierReturnsCommitted, 'no supplier return ever committed').toBeGreaterThan(
+      0,
+    );
+    expect(observed.unitPricedLines, 'no sale line was ever priced per strip').toBeGreaterThan(0);
+    expect(
+      observed.packPurchaseLines,
+      'no purchase line was ever entered per strip',
+    ).toBeGreaterThan(0);
+    expect(
+      observed.batchesReconciled,
+      'no batch was ever used up — the exact cost reconciliation never ran',
+    ).toBeGreaterThan(0);
+    expect(observed.productsReplaced, 'no product was ever replaced').toBeGreaterThan(0);
+    expect(
+      observed.adjustmentsRefused,
+      'no adjustment was ever refused — the refusal path went untested',
+    ).toBeGreaterThan(0);
   });
 });

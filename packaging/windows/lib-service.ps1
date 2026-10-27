@@ -141,3 +141,86 @@ function New-WinSwDescriptor {
 </service>
 "@
 }
+
+<#
+.SYNOPSIS
+    Stop Mehvar's services, in order, and put them back if any refuses.
+
+.DESCRIPTION
+    An update replaces node.exe, MehvarNode.exe and the PostgreSQL binaries,
+    and then migrates the schema. Doing either under a running service fails
+    two ways: Windows will not overwrite a running image (so step 7's copy over
+    MehvarNode.exe threw on every upgrade), and the old application keeps
+    serving against a schema it was not written for. So Setup stops both
+    services after the pre-update backup and before replacing a file, and
+    install-services.ps1 stops the application again before it migrates.
+
+    In order: the application first, because it holds the database
+    connections; then PostgreSQL. If one will not stop, the ones this call
+    stopped are started again, in reverse, and the result says which refused --
+    a shop must never be left with no counter because an update could not
+    begin.
+
+    The service calls are parameters so services.tests.ps1 can drive every
+    branch on any machine. A service that does not exist (a first install) is
+    skipped, not an error.
+
+.OUTPUTS
+    [pscustomobject] Ok, Stopped (names this call stopped), Failed, Message
+#>
+function Stop-MehvarServices {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] [string[]] $Names,
+        [int] $TimeoutSeconds = 30,
+        [scriptblock] $GetStatus = {
+            param($Name)
+            # Get-Service exists only on Windows; elsewhere there is nothing to stop.
+            if (-not (Get-Command Get-Service -ErrorAction SilentlyContinue)) { return $null }
+            $svc = Get-Service -Name $Name -ErrorAction SilentlyContinue
+            if ($svc) { return "$($svc.Status)" } else { return $null }
+        },
+        [scriptblock] $StopOne  = { param($Name) Stop-Service -Name $Name -Force -ErrorAction Stop },
+        [scriptblock] $StartOne = { param($Name) Start-Service -Name $Name -ErrorAction SilentlyContinue },
+        [scriptblock] $Wait     = { Start-Sleep -Seconds 1 }
+    )
+
+    $stopped = New-Object System.Collections.Generic.List[string]
+
+    foreach ($name in $Names) {
+        $status = & $GetStatus $name
+        if ($null -eq $status -or $status -eq 'Stopped') { continue }
+
+        $failure = $null
+        try { & $StopOne $name } catch { $failure = $_.Exception.Message }
+
+        if ($null -eq $failure) {
+            $failure = "$name did not stop within $TimeoutSeconds seconds."
+            for ($i = 0; $i -lt $TimeoutSeconds; $i++) {
+                if ((& $GetStatus $name) -eq 'Stopped') { $failure = $null; break }
+                & $Wait
+            }
+        }
+
+        if ($null -ne $failure) {
+            # Put back what this call took down, newest first.
+            for ($j = $stopped.Count - 1; $j -ge 0; $j--) { & $StartOne $stopped[$j] }
+            return [pscustomobject]@{
+                Ok      = $false
+                Stopped = @()
+                Failed  = $name
+                Message = "Could not stop ${name}: $failure"
+            }
+        }
+        $stopped.Add($name)
+    }
+
+    $message = 'Nothing was running.'
+    if ($stopped.Count -gt 0) { $message = "Stopped: $($stopped -join ', ')" }
+    return [pscustomobject]@{
+        Ok      = $true
+        Stopped = $stopped.ToArray()
+        Failed  = $null
+        Message = $message
+    }
+}

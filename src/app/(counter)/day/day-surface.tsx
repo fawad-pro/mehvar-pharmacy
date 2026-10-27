@@ -20,6 +20,8 @@ import {
   type CashDirection,
   type CashReason,
 } from '@/domain/cash/cash-command';
+import { paisaFromRupeeInput, parseRupeeInput } from '@/domain/sales/cart';
+import { creditAgainstStockCost } from '@/domain/suppliers/supplier-return';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
@@ -40,6 +42,8 @@ interface ThreeNumbers {
 interface ReportFigures {
   costPaisa: number;
   marginPaisa: number;
+  /** [PCN-012, D2] Written off or counted short in the range, at cost. */
+  writtenOffPaisa: number;
   saleCount: number;
   unitsSold: number;
   returnCount: number;
@@ -66,6 +70,18 @@ interface ReturnExceptionRow {
   createdAt: Date;
 }
 
+/** PCN-008 — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface ExpiredSaleRow {
+  allocationId: string;
+  receiptNumber: string;
+  productName: string;
+  qtyBase: number;
+  baseUnitName: string;
+  expiryDate: string;
+  byName: string;
+  createdAt: Date;
+}
+
 interface QuickItemRow {
   productId: string;
   name: string;
@@ -76,8 +92,37 @@ interface AdjustmentExceptionRow {
   id: string;
   productName: string;
   qtyBaseDelta: number;
+  /** [PCN-012] The magnitude as counted: "5 strip". */
+  amount: string;
   reason: string;
   note: string | null;
+  byName: string;
+  createdAt: Date;
+}
+
+/** [PCN-009] — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface PurchaseCorrectionExceptionRow {
+  id: string;
+  purchaseId: string;
+  productName: string;
+  qtyDeltaBase: number;
+  bonusDeltaBase: number;
+  costCorrected: boolean;
+  invoiceDeltaPaisa: number;
+  note: string;
+  byName: string;
+  createdAt: Date;
+}
+
+interface SupplierReturnExceptionRow {
+  id: string;
+  productName: string;
+  supplierName: string;
+  /** [PCN-012] As counted: "5 strip". */
+  amount: string;
+  creditPaisa: number;
+  /** [PCN-012] What the return took out of its batch, at cost. */
+  stockCostPaisa: number;
   byName: string;
   createdAt: Date;
 }
@@ -108,12 +153,17 @@ export function DaySurface({
   figures,
   overrides,
   returns,
+  expiredSold,
   quickItems,
   adjustments,
+  corrections,
+  supplierReturns,
   cashMovements,
   lateSynced,
   hasOpeningFloat,
   supplierOwedPaisa,
+  supplierCreditPaisa,
+  suppliersInCredit,
 }: {
   day: BusinessDay;
   today: BusinessDay;
@@ -122,13 +172,22 @@ export function DaySurface({
   figures: ReportFigures;
   overrides: OverrideRow[];
   returns: ReturnExceptionRow[];
+  /** PCN-008: sold from a batch already past its expiry date. */
+  expiredSold: ExpiredSaleRow[];
   quickItems: QuickItemRow[];
   adjustments: AdjustmentExceptionRow[];
+  /** [PCN-009] Corrections to received invoices. */
+  corrections: PurchaseCorrectionExceptionRow[];
+  /** [PCN-009] Goods sent back to suppliers. */
+  supplierReturns: SupplierReturnExceptionRow[];
   cashMovements: CashMovementExceptionRow[];
   lateSynced: LateSyncedRow[];
   hasOpeningFloat: boolean;
-  /** [PCN-006] What the pharmacy owes suppliers — a position, always all-time. */
+  /** [PCN-007] What the pharmacy owes suppliers — a position, always all-time. */
   supplierOwedPaisa: number;
+  /** [PCN-011] Credit suppliers hold for the pharmacy — reported apart, never netted. */
+  supplierCreditPaisa: number;
+  suppliersInCredit: number;
 }) {
   const isToday = day === today;
   /** Counting and recording cash is something you do to *this* drawer, now. */
@@ -136,10 +195,13 @@ export function DaySurface({
   const needsOpeningFloat = isDrawerDay && !hasOpeningFloat;
 
   const exceptionCount =
+    expiredSold.length +
     overrides.length +
     returns.length +
     quickItems.length +
     adjustments.length +
+    corrections.length +
+    supplierReturns.length +
     cashMovements.length +
     lateSynced.length;
 
@@ -252,10 +314,13 @@ export function DaySurface({
       <AttentionBanner
         count={exceptionCount}
         parts={[
+          [expiredSold.length, 'expired sale'],
           [overrides.length, 'discount'],
           [returns.length, 'return'],
           [quickItems.length, 'quick item'],
           [adjustments.length, 'adjustment'],
+          [corrections.length, 'purchase correction'],
+          [supplierReturns.length, 'return to supplier'],
           [cashMovements.length, 'cash movement'],
           [lateSynced.length, 'synced late'],
         ]}
@@ -271,6 +336,17 @@ export function DaySurface({
             {formatPaisa(paisa(figures.marginPaisa), { withSymbol: true })}
           </span>
         </span>
+        {/* D2: stock that left without a sale is a loss at its cost, said
+            beside the margin rather than hidden in it. Only when there is one. */}
+        {figures.writtenOffPaisa > 0 ? (
+          <span>
+            Written off{' '}
+            <span className="numeral text-amber font-medium">
+              {formatPaisa(paisa(figures.writtenOffPaisa), { withSymbol: true })}
+            </span>{' '}
+            at cost
+          </span>
+        ) : null}
         {/* "How many sales" is exactly the moment an owner wants to see which
             ones — and this used to land on Returns, dropping someone reviewing
             the day into a refund workflow. It goes to Receipts now: a place to
@@ -279,7 +355,7 @@ export function DaySurface({
           {figures.saleCount} sale{figures.saleCount === 1 ? '' : 's'} →
         </Link>
         <span>{figures.unitsSold.toLocaleString()} units sold</span>
-        {/* [PCN-006] The payable position — the mirror of "Owed to you". Shown
+        {/* [PCN-007] The payable position — the mirror of "Owed to you". Shown
             only when the shop is actually carrying supplier credit, so a
             cash-only pharmacy never reads a permanent "Rs 0.00" it learns to
             ignore. Paid down from the Purchases screen. */}
@@ -289,6 +365,19 @@ export function DaySurface({
             <span className="numeral text-amber font-medium">
               {formatPaisa(paisa(supplierOwedPaisa), { withSymbol: true })}
             </span>
+          </Link>
+        ) : null}
+        {/* [PCN-011] The other direction: money a supplier holds for the shop
+            (an overpayment, or credit for goods sent back from a paid invoice).
+            Hidden until PCN-011 — the owed figure floored it at zero — although
+            it is as real as a customer's advance. Same rule as that note: shown
+            only when there is something to show. */}
+        {supplierCreditPaisa > 0 ? (
+          <Link href="/purchases" className="hover:underline">
+            <span className="numeral font-medium">
+              {formatPaisa(paisa(supplierCreditPaisa), { withSymbol: true })}
+            </span>{' '}
+            credit with {suppliersInCredit} supplier{suppliersInCredit === 1 ? '' : 's'}
           </Link>
         ) : null}
       </div>
@@ -315,6 +404,21 @@ export function DaySurface({
       <div>
         {exceptionCount > 0 ? (
           <div className="flex flex-col gap-4">
+            {/* PCN-008. First, because it is the one that can reach a patient. */}
+            <ExceptionGroup title="Expired stock sold" rows={expiredSold} empty={false}>
+              {expiredSold.map((row) => (
+                <Row key={row.allocationId}>
+                  <span className="font-medium">{row.productName}</span>
+                  <span className="numeral text-amber ml-2">
+                    {row.qtyBase} {row.baseUnitName}
+                  </span>
+                  <span className="text-amber ml-2">expired {row.expiryDate}</span>
+                  <span className="text-ink/60 ml-2">{row.receiptNumber}</span>
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
             <ExceptionGroup title="Discounts and overrides" rows={overrides} empty={false}>
               {overrides.map((row) => (
                 <Row key={row.saleLineId}>
@@ -353,6 +457,52 @@ export function DaySurface({
               ))}
             </ExceptionGroup>
 
+            <ExceptionGroup title="Purchase corrections" rows={corrections} empty={false}>
+              {corrections.map((row) => (
+                <Row key={row.id}>
+                  <Link
+                    href={`/purchases/${row.purchaseId}`}
+                    className="font-medium hover:underline"
+                  >
+                    {row.productName}
+                  </Link>
+                  <span className="text-ink/60 ml-2">
+                    {[
+                      row.qtyDeltaBase !== 0
+                        ? `qty ${row.qtyDeltaBase > 0 ? '+' : ''}${row.qtyDeltaBase}`
+                        : null,
+                      row.bonusDeltaBase !== 0
+                        ? `bonus ${row.bonusDeltaBase > 0 ? '+' : ''}${row.bonusDeltaBase}`
+                        : null,
+                      row.costCorrected ? 'cost corrected' : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <span className="text-ink/50 ml-2 truncate">{row.note}</span>
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
+            <ExceptionGroup title="Returns to suppliers" rows={supplierReturns} empty={false}>
+              {supplierReturns.map((row) => (
+                <Row key={row.id}>
+                  <span className="font-medium">{row.productName}</span>
+                  <span className="numeral text-amber ml-2">−{row.amount}</span>
+                  <span className="text-ink/60 ml-2">to {row.supplierName}</span>
+                  <span className="numeral ml-2">credit {formatPaisa(paisa(row.creditPaisa))}</span>
+                  <span className="numeral text-ink/60 ml-2">
+                    stock cost {formatPaisa(paisa(row.stockCostPaisa))}
+                    {creditAgainstStockCost(row.creditPaisa, row.stockCostPaisa)
+                      ? ` (${creditAgainstStockCost(row.creditPaisa, row.stockCostPaisa)})`
+                      : ''}
+                  </span>
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
             <ExceptionGroup title="Adjustments" rows={adjustments} empty={false}>
               {adjustments.map((row) => (
                 <Row key={row.id}>
@@ -360,8 +510,8 @@ export function DaySurface({
                   <span
                     className={`numeral ml-2 ${row.qtyBaseDelta < 0 ? 'text-amber' : 'text-green-900'}`}
                   >
-                    {row.qtyBaseDelta > 0 ? '+' : ''}
-                    {row.qtyBaseDelta}
+                    {row.qtyBaseDelta > 0 ? '+' : '−'}
+                    {row.amount}
                   </span>
                   <span className="text-ink/60 ml-2">{row.reason.replaceAll('_', ' ')}</span>
                   <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
@@ -528,11 +678,15 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
 
-  const countedPaisa = Math.round(Number(counted || '0') * 100);
+  // A count that is not an amount is said, never read as Rs 0 — that would
+  // record the whole drawer as short.
+  const countedParsed = parseRupeeInput(counted);
+  const unreadable = counted.trim() !== '' && countedParsed === null;
+  const countedPaisa = countedParsed ?? 0;
   const differencePaisa = countedPaisa - expectedCashPaisa;
 
   async function record(): Promise<void> {
-    if (differencePaisa === 0 || busy) {
+    if (countedParsed === null || differencePaisa === 0 || busy) {
       return;
     }
     setBusy(true);
@@ -564,6 +718,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
             What&rsquo;s actually in the drawer
           </label>
           <input
+            autoComplete="off"
             id="drawer-counted"
             value={counted}
             inputMode="decimal"
@@ -574,7 +729,11 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
             className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
           />
         </div>
-        {counted !== '' ? (
+        {unreadable ? (
+          <p className="text-red text-sm" role="alert">
+            Not an amount — type the cash you counted.
+          </p>
+        ) : counted !== '' ? (
           <p className={`text-sm ${differencePaisa === 0 ? 'text-green-900' : 'text-amber'}`}>
             {differencePaisa === 0
               ? 'Matches exactly.'
@@ -584,7 +743,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
         <button
           type="button"
           onClick={() => void record()}
-          disabled={busy || counted === '' || differencePaisa === 0}
+          disabled={busy || countedParsed === null || differencePaisa === 0}
           className="bg-green-600 text-paper min-h-touch ml-auto rounded px-5 font-medium disabled:opacity-40"
         >
           {busy ? 'Recording…' : 'Record over/short'}
@@ -624,7 +783,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
   const direction = directionFor(reason);
 
   async function record(): Promise<void> {
-    const amountPaisa = Math.round(Number(amount || '0') * 100);
+    const amountPaisa = paisaFromRupeeInput(amount);
     if (amountPaisa <= 0 || busy || direction === null) {
       return;
     }
@@ -684,6 +843,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
             Amount
           </label>
           <input
+            autoComplete="off"
             id="movement-amount"
             value={amount}
             inputMode="decimal"
@@ -699,6 +859,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
             Note (optional)
           </label>
           <input
+            autoComplete="off"
             id="movement-note"
             value={note}
             onChange={(event) => {
@@ -710,7 +871,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
         <button
           type="button"
           onClick={() => void record()}
-          disabled={busy || Math.round(Number(amount || '0') * 100) <= 0}
+          disabled={busy || paisaFromRupeeInput(amount) <= 0}
           className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
         >
           {busy ? 'Saving…' : 'Save'}

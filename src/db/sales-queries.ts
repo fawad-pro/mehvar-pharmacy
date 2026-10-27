@@ -14,10 +14,12 @@ import type { TenantScope } from './scoped';
 import {
   adjustments,
   batches,
+  purchaseCorrections,
   saleLineAllocations,
   saleLines,
   saleReturnLines,
   sales,
+  supplierReturns,
 } from './schema';
 
 import type { BatchAvailability } from '@/domain/inventory/allocation';
@@ -110,8 +112,7 @@ export async function findSaleById(
   scope: TenantScope,
   saleId: Uuid,
 ): Promise<
-  | { id: string; receiptNumber: string; totalPaisa: number; customerId: string | null }
-  | undefined
+  { id: string; receiptNumber: string; totalPaisa: number; customerId: string | null } | undefined
 > {
   const row = await scope.selectOne(sales, eq(sales.id, saleId));
   return row
@@ -189,6 +190,10 @@ export interface BatchLedgerRow {
   allocatedBase: number;
   adjustedBase: number;
   restockedBase: number;
+  /** [PCN-009] Σ quantity and bonus deltas of purchase corrections to this batch. */
+  correctedBase: number;
+  /** [PCN-009] Σ units sent back to the supplier from this batch. */
+  supplierReturnedBase: number;
 }
 
 /**
@@ -198,8 +203,9 @@ export interface BatchLedgerRow {
  *
  *   qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments
  *                   + Σ restocked returns
+ *                   + Σ purchase-correction deltas − Σ supplier returns   [PCN-009]
  *
- * Deliberately four plain aggregates stitched together in TypeScript rather than
+ * Deliberately plain aggregates stitched together in TypeScript rather than
  * one clever statement. Two reasons, both learned the hard way:
  *
  *  - Joining three one-to-many tables at once multiplies rows and silently
@@ -223,7 +229,7 @@ export async function batchLedger(scope: TenantScope): Promise<BatchLedgerRow[]>
     .from(batches)
     .where(scope.scopeOf(batches));
 
-  const [allocated, adjusted, restocked] = await Promise.all([
+  const [allocated, adjusted, restocked, corrected, supplierReturned] = await Promise.all([
     scope.db
       .select({
         batchId: saleLineAllocations.batchId,
@@ -246,11 +252,7 @@ export async function batchLedger(scope: TenantScope): Promise<BatchLedgerRow[]>
       .select({ batchId: adjustments.batchId, total: sum(adjustments.qtyBaseDelta).as('total') })
       .from(adjustments)
       .where(
-        scope.scopeOf(
-          adjustments,
-          isNotNull(adjustments.batchId),
-          lt(adjustments.qtyBaseDelta, 0),
-        ),
+        scope.scopeOf(adjustments, isNotNull(adjustments.batchId), lt(adjustments.qtyBaseDelta, 0)),
       )
       .groupBy(adjustments.batchId),
 
@@ -262,6 +264,23 @@ export async function batchLedger(scope: TenantScope): Promise<BatchLedgerRow[]>
       .from(saleReturnLines)
       .where(scope.scopeOf(saleReturnLines, isNotNull(saleReturnLines.restockBatchId)))
       .groupBy(saleReturnLines.restockBatchId),
+
+    // [PCN-009] Signed: a correction can add units that arrived uncounted, or
+    // take away units that were entered but never came.
+    scope.db
+      .select({
+        batchId: purchaseCorrections.batchId,
+        total: sql<string>`sum(${purchaseCorrections.qtyDeltaBase} + ${purchaseCorrections.bonusDeltaBase})`,
+      })
+      .from(purchaseCorrections)
+      .where(scope.scopeOf(purchaseCorrections))
+      .groupBy(purchaseCorrections.batchId),
+
+    scope.db
+      .select({ batchId: supplierReturns.batchId, total: sum(supplierReturns.qtyBase).as('total') })
+      .from(supplierReturns)
+      .where(scope.scopeOf(supplierReturns))
+      .groupBy(supplierReturns.batchId),
   ]);
 
   const index = (rows: Array<{ batchId: string | null; total: string | null }>) => {
@@ -277,6 +296,8 @@ export async function batchLedger(scope: TenantScope): Promise<BatchLedgerRow[]>
   const allocatedBy = index(allocated);
   const adjustedBy = index(adjusted);
   const restockedBy = index(restocked);
+  const correctedBy = index(corrected);
+  const supplierReturnedBy = index(supplierReturned);
 
   return batchRows.map((row) => ({
     batchId: row.batchId,
@@ -286,6 +307,8 @@ export async function batchLedger(scope: TenantScope): Promise<BatchLedgerRow[]>
     allocatedBase: allocatedBy.get(row.batchId) ?? 0,
     adjustedBase: adjustedBy.get(row.batchId) ?? 0,
     restockedBase: restockedBy.get(row.batchId) ?? 0,
+    correctedBase: correctedBy.get(row.batchId) ?? 0,
+    supplierReturnedBase: supplierReturnedBy.get(row.batchId) ?? 0,
   }));
 }
 

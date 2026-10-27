@@ -39,6 +39,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import type { ProductUnit } from '@/domain/catalog/units';
 import type { PackLevel } from '@/lib/quantity';
 
 /* ========================================================================== */
@@ -58,6 +59,11 @@ export const adjustmentReason = pgEnum('adjustment_reason', [
   'distributor_return',
   'count_correction',
   'opening_stock',
+  /**
+   * [PCN-012] Stock moved to the product that replaces one whose pack was
+   * entered wrong: out of the old product's batch, into the new one's.
+   */
+  'product_replaced',
 ]);
 
 export const cashDirection = pgEnum('cash_direction', ['in', 'out']);
@@ -111,6 +117,13 @@ export interface TenantSettings {
    * absent reads as on.
    */
   autoPrintReceipt?: boolean;
+  /**
+   * [PCN-012, as amended 2026-10-26] Whether a new sale line starts in the
+   * loose unit (tablet, capsule) rather than the smallest pack, for a product
+   * this counter has not sold before. Every unit stays on the line either
+   * way. Absent reads as off: the strip, today's behaviour.
+   */
+  saleStartsLoose?: boolean;
 }
 
 /* ========================================================================== */
@@ -225,9 +238,30 @@ export const products = pgTable(
     /** Ordered levels, factors in base units — read whole, written rarely,
         never queried relationally (Phase 9 §2's note on why this is JSONB). */
     packLevels: jsonb('pack_levels').$type<PackLevel[]>().notNull().default([]),
+    /**
+     * [PCN-012] Each unit with its own price, smallest first. Null on a product
+     * written before PCN-012: `unitsOf` derives its units from the columns
+     * around it, which is what it charged then — so nothing is backfilled.
+     * `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are
+     * kept in step with it for one release.
+     */
+    units: jsonb('units').$type<ProductUnit[]>(),
     defaultPricePerBaseUnit: bigint('default_price_per_base_unit', { mode: 'number' }).notNull(),
     /** Reference ceiling, D4: the pack in hand is authoritative, not our data. */
     currentMrpPerBaseUnit: bigint('current_mrp_per_base_unit', { mode: 'number' }),
+    /**
+     * [PCN-012] MRP as printed, for the unit it is printed on (`mrpUnitKey`).
+     * Set from a delivery's "MRP on pack" when the owner accepts it; null on a
+     * product that only has the legacy per-base figure above.
+     */
+    mrpPaisa: bigint('mrp_paisa', { mode: 'number' }),
+    mrpUnitKey: text('mrp_unit_key'),
+    /**
+     * [PCN-012] Set on a product whose pack was entered wrong and that was
+     * replaced: its stock moved to this product, and it became inactive. Its
+     * history stays on it (ADR-1).
+     */
+    replacedByProductId: uuid('replaced_by_product_id'),
     minStockBaseUnits: integer('min_stock_base_units'),
     /** D3 — quick items are real products flagged for enrichment. */
     needsCompletion: boolean('needs_completion').notNull().default(false),
@@ -329,11 +363,23 @@ export const batches = pgTable(
     pricePerBaseUnitPaisa: bigint('price_per_base_unit_paisa', { mode: 'number' }).notNull(),
     qtyReceivedBase: integer('qty_received_base').notNull(),
     /**
+     * [PCN-012] What these units cost in total, exactly: what was paid for
+     * the purchase line (bonus units free), or the opening/counted units at
+     * their entered cost. Null on a batch from before PCN-012, which reads its
+     * total from its purchase line or `unit_cost_paisa × qty_received`.
+     * Corrections restate it through `purchase_corrections.invoice_delta_paisa`.
+     * `unit_cost_paisa` above is nominal from here on (rounded up).
+     */
+    costTotalPaisa: bigint('cost_total_paisa', { mode: 'number' }),
+    /** [PCN-012] Each unit's selling price when the batch arrived: `[{key, pricePaisa}]`. */
+    pricesAtReceiving: jsonb('prices_at_receiving').$type<{ key: string; pricePaisa: number }[]>(),
+    /**
      * THE single ADR-8 transactional cache. Everything else computes on read.
      *
      * Derivation contract (Phase 9 §4):
      *   qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments
      *                   + Σ restocked returns
+     *                   + Σ purchase-correction deltas − Σ supplier returns  [PCN-009]
      * The rebuild/verifier routine recomputes and compares; a mismatch is sev-1.
      */
     qtyRemainingBase: integer('qty_remaining_base').notNull(),
@@ -364,7 +410,7 @@ export const purchases = pgTable(
     invoiceDate: date('invoice_date'),
     note: text('note'),
     /**
-     * [PCN-006] Cash paid to the supplier at receiving — the mirror of
+     * [PCN-007] Cash paid to the supplier at receiving — the mirror of
      * `sales.cash_paisa`. The credit the pharmacy owes for this invoice is the
      * derived remainder (Σ line cost − this), so a fully-paid delivery leaves
      * `cash_paid_paisa` equal to the invoice and owes nothing. Defaults to 0 so
@@ -373,6 +419,17 @@ export const purchases = pgTable(
      * cash purchase is unchanged and no existing workflow slows down.
      */
     cashPaidPaisa: bigint('cash_paid_paisa', { mode: 'number' }).notNull().default(0),
+    /**
+     * [PCN-007] Whether this purchase's payment was RECORDED. A purchase
+     * entered before supplier credit existed had no "Paid now" field: its
+     * `cash_paid_paisa` is the column default 0, not a fact, and counting it
+     * made every historical invoice read as owed. Migration 0010 adds this column so every row that
+     * already exists reads false — PostgreSQL's stored default, no row
+     * rewritten — and every purchase recorded since reads true. Supplier
+     * balances count only tracked purchases. Nothing is backfilled: no payment
+     * is invented and no historical row is altered.
+     */
+    creditTracked: boolean('credit_tracked').notNull().default(true),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -405,8 +462,29 @@ export const purchaseLines = pgTable(
     unitCostPaisa: bigint('unit_cost_paisa', { mode: 'number' }).notNull(),
     expiryDate: date('expiry_date'),
     batchNumber: text('batch_number'),
+    /**
+     * MRP printed on the pack: per the entered unit when the line has one
+     * (`unit_key`), per base unit on a line from before PCN-012.
+     */
     mrpAtReceivingPaisa: bigint('mrp_at_receiving_paisa', { mode: 'number' }),
+    /** Per base unit; nominal (rounded) when the line was entered per pack. */
     priceAtReceivingPaisa: bigint('price_at_receiving_paisa', { mode: 'number' }).notNull(),
+    /**
+     * [PCN-012] The line as invoiced, in the unit it was bought in: "10 boxes
+     * + 1 free at Rs 250 a box". Null on a line from before PCN-012, which
+     * reads as base units at `unit_cost_paisa` — exactly what it invoiced.
+     * `qty_base`/`bonus_qty_base` stay the base-unit truth stock runs on.
+     */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
+    bonusUnitCount: integer('bonus_unit_count'),
+    /** The cost of ONE entered unit, as invoiced. */
+    unitCostPaisaEntered: bigint('unit_cost_paisa_entered', { mode: 'number' }),
+    /** Exactly `unit_count × unit_cost_paisa_entered`: what this line cost. */
+    lineCostPaisa: bigint('line_cost_paisa', { mode: 'number' }),
+    /** What ONE entered unit sells for, as set at receiving. */
+    pricePaisaEntered: bigint('price_paisa_entered', { mode: 'number' }),
     createdAt: createdAt(),
   },
   (table) => [
@@ -414,6 +492,20 @@ export const purchaseLines = pgTable(
     index('purchase_lines_tenant_created_idx').on(table.tenantId, table.createdAt),
     check('purchase_lines_qty_positive', sql`${table.qtyBase} > 0`),
     check('purchase_lines_bonus_nonneg', sql`${table.bonusQtyBase} >= 0`),
+    // [PCN-012] An entered line is whole or absent, its cost is exactly count
+    // × cost, and its base quantities are whole multiples of one unit size —
+    // bonus in the same unit as the paid quantity.
+    check(
+      'purchase_lines_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.bonusUnitCount} IS NULL AND ${table.unitCostPaisaEntered} IS NULL
+           AND ${table.lineCostPaisa} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL
+           AND ${table.pricePaisaEntered} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.bonusUnitCount} >= 0 AND ${table.unitCostPaisaEntered} >= 0
+              AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL AND ${table.pricePaisaEntered} > 0
+              AND ${table.lineCostPaisa} = ${table.unitCount} * ${table.unitCostPaisaEntered}
+              AND ${table.qtyBase} % ${table.unitCount} = 0
+              AND ${table.bonusQtyBase} * ${table.unitCount} = ${table.bonusUnitCount} * ${table.qtyBase})`,
+    ),
   ],
 );
 
@@ -483,7 +575,24 @@ export const saleLines = pgTable(
     qtyBase: integer('qty_base').notNull(),
     /** As entered, for display and receipt (W5's natural language). */
     enteredUnitLevel: text('entered_unit_level').notNull(),
+    /**
+     * Per base unit. Before PCN-012 this was the price charged; since, it is
+     * nominal (the entered unit's price ÷ its size, rounded down) and kept only
+     * because the column is NOT NULL. Money is read from `line_amount_paisa`.
+     */
     unitPricePaisa: bigint('unit_price_paisa', { mode: 'number' }).notNull(),
+    /*
+     * [PCN-012] What was actually entered and charged. Null on lines written
+     * before PCN-012 (and by an offline client still on record version 1),
+     * whose amount is `unit_price_paisa × qty_base` — exactly what was charged.
+     */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
+    /** The price of ONE entered unit, as charged. */
+    unitPricePaisaEntered: bigint('unit_price_paisa_entered', { mode: 'number' }),
+    /** `unit_count × unit_price_paisa_entered`, before the line discount. */
+    lineAmountPaisa: bigint('line_amount_paisa', { mode: 'number' }),
     lineDiscountPaisa: bigint('line_discount_paisa', { mode: 'number' }).notNull().default(0),
     /** T1 exposure — surfaces in the owner's daily view. */
     priceOverridden: boolean('price_overridden').notNull().default(false),
@@ -493,6 +602,15 @@ export const saleLines = pgTable(
     index('sale_lines_sale_idx').on(table.tenantId, table.saleId),
     index('sale_lines_tenant_created_idx').on(table.tenantId, table.createdAt),
     check('sale_lines_qty_positive', sql`${table.qtyBase} > 0`),
+    // [PCN-012] The entered columns arrive together or not at all, and the
+    // amount is exactly count × price — the database refuses anything else.
+    check(
+      'sale_lines_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitPricePaisaEntered} IS NULL AND ${table.lineAmountPaisa} IS NULL AND ${table.unitName} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitPricePaisaEntered} >= 0 AND ${table.unitName} IS NOT NULL
+              AND ${table.lineAmountPaisa} = ${table.unitCount} * ${table.unitPricePaisaEntered}
+              AND ${table.qtyBase} % ${table.unitCount} = 0)`,
+    ),
   ],
 );
 
@@ -590,7 +708,7 @@ export const payments = pgTable(
 );
 
 /**
- * [PCN-006] Payments the pharmacy makes to a supplier — the mirror of
+ * [PCN-007] Payments the pharmacy makes to a supplier — the mirror of
  * `payments`, which records money customers pay the pharmacy.
  *
  * A supplier settlement reduces what the pharmacy owes, exactly as a customer
@@ -629,6 +747,118 @@ export const supplierPayments = pgTable(
     index('supplier_payments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('supplier_payments_tenant_supplier_idx').on(table.tenantId, table.supplierId),
     check('supplier_payments_amount_positive', sql`${table.amountPaisa} > 0`),
+  ],
+);
+
+/**
+ * [PCN-009] A compensating correction to one received purchase line (T2).
+ *
+ * The purchase line stays exactly as it was entered; this row says what it
+ * should have said. Quantity deltas move the line's batch through ADR-8's
+ * guarded functions, so `batches.qty_remaining` and the verifier agree. Two
+ * figures are recorded as they stood after this correction, so readers never
+ * have to replay the history: `effective_unit_cost_paisa` (the batch's cost per
+ * received unit, bonus included — reports value every allocation from the batch
+ * at the latest one) and `invoice_delta_paisa` (how much this correction moved
+ * the invoice's value — supplier balances add it).
+ */
+export const purchaseCorrections = pgTable(
+  'purchase_corrections',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    purchaseLineId: uuid('purchase_line_id')
+      .notNull()
+      .references(() => purchaseLines.id),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => batches.id),
+    /** Change to the invoiced (paid-for) quantity, in base units. */
+    qtyDeltaBase: integer('qty_delta_base').notNull().default(0),
+    /** Change to the free bonus quantity, in base units. */
+    bonusDeltaBase: integer('bonus_delta_base').notNull().default(0),
+    /** The corrected invoiced cost per base unit, when the cost was wrong. */
+    correctedUnitCostPaisa: bigint('corrected_unit_cost_paisa', { mode: 'number' }),
+    /**
+     * [PCN-012] The corrected cost of ONE of the line's entered unit, when the
+     * line was bought per pack and its cost was wrong. Exactly one of this and
+     * `corrected_unit_cost_paisa` is set by a cost correction.
+     */
+    correctedUnitCostPaisaEntered: bigint('corrected_unit_cost_paisa_entered', { mode: 'number' }),
+    /** Nominal per received base unit (rounded up) since PCN-012; reports derive cost. */
+    effectiveUnitCostPaisa: bigint('effective_unit_cost_paisa', { mode: 'number' }).notNull(),
+    invoiceDeltaPaisa: bigint('invoice_delta_paisa', { mode: 'number' }).notNull(),
+    note: text('note').notNull(),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('purchase_corrections_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('purchase_corrections_line_idx').on(table.tenantId, table.purchaseLineId),
+    index('purchase_corrections_batch_idx').on(table.tenantId, table.batchId),
+    check(
+      'purchase_corrections_changes_something',
+      sql`${table.qtyDeltaBase} <> 0 OR ${table.bonusDeltaBase} <> 0 OR ${table.correctedUnitCostPaisa} IS NOT NULL
+          OR ${table.correctedUnitCostPaisaEntered} IS NOT NULL`,
+    ),
+    check(
+      'purchase_corrections_cost_nonneg',
+      sql`${table.correctedUnitCostPaisa} IS NULL OR ${table.correctedUnitCostPaisa} >= 0`,
+    ),
+    check('purchase_corrections_note_present', sql`length(trim(${table.note})) > 0`),
+  ],
+);
+
+/**
+ * [PCN-009] Goods sent back to the distributor, with the credit the supplier
+ * gives for them. Stock leaves the named batch (as a distributor-return
+ * adjustment did), and the credit reduces what the pharmacy owes the supplier
+ * (which an adjustment could not, once PCN-007 introduced a payable).
+ */
+export const supplierReturns = pgTable(
+  'supplier_returns',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    supplierId: uuid('supplier_id')
+      .notNull()
+      .references(() => suppliers.id),
+    productId: uuid('product_id')
+      .notNull()
+      .references(() => products.id),
+    batchId: uuid('batch_id')
+      .notNull()
+      .references(() => batches.id),
+    qtyBase: integer('qty_base').notNull(),
+    creditPaisa: bigint('credit_paisa', { mode: 'number' }).notNull(),
+    note: text('note'),
+    /** [PCN-012] The amount as entered, for display ("5 box"); null in base units. */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index('supplier_returns_tenant_created_idx').on(table.tenantId, table.createdAt),
+    index('supplier_returns_tenant_supplier_idx').on(table.tenantId, table.supplierId),
+    index('supplier_returns_batch_idx').on(table.tenantId, table.batchId),
+    check('supplier_returns_qty_positive', sql`${table.qtyBase} > 0`),
+    check('supplier_returns_credit_nonneg', sql`${table.creditPaisa} >= 0`),
+    check(
+      'supplier_returns_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL
+              AND ${table.qtyBase} % ${table.unitCount} = 0)`,
+    ),
   ],
 );
 
@@ -680,11 +910,21 @@ export const saleReturnLines = pgTable(
     qtyBase: integer('qty_base').notNull(),
     /** Known source batch, or null for a write-off. */
     restockBatchId: uuid('restock_batch_id').references(() => batches.id),
+    /** [PCN-012] The amount as entered, for display ("1 strip"); null in base units. */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
     createdAt: createdAt(),
   },
   (table) => [
     index('sale_return_lines_return_idx').on(table.tenantId, table.saleReturnId),
     check('sale_return_lines_qty_positive', sql`${table.qtyBase} > 0`),
+    check(
+      'sale_return_lines_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL
+              AND ${table.qtyBase} % ${table.unitCount} = 0)`,
+    ),
   ],
 );
 
@@ -702,6 +942,14 @@ export const adjustments = pgTable(
     qtyBaseDelta: integer('qty_base_delta').notNull(),
     reason: adjustmentReason('reason').notNull(),
     note: text('note'),
+    /**
+     * [PCN-012] The amount as entered, for display: "3 strip". Null when it
+     * was entered in base units or as a count across several units (opening
+     * stock); `qty_base_delta` stays the truth.
+     */
+    unitKey: text('unit_key'),
+    unitName: text('unit_name'),
+    unitCount: integer('unit_count'),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -711,6 +959,12 @@ export const adjustments = pgTable(
     index('adjustments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('adjustments_product_idx').on(table.tenantId, table.productId),
     check('adjustments_delta_nonzero', sql`${table.qtyBaseDelta} <> 0`),
+    check(
+      'adjustments_entered_unit_complete',
+      sql`(${table.unitCount} IS NULL AND ${table.unitName} IS NULL AND ${table.unitKey} IS NULL)
+          OR (${table.unitCount} > 0 AND ${table.unitName} IS NOT NULL AND ${table.unitKey} IS NOT NULL
+              AND abs(${table.qtyBaseDelta}) % ${table.unitCount} = 0)`,
+    ),
     /**
      * Phase 9 §5.4 — "signed-delta reason consistency". Stock leaves for damage,
      * expiry and distributor returns; opening stock only ever adds; a count
@@ -718,9 +972,12 @@ export const adjustments = pgTable(
      */
     check(
       'adjustments_reason_sign',
-      sql`(${table.reason} IN ('damage', 'expiry_writeoff', 'distributor_return') AND ${table.qtyBaseDelta} < 0)
-          OR (${table.reason} = 'opening_stock' AND ${table.qtyBaseDelta} > 0)
-          OR ${table.reason} = 'count_correction'`,
+      // Compared as text: a migration that adds an enum value cannot use it in
+      // the same transaction, and drizzle applies every pending migration in
+      // one — a cast literal would refuse the whole update (0014).
+      sql`(${table.reason}::text IN ('damage', 'expiry_writeoff', 'distributor_return') AND ${table.qtyBaseDelta} < 0)
+          OR (${table.reason}::text = 'opening_stock' AND ${table.qtyBaseDelta} > 0)
+          OR ${table.reason}::text IN ('count_correction', 'product_replaced')`,
     ),
   ],
 );
@@ -1017,6 +1274,9 @@ export const EVENT_TABLES = [
   'sale_line_allocations',
   'payments',
   'supplier_payments',
+  // [PCN-009] Compensating records for purchases and goods sent back.
+  'purchase_corrections',
+  'supplier_returns',
   'sale_returns',
   'sale_return_lines',
   'adjustments',

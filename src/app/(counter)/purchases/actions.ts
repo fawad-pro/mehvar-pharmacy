@@ -22,7 +22,8 @@ import {
   type SupplierPaymentRejection,
 } from '@/domain/suppliers/commit-supplier-payment';
 import { insertSupplier, listPurchases, searchSuppliers } from '@/db/purchase-queries';
-import { listSuppliersOwed, type SupplierBalanceItem } from '@/db/supplier-queries';
+import { recordDeliveredMrp } from '@/domain/catalog/writers';
+import { supplierPositions, type SupplierPositions } from '@/db/supplier-queries';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
@@ -81,6 +82,10 @@ function messageFor(reason: PurchaseRejection): string {
       return 'The amount paid now cannot be negative.';
     case 'credit_without_supplier':
       return 'Choose a supplier before putting an invoice on credit.';
+    case 'invalid_unit':
+      // The product's packs changed since the line was typed (another counter
+      // edited it). Re-adding the line picks up the current pack sizes.
+      return 'A line’s pack size no longer matches the product. Remove the line and add it again.';
     default:
       return 'That did not save. Check the lines and try again.';
   }
@@ -130,15 +135,16 @@ export async function recentPurchasesAction() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* [PCN-006] Supplier credit — what the pharmacy owes, and paying it down      */
+/* [PCN-007] Supplier credit — what the pharmacy owes, and paying it down      */
 /* -------------------------------------------------------------------------- */
 
-export async function suppliersOwedAction(): Promise<SupplierBalanceItem[]> {
+/** Who is owed and, since PCN-011, who holds the pharmacy's credit. */
+export async function supplierPositionsAction(): Promise<SupplierPositions> {
   const session = await currentSession();
   if (!session) {
-    return [];
+    return { owed: [], inCredit: [] };
   }
-  return listSuppliersOwed(scopeFor(session));
+  return supplierPositions(scopeFor(session));
 }
 
 function supplierMessageFor(reason: SupplierPaymentRejection): string {
@@ -186,4 +192,37 @@ export async function settleSupplierAction(input: {
   revalidateAfter('purchases');
 
   return { ok: true, newBalancePaisa: result.value.newBalancePaisa };
+}
+
+/* -------------------------------------------------------------------------- */
+/* [PCN-012] A delivery's MRP, offered to the product record                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Records the MRP on a delivered pack and, when chosen, the unit's new price.
+ * The owner's call, like any price change (the product form is owner-only).
+ */
+export async function recordDeliveredMrpAction(input: {
+  productId: Uuid;
+  unitKey: string;
+  mrpPaisa: number;
+  pricePaisa: number | null;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const session = await currentSession();
+  if (!session) {
+    return { ok: false, message: 'This device needs to sign in again.' };
+  }
+  if (session.userRole !== 'owner') {
+    return { ok: false, message: 'Only the owner can change a product’s price or MRP.' };
+  }
+  const licensed = requireCapability(session, 'author_product');
+  if (!licensed.ok) {
+    return { ok: false, message: licensed.message };
+  }
+  const result = await recordDeliveredMrp(scopeFor(session), input.productId, input);
+  if (!result.ok) {
+    return { ok: false, message: 'That did not save. Check the MRP and price, and try again.' };
+  }
+  revalidateAfter('catalog');
+  return { ok: true };
 }

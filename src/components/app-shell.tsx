@@ -21,6 +21,7 @@ import { ServiceWorker } from '@/client/sync/service-worker';
 import { KeyBar } from './key-bar';
 import { LicenceBanner, type LicenceNotice } from './licence-banner';
 import { PinSwitchOverlay, type SwitchableUser } from './pin-switch-overlay';
+import { ScanGuard } from './scan-guard';
 import { SettleUdhaarOverlay } from './settle-udhaar-overlay';
 import { TopBar } from './top-bar';
 
@@ -92,12 +93,15 @@ export function AppShell({
     // Both providers wrap the whole shell, not just the surface: the top bar's
     // unsynced badge (ADR-3) reads the sync context, and Settle Udhaar (W3)
     // captures through it from outside any page.
-    <ReceiptContextProvider tenantId={tenantId}>
+    <ReceiptContextProvider tenantId={tenantId} salesmanName={userName}>
       <SyncProvider tenantId={tenantId} restricted={licence?.tier === 'restricted'}>
         <ServiceWorker />
         {/* Every screen re-reads when the outbox lands a record — see the
             component's own note. Mounted here so no surface has to know. */}
         <RefreshOnSync />
+        {/* A barcode scanned into a field not meant for one is put back,
+            on every screen (see the component). */}
+        <ScanGuard />
 
         <div className="flex h-screen flex-col">
           <TopBar

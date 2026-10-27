@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import {
   cart,
+  DEMO,
   lastSale,
   openCounter,
   printedReceipt as receipt,
@@ -123,6 +124,9 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   // The sale is not refused; the shortfall is surfaced (D2).
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
   await expect(lastSale(page)).toContainText('Sold more than the system had');
+  // Said to the shop, never to the customer: the receipt is theirs to keep.
+  await expect(receipt(page)).toContainText('Rocephin');
+  await expect(receipt(page)).not.toContainText(/system|exception|stock/i);
 });
 
 test('receipt numbers advance per device and never repeat', async ({ page }) => {
@@ -135,6 +139,13 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     await page.keyboard.press('F12');
     await page.keyboard.press('Enter');
 
+    // Wait for THIS sale's number. Reading the status straight after Enter can
+    // catch the previous sale's text, which read as a repeated number.
+    await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+    const previous = numbers.at(-1);
+    if (previous !== undefined) {
+      await expect(lastSale(page)).not.toContainText(new RegExp(`A-${previous}(?!\\d)`));
+    }
     const text = (await lastSale(page).textContent()) ?? '';
     const match = /A-(\d+)/.exec(text);
     expect(match, 'a receipt number was issued').not.toBeNull();
@@ -156,7 +167,10 @@ test('search results show the compact on-hand figure for every row', async ({ pa
   // Regardless of level: the suite shares a database, so the exact count moves
   // as other specs sell or receive it — only the shape is asserted here. The
   // existing colour-coded low/zero badge (StockBadge) is untouched by this.
-  await expect(page.getByRole('option').first()).toContainText(/On hand: -?\d+/);
+  // An amount in the product's units, or "Short by …" — never a minus sign
+  // (PCN-012 decision 8).
+  await expect(page.getByRole('option').first()).toContainText(/On hand: (Short by )?\d+ \w/);
+  await expect(page.getByRole('option').first()).not.toContainText(/On hand: -/);
 });
 
 test('a fixed PKR line discount reduces that line and the total, by keyboard', async ({ page }) => {
@@ -258,9 +272,10 @@ test('a percentage line discount is computed off that line, not the cart', async
   await page.keyboard.press('Enter');
 
   await expect(cart(page)).toContainText('−9.00'); // 10% of Rs 90.00
-  // Disprin's row must show no discount at all — the empty-state dash.
-  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).toContainText('—');
-  await expect(cart(page).locator('tr', { hasText: 'Disprin' })).not.toContainText('−');
+  // Disprin's row must show no discount at all — the empty-state dash in its
+  // Discount cell (the row's other "−" is the quantity button, PCN-012).
+  const disprinDiscount = cart(page).locator('tr', { hasText: 'Disprin' }).locator('td').nth(3);
+  await expect(disprinDiscount).toHaveText('—');
 });
 
 test('the Discount column is clickable, no keyboard shortcut required', async ({ page }) => {
@@ -358,4 +373,30 @@ test('Escape cancels an in-progress discount edit without changing anything', as
   // whole cart line.
   await page.keyboard.press('+');
   await expect(cart(page)).toContainText('2 strip');
+});
+
+test('the receipt names whoever is selling, after a PIN switch', async ({ page }) => {
+  // The receipt context used to capture the acting user's name once, when the
+  // counter opened as the owner, so every receipt for the rest of the session
+  // named the owner however many times the PIN switch moved the counter on.
+  // The sale itself was always attributed correctly; only the paper was wrong.
+  await openCounter(page);
+
+  await page.keyboard.press('F10');
+  const overlay = page.getByRole('dialog', { name: 'Switch user' });
+  await overlay.getByRole('button', { name: new RegExp(DEMO.salesman.name) }).click();
+  await overlay.getByLabel('PIN').fill(DEMO.salesman.pin);
+  await overlay.getByRole('button', { name: 'Switch' }).click();
+  await expect(overlay).toBeHidden();
+  await expect(page.getByRole('button', { name: new RegExp(DEMO.salesman.name) })).toBeVisible();
+
+  await search(page).fill('panadol');
+  await expect(page.getByRole('option').first()).toContainText('Panadol');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('F12');
+  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+
+  await expect(receipt(page)).toContainText(DEMO.salesman.name);
 });

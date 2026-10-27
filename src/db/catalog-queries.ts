@@ -13,16 +13,27 @@
 
 import 'server-only';
 
-import { and, asc, count, desc, eq, gt, ilike, inArray, ne, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
+import { barcodeKeys } from '@/domain/catalog/barcode';
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
 import type { CatalogSuggestion } from '@/domain/catalog/product';
+import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
+import { businessDayOf } from '@/lib/business-day';
 import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 import { database } from './client';
 import { type TenantScope } from './scoped';
-import { batches, globalProducts, productBarcodes, products } from './schema';
+import {
+  adjustments,
+  batches,
+  globalProducts,
+  productBarcodes,
+  products,
+  purchaseLines,
+  saleLines,
+} from './schema';
 
 /* ========================================================================== */
 /* The ADR-4 index payload                                                     */
@@ -38,7 +49,11 @@ export interface IndexProductRow {
   baseUnitName: string;
   packLevels: PackLevel[];
   pricePaisa: number;
+  /** [PCN-012] Each unit with its own price, smallest first. */
+  units: ProductUnit[];
   mrpPaisa: number | null;
+  /** [PCN-012] MRP as printed, for the unit it is printed on. */
+  mrpUnit: { key: string; paisa: number } | null;
   needsCompletion: boolean;
 }
 
@@ -55,7 +70,15 @@ export interface CatalogSnapshot {
   removedProductIds: string[];
   removedBarcodes: string[];
   stock: Record<string, number>;
+  /** PCN-008: expired stock on hand, for the counter's warning. */
+  expired: Record<string, ExpiredStock>;
   syncedAt: string;
+}
+
+/** Base units on hand in expired batches, and the earliest of their expiry dates. */
+export interface ExpiredStock {
+  qtyBase: number;
+  expiryDate: string;
 }
 
 /**
@@ -70,6 +93,12 @@ export interface CatalogSnapshot {
  * removal is just a change the client interprets as a drop.
  */
 export async function catalogSnapshot(scope: TenantScope, since?: Date): Promise<CatalogSnapshot> {
+  // The watermark is taken BEFORE reading, and a little early. Stamped after
+  // the reads, a barcode linked while they ran was newer than nothing the
+  // client fetched yet older than its watermark — so no later delta carried it,
+  // and every counter read the code as unknown until a full reload. Reading a
+  // few seconds twice is harmless: the client merges by product and barcode.
+  const syncedAt = new Date(Date.now() - WATERMARK_OVERLAP_MS).toISOString();
   const changed = since
     ? await scope.select(products, gt(products.updatedAt, since))
     : await scope.select(products, eq(products.isActive, true));
@@ -94,9 +123,13 @@ export async function catalogSnapshot(scope: TenantScope, since?: Date): Promise
     // explicit list is reserved for Day 6, when unlink lands on the UI.
     removedBarcodes: [],
     stock: await stockByProduct(scope),
-    syncedAt: new Date().toISOString(),
+    expired: await expiredStockByProduct(scope, businessDayOf(new Date())),
+    syncedAt,
   };
 }
+
+/** Overlap between deltas: covers the reads' own duration and app/DB clock skew. */
+const WATERMARK_OVERLAP_MS = 5_000;
 
 /**
  * Base units on hand per product, from `batches.qty_remaining`.
@@ -122,6 +155,40 @@ export async function stockByProduct(scope: TenantScope): Promise<Record<string,
   return stock;
 }
 
+/**
+ * PCN-008: what part of each product's stock is past its expiry on `today`.
+ *
+ * Allocation reaches these batches only when nothing unexpired is left, so the
+ * counter can say, before payment, that a line will be met from expired stock
+ * and name the date. Products with no expired stock on hand are absent.
+ */
+export async function expiredStockByProduct(
+  scope: TenantScope,
+  today: string,
+): Promise<Record<string, ExpiredStock>> {
+  const rows = await scope.db
+    .select({
+      productId: batches.productId,
+      total: sql<string>`sum(${batches.qtyRemainingBase})`,
+      earliest: sql<string>`min(${batches.expiryDate})::text`,
+    })
+    .from(batches)
+    .where(
+      scope.scopeOf(
+        batches,
+        gt(batches.qtyRemainingBase, 0),
+        sql`${batches.expiryDate} < ${today}::date`,
+      ),
+    )
+    .groupBy(batches.productId);
+
+  const expired: Record<string, ExpiredStock> = {};
+  for (const row of rows) {
+    expired[row.productId] = { qtyBase: Number(row.total), expiryDate: row.earliest };
+  }
+  return expired;
+}
+
 function toIndexProduct(row: typeof products.$inferSelect): IndexProductRow {
   return {
     id: row.id,
@@ -133,9 +200,24 @@ function toIndexProduct(row: typeof products.$inferSelect): IndexProductRow {
     baseUnitName: row.baseUnitName,
     packLevels: row.packLevels,
     pricePaisa: row.defaultPricePerBaseUnit,
+    units: unitsOfRow(row),
     mrpPaisa: row.currentMrpPerBaseUnit,
+    mrpUnit:
+      row.mrpPaisa !== null && row.mrpUnitKey !== null
+        ? { key: row.mrpUnitKey, paisa: row.mrpPaisa }
+        : null,
     needsCompletion: row.needsCompletion,
   };
+}
+
+/** [PCN-012] A product row's units, derived for rows written before PCN-012. */
+function unitsOfRow(row: typeof products.$inferSelect): ProductUnit[] {
+  return unitsOf({
+    baseUnitName: row.baseUnitName,
+    packLevels: row.packLevels,
+    pricePerBasePaisa: row.defaultPricePerBaseUnit,
+    units: row.units,
+  });
 }
 
 /* ========================================================================== */
@@ -324,6 +406,12 @@ export interface ProductDetail extends ProductListItem {
   stockBase: number | null;
   /** Present when this product came from Mehvar's catalogue (Phase 6 §2). */
   globalProductId: string | null;
+  /** [PCN-012] Each unit with its own price, smallest first. */
+  units: ProductUnit[];
+  /** [PCN-012] MRP as printed, for the unit it is printed on; null when per base or none. */
+  mrpUnit: { key: string; paisa: number } | null;
+  /** [PCN-012] Set once the product has been replaced by one with the right pack. */
+  replacedByProductId: string | null;
 }
 
 export async function findProduct(
@@ -352,7 +440,13 @@ export async function findProduct(
     baseUnitName: row.baseUnitName,
     packLevels: row.packLevels,
     pricePaisa: row.defaultPricePerBaseUnit,
+    units: unitsOfRow(row),
     mrpPaisa: row.currentMrpPerBaseUnit,
+    mrpUnit:
+      row.mrpPaisa !== null && row.mrpUnitKey !== null
+        ? { key: row.mrpUnitKey, paisa: row.mrpPaisa }
+        : null,
+    replacedByProductId: row.replacedByProductId,
     minStockBaseUnits: row.minStockBaseUnits,
     needsCompletion: row.needsCompletion,
     isActive: row.isActive,
@@ -369,17 +463,64 @@ export async function findProduct(
 }
 
 /** Is this barcode already taken within the tenant? Unique (tenant_id, barcode). */
+/**
+ * Which product already owns this code — under any form the counter treats as
+ * the same item (`barcodeKeys`: the code as written, its GTIN-14, its EAN-13).
+ * Matching the exact string only let a pack's GTIN be linked to one product
+ * while the box's EAN sat on another; the counter would then find the first.
+ */
 export async function findBarcodeOwner(
   scope: TenantScope,
   barcode: string,
 ): Promise<{ productId: string; productName: string } | undefined> {
+  const keys = barcodeKeys(barcode);
+  if (keys.length === 0) {
+    return undefined;
+  }
   const rows = await scope.db
     .select({ productId: productBarcodes.productId, productName: products.name })
     .from(productBarcodes)
     .innerJoin(products, eq(productBarcodes.productId, products.id))
-    .where(scope.scopeOf(productBarcodes, eq(productBarcodes.barcode, barcode)))
+    .where(scope.scopeOf(productBarcodes, inArray(productBarcodes.barcode, keys)))
     .limit(1);
   return rows[0];
+}
+
+/**
+ * [PCN-012] Has anything been recorded against this product?
+ *
+ * A batch (purchase, opening stock, or an adjustment that brought stock into
+ * existence), a sale line (including one the pending layer holds with no
+ * batch behind it), a purchase line or an adjustment. Returns and corrections
+ * always point at one of those, so they need no lookup of their own.
+ *
+ * Four independent limit-1 lookups rather than one query with correlated
+ * subqueries (CLAUDE.md, Day 3).
+ */
+export async function productHasHistory(scope: TenantScope, productId: Uuid): Promise<boolean> {
+  const found = await Promise.all([
+    scope.db
+      .select({ id: batches.id })
+      .from(batches)
+      .where(scope.scopeOf(batches, eq(batches.productId, productId)))
+      .limit(1),
+    scope.db
+      .select({ id: saleLines.id })
+      .from(saleLines)
+      .where(scope.scopeOf(saleLines, eq(saleLines.productId, productId)))
+      .limit(1),
+    scope.db
+      .select({ id: purchaseLines.id })
+      .from(purchaseLines)
+      .where(scope.scopeOf(purchaseLines, eq(purchaseLines.productId, productId)))
+      .limit(1),
+    scope.db
+      .select({ id: adjustments.id })
+      .from(adjustments)
+      .where(scope.scopeOf(adjustments, eq(adjustments.productId, productId)))
+      .limit(1),
+  ]);
+  return found.some((rows) => rows.length > 0);
 }
 
 /* ========================================================================== */
@@ -427,6 +568,82 @@ export async function deleteBarcode(
     .delete(productBarcodes)
     .where(scope.scopeOf(productBarcodes, eq(productBarcodes.id, barcodeId)));
   await scope.update(products, {}, eq(products.id, productId));
+}
+
+/**
+ * [PCN-012] Renames the unit a product's barcodes name, in step with a rename
+ * of the unit itself. Worked out per row and written once each, so a swap
+ * (strip ↔ box) cannot merge two units' codes into one.
+ */
+export async function renameBarcodeUnits(
+  scope: TenantScope,
+  productId: Uuid,
+  renames: readonly { from: string; to: string }[],
+): Promise<void> {
+  if (renames.length === 0) return;
+  const to = new Map(renames.map((rename) => [rename.from, rename.to]));
+  const codes = await scope.select(productBarcodes, eq(productBarcodes.productId, productId));
+  for (const code of codes) {
+    const renamed = to.get(code.unitLevelName);
+    if (renamed !== undefined) {
+      await scope.update(
+        productBarcodes,
+        { unitLevelName: renamed },
+        eq(productBarcodes.id, code.id),
+      );
+    }
+  }
+}
+
+/**
+ * [PCN-012] Marks a product as replaced, once. The guard is the concurrency
+ * control: a second replacement of the same product updates nothing and the
+ * caller rolls back, so two clicks never make two replacements.
+ */
+export async function markProductReplaced(
+  scope: TenantScope,
+  productId: Uuid,
+  replacedBy: Uuid,
+): Promise<boolean> {
+  const rows = await scope.update(
+    products,
+    { replacedByProductId: replacedBy, isActive: false },
+    eq(products.id, productId),
+    isNull(products.replacedByProductId),
+  );
+  return rows.length === 1;
+}
+
+/**
+ * [PCN-012] Moves a replaced product's barcodes to its replacement, each to the
+ * unit of the same name. A code whose unit the replacement does not have is
+ * unlinked and returned, so the owner can link it again knowingly — left on
+ * the old product it would scan as a product that is no longer sold.
+ */
+export async function moveBarcodesByUnitName(
+  scope: TenantScope,
+  fromProductId: Uuid,
+  toProductId: Uuid,
+  unitNames: readonly string[],
+): Promise<{ barcode: string; unitLevelName: string }[]> {
+  const names = new Set(unitNames);
+  const codes = await scope.select(productBarcodes, eq(productBarcodes.productId, fromProductId));
+  const unmatched: { barcode: string; unitLevelName: string }[] = [];
+  for (const code of codes) {
+    if (names.has(code.unitLevelName)) {
+      await scope.update(
+        productBarcodes,
+        { productId: toProductId },
+        eq(productBarcodes.id, code.id),
+      );
+    } else {
+      await scope.db
+        .delete(productBarcodes)
+        .where(scope.scopeOf(productBarcodes, eq(productBarcodes.id, code.id)));
+      unmatched.push({ barcode: code.barcode, unitLevelName: code.unitLevelName });
+    }
+  }
+  return unmatched;
 }
 
 /** Most recently touched products — the Products screen's default view. */

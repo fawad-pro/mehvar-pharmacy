@@ -173,3 +173,51 @@ export async function applyGrants(): Promise<void> {
     await pool.end();
   }
 }
+
+/**
+ * Prove, AS THE APPLICATION ROLE, that every event table refuses UPDATE and
+ * DELETE — the check verify-install.ps1 makes after an install, made here for a
+ * restored database.
+ *
+ * Only PostgreSQL's own refusal for lack of privilege (SQLSTATE 42501) counts.
+ * Anything else — a missing table, a refused connection — proves nothing, and
+ * proving nothing is a failure here, for the reason lib-verify.ps1 records: a
+ * check that passes when it could not run is decorative.
+ *
+ * `WHERE false` so a broken grant still changes no row.
+ */
+export async function assertEventTablesImmutable(appUrl: string): Promise<void> {
+  const pool = new Pool({ connectionString: appUrl });
+  const problems: string[] = [];
+  try {
+    for (const table of EVENT_TABLES) {
+      for (const statement of [
+        `UPDATE ${quoteIdent(table)} SET id = id WHERE false`,
+        `DELETE FROM ${quoteIdent(table)} WHERE false`,
+      ]) {
+        try {
+          await pool.query(statement);
+          problems.push(`${table}: the application role was ALLOWED to run "${statement}"`);
+        } catch (error: unknown) {
+          const code = (error as { code?: string }).code;
+          if (code !== '42501') {
+            problems.push(
+              `${table}: inconclusive (${code ?? 'no code'}): ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+      }
+    }
+  } finally {
+    await pool.end();
+  }
+
+  if (problems.length > 0) {
+    throw new Error(
+      ['Event tables are not immutable for the application role:', ...problems].join('\n  '),
+    );
+  }
+  console.log(
+    `Immutability: the application role is refused UPDATE and DELETE on all ${EVENT_TABLES.length} event tables.`,
+  );
+}

@@ -34,11 +34,18 @@ import {
 } from '@/db/sales-queries';
 import { customerBalance } from '@/db/udhaar-queries';
 import type { TenantScope } from '@/db/scoped';
-import { paisa, type Paisa } from '@/lib/branded';
+import { packFactor, paisa, type Paisa } from '@/lib/branded';
+import { businessDayOf } from '@/lib/business-day';
+import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { planAllocation } from '../inventory/allocation';
-import { validateSaleCommand, type SaleCommand, type SaleRejection } from './sale-command';
+import {
+  saleLineGrossPaisa,
+  validateSaleCommand,
+  type SaleCommand,
+  type SaleRejection,
+} from './sale-command';
 
 // The command and its validator are pure and live apart (see `sale-command.ts`
 // for why); re-exported so every existing caller keeps one import.
@@ -105,6 +112,9 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
 
     const productIds = [...new Set(command.lines.map((line) => line.productId))];
     const available = await lockBatchesForProducts(tx, productIds);
+    // PCN-008: what counts as expired is decided by the day the sale lands,
+    // which is also the day the owner's exception list files it under.
+    const today = businessDayOf(new Date());
 
     // Read before the sale lands, so the mini-statement's "previous balance"
     // means what it says (T4/T5, Phase 10 §7).
@@ -136,7 +146,21 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
         productId: line.productId,
         qtyBase: line.qtyBase,
         enteredUnitLevel: line.enteredUnitLevel,
-        unitPricePaisa: line.unitPricePaisa,
+        // [PCN-012] The nominal per-base price is derived here, not trusted:
+        // money is read from `lineAmountPaisa` whenever it is present.
+        unitPricePaisa:
+          line.unitCount !== undefined && line.unitPricePaisaEntered !== undefined
+            ? nominalPricePerBase(
+                paisa(line.unitPricePaisaEntered),
+                packFactor(line.qtyBase / line.unitCount),
+              )
+            : line.unitPricePaisa,
+        unitKey: line.unitCount !== undefined ? (line.unitKey ?? null) : null,
+        unitName: line.unitCount !== undefined ? (line.unitName ?? null) : null,
+        unitCount: line.unitCount ?? null,
+        unitPricePaisaEntered:
+          line.unitCount !== undefined ? (line.unitPricePaisaEntered ?? null) : null,
+        lineAmountPaisa: line.unitCount !== undefined ? saleLineGrossPaisa(line) : null,
         lineDiscountPaisa: line.lineDiscountPaisa,
         priceOverridden: line.priceOverridden,
       })),
@@ -157,7 +181,7 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
       // against the same units — a cart with "3 strips" and "4 tablets" of one
       // medicine is ordinary, and getting this wrong over-allocates a batch.
       const remaining = available.get(line.productId) ?? [];
-      const plan = planAllocation(remaining, line.qtyBase as never);
+      const plan = planAllocation(remaining, line.qtyBase as never, today);
 
       for (const allocation of plan.allocations) {
         allocationRows.push({

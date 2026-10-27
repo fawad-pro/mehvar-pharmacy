@@ -26,6 +26,8 @@ export interface SaleContext {
   salesmanName: string;
   /** Whether a committed sale prints without being asked (Settings). */
   autoPrintReceipt: boolean;
+  /** PCN-012: a product's first line starts in its loose unit (Settings). */
+  saleStartsLoose: boolean;
 }
 
 /**
@@ -52,5 +54,6 @@ export async function saleContext(): Promise<SaleContext | null> {
     salesmanName: session.userName,
     // Absent means on: an existing tenant keeps the behaviour it had.
     autoPrintReceipt: settings?.autoPrintReceipt ?? true,
+    saleStartsLoose: settings?.saleStartsLoose ?? false,
   };
 }

@@ -18,8 +18,12 @@
 param(
     [Parameter(Mandatory)] [string] $InstallDir,
     [Parameter(Mandatory)] [string] $DataDir,
-    [Parameter(Mandatory)] [string] $ShopName,
-    [Parameter(Mandatory)] [string] $OwnerPin,
+    # Not Mandatory: an upgrade or repair skips the wizard's shop and PIN pages
+    # (the pharmacy already exists, and init.js leaves it untouched), so Setup
+    # passes them empty. A FIRST install still cannot proceed without them --
+    # init.js refuses, naming the missing value.
+    [string] $ShopName = '',
+    [string] $OwnerPin = '',
     [string] $OwnerName = 'Owner',
     [string] $ShopAddress = '',
     [string] $ShopPhone = '',
@@ -42,6 +46,7 @@ $MyRoot =
     else { (Get-Location).Path }
 
 . (Join-Path $MyRoot 'lib-service.ps1')
+. (Join-Path $MyRoot 'lib-config.ps1')
 
 $PgBin      = Join-Path $InstallDir 'pgsql\bin'
 $NodeExe    = Join-Path $InstallDir 'runtime\node.exe'
@@ -81,6 +86,8 @@ $script:CurrentStep = 'starting up'
 function Write-Log {
     param([string] $Message, [string] $Level = 'INFO')
 
+    # Credentials never reach the log: it is the tail the support bundle sends.
+    if (Get-Command Protect-LogText -ErrorAction SilentlyContinue) { $Message = Protect-LogText $Message }
     $line = "{0:HH:mm:ss} [{1,-5}] {2}" -f (Get-Date), $Level, $Message
     Add-Content -Path $script:LogFile -Value $line -Encoding utf8
     Write-Host $line
@@ -281,28 +288,40 @@ Invoke-Tool -FilePath $psql -Arguments @(
 # ---------------------------------------------------------------------------
 Write-Step 'Writing configuration'
 
-$sessionSecret = if (Test-Path $EnvFile) {
-    # Rotating this on every repair install would log every counter out.
-    ((Get-Content $EnvFile | Where-Object { $_ -like 'SESSION_SECRET=*' }) -split '=', 2)[1]
-} else {
+<#
+    MERGED into the existing file, never regenerated. Regenerating it on every
+    run deleted the shop's own settings on each upgrade -- MEHVAR_BACKUP_DIR,
+    the USB drive OPERATIONS.md tells the owner to back up to, among them. The
+    rules (which keys the installer owns, which it only fills in) are in
+    lib-config.ps1 and pinned by config.tests.ps1.
+#>
+$envSettings = [ordered]@{
+    APP_ENV            = 'production'
+    NODE_ENV           = 'production'
+    PORT               = "$Port"
+    DATABASE_URL       = $appUrl
+    DATABASE_ADMIN_URL = $adminUrl
+    APP_DB_ROLE        = $AppRole
+    APP_DB_PASSWORD    = $appPassword
     # 32 raw bytes base64-encoded comfortably clears env.ts's 32-character floor.
-    New-Secret
+    SESSION_SECRET     = (New-Secret)
+    TENANT_TIME_ZONE   = 'Asia/Karachi'
+    MEHVAR_DATA_DIR    = $DataDir
+    MEHVAR_LOG_DIR     = $LogDir
+    MEHVAR_PG_BIN      = $PgBin
 }
 
-@"
-APP_ENV=production
-NODE_ENV=production
-PORT=$Port
-DATABASE_URL=$appUrl
-DATABASE_ADMIN_URL=$adminUrl
-APP_DB_ROLE=$AppRole
-APP_DB_PASSWORD=$appPassword
-SESSION_SECRET=$sessionSecret
-TENANT_TIME_ZONE=Asia/Karachi
-MEHVAR_DATA_DIR=$DataDir
-MEHVAR_LOG_DIR=$LogDir
-MEHVAR_PG_BIN=$PgBin
-"@ | Set-Content -Path $EnvFile -Encoding ascii
+# SESSION_SECRET: rotating it on every repair install would log every counter
+# out. TENANT_TIME_ZONE: the shop's choice, not this machine's.
+$envMerge = Update-EnvFile -Path $EnvFile -Settings $envSettings -KeepExisting @('SESSION_SECRET', 'TENANT_TIME_ZONE')
+
+foreach ($key in $envMerge.Replaced) {
+    # By name only: most of these are credentials.
+    Write-Log "   $key reset to this installation's value"
+}
+if ($envMerge.Kept.Count -gt 0) {
+    Write-Log "   kept the shop's own settings: $($envMerge.Kept -join ', ')"
+}
 
 # The config holds database credentials. Administrators and SYSTEM only.
 $acl = Get-Acl $EnvFile
@@ -316,6 +335,17 @@ Set-Acl -Path $EnvFile -AclObject $acl
 # ---------------------------------------------------------------------------
 # 5. Migrate, then GRANT -- never one without the other
 # ---------------------------------------------------------------------------
+<#
+    The application must not be running while the schema changes under it: an
+    old build serving against a new schema is the failure this guards. Setup
+    already stopped it before replacing files (stop-services.ps1); this makes
+    the guarantee local to the migration, whoever ran this script.
+#>
+Write-Step 'Stopping the application before migrating'
+$stop = Stop-MehvarServices -Names @($AppService)
+Write-Log "   $($stop.Message)"
+if (-not $stop.Ok) { throw $stop.Message }
+
 Write-Step 'Applying migrations'
 <#
     MEHVAR_MIGRATIONS_DIR is not optional decoration.
@@ -547,6 +577,26 @@ echo.
 pause
 "@ | Set-Content -Path $supportWrapper -Encoding ascii
 
+<#
+    Replacing a dead counter PC (OPERATIONS.md): install Mehvar, then
+        mehvar-restore.cmd E:\MehvarBackups\mehvar-....dump --replace
+    The counter service is stopped for the swap and started again whatever the
+    outcome; restore.js proves the backup in a scratch database before it
+    touches the live one, and keeps the live one (renamed) when it does.
+#>
+$restoreWrapper = Join-Path $InstallDir 'mehvar-restore.cmd'
+@"
+@echo off
+cd /d "$AppDir"
+set "DOTENV_CONFIG_PATH=$EnvFile"
+for /f "usebackq eol=# tokens=1,* delims==" %%a in ("$EnvFile") do set "%%a=%%b"
+net stop $AppService >nul 2>&1
+"$NodeExe" "$BinDir\ops\restore.js" %*
+set "RESULT=%ERRORLEVEL%"
+net start $AppService >nul 2>&1
+exit /b %RESULT%
+"@ | Set-Content -Path $restoreWrapper -Encoding ascii
+
 & schtasks.exe /Create /F /TN 'Mehvar\NightlyBackup' /TR "`"$backupWrapper`"" /SC DAILY /ST 02:30 /RU SYSTEM | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "Could not schedule the nightly backup (schtasks exit $LASTEXITCODE)." }
 
@@ -567,9 +617,22 @@ if (-not (Get-NetFirewallRule -DisplayName 'Mehvar Node' -ErrorAction SilentlyCo
 #>
 Write-Step 'Confirming the install'
 
-$firstRun = Join-Path $DataDir 'first-run.txt'
-if (-not (Test-Path $firstRun)) {
-    throw "Provisioning did not produce $firstRun -- the pharmacy was not created."
+<#
+    The pharmacy is proven by the database, not by first-run.txt. That file
+    holds the pairing key and the owner password in plain text and says to keep
+    it only until the counter is paired, so a careful shop deletes it -- and
+    every later update then failed here, after migrating, claiming the pharmacy
+    had never been created. It is written only when a pharmacy is created, and
+    nothing here recreates it.
+#>
+$tenantCount = & $psql $adminUrl -tAc 'SELECT count(*) FROM tenants'
+if ($LASTEXITCODE -ne 0 -or [int] ("$tenantCount".Trim()) -lt 1) {
+    throw 'The database holds no pharmacy -- provisioning did not create one.'
+}
+if (Test-Path (Join-Path $DataDir 'first-run.txt')) {
+    Write-Log '   pharmacy present; first-run.txt holds its pairing key'
+} else {
+    Write-Log '   pharmacy present (an existing one: first-run.txt is not needed)'
 }
 
 $appSvc = Get-Service -Name $AppService -ErrorAction SilentlyContinue

@@ -16,7 +16,10 @@ import 'server-only';
 import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
 
 import { summariseBook } from '@/domain/udhaar/position';
+import { DEFAULT_TIME_ZONE } from '@/lib/business-day';
+import type { PackLevel } from '@/lib/quantity';
 
+import { batchCostLedger } from './batch-cost-queries';
 import type { TenantScope } from './scoped';
 import {
   adjustments,
@@ -24,11 +27,14 @@ import {
   cashMovements,
   payments,
   products,
+  purchaseCorrections,
+  purchaseLines,
   saleLineAllocations,
   saleLines,
-  saleReturnLines,
   saleReturns,
   sales,
+  supplierReturns,
+  suppliers,
   users,
 } from './schema';
 
@@ -275,6 +281,158 @@ export async function returnsInRange(
     .orderBy(desc(saleReturns.createdAt));
 }
 
+export interface ExpiredSaleRow {
+  readonly allocationId: string;
+  readonly receiptNumber: string;
+  readonly productName: string;
+  readonly qtyBase: number;
+  readonly baseUnitName: string;
+  readonly expiryDate: string;
+  readonly byName: string;
+  readonly createdAt: Date;
+}
+
+/**
+ * PCN-008: stock sold from a batch that had already expired on the day of the
+ * sale. Allocation consumes expired batches only when nothing unexpired is
+ * left, so every row here is a sale the counter was warned about and made
+ * anyway. Derived from the allocation the server actually made, which is why
+ * an offline sale cannot dodge it.
+ */
+export async function expiredStockSoldInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+): Promise<ExpiredSaleRow[]> {
+  const rows = await scope.db
+    .select({
+      allocationId: saleLineAllocations.id,
+      receiptNumber: sales.receiptNumber,
+      productName: products.name,
+      qtyBase: saleLineAllocations.qtyBase,
+      baseUnitName: products.baseUnitName,
+      expiryDate: batches.expiryDate,
+      byName: users.name,
+      createdAt: sales.createdAt,
+    })
+    .from(saleLineAllocations)
+    .innerJoin(batches, eq(saleLineAllocations.batchId, batches.id))
+    .innerJoin(saleLines, eq(saleLineAllocations.saleLineId, saleLines.id))
+    .innerJoin(sales, eq(saleLines.saleId, sales.id))
+    .innerJoin(products, eq(saleLines.productId, products.id))
+    .innerJoin(users, eq(sales.createdBy, users.id))
+    .where(
+      scope.scopeOf(
+        sales,
+        gte(sales.createdAt, from),
+        lt(sales.createdAt, to),
+        sql`${batches.expiryDate} < (${sales.createdAt} AT TIME ZONE ${DEFAULT_TIME_ZONE})::date`,
+      ),
+    )
+    .orderBy(desc(sales.createdAt));
+  return rows.map((row) => ({ ...row, expiryDate: row.expiryDate ?? '' }));
+}
+
+export interface PurchaseCorrectionExceptionRow {
+  readonly id: string;
+  readonly purchaseId: string;
+  readonly productName: string;
+  readonly qtyDeltaBase: number;
+  readonly bonusDeltaBase: number;
+  readonly costCorrected: boolean;
+  readonly invoiceDeltaPaisa: number;
+  readonly note: string;
+  readonly byName: string;
+  readonly createdAt: Date;
+}
+
+/** [PCN-009] Corrections to received invoices — every one, attributed (T1). */
+export async function purchaseCorrectionsInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+): Promise<PurchaseCorrectionExceptionRow[]> {
+  const rows = await scope.db
+    .select({
+      id: purchaseCorrections.id,
+      purchaseId: purchaseLines.purchaseId,
+      productName: products.name,
+      qtyDeltaBase: purchaseCorrections.qtyDeltaBase,
+      bonusDeltaBase: purchaseCorrections.bonusDeltaBase,
+      correctedUnitCostPaisa: purchaseCorrections.correctedUnitCostPaisa,
+      correctedUnitCostPaisaEntered: purchaseCorrections.correctedUnitCostPaisaEntered,
+      invoiceDeltaPaisa: purchaseCorrections.invoiceDeltaPaisa,
+      note: purchaseCorrections.note,
+      byName: users.name,
+      createdAt: purchaseCorrections.createdAt,
+    })
+    .from(purchaseCorrections)
+    .innerJoin(purchaseLines, eq(purchaseLines.id, purchaseCorrections.purchaseLineId))
+    .innerJoin(products, eq(products.id, purchaseLines.productId))
+    .innerJoin(users, eq(users.id, purchaseCorrections.createdBy))
+    .where(
+      scope.scopeOf(
+        purchaseCorrections,
+        gte(purchaseCorrections.createdAt, from),
+        lt(purchaseCorrections.createdAt, to),
+      ),
+    )
+    .orderBy(desc(purchaseCorrections.createdAt));
+  return rows.map(({ correctedUnitCostPaisa, correctedUnitCostPaisaEntered, ...row }) => ({
+    ...row,
+    // Either column: per base unit on an older line, per pack since PCN-012.
+    costCorrected: correctedUnitCostPaisa !== null || correctedUnitCostPaisaEntered !== null,
+  }));
+}
+
+export interface SupplierReturnExceptionRow {
+  readonly id: string;
+  readonly productName: string;
+  readonly supplierName: string;
+  readonly qtyBase: number;
+  readonly baseUnitName: string;
+  readonly packLevels: PackLevel[];
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
+  readonly creditPaisa: number;
+  readonly byName: string;
+  readonly createdAt: Date;
+}
+
+/** [PCN-009] Goods sent back to suppliers, with the credit given (T1). */
+export async function supplierReturnsInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+): Promise<SupplierReturnExceptionRow[]> {
+  return scope.db
+    .select({
+      id: supplierReturns.id,
+      productName: products.name,
+      supplierName: suppliers.name,
+      qtyBase: supplierReturns.qtyBase,
+      baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
+      unitName: supplierReturns.unitName,
+      unitCount: supplierReturns.unitCount,
+      creditPaisa: supplierReturns.creditPaisa,
+      byName: users.name,
+      createdAt: supplierReturns.createdAt,
+    })
+    .from(supplierReturns)
+    .innerJoin(products, eq(products.id, supplierReturns.productId))
+    .innerJoin(suppliers, eq(suppliers.id, supplierReturns.supplierId))
+    .innerJoin(users, eq(users.id, supplierReturns.createdBy))
+    .where(
+      scope.scopeOf(
+        supplierReturns,
+        gte(supplierReturns.createdAt, from),
+        lt(supplierReturns.createdAt, to),
+      ),
+    )
+    .orderBy(desc(supplierReturns.createdAt));
+}
+
 export interface QuickItemRow {
   readonly productId: string;
   readonly name: string;
@@ -305,6 +463,10 @@ export interface AdjustmentExceptionRow {
   readonly id: string;
   readonly productName: string;
   readonly qtyBaseDelta: number;
+  readonly baseUnitName: string;
+  readonly packLevels: PackLevel[];
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
   readonly reason: string;
   readonly note: string | null;
   readonly byName: string;
@@ -332,6 +494,10 @@ export async function adjustmentsInRange(
       id: adjustments.id,
       productName: products.name,
       qtyBaseDelta: adjustments.qtyBaseDelta,
+      baseUnitName: products.baseUnitName,
+      packLevels: products.packLevels,
+      unitName: adjustments.unitName,
+      unitCount: adjustments.unitCount,
       reason: adjustments.reason,
       note: adjustments.note,
       byName: users.name,
@@ -477,14 +643,15 @@ export interface ReportFigures {
   readonly returnCount: number;
   /** Refunded in the range, so the net figures can show their own adjustment. */
   readonly returnedPaisa: number;
+  /** [PCN-012, D2] Stock written off or counted short in the range, at cost. */
+  readonly writtenOffPaisa: number;
 }
 
 /**
- * Margin is honest about two things Phase 9 §7 names: bonus units (cost
- * already carries the blended figure from `costing.ts`, nothing extra needed
- * here) and pending allocations (`unit_cost_paisa` is null while pending, and
- * `sum()` skips nulls — an unresolved shortfall simply contributes no cost
- * until a purchase or count correction gives it one).
+ * Margin is honest about two things Phase 9 §7 names: bonus units (a batch's
+ * total is what was paid, spread over every unit received, free ones
+ * included) and pending allocations (no batch yet, so no cost until a
+ * purchase or count correction gives it one).
  *
  * And now about a third: RETURNS.
  *
@@ -519,19 +686,25 @@ export async function reportFigures(
     .from(saleLines)
     .where(scope.scopeOf(saleLines, gte(saleLines.createdAt, from), lt(saleLines.createdAt, to)));
 
-  const [costRow] = await scope.db
-    .select({
-      total: sql<string>`sum(${saleLineAllocations.qtyBase} * ${saleLineAllocations.unitCostPaisa})`,
-    })
-    .from(saleLineAllocations)
-    .innerJoin(saleLines, eq(saleLineAllocations.saleLineId, saleLines.id))
-    .where(
-      scope.scopeOf(
-        saleLineAllocations,
-        gte(saleLines.createdAt, from),
-        lt(saleLines.createdAt, to),
-      ),
-    );
+  /*
+   * [PCN-012] Cost is each outflow's cumulative share of its batch's exact
+   * total (`batch-cost-queries.ts`): never understated, and a used-up batch
+   * costs exactly what was paid. Derived from the batch's CURRENT total, so a
+   * corrected invoice restates units sold before the correction (D1). Sales
+   * net of restocked returns are cost of goods sold; write-offs and other
+   * negative adjustments take their share too (D2) and are reported beside it.
+   * A pending allocation has no batch yet and costs nothing until resolved.
+   */
+  const ledger = await batchCostLedger(scope, to);
+  let soldCost = 0;
+  let returnedCost = 0;
+  let writtenOffPaisa = 0;
+  for (const movement of ledger.movements) {
+    if (movement.at < from) continue;
+    if (movement.kind === 'sale') soldCost += movement.costPaisa;
+    else if (movement.kind === 'restock') returnedCost -= movement.costPaisa;
+    else if (movement.kind === 'adjustment') writtenOffPaisa += movement.costPaisa;
+  }
 
   const [returnsRow] = await scope.db
     .select({
@@ -543,32 +716,9 @@ export async function reportFigures(
       scope.scopeOf(saleReturns, gte(saleReturns.createdAt, from), lt(saleReturns.createdAt, to)),
     );
 
-  /*
-   * The cost of what came back, valued at the batch it was restocked into.
-   *
-   * That batch is the one `restockToBatch` actually put the units in, so its
-   * unit cost is the cost the system really reversed — not a re-derivation from
-   * the original allocations, which could span several batches and would give a
-   * figure the inventory never used.
-   */
-  const [returnedCostRow] = await scope.db
-    .select({
-      total: sql<string>`sum(${saleReturnLines.qtyBase} * ${batches.unitCostPaisa})`,
-    })
-    .from(saleReturnLines)
-    .innerJoin(saleReturns, eq(saleReturnLines.saleReturnId, saleReturns.id))
-    .innerJoin(batches, eq(saleReturnLines.restockBatchId, batches.id))
-    .where(
-      scope.scopeOf(
-        saleReturnLines,
-        gte(saleReturns.createdAt, from),
-        lt(saleReturns.createdAt, to),
-      ),
-    );
-
   const returnedPaisa = Number(returnsRow?.refunded ?? 0);
   const revenuePaisa = Number(salesRow?.total ?? 0) - returnedPaisa;
-  const costPaisa = Number(costRow?.total ?? 0) - Number(returnedCostRow?.total ?? 0);
+  const costPaisa = soldCost - returnedCost;
 
   return {
     revenuePaisa,
@@ -578,5 +728,6 @@ export async function reportFigures(
     unitsSold: Number(unitsRow?.total ?? 0),
     returnCount: Number(returnsRow?.count ?? 0),
     returnedPaisa,
+    writtenOffPaisa,
   };
 }

@@ -1,12 +1,17 @@
 'use client';
 
 /**
- * [PCN-006] Owed to suppliers — the payable mirror of the customers-owing list.
+ * [PCN-007] Owed to suppliers — the payable mirror of the customers-owing list.
  *
  * "Money customers owe us" has had a home since Day 4; "money we owe our
  * distributors" had none, so a pharmacy running on supplier credit could not
  * answer the one question that decides whether it can take the next delivery.
  * This panel is that answer, and the place the shop marks a payment made.
+ *
+ * [PCN-011] Suppliers holding the pharmacy's money — an overpayment, or credit
+ * for goods sent back from a paid invoice — are listed beneath, and a payment
+ * larger than what is owed says so before it is recorded. Until then such a
+ * supplier simply vanished from this panel.
  *
  * Refreshes when a purchase commits (a received invoice on credit adds to what
  * is owed) and after each settlement, so the figure here and the Day screen's
@@ -16,13 +21,17 @@
  * a module that reaches the database (the rule recorded on Day 4/Day 6).
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { needsClickToCommit } from '@/client/scan/amount-guard';
+import { paisaFromRupeeInput } from '@/domain/sales/cart';
+import { supplierPaymentEffect } from '@/domain/suppliers/supplier-position';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import type { Uuid } from '@/lib/uuid';
 
-import { settleSupplierAction, suppliersOwedAction } from './actions';
+import { settleSupplierAction, supplierPositionsAction } from './actions';
 
 interface SupplierRow {
   id: string;
@@ -31,13 +40,32 @@ interface SupplierRow {
   balancePaisa: number;
 }
 
+interface SupplierInCreditRow {
+  id: string;
+  name: string;
+  phone: string | null;
+  creditPaisa: number;
+}
+
+interface Positions {
+  owed: SupplierRow[];
+  inCredit: SupplierInCreditRow[];
+}
+
 export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
-  const [rows, setRows] = useState<SupplierRow[] | null>(null);
+  const [positions, setPositions] = useState<Positions | null>(null);
   const [bump, setBump] = useState(0);
 
+  // Loads on mount and again after every receipt or payment. The answer to the
+  // LATEST request is the one shown: an earlier, slower one landing last put
+  // back the owed figure from before the payment just made.
+  const latest = useRef(0);
   const load = useCallback(() => {
-    void suppliersOwedAction()
-      .then(setRows)
+    const mine = ++latest.current;
+    void supplierPositionsAction()
+      .then((answer) => {
+        if (mine === latest.current) setPositions(answer);
+      })
       .catch(() => {
         // Offline (ADR-3): purchases and their payments need the server, so the
         // list of what is owed does too. Silence is right.
@@ -46,51 +74,105 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
 
   useEffect(load, [load, reloadKey, bump]);
 
-  if (rows === null || rows.length === 0) {
+  if (positions === null || (positions.owed.length === 0 && positions.inCredit.length === 0)) {
     // Nothing owed is the common, healthy state; a panel that always shows would
     // just be an empty box on the busy Purchases screen. Absent is the answer.
     return null;
   }
 
-  const total = rows.reduce((sum, row) => sum + row.balancePaisa, 0);
+  const { owed, inCredit } = positions;
+  const total = owed.reduce((sum, row) => sum + row.balancePaisa, 0);
+  const creditTotal = inCredit.reduce((sum, row) => sum + row.creditPaisa, 0);
 
   return (
-    <div>
-      <div className="mb-2 flex items-baseline gap-3">
-        <h2 className="text-green-900 font-medium">Owed to suppliers</h2>
-        <span className="text-amber numeral font-semibold">
-          {formatPaisa(paisa(total), { withSymbol: true })}
-        </span>
-      </div>
-      <ul className="border-line divide-line divide-y rounded border text-sm">
-        {rows.map((row) => (
-          <SupplierCreditRow
-            key={row.id}
-            row={row}
-            onSettled={() => {
-              setBump((n) => n + 1);
-            }}
-          />
-        ))}
-      </ul>
+    <div className="flex flex-col gap-4">
+      {owed.length > 0 ? (
+        <div>
+          <div className="mb-2 flex items-baseline gap-3">
+            <h2 className="text-green-900 font-medium">Owed to suppliers</h2>
+            <span className="text-amber numeral font-semibold">
+              {formatPaisa(paisa(total), { withSymbol: true })}
+            </span>
+          </div>
+          <ul className="border-line divide-line divide-y rounded border text-sm">
+            {owed.map((row) => (
+              <SupplierCreditRow
+                key={row.id}
+                row={row}
+                onSettled={() => {
+                  setBump((n) => n + 1);
+                }}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {inCredit.length > 0 ? (
+        <section aria-label="Credit with suppliers">
+          <div className="mb-2 flex items-baseline gap-3">
+            <h2 className="text-green-900 font-medium">Credit with suppliers</h2>
+            <span className="numeral font-semibold">
+              {formatPaisa(paisa(creditTotal), { withSymbol: true })}
+            </span>
+          </div>
+          <ul className="border-line divide-line divide-y rounded border text-sm">
+            {inCredit.map((row) => (
+              <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
+                <SupplierName id={row.id} name={row.name} />
+                {row.phone ? <span className="text-ink/50 text-xs">{row.phone}</span> : null}
+                <span className="numeral ml-auto font-medium">
+                  {formatPaisa(paisa(row.creditPaisa), { withSymbol: true })}
+                </span>
+                <span className="text-ink/60 text-xs">held for you</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-ink/60 mt-1 text-xs">
+            Paid ahead, or credited for goods sent back. It counts against what you next owe that
+            supplier.
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }
 
-function SupplierCreditRow({
+/** The way into the supplier's account, where every payment is listed (T4). */
+function SupplierName({ id, name }: { id: string; name: string }) {
+  return (
+    <Link
+      href={`/purchases/suppliers/${id}`}
+      className="text-green-700 font-medium underline-offset-2 hover:underline"
+    >
+      {name}
+    </Link>
+  );
+}
+
+export function SupplierCreditRow({
   row,
   onSettled,
+  onAccountPage = false,
 }: {
   row: SupplierRow;
   onSettled: () => void;
+  /** On the account itself the name would link to the page it is on. */
+  onAccountPage?: boolean;
 }) {
   const [paying, setPaying] = useState(false);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Anything that is not an amount reads as zero, so nothing is recorded — a
+  // GS1 code here once overflowed into the credit sum and crashed the row.
+  const enteredPaisa = paisaFromRupeeInput(amount);
+  // [PCN-011] Said before recording, never blocked: paying more than is owed
+  // leaves the rest with the supplier as credit.
+  const { leavesCreditPaisa } = supplierPaymentEffect(row.balancePaisa, enteredPaisa);
+
   async function settle(): Promise<void> {
-    const amountPaisa = Math.round(Number(amount || '0') * 100);
+    const amountPaisa = enteredPaisa;
     if (amountPaisa <= 0 || busy) {
       return;
     }
@@ -119,7 +201,11 @@ function SupplierCreditRow({
   return (
     <li className="px-3 py-2">
       <div className="flex flex-wrap items-baseline gap-x-3">
-        <span className="font-medium">{row.name}</span>
+        {onAccountPage ? (
+          <span className="font-medium">{row.name}</span>
+        ) : (
+          <SupplierName id={row.id} name={row.name} />
+        )}
         {row.phone ? <span className="text-ink/50 text-xs">{row.phone}</span> : null}
         <span className="numeral text-amber ml-auto font-medium">
           {formatPaisa(paisa(row.balancePaisa), { withSymbol: true })}
@@ -143,6 +229,13 @@ function SupplierCreditRow({
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
+              // An amount too large to be real records only by a click.
+              if (needsClickToCommit(enteredPaisa)) {
+                setError(
+                  `${formatPaisa(enteredPaisa, { withSymbol: true })} looks like a barcode. If it is right, click Record payment.`,
+                );
+                return;
+              }
               void settle();
             }
           }}
@@ -152,12 +245,14 @@ function SupplierCreditRow({
               Amount paid
             </label>
             <input
+              autoComplete="off"
               id={`pay-${row.id}`}
               value={amount}
               inputMode="decimal"
               autoFocus
               onChange={(event) => {
                 setAmount(event.target.value);
+                setError(null);
               }}
               className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
             />
@@ -165,11 +260,21 @@ function SupplierCreditRow({
           <button
             type="button"
             onClick={() => void settle()}
-            disabled={busy || Math.round(Number(amount || '0') * 100) <= 0}
+            disabled={busy || !(enteredPaisa > 0)}
             className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
           >
-            {busy ? 'Saving…' : 'Record payment'}
+            {busy
+              ? 'Saving…'
+              : leavesCreditPaisa > 0
+                ? `Record payment — leaves ${formatPaisa(paisa(leavesCreditPaisa), { withSymbol: true })} credit`
+                : 'Record payment'}
           </button>
+          {leavesCreditPaisa > 0 ? (
+            <p className="text-amber w-full text-sm" role="status">
+              {formatPaisa(paisa(leavesCreditPaisa), { withSymbol: true })} more than you owe{' '}
+              {row.name}. It stays with them as credit.
+            </p>
+          ) : null}
           {error ? (
             <p className="text-red text-sm" role="alert">
               {error}

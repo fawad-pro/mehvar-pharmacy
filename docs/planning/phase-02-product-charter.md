@@ -40,11 +40,11 @@ A counter-first pharmacy operations system:
 
 ## What We Are NOT Building (V1)
 
-- Prescription management, dispensing records, or any clinical functionality
+- Prescription management, dispensing records, or any clinical functionality — including controlled-drug registers, as a conscious exclusion; the product makes no regulatory-compliance claim *(PCN-010)*
 - Patient/medical records of any kind
 - Customer relationship management: a customer is a name and phone number attached to a debt — no addresses, notes, loyalty, messaging, or marketing
 - Multi-branch operation (single branch in V1; nothing in the product may make future multi-branch impossible)
-- Supplier accounting / payables ledger (purchase recording yes; distributor credit management no)
+- Supplier accounting beyond what is owed *(amended 2026-10-22, PCN-010, applying PCN-007)*: what the pharmacy owes each supplier is tracked as a derived position — invoices, payments, corrections and returns — but there are no supplier statements, ledgers or accounting beyond that
 - FBR POS integration (not required for our non-Tier-1 segment; must remain adoptable later without disrupting the product)
 - Accounting beyond the pharmacy's operational money flow (no general ledger, no financial statements)
 - E-commerce, delivery, or customer-facing apps
@@ -68,6 +68,8 @@ Exclusions exist to protect speed and clarity. Each is revisitable post-V1; none
 
 **Secondary:** The owner as evening operator and remote reader of the day's numbers.
 
+**First customers (amended 2026-10-22, PCN-010):** neighbourhood pharmacies, mostly not tech-literate. Setup, opening stock and training are founder-done, and nothing in the first installs may depend on the owner configuring the software.
+
 **Future:** Small chains (2–5 branches); the multi-branch path is preserved architecturally and deferred entirely as product.
 
 ## Reference Customer Posture
@@ -88,7 +90,7 @@ A quality entrant in a crowded checklist market. Feature parity is assumed (sear
 **Trust (the decisive measure):**
 - By day 60 at the reference pharmacy, the owner has retired the parallel paper registers for stock, cash, and udhaar — the system is the sole record of the business. Supporting evidence: unannounced physical spot counts match system stock, and the owner settles udhaar disputes by showing the customer the screen.
 
-**Owner (answered within seconds, from a phone):**
+**Owner (answered within seconds, from a phone — in V1, a phone on the shop's own network; PCN-010):**
 - What did I sell today, and how much cash should be in the drawer?
 - Who owes me money, and how much?
 - What is running out, and what is about to expire?

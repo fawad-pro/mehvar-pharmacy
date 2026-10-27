@@ -19,7 +19,28 @@
  * file's business.
  */
 
-const ROUTES = ['/login', '/sale', '/products', '/customers', '/api/catalog'];
+/*
+ * Every route a spec reaches by a function key, not only the ones it opens on.
+ * A route left out compiles on its first key press, and the five-second
+ * interaction timeout was then measuring the compiler: F2 → /receipts and
+ * F7 → /purchases failed that way under full-suite load.
+ */
+const ROUTES = [
+  '/login',
+  '/sale',
+  '/receipts',
+  '/customers',
+  '/products',
+  '/stock',
+  '/purchases',
+  '/stock/adjust',
+  '/returns',
+  '/day',
+  '/settings',
+  '/owner',
+  '/owner/login',
+  '/api/catalog',
+];
 
 export default async function warmUp(): Promise<void> {
   if (process.env.E2E_BASE_URL) {
@@ -30,7 +51,7 @@ export default async function warmUp(): Promise<void> {
   const base = `http://127.0.0.1:${port}`;
 
   // Sequential on purpose: the point is to let the compiler finish one route at
-  // a time, which is faster than five parallel cold compiles fighting for the
+  // a time, which is faster than parallel cold compiles fighting for the
   // same CPU — the exact contention this exists to remove.
   for (const route of ROUTES) {
     try {

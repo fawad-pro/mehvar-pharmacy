@@ -53,7 +53,21 @@ UninstallDisplayName={#AppName}
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignoreversion recursesubdirs createallsubdirs
+; Never installed: extracted to {tmp} by PrepareToInstall, which backs up the
+; database before a single file is replaced. lib-verify.ps1 goes with it
+; (Invoke-Native); it is also installed normally, below. FIRST in [Files] on
+; purpose: with SolidCompression, ExtractTemporaryFile on an entry listed after
+; the payload has to decompress the whole payload to reach it.
+Source: "{#ScriptsDir}pre-update-backup.ps1"; DestDir: "{tmp}"; Flags: dontcopy
+Source: "{#ScriptsDir}lib-verify.ps1";        DestDir: "{tmp}"; Flags: dontcopy
+; Also extracted by PrepareToInstall, after the backup: stops the services so
+; no file is locked and the old application never runs against a new schema.
+Source: "{#ScriptsDir}stop-services.ps1";     DestDir: "{tmp}"; Flags: dontcopy
+Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{tmp}"; Flags: dontcopy
+; Excludes: the build machine's .env must never ship (scripts/package/payload-env.ts).
+; package:build strips it and package:installer refuses a payload holding one;
+; this is the last layer, because Next loads app\.env at startup on the shop machine.
+Source: "{#PayloadDir}\app\*";        DestDir: "{app}\app";        Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: ".env,.env.*"
 Source: "{#PayloadDir}\migrations\*"; DestDir: "{app}\migrations"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; The starter catalogue. Not skipifsourcedoesntexist: a payload built without
 ; one is a broken build, and a pharmacy opening on an empty catalogue starts
@@ -65,6 +79,8 @@ Source: "{#PayloadDir}\pgsql\*";      DestDir: "{app}\pgsql";      Flags: ignore
 Source: "{#PayloadDir}\winsw\*";      DestDir: "{app}\winsw";      Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "{#PayloadDir}\VERSION";      DestDir: "{app}";            Flags: ignoreversion
 Source: "{#ScriptsDir}lib-service.ps1";       DestDir: "{app}\packaging"; Flags: ignoreversion
+; install-services.ps1 dot-sources this too: it merges .env rather than rewriting it.
+Source: "{#ScriptsDir}lib-config.ps1";        DestDir: "{app}\packaging"; Flags: ignoreversion
 ; verify-install.ps1 dot-sources this. Shipping one without the other kills the
 ; whole verification step at its first line.
 Source: "{#ScriptsDir}lib-verify.ps1";        DestDir: "{app}\packaging"; Flags: ignoreversion
@@ -72,6 +88,14 @@ Source: "{#ScriptsDir}install-services.ps1";  DestDir: "{app}\packaging"; Flags:
 Source: "{#ScriptsDir}verify-install.ps1";    DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}counter-shortcut.ps1";  DestDir: "{app}\packaging"; Flags: ignoreversion
 Source: "{#ScriptsDir}uninstall-services.ps1";DestDir: "{app}\packaging"; Flags: ignoreversion
+
+[InstallDelete]
+; Installers before scripts/package/payload-env.ts shipped the BUILD machine's
+; .env as {app}\app\.env, and [Files] never deletes -- so without this an
+; upgraded shop would keep it forever, and Next loads it at every start. Runs
+; after PrepareToInstall's backup and before the new files are copied.
+Type: files; Name: "{app}\app\.env"
+Type: files; Name: "{app}\app\.env.*"
 
 [Dirs]
 Name: "{commonappdata}\Mehvar"; Permissions: admins-full
@@ -106,9 +130,36 @@ var
   { Set if SaveStringToFile ever fails, so a failure dialog never points at a
     log that does not exist. }
   LogUnwritable: Boolean;
+  { True when PrepareToInstall stopped the services for this run, and
+    install-services.ps1 has not yet been started to bring them back. Read by
+    DeinitializeSetup so a cancelled or failed copy never leaves the shop with
+    no counter. }
+  ServicesStopped: Boolean;
+  PostInstallStarted: Boolean;
+  { Decided once, when the wizard opens -- see IsExistingPharmacy. }
+  ExistingPharmacy: Boolean;
+
+{ An installed pharmacy already exists on this machine. installation.json is
+  written by init.js only once a pharmacy has been created, and nothing deletes
+  it -- unlike first-run.txt, which holds the pairing key and owner password in
+  plain text and which a careful shop removes after pairing. }
+function IsExistingPharmacy(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{commonappdata}\Mehvar\installation.json'));
+end;
+
+{ An upgrade or repair keeps the pharmacy, its name and its owner PIN exactly as
+  they are (init.js does nothing when one exists). Asking for them again would
+  let an owner believe a new PIN had been set when it had not. }
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := ExistingPharmacy and ((PageID = ShopPage.ID) or (PageID = PinPage.ID));
+end;
 
 procedure InitializeWizard;
 begin
+  ExistingPharmacy := IsExistingPharmacy();
+
   { Everything `mehvar init` needs, asked once, in the installer, because there
     is no wizard in the product for roadmap Phase 1 — the Settings screen
     already covers the rest. }
@@ -233,10 +284,9 @@ begin
       Result := Result + Lines[Index] + #13#10;
 end;
 
-function PowerShellArgs(ScriptName, Extra: String): String;
+function PowerShellArgs(ScriptPath, Extra: String): String;
 begin
-  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\packaging\')
-    + ScriptName + '" ' + Extra;
+  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath + '" ' + Extra;
 end;
 
 { Run PowerShell with EVERY stream redirected to a file.
@@ -246,15 +296,19 @@ end;
   never runs a line, so its own logging is irrelevant; the only record of why
   is what powershell.exe printed to stderr. That used to go to a hidden window
   and vanish. Now it lands in a file Setup reads back. }
-function RunPowerShellLogged(ScriptName, Extra, ConsoleLog: String; var Output: String): Integer;
+{ Takes a full path: the pre-update backup runs from Setup's temporary folder,
+  before anything is installed in the application folder. }
+function RunPowerShellFileLogged(ScriptPath, Extra, ConsoleLog: String; var Output: String): Integer;
 var
   ResultCode: Integer;
   Command: String;
+  ScriptName: String;
 begin
+  ScriptName := ExtractFileName(ScriptPath);
   DeleteFile(ConsoleLog);
 
   Command := '/c ""' + ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe') + '" '
-    + PowerShellArgs(ScriptName, Extra) + ' > "' + ConsoleLog + '" 2>&1"';
+    + PowerShellArgs(ScriptPath, Extra) + ' > "' + ConsoleLog + '" 2>&1"';
 
   AppendLog('run: cmd.exe ' + Command);
 
@@ -276,9 +330,103 @@ begin
   Result := ResultCode;
 end;
 
+{ The scripts install-services.ps1 and friends, installed in the application
+  folder's packaging subfolder. }
+function RunPowerShellLogged(ScriptName, Extra, ConsoleLog: String; var Output: String): Integer;
+begin
+  Result := RunPowerShellFileLogged(ExpandConstant('{app}\packaging\') + ScriptName, Extra,
+    ConsoleLog, Output);
+end;
+
 function ShellQuote(Value: String): String;
 begin
   Result := '"' + Value + '"';
+end;
+
+{ ------------------------------------------------------------------------
+  Backup before update.
+
+  Inno calls this after the operator clicks Install and BEFORE any file is
+  replaced; install-services.ps1 migrates the schema later still. So the dump
+  pre-update-backup.ps1 takes is of the installation exactly as it stands.
+
+  A non-empty result stops Setup on the Preparing to Install page with nothing
+  changed. That is the point: the upgrade test found an update that took no
+  backup at all, so a failed migration would have cost everything since the
+  last 02:30 job. If a pharmacy's records exist and cannot be backed up, the
+  update does not happen. On a first install there is no database, the script
+  says so, and this returns '' at once.
+
+  Both scripts are Flags: dontcopy entries -- extracted to Setup's temporary
+  folder for this and never installed -- because nothing in the application
+  folder can be trusted to be current yet, and on a first install nothing is
+  there at all.
+  ------------------------------------------------------------------------ }
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Output: String;
+  ConsoleLog: String;
+begin
+  Result := '';
+  ConsoleLog := LogDir() + '\pre-update-backup-console.log';
+
+  AppendLog('=== Mehvar {#AppVersion}: backing up before changing anything ===');
+  ExtractTemporaryFile('lib-verify.ps1');
+  ExtractTemporaryFile('pre-update-backup.ps1');
+
+  ResultCode := RunPowerShellFileLogged(ExpandConstant('{tmp}\pre-update-backup.ps1'),
+      '-InstallDir ' + ShellQuote(ExpandConstant('{app}')) +
+      ' -DataDir '   + ShellQuote(ExpandConstant('{commonappdata}\Mehvar')),
+      ConsoleLog, Output);
+
+  if ResultCode <> 0 then
+  begin
+    AppendLog('PRE-UPDATE BACKUP FAILED. Setup stopped before changing anything.');
+    Result :=
+      'Mehvar could not back up this pharmacy''s records, so Setup has stopped' + #13#10 +
+      'before changing anything. The installed version is untouched and keeps' + #13#10 +
+      'working.' + #13#10 + #13#10 +
+      Output + #13#10 +
+      LogAdvice();
+    Exit;
+  end;
+
+  { Backed up; now stop the services. Windows will not overwrite a running
+    node.exe, MehvarNode.exe or postgres.exe, and the old application must not
+    be serving while the schema migrates. If one will not stop, stop-services.ps1
+    has already started again whatever it stopped. }
+  ExtractTemporaryFile('lib-service.ps1');
+  ExtractTemporaryFile('stop-services.ps1');
+  ResultCode := RunPowerShellFileLogged(ExpandConstant('{tmp}\stop-services.ps1'), '',
+      LogDir() + '\stop-services-console.log', Output);
+  if ResultCode <> 0 then
+  begin
+    AppendLog('STOPPING SERVICES FAILED. Setup stopped before changing anything.');
+    Result :=
+      'Mehvar''s services could not be stopped for the update, so Setup has' + #13#10 +
+      'stopped before changing anything. The installed version keeps working.' + #13#10 + #13#10 +
+      Output + #13#10 +
+      LogAdvice();
+    Exit;
+  end;
+  ServicesStopped := True;
+end;
+
+{ Setup is exiting. If it stopped the services and never reached
+  install-services.ps1 -- cancelled during the copy, or the copy failed -- start
+  them again: the update did not happen, and the counter must not stay down
+  because of it. Best effort; both services also start with Windows. }
+procedure DeinitializeSetup();
+var
+  ResultCode: Integer;
+begin
+  if ServicesStopped and not PostInstallStarted then
+  begin
+    AppendLog('Setup ended before provisioning; starting the services it had stopped.');
+    Exec(ExpandConstant('{sys}\sc.exe'), 'start MehvarPostgres', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(ExpandConstant('{sys}\sc.exe'), 'start MehvarNode', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
 end;
 
 { One line of install-status.txt, which install-services.ps1 writes. }
@@ -315,6 +463,17 @@ begin
   Result := ProvisioningOk and FileExists(ExpandConstant('{commonappdata}\Mehvar\first-run.txt'));
 end;
 
+{ What a provisioning failure means for the shop's records. }
+function UpgradeFailureAdvice(): String;
+begin
+  if ExistingPharmacy then
+    Result := 'The pharmacy''s records were backed up before anything changed, to' + #13#10 +
+              ExpandConstant('{commonappdata}\Mehvar\backups\pre-update') + '.' + #13#10 +
+              'Run Setup again; do not delete anything.' + #13#10
+  else
+    Result := 'Nothing has been lost, and no pharmacy data was created.' + #13#10;
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -329,6 +488,7 @@ begin
 
   DataDir := ExpandConstant('{commonappdata}\Mehvar');
   ConsoleLog := LogDir() + '\install-console.log';
+  PostInstallStarted := True;
   ProvisioningOk := False;
   ChecksOk := True;
 
@@ -370,7 +530,7 @@ begin
       'Setup could not finish configuring Mehvar.' + #13#10 + #13#10 +
       'Failed at:  ' + Step + #13#10 +
       'Reason:' + #13#10 + Detail + #13#10 + #13#10 +
-      'Nothing has been lost, and no pharmacy data was created.' + #13#10 +
+      UpgradeFailureAdvice() +
       LogAdvice();
 
     AppendLog('PROVISIONING FAILED at: ' + Step);
@@ -391,7 +551,15 @@ begin
       ' -DataDir '   + ShellQuote(DataDir),
       LogDir() + '\verify-console.log', Output);
 
-  if ResultCode <> 0 then
+  { Exit 2: every check passed, but the default printer will not print
+    receipts (verify-install.ps1). Said once, plainly; not a failure. }
+  if ResultCode = 2 then
+  begin
+    AppendLog('Post-install checks passed with a printer warning.');
+    MsgBox('Mehvar is installed and verified, but receipts will not print yet.' + #13#10 + #13#10 +
+      Output, mbInformation, MB_OK);
+  end
+  else if ResultCode <> 0 then
   begin
     { ProvisioningOk stays True. This machine HAS Mehvar on it: the database,
       both services and the pharmacy record all exist. What did not pass is the
@@ -455,11 +623,12 @@ Filename: "powershell.exe"; \
 ; app\ carries the server, node_modules and the compiled bin\ scripts.
 Type: filesandordirs; Name: "{app}\app"
 
-; The three .cmd wrappers are written by install-services.ps1 at post-install,
+; The .cmd wrappers are written by install-services.ps1 at post-install,
 ; not installed by Setup — so Setup does not know to remove them, and without
-; these lines an uninstall leaves {app} behind holding three orphaned files.
+; these lines an uninstall leaves {app} behind holding orphaned files.
 Type: files; Name: "{app}\mehvar-backup.cmd"
 Type: files; Name: "{app}\mehvar-support.cmd"
+Type: files; Name: "{app}\mehvar-restore.cmd"
 
 ; WinSW's service host, descriptor and its own logs, all written post-install.
 Type: files; Name: "{app}\MehvarNode.exe"

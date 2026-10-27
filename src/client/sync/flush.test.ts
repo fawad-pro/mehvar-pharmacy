@@ -9,7 +9,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { backoffMs, originFor, readyToFlush, withReceiptNumber } from './flush';
+import {
+  backoffMs,
+  failuresAfterAnswer,
+  originFor,
+  readyToFlush,
+  retryRead,
+  withReceiptNumber,
+} from './flush';
 import type { OutboxRecord } from './records';
 
 describe('originFor', () => {
@@ -27,6 +34,47 @@ describe('originFor', () => {
     // `navigator.onLine` lies through a captive portal or a dead upstream. A
     // failed attempt is harder evidence than the flag.
     expect(originFor({ capturedOffline: false, attempts: 1 })).toBe('offline_sync');
+  });
+});
+
+describe('failuresAfterAnswer', () => {
+  it('clears the count once something was delivered', () => {
+    expect(failuresAfterAnswer(4, true)).toBe(0);
+  });
+
+  it('backs off when the server answered but nothing moved', () => {
+    // The laptop whose database missed two migrations: every sale came back
+    // `retry`, the count reset to zero on every answer, and the same three
+    // records went out every 250ms. The delay must grow instead.
+    let failures = 0;
+    const delays: number[] = [];
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      failures = failuresAfterAnswer(failures, false);
+      delays.push(backoffMs(failures));
+    }
+    expect(delays).toEqual([1_000, 2_000, 4_000, 8_000, 16_000, 30_000]);
+  });
+});
+
+describe('retryRead', () => {
+  it('returns what the read returned, retrying a transient failure', async () => {
+    let calls = 0;
+    const read = async (): Promise<string[]> => {
+      calls += 1;
+      if (calls < 3) throw new Error('AbortError: The transaction was aborted');
+      return ['customer', 'sale'];
+    };
+    expect(await retryRead(read, 3, 0)).toEqual(['customer', 'sale']);
+    expect(calls).toBe(3);
+  });
+
+  it('says it could not read — never "nothing queued" — when every attempt fails', async () => {
+    // The pilot's offline test: the outbox read aborted, came back as [], and
+    // the badge dropped to zero over two queued records.
+    const read = async (): Promise<string[]> => {
+      throw new Error('AbortError');
+    };
+    expect(await retryRead(read, 3, 0)).toBeNull();
   });
 });
 

@@ -150,9 +150,3 @@ export function distanceTolerance(queryLength: number): number {
   if (queryLength <= 8) return 2;
   return 3;
 }
-
-/** A scanner emits digits and an Enter. Long digit runs are barcodes, not names. */
-export function looksLikeBarcode(raw: string): boolean {
-  const digits = raw.trim();
-  return /^\d{6,}$/.test(digits);
-}

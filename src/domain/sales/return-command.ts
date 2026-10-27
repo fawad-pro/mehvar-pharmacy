@@ -16,7 +16,10 @@
  * the database drags `server-only` into the browser bundle.
  */
 
+import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
+
+import { storedLineGrossPaisa } from './sale-command';
 
 export interface ReturnLineCommand {
   readonly saleLineId: Uuid;
@@ -27,6 +30,12 @@ export interface ReturnLineCommand {
    * `sale_return_lines.restock_batch_id`.
    */
   readonly restockBatchId: Uuid | null;
+  /** [PCN-012] As counted: "1 strip". The writer checks it against the product. */
+  readonly entered?: {
+    readonly unitKey: string;
+    readonly unitName: string;
+    readonly unitCount: number;
+  };
 }
 
 export interface ReturnCommand {
@@ -42,10 +51,7 @@ export interface ReturnCommand {
 }
 
 export type ReturnRejection =
-  | 'empty_return'
-  | 'invalid_quantity'
-  | 'exceeds_sold_quantity'
-  | 'credit_requires_customer';
+  'empty_return' | 'invalid_quantity' | 'exceeds_sold_quantity' | 'credit_requires_customer';
 
 /** What the writer needs to know about the sale and its lines to validate against. */
 export interface ReturnableSaleLine {
@@ -54,6 +60,8 @@ export interface ReturnableSaleLine {
   /** Already returned against this line, from prior (non-idempotent) returns. */
   readonly alreadyReturnedBase: number;
   readonly unitPricePaisa: number;
+  /** [PCN-012] The exact amount charged, or null on a line from before it. */
+  readonly lineAmountPaisa: number | null;
   readonly lineDiscountPaisa: number;
 }
 
@@ -72,6 +80,15 @@ export function validateReturnCommand(
   const byId = new Map(lines.map((line) => [line.saleLineId, line]));
   for (const line of command.lines) {
     if (!Number.isSafeInteger(line.qtyBase) || line.qtyBase <= 0) {
+      return { ok: false, reason: 'invalid_quantity', saleLineId: line.saleLineId };
+    }
+    if (
+      line.entered &&
+      (!Number.isSafeInteger(line.entered.unitCount) ||
+        line.entered.unitCount <= 0 ||
+        line.entered.unitName.trim() === '' ||
+        line.qtyBase % line.entered.unitCount !== 0)
+    ) {
       return { ok: false, reason: 'invalid_quantity', saleLineId: line.saleLineId };
     }
     const original = byId.get(line.saleLineId);
@@ -94,7 +111,9 @@ export function refundForLine(line: ReturnableSaleLine, qtyBase: number): number
   if (line.qtyBase <= 0) {
     return 0;
   }
-  const chargedTotal = line.unitPricePaisa * line.qtyBase - line.lineDiscountPaisa;
+  // [PCN-012] What the line actually charged: a box refunds as a share of the
+  // box price, never of a rounded per-tablet figure.
+  const chargedTotal = storedLineGrossPaisa(line) - line.lineDiscountPaisa;
   return Math.floor((chargedTotal * qtyBase) / line.qtyBase);
 }
 
@@ -134,5 +153,10 @@ export interface ReturnableLineRow extends ReturnableSaleLine {
   readonly productName: string;
   readonly baseUnitName: string;
   readonly enteredUnitLevel: string;
+  readonly packLevels: readonly PackLevel[];
+  /** [PCN-012] What a return may be counted in: the units sold, smallest first. */
+  readonly units: readonly { key: string; name: string; factor: number }[];
+  /** The unit this line was sold in — the return starts there. */
+  readonly soldUnitKey: string;
   readonly sourceBatches: readonly { batchId: Uuid; expiryDate: string | null }[];
 }

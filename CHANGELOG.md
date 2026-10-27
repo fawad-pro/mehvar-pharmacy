@@ -2,6 +2,446 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Receipts say only what the customer needs
+
+- **No internal notes on the slip.** Selling more than the system had no
+  longer prints "Sold more than the system had…" on the customer's receipt;
+  the counter screen and the owner's exception list still say it.
+- **Refund slips read as refunds.** A return prints "RETURN — against receipt
+  A-64", amounts without minus signs, "Refund" in place of "Amount Due", and
+  "Cash refunded" or "Udhaar reduced"; the balance section calls it
+  "Returned", never "Paid".
+- **Chrome no longer fills the device login into a new salesman's name and
+  PIN** on Settings, and browser autofill no longer throws an error in the
+  barcode guard.
+- **The next key after a sale goes where it says.** A link or function key
+  pressed right after a sale was sometimes ignored, because the background
+  refresh that follows a delivered sale cancelled the navigation.
+- **Balances on paper speak like the screen.** An overpaid settlement or a
+  return past zero printed "New balance -50.00"; the slip now says
+  "50.00 advance", or "Settled". The customer picker and the owner's list no
+  longer show an advance as a negative number.
+- **The browser's own suggestions are off in every field**, as the product
+  form already had them, and lists on Receive Stock and the licence panel can
+  no longer be overwritten by a slower, older answer.
+- **Settings keeps what you change.** A slow load could overwrite a ticked box
+  on the Settings screen and save the old value back.
+
+## PCN-012 final pass — units everywhere, renames, replace this product
+
+- **Stock in the product's own words**: "12 box, 3 strip, 7 tab", and
+  "Short by 2 strip" for a shortfall, on Stock, the owner surface, Adjust and
+  corrections.
+- **Returns and removals in units.** A customer return starts in the unit the
+  item was sold in; a stock removal starts in the unit the batch arrived in;
+  a return to the supplier offers packs only and pre-fills the credit at the
+  pack's cost. History shows each as entered ("5 strip returned").
+- **Returns to the supplier** suggest a credit at exactly what the units cost
+  (bonus and corrections included), and show that stock cost beside whatever
+  credit the supplier gave, with any difference stated.
+- **Receive Stock** keeps a line's fields on one row on a desktop-wide screen,
+  with one-line labels in one pattern — Qty (box), Bonus (box), Cost / box,
+  Expiry, Batch no., MRP / box, Price / box — that follow the pressed pack.
+  Narrower screens wrap as before.
+- **MRP printed on a unit** — the product form asks which pack the MRP is
+  printed on and keeps it exactly as printed.
+- **Rename a unit** (pack → strip) after stock and sales exist; barcodes
+  follow, past receipts keep their words. Pack sizes stay locked.
+- **Replace this product**, for a pack set up wrong: count each batch in the
+  new pack (pre-filled), confirm, and the stock moves with its exact cost;
+  barcodes follow by unit name; the old product keeps its history and stops
+  being sold.
+
+## Session 2 — Stock comes in as the paper says (PCN-012)
+
+- **Receive Stock in packs.** Each line is entered in the pack it arrived in
+  (largest first; boxes and strips, never loose tablets): quantity, bonus and
+  cost per box, and "Sells for" per box, pre-filled from the product. The line
+  shows "2 box + 1 box" and its exact cost; the invoice total, the supplier's
+  balance and the invoice page add up to the paper to the paisa (a box of 14
+  at Rs 250 is Rs 250.00, never Rs 250.04).
+- **MRP on pack**, per line. A selling price above it is warned. When it
+  differs from the product's record, the owner is offered "Record it, and sell
+  at Rs X per box" or "Record the MRP only" — never applied silently.
+- **After a 1D barcode**, which carries only the product number, Expiry and
+  Batch are marked "type from the pack" and the cursor starts at Expiry. A 2D
+  code still fills both.
+- **Opening stock** is counted as the shelf holds it — boxes, strips and
+  tablets — costed per box. The cost is required (0 for free) and pre-filled
+  from the product's last purchase. The screen shows what the count comes to
+  ("234 tab in all · costs Rs 585.00") before saving.
+- **Exact margins (owner's decisions D1 and D2).** Each batch now keeps what
+  it cost in total, and every unit that leaves it — sold, written off or
+  returned to the supplier — takes its share, counted cumulatively: margin is
+  never better than the real one, and a used-up batch costs exactly what was
+  paid. Correcting an invoice restates the cost of units already sold. Stock
+  written off shows on the Day screen beside the margin, at cost.
+- **Corrections** to a line bought per pack are stated in that pack
+  (quantity in boxes, cost per box).
+- With automatic printing off, the previous sale's slip could stay hidden in
+  the Sale screen, so the browser's own print command would print a receipt
+  for a different sale. A sale that does not print now clears it.
+
+## Session — One scan guard for every field
+
+- Patching amount fields one at a time kept leaving the next one open. At the
+  pilot: a GS1 code scanned into Receive Stock's Paid now read as Rs 0 and put
+  the whole invoice on credit; scanned into a supplier's Pay it crashed the
+  screen; and a plain EAN there recorded a supplier payment of
+  Rs 8,964,001,590,170 (reproduced on the test database).
+- Now one guard covers every text field on every screen: a scan is
+  recognised by its speed, its Enter is swallowed before the screen sees it,
+  the field is put back as it was, and one notice says so. Only the fields
+  meant for scans take them: product search, Returns search, a product's
+  barcode field, and the Receive Stock line.
+- Behind it, text that is not an amount is never read as zero where that
+  would record something: Paid now and the drawer count say "Not an amount"
+  and wait. The supplier Pay row, the drawer count and the product form no
+  longer crash on a very long number.
+
+## Session — A barcode scanned into a payment amount never becomes money
+
+- A barcode scanned into Cash tendered replaced the amount, and the scanner's
+  own Enter committed the sale: the receipt printed "Paid
+  8,964,000,101,018.00" before any cash was counted. In Settle Udhaar the same
+  scan would have recorded a payment of billions against the customer and the
+  drawer. A scan in either field is now recognised: the field is put back,
+  the screen says it was a barcode, and nothing is saved.
+- Backstop for a scan that slips past: an amount of Rs 1 crore or more is
+  committed only by clicking the button, never by Enter. Nothing is refused.
+- The quick item form had the same hole: a code scanned into Price saved an
+  item priced at billions, and into Name saved it named after the code. Each
+  field now puts a scan back and saves nothing; a price of Rs 1 crore or more
+  saves only by a click.
+
+## Session — A missed scan on Receive Stock no longer crashes the page
+
+- A scan was recognised only if every key, and the Enter after it, came within
+  50 ms. On a busy PC one slow key was enough to miss it: the digits went into
+  the field, and in Unit cost the amount was too large to convert, so the page
+  crashed instead of saying "looks like a barcode". Scans are now judged by
+  their typical key gap, which a slow key or late Enter no longer spoils, and
+  an amount that large is refused with the message, never a crash. Seen in 2
+  of 6 runs of the Receive Stock scan test before, 0 of 36 after.
+- The same conversion is used by the payment and udhaar overlays, which could
+  have crashed the same way on a scanned code in an amount field.
+
+## Session — Units as buttons on the sale line (PCN-012, as amended)
+
+- Every unit a product has (tab, strip, box) is a button on its cart line,
+  beside − and + for the count, so a tablet or touch screen can change the
+  unit and quantity without a keyboard. The price column shows the price of
+  the chosen unit; the line is charged and stock is taken in that unit.
+  Tab, + and − work as before.
+- A new line starts in the unit that product was last sold in on this counter,
+  else in the strip — or in tablets, for a shop that turns on "Start sales in
+  loose tablets/capsules" (Settings → Selling). A scanned barcode still adds
+  its own unit.
+
+## Session — The unsynced badge never drops to zero over queued records
+
+- Reading the offline queue occasionally failed (an aborted browser-storage
+  transaction), and the failure was read as "nothing queued": the badge went
+  to zero and the retry was cancelled while sales sat on disk, until the next
+  15-second check. A failed read is now retried, and if it still fails the
+  badge keeps its number and the counter looks again a second later. Nothing
+  was ever lost; the badge was wrong. Seen in 3 of 15 runs of the offline test
+  before, 0 of 15 after.
+
+## Session — Scanning on Receive Stock moves to the next product
+
+- Scanning the next product while the cursor sat in a line's Qty, Unit cost or
+  any other field typed the barcode into that field: Qty filled with thirteen
+  digits, the previous pack's expiry and batch stayed on screen, and with the
+  cursor in Unit cost the scanner's Enter could add a line costing trillions.
+  A scan is now recognised wherever the cursor is (by its speed, with the code
+  confirmed against the catalogue), the field is put back as it was, a
+  complete line is added, and the scanned product's line opens with its own
+  batch and expiry. An incomplete line is kept and named, never lost.
+- Backstop: a quantity of more than 100,000 units or a price above Rs 1,000,000
+  a unit is refused as "looks like a barcode".
+- A barcode linked while a counter was fetching catalogue changes could be
+  missed by every later update, leaving the code unknown at the counter until
+  a full reload. The update's watermark is now taken before reading, with a
+  small overlap.
+
+## Session — Unknown barcodes keep their code; GS1 expiry and batch
+
+- "Add a new product" from an unknown scan now saves the scanned code with the
+  new product (as its GTIN, not one pack's batch string), so the next scan adds
+  it directly. It travels with the quick item through the outbox, so it works
+  offline too. A salesman's quick item keeps it as well; the owner sees it on
+  the product page.
+- A barcode is never put on a second product. Before saving, the dialog checks
+  the counter's own index and, online, the server; if another product owns the
+  code it says so and offers "Sell <that product> instead" or "Save without the
+  barcode". The server refuses too, and now matches a code under every form the
+  counter treats as the same item (GS1 string, GTIN-14, EAN-13): a pack's code
+  could previously be linked to one product while its box's EAN sat on another.
+- GS1 DataMatrix codes are read field by field: product number, expiry, batch,
+  serial. Receive Stock fills a line's batch and expiry from a scanned pack, and
+  the counter says so when a scanned pack's own code shows it has expired (the
+  sale is never blocked). A scanner that does not transmit the GS separator
+  cannot split a batch followed by a serial; packs printing the batch last
+  (as seen at the pilot) read correctly.
+
+## Session — Receipt type at true size
+
+- The pilot printer's Chrome output came out at about 75% (the Windows test
+  page does not), so every size judged so far was seen shrunk. With Chrome's
+  Scale at 133 the receipt prints at its designed size, where 14px read too
+  large: every size except the shop name is one step smaller (13px body,
+  12px header and footer lines, 16px Amount Due). OPERATIONS.md records the
+  Chrome settings found for the SP-200U: Margins None, paper 80 x 297mm or
+  80(72) x 210mm (never 80 x 3276mm), Scale 133.
+
+## Session — The receipt prints at true size
+
+- The slip printed at about 75% and sat on the left of the roll: a 50 mm test
+  bar measured 37 mm. The receipt's page size was written as
+  `size: 72mm auto`, which is not valid CSS, so Chrome dropped it and laid the
+  slip out on a Letter-size page before fitting it to the roll. The page size
+  is now set the moment a receipt prints: 72 mm wide and exactly as tall as
+  that receipt, so a long receipt is never split and no blank paper is fed.
+- Amount Due is no longer extra-bold; it stands out by size. At 18px
+  extra-bold the thermal head bled it into a smudge.
+- OPERATIONS.md gives the Chrome print settings to use (Margins: None, Scale:
+  Default) and the bar check that confirms them.
+
+## Session — Receipt layout from the pilot
+
+- Items print as columns, QTY | ITEM | AMT, with the quantity as a plain
+  number (2 strips prints 2). The unit word is no longer on the slip; it stays
+  on the screen and on the receipt detail page.
+- The date and time print under the shop's phone number; the salesman is named
+  beside the receipt number ("Served by …"); the mark reads MEHVAR.
+- Type is one step larger: 14px body, 18px shop name, 13px header and footer
+  lines. Amount Due stays at 18px, extra-bold.
+
+## Session — Supplier accounts: every payment can be found again
+
+- Each supplier has an account page (Purchases → a supplier's name, or
+  "Payments and account" on any invoice). It lists every invoice, correction,
+  return and payment with the date, time and who recorded it, and a running
+  balance that ends on the figure at the top. Before this, paying the last
+  Rs 500 of an invoice from "Owed to suppliers" lowered the balance and was
+  shown nowhere.
+- An invoice page now says where the supplier's account stands today, beside
+  what that invoice left on credit when it arrived.
+- The account takes payments too, the way a customer's does.
+
+## Session — Sync backs off when the server cannot store a sale
+
+- A sale the server answers but cannot store (a database missing a
+  migration, a writer bug) no longer resends every 250ms. Any answer used to
+  reset the sync backoff to zero, so three unsynced sales went out about four
+  times a second for as long as the counter was open. Only a delivery that
+  moved the queue clears the backoff now; anything else waits 1s, 2s, 4s… up
+  to 30s, exactly as an unreachable server does. Nothing queued is dropped.
+
+## Session — Refused stock adjustments leave nothing behind
+
+- Removing more units than a batch has (damage, expiry, a downward count) is
+  refused as before, but the refusal no longer saves the adjustment. It was
+  returned from inside the transaction, which committed it: the record said the
+  units left, the batch still held them, and `db:verify` reported a mismatch.
+  The Adjust screen's "try again" then wrote a second one.
+- A retry of a refused adjustment is refused again, instead of being reported
+  as already done.
+- Databases where an adjustment was refused before this fix may already hold
+  such records; `npm run db:verify` names the batch if so.
+
+## Session — Readable thermal receipts
+
+- The receipt is laid out at 72 mm, the printable width of an 80 mm roll.
+  At 80 mm it was wider than the head prints, so it was shrunk to about 90%
+  before it reached the paper.
+- Everything prints in solid black. Grey quantities, faint dashed rules and the
+  coloured mark were reaching the thermal driver as halftone dots.
+- Larger, heavier type: 13px body, bold item names, and the amount due largest
+  and boldest on the slip. Nothing printed was added or removed.
+- The test receipt ends with a 50 mm and a 72 mm bar, so a ruler shows
+  whether a printer scales or clips the page (OPERATIONS.md, "Receipt printer
+  settings").
+
+## Session — Barcode scanning at the counter
+
+- A barcode linked on the Products screen now scans at the counter straight
+  away. The counter's search index was built once per page load, and catalogue
+  edits never refreshed it, so a fresh code read as unknown until a reload.
+- The 2D code on medicine packs (GS1 DataMatrix: product number, expiry,
+  batch) finds its product. Before, any code containing letters was never
+  looked up as a barcode. A pack's code matches the box's printed EAN and every
+  later batch of the same pack; a code saved earlier as a full 2D string still
+  works.
+- An unknown scan no longer opens "Add it now" with the code as the product
+  name. The scanner's Enter does nothing by itself; the operator chooses "Link
+  it to a product" (owner only, at the unit the code is on) or "Add a new
+  product" with the name left blank.
+
+## Session — Prices per strip and box (PCN-012, step 2a)
+
+- Each unit of a product has its own price. The owner types the strip or box
+  price they know; Mehvar suggests the others and shows them before saving.
+- A box sells at exactly the box price: a box of 14 at Rs 250 is Rs 250.00 on
+  the line, the total, the receipt and a refund — no more per-tablet rounding.
+- At the counter, Tab moves a line to the next unit at that unit's price and
+  keeps the count; + and − add or remove one unit. Receipts say "2 box".
+- Sales recorded before this change, and offline sales captured before the
+  update, keep exactly the amounts they were charged.
+
+## Session — Pack sizes protected (PCN-012, step 1)
+
+- A product's base unit and pack sizes can no longer be changed once anything
+  is recorded against it (stock, a sale, a purchase or an adjustment). Changing
+  them would have silently re-read every recorded quantity. Prices, names and a
+  larger pack on top (a carton over the box) can still be edited.
+- The product edit form says the units are fixed before Save, and the refusal
+  says what to do instead.
+- New pack sizes must nest: a box must hold a whole number of strips. Products
+  already trading with a non-nesting pack keep working and stay editable.
+
+## Session — Supplier credit made visible (PCN-011)
+
+- A supplier holding the pharmacy's money — an overpayment, or credit for goods
+  sent back from a paid invoice — used to vanish from every screen. The
+  Purchases panel now lists "Credit with suppliers" under "Owed to suppliers".
+- Paying more than is owed says, before recording, how much will stay with the
+  supplier as credit. A warning, never a block.
+- The Day screen shows "Rs X credit with N suppliers" beside the owed figure
+  when there is any. Owed and credit are never netted.
+
+## Session — Expired stock, purchase corrections, supplier returns (Day 20)
+
+PCN-008 and PCN-009 applied; the E2E suite made to pass against a database it
+has run on before.
+
+**Expired stock is the last stock a sale reaches (PCN-008)**
+
+- Earliest-expiry-first always reached for an expired batch first. Allocation
+  now consumes unexpired batches first, then expired, then the pending layer.
+- The cart warns "only expired stock left" / "part from expired stock", naming
+  the expiry, before payment. Never a block (P2).
+- The Day screen lists "Expired stock sold" first, derived from the allocations
+  the server actually made, so an offline sale cannot dodge it.
+
+**Purchases can be corrected; goods can go back for credit (PCN-009)**
+
+- Migration 0011: `purchase_corrections` and `supplier_returns`, both
+  INSERT-only for the app role. Compensating records: the purchase line is
+  never edited.
+- A correction states what the line should have said (quantity, bonus, unit
+  cost, a reason). Quantity changes move the batch; a corrected cost values
+  every unit sold from that batch, including units sold before the correction.
+  A reduction larger than the batch still holds is refused.
+- A supplier return removes stock from a batch and subtracts the supplier's
+  credit from what is owed.
+- The stock verifier, supplier balances and margin all count both. The invoice
+  page shows the corrected total beside the entered one; the forms live on
+  `/purchases/[id]/correct`, owner-only. Both acts appear on the Day screen.
+- The data export now includes `supplier_payments` (missing since PCN-007) and
+  both new tables, pinned by `tests/export-coverage.test.ts`.
+
+**E2E without a reset**
+
+- The warm-up compiles every route a function key reaches, not only the
+  opening ones; `/receipts` and `/purchases` failed on their first key press.
+- Specs that receive stock size their quantities from what the system holds
+  now, so the suite passes against a developer database without
+  `npm run e2e:reset`.
+
+## Session — Migration 0009 on databases that ran supplier credit early (Day 19)
+
+`db:migrate` failed on databases that had run supplier credit from its original
+branch: 0009 tried to create `supplier_payments` again, the batch rolled back,
+0010 never ran, and the Day screen crashed on `purchases.credit_tracked`.
+
+**Root cause.** Supplier credit was written as migration `0006_supplier_credit`
+(a79e57d, journal `when` 1786460433684) on a branch that diverged from main.
+Main had since taken 0006–0008 for licensing, so the work was cherry-picked as
+`0009_supplier_credit` with a regenerated `when` (1790111708134). The SQL is
+byte-identical (git blob 408d5e0a, SHA-256 7f6808b1…). drizzle recognises an
+applied migration only by its `when`, so on any database that had run the
+branch, 0009 looked new and re-ran its `CREATE TABLE`. On a database that had
+not met main yet, licensing 0006–0008 rolled back with it.
+
+**Fix.** `scripts/db/renumbered-migrations.ts` registers the renumbering, and
+`applyMigrations` records 0009 as applied when, and only when, the database
+recorded the former `when` with the current file's hash and its objects are
+present. It first migrates up to 0008, so licensing still runs. It adds one
+row and changes no existing row. A former-number row with a different hash is
+refused before anything changes. No migration file was edited and no `when`
+moved. Restore, the restore drill and the packaged installer all migrate
+through `applyMigrations`, so they inherit the fix. `db:migrate` now also prints
+the database's own error (`Cause: relation … already exists`); drizzle's
+message alone was the bare query.
+
+- Historical purchases keep PCN-007's decided semantics: every purchase that
+  existed when 0010 ran is untracked, including ones recorded on the branch.
+- Tests: `tests/renumbered-migration.integration.test.ts` rebuilds the affected
+  database from the branch's journal with trading on it, in both histories (seen
+  failing before the fix). It asserts every record and row version unchanged,
+  the schema identical to a fresh install, and a second run a no-op. A hash
+  mismatch is refused. `tests/renumbered-migrations.test.ts` pins the
+  registry's hash to the file.
+
+## Session — Release hardening for the first pharmacy (Day 18)
+
+The installer, upgrade, recovery and diagnostics paths, closed against a real
+compiled installer (Inno Setup 6.4.3 under Wine) and a populated
+upgrade-and-recovery rehearsal. One plan change decided (PCN-007); nothing else
+re-litigated.
+
+**Installer: back up first, keep the shop's settings, ship no secrets**
+
+- Every upgrade and repair dumps the database to `backups\pre-update\` from
+  `PrepareToInstall`, before a file is replaced; if a pharmacy exists and
+  cannot be backed up, Setup stops with nothing changed.
+- `.env` is merged, not regenerated: installer-owned keys are rewritten (logged
+  by name), the shop's own settings are kept verbatim.
+- The build machine's `.env` never enters the payload (stripped, refused,
+  excluded), and an upgrade deletes the copy older installers left.
+- The payload now carries the Windows argon2 binary whatever machine built it;
+  a Linux-built payload had none and would have failed at the first PIN.
+
+**A safe upgrade lifecycle**
+
+- Setup stops `MehvarNode` then `MehvarPostgres` after the backup and before
+  replacing files, puts them back if one refuses, and restarts them if Setup
+  ends before provisioning. `install-services.ps1` stops the application again
+  before migrating.
+- Step 9 proves the pharmacy from the database; `first-run.txt` (plaintext
+  credentials) is no longer required, and nothing recreates it.
+- Upgrades skip the shop-name and PIN pages; `init` decides "a pharmacy exists"
+  before reading them.
+- `lint:ps` catches a `{constant}` inside a Pascal `{ }` comment, which broke the
+  compile and had shipped in the pre-update backup's own comments.
+
+**Restore and recovery**
+
+- The restore drill migrates a restored dump before granting, so backups taken
+  before an update drill clean; it also proves the application role is refused
+  UPDATE and DELETE on every event table.
+- `ops:restore` / `mehvar-restore.cmd` replaces a dead counter PC: it proves the
+  backup in a scratch database, keeps the database it replaces, and issues a
+  one-time pairing key on screen. See OPERATIONS.md, "Replacing the counter PC".
+
+**Supplier credit, admitted to the plan and corrected (PCN-007)**
+
+- Phase 5 §6 no longer excludes supplier payables; the Day 17 feature now
+  has its decision of record. Its code cited PCN-006 (licensing); relabelled.
+- Migration 0010 adds `purchases.credit_tracked`: purchases from before
+  supplier credit read untracked through PostgreSQL's stored default — no row
+  rewritten, no payment invented — and no longer count as owed.
+
+**Release identity and diagnostics**
+
+- VERSION records `<version>+<commit>[.dirty]`; the server, `init`, the support
+  bundle and the installer's name all use it. `package:installer` refuses a
+  `.dirty` payload.
+- The support bundle redacts credentials from every section, and the install
+  log masks them at the source.
+
 ## Session — Sales/POS usability pass and supplier credit (Day 17)
 
 A read of the counter as a cashier sees it, then the one credit gap the product
@@ -25,9 +465,9 @@ reused, not replaced (PCN-005, PCN-006).
 - The **F1–F10 foot rail** sits a touch taller (52px) with boxed keys and larger
   labels — easier to read and hit, still compact (Phase 10 §1, I1).
 
-**Supplier credit — the pharmacy owes distributors too (PCN-006)**
+**Supplier credit — the pharmacy owes distributors too (PCN-007)**
 
-- The mirror of customer udhaar. Migration 0006 adds `purchases.cash_paid_paisa`
+- The mirror of customer udhaar. Migration 0009 adds `purchases.cash_paid_paisa`
   (the analogue of `sales.cash_paisa`) and the `supplier_payments` event table
   (the analogue of `payments`); both derive rather than store the balance:
   `Σ (invoice − paid) − Σ payments`, never authority (ADR-1, Phase 5 inv. 3).

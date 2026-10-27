@@ -24,8 +24,9 @@ export default async function NewProductPage() {
           formulaText: '',
           baseUnitName: 'tab',
           packLevels: 'strip:10',
-          priceRupees: '',
+          unitPriceRupees: {},
           mrpRupees: '',
+          mrpUnitName: null,
           minStock: '',
           needsCompletion: false,
         }}

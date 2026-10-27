@@ -2,10 +2,19 @@ import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
+import {
+  batchesForPurchase,
+  correctionsForPurchase,
+  supplierReturnsForBatches,
+} from '@/db/correction-queries';
 import { findPurchase } from '@/db/purchase-queries';
+import { supplierBalance } from '@/db/supplier-queries';
 import { baseQty, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity } from '@/lib/quantity';
+import { describeCounted, describeQuantity } from '@/lib/quantity';
+import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
+import { creditAgainstStockCost } from '@/domain/suppliers/supplier-return';
+import type { Uuid } from '@/lib/uuid';
 
 /**
  * One received invoice, expanded.
@@ -33,10 +42,31 @@ export default async function PurchaseDetailPage({
   }
 
   const { purchaseId } = await params;
-  const purchase = await findPurchase(scopeFor(session), purchaseId);
+  const scope = scopeFor(session);
+  const purchase = await findPurchase(scope, purchaseId);
   if (!purchase) {
     notFound();
   }
+  // [PCN-009] What has been corrected or sent back since, shown beside the
+  // invoice as entered — never instead of it (T2).
+  const [corrections, lineBatches, accountPaisa] = await Promise.all([
+    correctionsForPurchase(scope, purchaseId),
+    batchesForPurchase(scope, purchaseId),
+    // Where the supplier's account stands NOW. "On credit" below is what this
+    // invoice left owing when it arrived; payments made since are against the
+    // account, so the invoice says where to see them rather than going stale.
+    purchase.supplierId && purchase.creditTracked
+      ? supplierBalance(scope, purchase.supplierId as Uuid)
+      : Promise.resolve(null),
+  ]);
+  const [returns, stockCosts] = await Promise.all([
+    supplierReturnsForBatches(
+      scope,
+      lineBatches.map((batch) => batch.batchId),
+    ),
+    supplierReturnStockCosts(scope),
+  ]);
+  const correctedDeltaPaisa = corrections.reduce((sum, row) => sum + row.invoiceDeltaPaisa, 0);
 
   /*
    * Invoiced cost, not effective cost.
@@ -47,15 +77,16 @@ export default async function PurchaseDetailPage({
    * effective figure; showing it here would silently disagree with the
    * distributor's total and make a correct invoice look wrong.
    */
-  const totalCostPaisa = purchase.lines.reduce(
-    (sum, line) => sum + line.qtyBase * line.unitCostPaisa,
-    0,
-  );
+  const totalCostPaisa = purchase.lines.reduce((sum, line) => sum + lineCost(line), 0);
   const bonusBase = purchase.lines.reduce((sum, line) => sum + line.bonusQtyBase, 0);
-  // [PCN-006] What was still owed to the supplier when this invoice was
+  // [PCN-007] What was still owed to the supplier when this invoice was
   // received. A negative would be an overpayment; clamped, since "on credit"
   // never means the supplier owes us on a single invoice.
-  const creditPaisa = Math.max(0, totalCostPaisa - purchase.cashPaidPaisa);
+  // Untracked (entered before supplier credit existed): nothing was recorded
+  // about payment, so nothing is shown as owed.
+  const creditPaisa = purchase.creditTracked
+    ? Math.max(0, totalCostPaisa + correctedDeltaPaisa - purchase.cashPaidPaisa)
+    : 0;
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
@@ -104,11 +135,19 @@ export default async function PurchaseDetailPage({
                   </Link>
                 </td>
                 <td className="text-ink/70 px-3 py-2">
-                  {describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
+                  {/* [PCN-012] As invoiced: "10 box", never the 140 capsules
+                      they hold, so the line reads like the paper. */}
+                  {line.unitCount !== null && line.unitName !== null
+                    ? `${line.unitCount} ${line.unitName}`
+                    : describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)}
                   {/* Bonus is stated separately, never folded into the quantity:
                       it arrived free, and an owner comparing this screen to the
                       distributor's invoice needs the two numbers to match. */}
-                  {line.bonusQtyBase > 0 ? (
+                  {line.bonusUnitCount !== null && line.bonusUnitCount > 0 && line.unitName ? (
+                    <p className="text-green-700 text-xs">
+                      + {line.bonusUnitCount} {line.unitName} bonus
+                    </p>
+                  ) : line.unitCount === null && line.bonusQtyBase > 0 ? (
                     <p className="text-green-700 text-xs">
                       +{' '}
                       {describeQuantity(
@@ -127,10 +166,11 @@ export default async function PurchaseDetailPage({
                   ) : null}
                 </td>
                 <td className="numeral px-3 py-2 text-right">
-                  {formatPaisa(paisa(line.unitCostPaisa))}
+                  {formatPaisa(paisa(line.unitCostPaisaEntered ?? line.unitCostPaisa))}
+                  <p className="text-ink/50 text-xs">/ {line.unitName ?? line.baseUnitName}</p>
                 </td>
                 <td className="numeral px-3 py-2 text-right">
-                  {formatPaisa(paisa(line.priceAtReceivingPaisa))}
+                  {formatPaisa(paisa(line.pricePaisaEntered ?? line.priceAtReceivingPaisa))}
                   {line.mrpAtReceivingPaisa ? (
                     <p className="text-ink/50 text-xs">
                       MRP {formatPaisa(paisa(line.mrpAtReceivingPaisa))}
@@ -138,7 +178,7 @@ export default async function PurchaseDetailPage({
                   ) : null}
                 </td>
                 <td className="numeral px-3 py-2 text-right">
-                  {formatPaisa(paisa(line.qtyBase * line.unitCostPaisa))}
+                  {formatPaisa(paisa(lineCost(line)))}
                 </td>
               </tr>
             ))}
@@ -148,12 +188,22 @@ export default async function PurchaseDetailPage({
 
       <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-4 text-sm">
         <div className="flex justify-between font-semibold">
-          <span>Invoice total</span>
+          <span>Invoice total{correctedDeltaPaisa !== 0 ? ' as entered' : ''}</span>
           <span className="numeral">
             {formatPaisa(paisa(totalCostPaisa), { withSymbol: true })}
           </span>
         </div>
-        {/* [PCN-006] Paid vs owed — shown only when the invoice was not settled
+        {/* [PCN-009] The corrected figure sits beneath the entered one, so the
+            paper invoice and the correction can both be checked against it. */}
+        {correctedDeltaPaisa !== 0 ? (
+          <div className="flex justify-between font-semibold">
+            <span>Invoice total as corrected</span>
+            <span className="numeral">
+              {formatPaisa(paisa(totalCostPaisa + correctedDeltaPaisa), { withSymbol: true })}
+            </span>
+          </div>
+        ) : null}
+        {/* [PCN-007] Paid vs owed — shown only when the invoice was not settled
             in full, so an ordinary cash purchase reads exactly as before. */}
         {creditPaisa > 0 ? (
           <>
@@ -164,11 +214,41 @@ export default async function PurchaseDetailPage({
               </span>
             </div>
             <div className="text-amber flex justify-between font-medium">
-              <span>On credit{purchase.supplierName ? ` — owed to ${purchase.supplierName}` : ''}</span>
-              <span className="numeral">{formatPaisa(paisa(creditPaisa), { withSymbol: true })}</span>
+              <span>
+                On credit{purchase.supplierName ? ` — owed to ${purchase.supplierName}` : ''}
+              </span>
+              <span className="numeral">
+                {formatPaisa(paisa(creditPaisa), { withSymbol: true })}
+              </span>
             </div>
           </>
         ) : null}
+        {accountPaisa !== null && purchase.supplierId ? (
+          <p className="text-ink/70 border-line mt-1 flex flex-wrap justify-between gap-x-3 border-t pt-2">
+            <span>
+              {purchase.supplierName} account today:{' '}
+              <span className={accountPaisa > 0 ? 'text-amber font-medium' : 'font-medium'}>
+                {accountPaisa > 0
+                  ? `you owe ${formatPaisa(paisa(accountPaisa), { withSymbol: true })}`
+                  : accountPaisa < 0
+                    ? `they hold ${formatPaisa(paisa(-accountPaisa), { withSymbol: true })} credit for you`
+                    : 'settled'}
+              </span>
+            </span>
+            <Link
+              href={`/purchases/suppliers/${purchase.supplierId}`}
+              className="text-green-600 hover:underline"
+            >
+              Payments and account →
+            </Link>
+          </p>
+        ) : null}
+        {purchase.creditTracked ? null : (
+          <p className="text-ink/60 text-xs">
+            Payment not recorded — this invoice was entered before Mehvar tracked supplier credit,
+            so it is not counted in what is owed to suppliers.
+          </p>
+        )}
         {bonusBase > 0 ? (
           <p className="text-ink/60 text-xs">
             Includes bonus stock received free — it lowers the effective cost per unit without
@@ -176,6 +256,84 @@ export default async function PurchaseDetailPage({
           </p>
         ) : null}
       </div>
+
+      {corrections.length > 0 || returns.length > 0 ? (
+        <div className="border-line rounded border p-4 text-sm">
+          <h2 className="text-green-900 mb-2 font-medium">Corrections and returns</h2>
+          <ul className="divide-line divide-y">
+            {corrections.map((row) => (
+              <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
+                <span className="font-medium">{row.productName}</span>
+                <span className="text-ink/70">
+                  {[
+                    row.qtyDeltaBase !== 0
+                      ? `quantity ${row.qtyDeltaBase > 0 ? '+' : ''}${row.qtyDeltaBase}`
+                      : null,
+                    row.bonusDeltaBase !== 0
+                      ? `bonus ${row.bonusDeltaBase > 0 ? '+' : ''}${row.bonusDeltaBase}`
+                      : null,
+                    row.correctedUnitCostPaisa !== null
+                      ? `cost now ${formatPaisa(paisa(row.correctedUnitCostPaisa))}`
+                      : null,
+                    // [PCN-012] A line bought per pack is corrected per pack.
+                    row.correctedUnitCostPaisaEntered !== null
+                      ? `cost now ${formatPaisa(paisa(row.correctedUnitCostPaisaEntered))} per ${
+                          purchase.lines.find((line) => line.lineId === row.purchaseLineId)
+                            ?.unitName ?? 'unit'
+                        }`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+                <span className="text-ink/50">“{row.note}”</span>
+                <span className="text-ink/40 ml-auto text-xs">
+                  {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
+                </span>
+              </li>
+            ))}
+            {returns.map((row) => (
+              <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
+                <span className="font-medium">{row.productName}</span>
+                <span className="text-ink/70">
+                  {describeCounted(row)} returned to {row.supplierName}, credit{' '}
+                  {formatPaisa(paisa(row.creditPaisa))}
+                  {/* [PCN-012] Beside the stock cost it took out, so a credit
+                      that differs from it is never hidden in the balance. */}
+                  {' · '}stock cost {formatPaisa(paisa(stockCosts.get(row.id) ?? 0))}
+                  {creditAgainstStockCost(row.creditPaisa, stockCosts.get(row.id) ?? 0)
+                    ? ` (${creditAgainstStockCost(row.creditPaisa, stockCosts.get(row.id) ?? 0)})`
+                    : ''}
+                </span>
+                {row.note ? <span className="text-ink/50">“{row.note}”</span> : null}
+                <span className="text-ink/40 ml-auto text-xs">
+                  {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {/* The one control on this review page that changes something, and it
+          says so and goes elsewhere to do it (Day 9). Owner-only. */}
+      {session.userRole === 'owner' ? (
+        <Link
+          href={`/purchases/${purchaseId}/correct`}
+          className="text-green-700 self-start text-sm hover:underline"
+        >
+          Correct this invoice or return goods to the supplier →
+        </Link>
+      ) : null}
     </section>
   );
+}
+
+/**
+ * What a line cost, as invoiced: exact for a line bought per pack, quantity ×
+ * cost per base unit for one from before PCN-012 — the same rule as
+ * `purchaseLineCostSql`.
+ */
+function lineCost(line: { lineCostPaisa: number | null; qtyBase: number; unitCostPaisa: number }) {
+  return line.lineCostPaisa ?? line.qtyBase * line.unitCostPaisa;
 }

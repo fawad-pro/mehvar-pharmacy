@@ -102,6 +102,18 @@ export async function commitReturn(
     if (!validation.ok) {
       return validation;
     }
+    // [PCN-012] "1 strip" means one of this product's strips, in a unit the
+    // line could be returned in — never a size the screen guessed.
+    const linesById = new Map(returnableLines.map((line) => [line.saleLineId, line]));
+    for (const line of command.lines) {
+      if (!line.entered) continue;
+      const unit = linesById
+        .get(line.saleLineId)
+        ?.units.find((candidate) => candidate.key === line.entered?.unitKey);
+      if (!unit || unit.factor * line.entered.unitCount !== line.qtyBase) {
+        return { ok: false, reason: 'invalid_quantity', saleLineId: line.saleLineId };
+      }
+    }
 
     const refund = totalRefundPaisa(command, returnableLines);
     const cashOutPaisa = command.refundMethod === 'cash' ? refund : 0;
@@ -129,6 +141,13 @@ export async function commitReturn(
         saleLineId: line.saleLineId,
         qtyBase: line.qtyBase,
         restockBatchId: line.restockBatchId,
+        ...(line.entered
+          ? {
+              unitKey: line.entered.unitKey,
+              unitName: line.entered.unitName,
+              unitCount: line.entered.unitCount,
+            }
+          : {}),
       })),
     );
 

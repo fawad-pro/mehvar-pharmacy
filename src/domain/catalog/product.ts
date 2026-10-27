@@ -12,6 +12,8 @@
 
 import type { PackLevel } from '@/lib/quantity';
 
+import { barcodeToStore } from './barcode';
+
 export type ProductRejection =
   | { reason: 'name_required' }
   | { reason: 'base_unit_required' }
@@ -22,7 +24,12 @@ export type ProductRejection =
   | { reason: 'pack_level_duplicate_name'; name: string }
   | { reason: 'pack_level_collides_with_base'; name: string }
   | { reason: 'pack_level_not_ascending'; index: number }
+  /** PCN-012: a level must hold a whole number of the level below it. */
+  | { reason: 'pack_level_not_nested'; index: number; below: string }
+  /** PCN-012: the product has history, so its existing units cannot change. */
+  | { reason: 'pack_structure_locked' }
   | { reason: 'min_stock_negative' }
+  | { reason: 'mrp_unit_unknown' }
   | { reason: 'barcode_required' }
   | { reason: 'barcode_unknown_unit_level'; unitLevelName: string };
 
@@ -38,7 +45,13 @@ export interface ProductDraft {
   packLevels: PackLevel[];
   /** Paisa per base unit. */
   pricePaisa: number;
+  /**
+   * MRP in paisa. [PCN-012] For the unit at `mrpUnitIndex` (0 the base unit,
+   * then each pack level) when that is set, as printed on that pack; per base
+   * unit when it is not — a caller from before PCN-012.
+   */
   mrpPaisa: number | null;
+  mrpUnitIndex?: number | null;
   minStockBaseUnits: number | null;
   needsCompletion: boolean;
   /**
@@ -50,6 +63,13 @@ export interface ProductDraft {
    * catalogue is never silently rewritten under it (P8).
    */
   globalProductId: string | null;
+  /**
+   * [PCN-012] Prices typed per unit, smallest first (base unit, then each
+   * pack level), null for a blank. When present, it decides `units` and the
+   * legacy `pricePaisa` follows from it; when absent, `pricePaisa` is the
+   * per-base price and every pack is priced from it, as before PCN-012.
+   */
+  unitPrices?: readonly (number | null)[];
 }
 
 /**
@@ -65,11 +85,21 @@ export interface ProductDraft {
  *    is not a level);
  *  - names are unique, and none may shadow the base unit;
  *  - factors ascend, because the natural-language renderer walks them
- *    largest-first and an out-of-order list would decompose incorrectly.
+ *    largest-first and an out-of-order list would decompose incorrectly;
+ *  - [PCN-012] each level holds a whole number of the level below it. A box
+ *    of 25 tablets over a strip of 10 is two and a half strips, and no screen
+ *    can state that stock in boxes and strips truthfully.
  */
 export function validatePackLevels(
   levels: readonly PackLevel[],
   baseUnitName: string,
+  /**
+   * [PCN-012] Levels before this index are exempt from the nesting rule:
+   * an existing product's own levels, kept unchanged by an edit. Nesting
+   * arrived after products were trading, and those levels can no longer
+   * change, so refusing them would only block unrelated edits like a price.
+   */
+  nestingCheckedFrom = 0,
 ): ProductRejection[] {
   const rejections: ProductRejection[] = [];
   const seen = new Set<string>();
@@ -95,10 +125,88 @@ export function validatePackLevels(
     const previous = levels[index - 1];
     if (previous !== undefined && level.factor <= previous.factor) {
       rejections.push({ reason: 'pack_level_not_ascending', index });
+    } else if (
+      index >= nestingCheckedFrom &&
+      previous !== undefined &&
+      Number.isSafeInteger(previous.factor) &&
+      previous.factor > 1 &&
+      level.factor % previous.factor !== 0
+    ) {
+      rejections.push({ reason: 'pack_level_not_nested', index, below: previous.name });
     }
   });
 
   return rejections;
+}
+
+/**
+ * [PCN-012] How an edit relates to a product's current units.
+ *
+ * Every recorded quantity is a count of base units, and the pack sizes say
+ * what those counts mean as strips and boxes. Once a product has history,
+ * changing its base unit or an existing pack size would silently reinterpret
+ * every quantity already recorded (Phase 9 §1: reference entities never edit
+ * "anything a report derives from"). So, for a product with history:
+ *
+ *  - `unchanged` — the same units: always allowed;
+ *  - `extended`  — the same units with larger packs added on top (a carton
+ *    over the box, or a quick item gaining its strip during completion):
+ *    allowed, because nothing already recorded changes meaning;
+ *  - `changed`   — anything else: refused.
+ *
+ * "The same units" means the same sizes in the same positions. A unit's NAME
+ * may change (a "pack" the owner would rather call a "strip"): units carry
+ * stable keys by position, so a rename reinterprets no quantity, and history
+ * keeps the words it was written in. See `unitRenames`.
+ */
+export type PackStructureChange = 'unchanged' | 'extended' | 'changed';
+
+export interface PackStructure {
+  readonly baseUnitName: string;
+  readonly packLevels: readonly PackLevel[];
+}
+
+export function packStructureChange(
+  current: PackStructure,
+  next: PackStructure,
+): PackStructureChange {
+  // The base unit is always size 1, so renaming it changes no quantity.
+  if (next.packLevels.length < current.packLevels.length) {
+    return 'changed';
+  }
+  const kept = current.packLevels.every((level, index) => {
+    const candidate = next.packLevels[index];
+    return candidate !== undefined && candidate.factor === level.factor;
+  });
+  if (!kept) {
+    return 'changed';
+  }
+  return next.packLevels.length === current.packLevels.length ? 'unchanged' : 'extended';
+}
+
+/**
+ * [PCN-012] The units an edit renames, by position: the base unit, then each
+ * pack level the edit keeps at the same size. A rename is only ever of the
+ * same unit — a position whose size changed is a different unit, not a rename.
+ */
+export function unitRenames(
+  current: PackStructure,
+  next: PackStructure,
+): { from: string; to: string }[] {
+  const before = [
+    { name: current.baseUnitName.trim(), factor: 1 },
+    ...current.packLevels.map((level) => ({ name: level.name.trim(), factor: level.factor })),
+  ];
+  const after = [
+    { name: next.baseUnitName.trim(), factor: 1 },
+    ...next.packLevels.map((level) => ({ name: level.name.trim(), factor: level.factor })),
+  ];
+  return before.flatMap((unit, index) => {
+    const renamed = after[index];
+    return renamed && renamed.factor === unit.factor && renamed.name !== unit.name && renamed.name
+      ? [{ from: unit.name, to: renamed.name }]
+      : [];
+  });
 }
 
 /**
@@ -124,7 +232,10 @@ export function formatPackLevels(levels: readonly PackLevel[]): string {
   return levels.map((level) => `${level.name}:${level.factor}`).join(', ');
 }
 
-export function validateProductDraft(draft: ProductDraft): Validated<ProductDraft> {
+export function validateProductDraft(
+  draft: ProductDraft,
+  options: { nestingCheckedFrom?: number } = {},
+): Validated<ProductDraft> {
   const rejections: ProductRejection[] = [];
 
   const name = draft.name.trim();
@@ -147,7 +258,20 @@ export function validateProductDraft(draft: ProductDraft): Validated<ProductDraf
     rejections.push({ reason: 'min_stock_negative' });
   }
 
-  rejections.push(...validatePackLevels(draft.packLevels, baseUnitName));
+  rejections.push(
+    ...validatePackLevels(draft.packLevels, baseUnitName, options.nestingCheckedFrom ?? 0),
+  );
+
+  if (
+    draft.mrpPaisa !== null &&
+    draft.mrpUnitIndex !== undefined &&
+    draft.mrpUnitIndex !== null &&
+    (!Number.isSafeInteger(draft.mrpUnitIndex) ||
+      draft.mrpUnitIndex < 0 ||
+      draft.mrpUnitIndex > draft.packLevels.length)
+  ) {
+    rejections.push({ reason: 'mrp_unit_unknown' });
+  }
 
   if (rejections.length > 0) {
     return { ok: false, rejections };
@@ -194,7 +318,10 @@ export function validateBarcode(
   packLevels: readonly PackLevel[],
 ): Validated<BarcodeDraft> {
   const rejections: ProductRejection[] = [];
-  const barcode = draft.barcode.trim().replace(/\s+/g, '');
+  // A pack's 2D code is saved as its GTIN: the batch and expiry it also
+  // carries change with every delivery and are not the product's identity.
+  // Any other code is saved as scanned, cleaned of the scanner's framing.
+  const barcode = barcodeToStore(draft.barcode);
   const unitLevelName = draft.unitLevelName.trim();
 
   if (barcode === '') {

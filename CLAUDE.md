@@ -32,7 +32,7 @@ Hospital-integration-adjacent. Nothing in it is decided.
 
 ## Identifier system — cite these by number
 
-- **P1–P8** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)
+- **P1–P9** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)
 - **D1–D5** domain semantic decisions (Phase 5 §4)
 - **W1–W12** core workflows (Phase 7)
 - **ADR-1–ADR-8** architecture decisions (Phase 8)
@@ -257,6 +257,10 @@ exception visibility.
   allocation.
 - **Effective unit cost floors.** Bonus stock makes cost land a paisa low rather
   than high, so a reported margin is never better than the real one.
+  _Superseded by PCN-012 (2026-10-24): the reasoning is inverted — a cost that
+  lands low reports a HIGHER margin. Allocations are to be costed cumulatively,
+  rounding up, so cost is never understated and a used-up batch reconciles
+  exactly to what was paid. Do not copy the floor into new code._
 - **A batch born from an adjustment is counted once.** It is that batch's
   `qty_received`; the adjustment sum in `batchLedger` takes only _negative_
   deltas. Day 3's signed sum was right until materialization existed, and
@@ -552,8 +556,152 @@ exception visibility.
   F10 to switch user", were the identical bug — silent, only because that key
   has not moved yet. Both now call `keyFor('switch-user')` too.
 
+## Things Day 19 established
+
+- **Never renumber a migration that has run anywhere.** drizzle knows an
+  applied migration only by its journal `when`; a cherry-picked migration with
+  a regenerated `when` is a NEW migration to every database that ran the
+  original. That is what broke `0009_supplier_credit` on databases that had
+  run it as `0006_supplier_credit`. A colliding number on a branch is resolved
+  before it runs anywhere, or by keeping the original `when`.
+- **If one is renumbered anyway, register it in the same commit**
+  (`scripts/db/renumbered-migrations.ts`). The database's row for the former
+  `when` is proof only while its hash equals the current file's, so the file is
+  never edited afterwards; `renumbered-migrations.test.ts` fails if it is.
+- **"Already exists" in a migration is a history question, not a DDL one.** The
+  tempting fix was `IF NOT EXISTS` in 0009, which would also have hidden every
+  future drift. The answer was in `git log` and the recorded hash.
+
+## Things Day 20 established
+
+- **Earliest-expiry-first is wrong the day a batch expires.** An expired batch
+  is always the earliest, so FEFO alone sells it first. `planAllocation` takes
+  the business day as a required argument (PCN-008); forgetting it is exactly
+  how the bug looked.
+- **A test date chosen as "the future" is a time bomb.** Two tests went red the
+  day PCN-008 landed because `2026-09-01` had quietly become the past. Use
+  dates that stay on their side of today (`2020-…`, `2030-…`), or pin today.
+- **A correction records the figures it leaves behind** (PCN-009:
+  `effective_unit_cost_paisa`, `invoice_delta_paisa`), so readers sum rather
+  than replay history. Reports value allocations at the latest corrected cost;
+  nothing else had to learn about corrections.
+- **A new event table has three homes**: `EVENT_TABLES` (grants), the test
+  purge (`tests/db-admin.ts`), and the export. The export was missed once
+  (`supplier_payments`); `export-coverage.test.ts` now pins it.
+- **The E2E suite runs against a developer's database without a reset.** A
+  spec that needs a shortfall or an expired batch sizes it from the current
+  catalog payload, never from the seed; warm-up lists every routed key.
+
+## Things the scanner fix established
+
+- **Revalidating a route does not reach the counter's search index.** The
+  index is client state built from `/api/catalog`, held by `CatalogProvider`
+  in the counter layout across navigation. A catalogue edit must call
+  `useCatalog().refresh()`; the search box also pulls changes on arrival. A
+  comment claiming `revalidateAfter('catalog')` made edits "reach /sale" is
+  what kept this invisible.
+- **`refresh` from `useCatalog` is stable on purpose.** It was rebuilt with
+  every index, so an effect depending on it re-ran after the refresh it
+  triggered.
+- **A scanned code is a GTIN only by proof**, never by shape: AI 01 with a
+  valid check digit, and GTIN-13 ⇄ `0`-prefixed GTIN-14 as the only
+  equivalence. Indicator digits 1–9 are other packaging levels.
+
+## Things the supplier account established
+
+- **Walk the whole workflow, not the screen you changed** — the owner's
+  standing instruction. Supplier credit had a balance, a Pay button and tests
+  for both, and a payment still vanished: nothing listed it. Before calling a
+  money workflow done, follow the money from where it is entered to every place
+  someone would look for it afterwards, and back.
+- **A balance with a Pay button needs its expansion** (T4). `supplierLedger`
+  is to `supplierBalance` what `customerLedger` is to `customerBalance`, and
+  `supplier-balance.integration` asserts the rows sum to the balance (Day 8).
+  A new term in one is a new term in the other.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
 boundaries. Migrations are committed with their feature. `npm run verify` before
 pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
+
+## Things the scan guard established
+
+- **A scanner types into whatever has the cursor and presses Enter.** Every
+  form that commits on Enter was one scan away from recording a barcode as
+  money: Cash tendered, a settlement, a supplier payment, Paid now. Fixing
+  them one by one found the next one each time.
+- **One guard on the window, ahead of every screen** (`client/scan/field-guard.ts`,
+  mounted by `ScanGuard` in the shell). A field that is MEANT to receive scans
+  opts out with `data-scan-target`; everything else is protected without
+  anyone remembering to protect it. A new scan field that forgets the
+  attribute fails loudly (its scans are put back), never silently.
+- **"Not an amount" is not zero.** `parseRupeeInput` returns null; use it
+  wherever reading junk as Rs 0 would record something (a drawer count, Paid
+  now). `paisaFromRupeeInput` (zero for junk) is only for fields where zero
+  commits nothing.
+
+## Things Session 2 (stock coming in) established
+
+- **A batch's cost is a total, not a rate.** No whole-paisa per-unit cost
+  multiplies back to what was paid (a box of 14 at Rs 250). Margin takes each
+  outflow's cumulative share — `C(n) = ⌈total × n ÷ received⌉`, cost =
+  `C(after) − C(before)` — from the batch's CURRENT total (D1: corrections
+  restate what already left). Every outflow is a movement (D2). Never multiply
+  `unit_cost_paisa` into a money figure again; it is nominal.
+- **A purchase line's cost has one expression.** `purchaseLineCostSql` in SQL,
+  `lineCostPaisa` in TypeScript. Summing `qty_base × unit_cost_paisa` is the
+  bug this replaced; the crown suite's own supplier check had it too, and went
+  red the moment pack lines appeared — which is how it should be found.
+- **Counts arrive in packs; the database keeps base units.** Every count is
+  turned into base units through `lib/quantity` (`levelToBaseUnits`,
+  `costOfBaseUnits`), and the writer refuses an entered pack whose size is not
+  the product's.
+
+## Things the PCN-012 final pass established
+
+- **A movement records the words it was entered in.** Returns, removals and
+  supplier returns carry `unit_key`/`unit_name`/`unit_count` beside the base
+  quantity; display them with `describeCounted`, and let the writer check the
+  unit against the product rather than trusting the screen.
+- **A unit's key is its identity; its name is a label.** Renames are allowed,
+  size changes are not. Anything that finds a unit from a history row matches
+  by key, or by size — never by the name the row was written with.
+- **Moving stock between products is a transfer, not a loss.**
+  `product_replaced` adjustments are a `transfer` in `batchCostLedger`; a
+  write-off figure that counted them would report a loss that never happened.
+  The moved cost is the batch total less what already left, so both batches
+  reconcile exactly.
+- **A server action that revalidates re-renders the page it was called
+  from.** A result shown on that page vanishes if the page's own render
+  changes (the replace screen now renders "already replaced"); show the result
+  where the user goes next.
+- **The receipt belongs to the customer.** A shortfall note (D2) printed on
+  every oversold sale's slip for months, and a refund slip read "Amount Due
+  -530.00" with an udhaar reduction labelled "Paid". Staff-facing notices go on
+  the counter screen and the exception list, never in `ReceiptData`; a
+  receipt-producing event that is not a sale says what it is (`refund`).
+- **A load must never overwrite what the user changed.** Settings filled its
+  form from an effect with no cancellation; development runs effects twice,
+  and the second answer landing after a click saved the old value back. That
+  left auto-print off for the rest of the E2E suite — first misdiagnosed as an
+  interrupted run. Every effect that fills editable state from a request
+  ignores a stale answer, and a spec that changes shared settings reads the
+  saved value back before trusting its own clean-up.
+- **A hand-kept list of risky fields misses the next one.** The Settings PIN
+  field shipped without an autofill opt-out because `password-autofill.test.ts`
+  checked a list nobody updated; Chrome filled the device's saved login into a
+  new salesman's name and PIN. The test now finds every password input in
+  `src` and fails until each is declared opted-out or a real login. The same
+  autofill sends a key-less `keydown`: a native key listener must not assume
+  `event.key` is a string.
+- **`router.refresh()` cancels a navigation already in flight.** `RefreshOnSync`
+  refreshed the moment a sale was delivered — exactly when the next key is
+  pressed — and lost about one navigation in eight. Navigation intent is
+  marked by link clicks and the global keys (`client/navigation/intent.ts`) and
+  a background refresh yields to it. A refresh run straight after the user's
+  own action, before they can click elsewhere, is safe.
+- **The position vocabulary covers paper too.** `position.ts` said the receipt
+  used it; the receipt did not, and printed "New balance -50.00". Any balance a
+  person reads — screen or slip — goes through `positionOf`/`BalanceInline`.
+

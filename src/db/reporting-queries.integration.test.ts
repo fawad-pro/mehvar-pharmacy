@@ -11,7 +11,7 @@ import { commitCashMovement } from '@/domain/cash/commit-cash-movement';
 import { commitReturn, type ReturnCommand } from '@/domain/sales/commit-return';
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
 import { commitSettlement } from '@/domain/udhaar/commit-settlement';
-import { reportFigures, threeNumbers } from '@/db/reporting-queries';
+import { expiredStockSoldInRange, reportFigures, threeNumbers } from '@/db/reporting-queries';
 import { uuidv7 } from '@/lib/uuid';
 
 import {
@@ -351,5 +351,74 @@ suite('threeNumbers against Postgres', () => {
     const numbers = await threeNumbers(tenant.scope, from, to);
     expect(numbers.salesPaisa).toBe(0);
     expect(numbers.expectedCashPaisa).toBe(0);
+  });
+});
+
+suite('expiredStockSoldInRange against Postgres (PCN-008)', () => {
+  let tenant: TestTenant;
+
+  beforeAll(async () => {
+    tenant = await provisionTestTenant('expired-sold');
+  });
+
+  afterAll(async () => {
+    await tenant.cleanup();
+  });
+
+  function sale(productId: string, qtyBase: number): SaleCommand {
+    return {
+      saleId: uuidv7(),
+      receiptNumber: nextReceipt(),
+      customerId: null,
+      lines: [
+        {
+          lineId: uuidv7(),
+          productId,
+          qtyBase,
+          enteredUnitLevel: 'tab',
+          unitPricePaisa: 350,
+          lineDiscountPaisa: 0,
+          priceOverridden: false,
+        },
+      ],
+      invoiceDiscountPaisa: 0,
+      cashPaisa: 350 * qtyBase,
+      creditPaisa: 0,
+      changePaisa: 0,
+      origin: 'online',
+      clientSchemaVersion: 1,
+      clientCommittedAt: new Date(),
+    };
+  }
+
+  it('lists only the units that came from an expired batch, naming its expiry', async () => {
+    const product = await createTestProduct(tenant.scope, `Expired ${uuidv7().slice(-6)}`);
+    await addOpeningStock(tenant.scope, product.id, 4, { expiryDate: '2030-01-01' });
+    await addOpeningStock(tenant.scope, product.id, 20, { expiryDate: '2020-01-01' });
+    const from = new Date(Date.now() - 1_000);
+
+    // Four from the good batch, then six from the expired one.
+    await commitSale(tenant.scope, sale(product.id, 10));
+
+    const rows = (
+      await expiredStockSoldInRange(tenant.scope, from, new Date(Date.now() + 1_000))
+    ).filter((row) => row.productName === product.name);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.qtyBase).toBe(6);
+    expect(rows[0]?.expiryDate).toBe('2020-01-01');
+  });
+
+  it('lists nothing for a sale met entirely from unexpired stock', async () => {
+    const product = await createTestProduct(tenant.scope, `Fresh ${uuidv7().slice(-6)}`);
+    await addOpeningStock(tenant.scope, product.id, 20, { expiryDate: '2030-01-01' });
+    await addOpeningStock(tenant.scope, product.id, 20, { expiryDate: '2020-01-01' });
+    const from = new Date(Date.now() - 1_000);
+
+    await commitSale(tenant.scope, sale(product.id, 10));
+
+    const rows = (
+      await expiredStockSoldInRange(tenant.scope, from, new Date(Date.now() + 1_000))
+    ).filter((row) => row.productName === product.name);
+    expect(rows).toEqual([]);
   });
 });

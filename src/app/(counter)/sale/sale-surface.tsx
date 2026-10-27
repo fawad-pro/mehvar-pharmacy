@@ -17,42 +17,45 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
-import {
-  defaultUnitLevel,
-  parseQuantityQuery,
-  resolveQuantity,
-} from '@/client/search/quantity-grammar';
+import { parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { lastSaleUnit, rememberSaleUnit } from '@/client/sale/last-unit';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { useRegisterUdhaarKeyHandler } from '@/client/keyboard/udhaar-key-context';
 import { keyFor } from '@/client/keyboard/registry';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import type { ReceiptData } from '@/client/print/receipt';
 import { CaptureBlockedError, useSync } from '@/client/sync/provider';
-import type { SearchHit } from '@/client/search/catalog-index';
+import { MatchTier, type SearchHit } from '@/client/search/catalog-index';
 import { ProductSearch } from '@/components/product-search';
 import { CustomerPicker } from '@/components/customer-picker';
 import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import { ReceiptView } from '@/components/receipt-view';
 import type { CustomerHit } from '@/app/(counter)/customers/actions';
+import { barcodeOwnerAction, linkScannedCode } from '@/app/(counter)/products/actions';
+import { barcodeToStore, parseGs1 } from '@/domain/catalog/barcode';
+import { businessDayOf } from '@/lib/business-day';
 import { miniStatement } from '@/domain/udhaar/settlement';
 // From the pure module, never from `commit-sale.ts`: that one reaches the
 // database, and importing it here would pull `server-only` into the browser.
 import { validateSaleCommand, type SaleRejection } from '@/domain/sales/sale-command';
+import { defaultSaleUnit, unitsOf } from '@/domain/catalog/units';
 import {
   addToCart,
   cartTotals,
   grossSubtotalPaisa,
   isPriceOverridden,
   lineTotal,
+  lineUnit,
+  newCartLine,
   removeLine,
   totalLineDiscountPaisa,
   updateLine,
   type CartLine,
 } from '@/domain/sales/cart';
-import { baseQty, paisa, ZERO_PAISA } from '@/lib/branded';
+import { packFactor, paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity } from '@/lib/quantity';
-import { uuidv7 } from '@/lib/uuid';
+import { nominalPricePerBase } from '@/lib/quantity';
+import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
 import { PaymentOverlay, type PaymentSplit } from './payment-overlay';
@@ -94,15 +97,24 @@ export function SaleSurface() {
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
   const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
-  /** W6's pending mini-form: the typed name, plus the resolver the search awaits. */
+  /** The last scanned pack, when its own 2D code says it has expired. */
+  const [expiredPack, setExpiredPack] = useState<{ name: string; expiry: string } | null>(null);
+  /**
+   * W6's pending mini-form: the typed name, plus the resolver the search awaits.
+   * From an unknown scan it also carries the code, and — if another product
+   * turns out to own that code — that product, so the form can refuse to put
+   * the code on a second one.
+   */
   const [quickAdd, setQuickAdd] = useState<{
     name: string;
+    code: string | null;
+    owner: { name: string; hit: SearchHit | null } | null;
     settle: (added: boolean) => void;
   } | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const receiptContext = useReceiptContext();
-  const { receipt, print } = usePrintReceipt();
+  const { receipt, print, clear: clearPrinted } = usePrintReceipt();
   const { capture } = useSync();
 
   // Defect C5: the udhaar key belongs to Sale only while the cart has
@@ -129,6 +141,15 @@ export function SaleSurface() {
     return stock;
   }, [lines, index]);
 
+  // PCN-008: the warning before payment, from the same snapshot as stock.
+  const expiredByProduct = useMemo(() => {
+    const expired: Record<string, { qtyBase: number; expiryDate: string } | null> = {};
+    for (const line of lines) {
+      expired[line.productId] = index?.expiredOf(line.productId) ?? null;
+    }
+    return expired;
+  }, [lines, index]);
+
   const focusSearch = useCallback(() => {
     setSelectedLineId(null);
     searchRef.current?.focus();
@@ -141,29 +162,49 @@ export function SaleSurface() {
    * the barcode's own unit level when the item was scanned — a box code means a
    * box, not a strip (Phase 5 §2).
    */
-  const onSelect = useCallback((hit: SearchHit, rawQuery: string) => {
-    const { count } = parseQuantityQuery(rawQuery);
-    const level =
-      hit.unitLevelName ?? defaultUnitLevel(hit.product.baseUnitName, hit.product.packLevels);
-    const qtyBase = resolveQuantity(count, level, hit.product.baseUnitName, hit.product.packLevels);
+  const startsLoose = receiptContext?.saleStartsLoose ?? false;
+  const onSelect = useCallback(
+    (hit: SearchHit, rawQuery: string) => {
+      const { count } = parseQuantityQuery(rawQuery);
+      // [PCN-012] Each unit at its own price; derived for an index cached
+      // before PCN-012.
+      const units = unitsOf({
+        baseUnitName: hit.product.baseUnitName,
+        packLevels: hit.product.packLevels,
+        pricePerBasePaisa: hit.product.pricePaisa,
+        units: hit.product.units,
+      });
+      // A scanned code keeps its own unit; otherwise the unit this counter last
+      // sold the product in, else the shop's configured start (PCN-012).
+      const level =
+        hit.unitLevelName ??
+        defaultSaleUnit(units, lastSaleUnit(hit.product.id), startsLoose)?.name ??
+        hit.product.baseUnitName;
 
-    setLines((current) =>
-      addToCart(current, {
+      const line = newCartLine({
         lineId: uuidv7(),
         productId: hit.product.id,
         name: hit.product.name,
         baseUnitName: hit.product.baseUnitName,
         packLevels: hit.product.packLevels,
-        qtyBase,
-        enteredUnitLevel: level,
-        unitPricePaisa: paisa(hit.product.pricePaisa),
-        catalogPricePaisa: paisa(hit.product.pricePaisa),
-        lineDiscountPaisa: ZERO_PAISA,
-      }),
-    );
-    setLastSale(null);
-    setError(null);
-  }, []);
+        units,
+        unitName: level,
+        count,
+      });
+      setLines((current) => addToCart(current, line));
+      // The pack in hand, not the batch FEFO will allocate: its own code says
+      // when it expires. Said, never blocked (P2) — the operator checks the pack.
+      const pack = parseGs1(rawQuery);
+      setExpiredPack(
+        pack?.expiry && pack.expiry < businessDayOf(new Date())
+          ? { name: hit.product.name, expiry: pack.expiry }
+          : null,
+      );
+      setLastSale(null);
+      setError(null);
+    },
+    [startsLoose],
+  );
 
   /**
    * Commits the cart — ADR-3's local commit, Phase 7 rule 3.
@@ -203,7 +244,16 @@ export function SaleSurface() {
           productId: line.productId,
           qtyBase: line.qtyBase,
           enteredUnitLevel: line.enteredUnitLevel,
-          unitPricePaisa: line.unitPricePaisa,
+          // [PCN-012] The exact charge is count × the unit's price; the
+          // per-base figure is nominal, for a column older readers expect.
+          unitPricePaisa: nominalPricePerBase(
+            line.pricePerUnitPaisa,
+            packFactor(lineUnit(line)?.factor ?? 1),
+          ),
+          unitKey: line.unitKey,
+          unitName: line.enteredUnitLevel,
+          unitCount: line.unitCount,
+          unitPricePaisaEntered: line.pricePerUnitPaisa,
           lineDiscountPaisa: line.lineDiscountPaisa,
           priceOverridden: isPriceOverridden(line),
         })),
@@ -235,6 +285,11 @@ export function SaleSurface() {
 
       try {
         await capture({ kind: 'sale', payload: command });
+        // [PCN-012] The next line of each product starts in the unit it was
+        // sold in now — recorded on the sale, never on an abandoned cart.
+        for (const line of soldLines) {
+          rememberSaleUnit(line.productId, line.unitKey);
+        }
       } catch (error) {
         // The outbox refused the record, so it is not durable, so no receipt
         // may claim it happened. Either the licence is not active (PCN-006, a
@@ -265,7 +320,8 @@ export function SaleSurface() {
         tenantFooterLine: receiptContext.tenantFooterLine,
         lines: soldLines.map((line) => ({
           name: line.name,
-          quantityLabel: describeQuantity(line.qtyBase, line.baseUnitName, [...line.packLevels]),
+          // As sold: 2 strips is 2, never re-expressed as tablets (P9).
+          quantity: line.unitCount,
           amountPaisa: lineTotal(line),
         })),
         // The receipt's Subtotal is the GROSS figure — before any line's own
@@ -285,12 +341,10 @@ export function SaleSurface() {
         ...(split.creditPaisa > 0 && soldCustomer
           ? { miniStatement: miniStatement(soldCustomer.balancePaisa, split.creditPaisa) }
           : {}),
-        ...(pendingUnits > 0
-          ? { pendingNote: 'Sold more than the system had. It is on the owner’s exception list.' }
-          : {}),
       };
 
       setLines([]);
+      setExpiredPack(null);
       setCustomer(null);
       setPaying(false);
       setLastSale({
@@ -306,6 +360,8 @@ export function SaleSurface() {
       // receipt one key away, from local state, exactly as before.
       if (receiptContext.autoPrintReceipt) {
         print(receiptData);
+      } else {
+        clearPrinted();
       }
 
       // Stock moved, so the index's advisory snapshot is stale. Harmless to ask
@@ -314,7 +370,19 @@ export function SaleSurface() {
       setBusy(false);
       focusSearch();
     },
-    [lines, busy, receiptContext, totals, customer, index, capture, refresh, focusSearch, print],
+    [
+      lines,
+      busy,
+      receiptContext,
+      totals,
+      customer,
+      index,
+      capture,
+      refresh,
+      focusSearch,
+      print,
+      clearPrinted,
+    ],
   );
 
   /**
@@ -350,6 +418,7 @@ export function SaleSurface() {
             name: product.name,
             pricePaisa: product.pricePaisa,
             baseUnitName: product.baseUnitName,
+            barcode: draft.barcode,
           },
         });
       } catch (error) {
@@ -363,21 +432,33 @@ export function SaleSurface() {
         throw error;
       }
 
-      addLocalProduct(product);
+      // With its code, so the next scan of this pack adds it directly.
+      addLocalProduct(
+        product,
+        draft.barcode
+          ? { barcode: draft.barcode, productId: product.id, unitLevelName: product.baseUnitName }
+          : undefined,
+      );
 
       setLines((current) =>
-        addToCart(current, {
-          lineId: uuidv7(),
-          productId: product.id,
-          name: product.name,
-          baseUnitName: product.baseUnitName,
-          packLevels: [],
-          qtyBase: baseQty(1),
-          enteredUnitLevel: product.baseUnitName,
-          unitPricePaisa: paisa(product.pricePaisa),
-          catalogPricePaisa: paisa(product.pricePaisa),
-          lineDiscountPaisa: ZERO_PAISA,
-        }),
+        addToCart(
+          current,
+          newCartLine({
+            lineId: uuidv7(),
+            productId: product.id,
+            name: product.name,
+            baseUnitName: product.baseUnitName,
+            packLevels: [],
+            units: unitsOf({
+              baseUnitName: product.baseUnitName,
+              packLevels: [],
+              pricePerBasePaisa: product.pricePaisa,
+              units: null,
+            }),
+            unitName: product.baseUnitName,
+            count: 1,
+          }),
+        ),
       );
       setLastSale(null);
       setError(null);
@@ -418,11 +499,58 @@ export function SaleSurface() {
               setSelectedLineId(last.lineId);
             }
           }}
-          onQuickAdd={(name) =>
+          onQuickAdd={(name, code) =>
             new Promise<boolean>((settle) => {
-              setQuickAdd({ name, settle });
+              // The counter's own index first (works offline); then the server,
+              // which also catches a code linked since this index was built.
+              const local = code ? (index?.resolveBarcode(code) ?? null) : null;
+              setQuickAdd({
+                name,
+                code: code ?? null,
+                owner: local ? { name: local.product.name, hit: local } : null,
+                settle,
+              });
+              if (code && !local) {
+                void barcodeOwnerAction(code)
+                  .then((found) => {
+                    if (!found) return;
+                    const hit =
+                      index?.products.find((product) => product.id === found.productId) ?? null;
+                    setQuickAdd((current) =>
+                      current && current.code === code
+                        ? {
+                            ...current,
+                            owner: {
+                              name: found.productName,
+                              hit: hit
+                                ? {
+                                    product: hit,
+                                    tier: MatchTier.Barcode,
+                                    matchedOn: 'barcode',
+                                    stockBase: index?.stockOf(hit.id) ?? null,
+                                  }
+                                : null,
+                            },
+                          }
+                        : current,
+                    );
+                  })
+                  .catch(() => {
+                    // Offline: the index check above is what there is, and the
+                    // server will still refuse to attach a code it finds taken.
+                  });
+              }
             })
           }
+          // Phase 10 §5: an unknown scan links in place. On success the
+          // index is refreshed so the next scan of this code is a plain hit.
+          onLinkCode={async (code, productId, unitLevelName) => {
+            const outcome = await linkScannedCode(productId as Uuid, code, unitLevelName);
+            if (outcome.ok) {
+              refresh();
+            }
+            return outcome;
+          }}
         />
       </div>
 
@@ -433,6 +561,7 @@ export function SaleSurface() {
             lines={lines}
             selectedLineId={selectedLineId}
             stockByProduct={stockByProduct}
+            expiredByProduct={expiredByProduct}
             onSelect={setSelectedLineId}
             onChange={(lineId, patch) => {
               setLines((current) => updateLine(current, lineId, patch));
@@ -481,9 +610,7 @@ export function SaleSurface() {
               </button>
             </div>
           ) : (
-            <p className="text-ink/40 text-xs">
-              {keyFor('udhaar')} — attach a customer for udhaar
-            </p>
+            <p className="text-ink/40 text-xs">{keyFor('udhaar')} — attach a customer for udhaar</p>
           )}
 
           {/* A counter cannot number a receipt until it has heard from the
@@ -494,6 +621,18 @@ export function SaleSurface() {
           {!receiptContext ? (
             <p className="text-amber text-xs" role="status">
               Getting this counter ready…
+            </p>
+          ) : null}
+
+          {expiredPack ? (
+            <p className="text-amber text-sm font-medium" role="status" aria-label="Expired pack">
+              Scanned pack of {expiredPack.name} expired on{' '}
+              {new Date(`${expiredPack.expiry}T00:00:00`).toLocaleDateString('en-PK', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}{' '}
+              — check before selling.
             </p>
           ) : null}
 
@@ -587,6 +726,19 @@ export function SaleSurface() {
       {quickAdd ? (
         <QuickItemForm
           initialName={quickAdd.name}
+          barcode={quickAdd.code ? barcodeToStore(quickAdd.code) : null}
+          owner={quickAdd.owner}
+          onSellOwner={
+            quickAdd.owner?.hit
+              ? () => {
+                  const hit = quickAdd.owner?.hit;
+                  if (hit) onSelect(hit, '');
+                  quickAdd.settle(true);
+                  setQuickAdd(null);
+                  focusSearch();
+                }
+              : undefined
+          }
           onCreate={(draft) => {
             void (async () => {
               try {

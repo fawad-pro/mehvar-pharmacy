@@ -626,8 +626,8 @@ recommendation. The founder locked the five decisions this note records.
 
 ### The decision, in one line
 
-The offline product is **perpetually licensed**. The licence answers *"is this
-installation authorized?"* — never *"has this customer paid this period?"* A new
+The offline product is **perpetually licensed**. The licence answers _"is this
+installation authorized?"_ — never _"has this customer paid this period?"_ A new
 **unlicensed** installation may operate as a **full evaluation for 30 days**;
 after that, without activation, it becomes **unauthorized (restricted)**. A valid,
 bound, perpetual licence makes the installation **authorized with full
@@ -642,17 +642,18 @@ on the authorized path.
         30-DAY EVALUATION  (full functionality)
               ↓
       ┌───────┴────────┐
-   activate           no activation
-   valid licence      after 30 days
-      ↓                   ↓
-  AUTHORIZED          UNAUTHORIZED
-  (full, forever)     (restricted)
-      ↑
-      └── revocation (separate, signed, time-independent) → RESTRICTED
+
+activate no activation
+valid licence after 30 days
+↓ ↓
+AUTHORIZED UNAUTHORIZED
+(full, forever) (restricted)
+↑
+└── revocation (separate, signed, time-independent) → RESTRICTED
 
 The 30-day clock **belongs to the installation**, not to a customer, account, or
 purchased licence. It is not a trial entitlement, not a subscription, not a grace
-period, and not an expiry on the perpetual licence. Copying a *licensed* install
+period, and not an expiry on the perpetual licence. Copying a _licensed_ install
 to another machine yields **unbound** (restricted immediately) — it does not mint
 a fresh evaluation.
 
@@ -660,22 +661,22 @@ a fresh evaluation.
 
 Two capability tiers — **full** and **restricted** — across five states:
 
-| State | Definition | Tier |
-| --- | --- | --- |
-| **evaluation** | No valid bound licence, within 30 days of first use | full |
-| **authorized** | Valid signed token, bound to this installation, not revoked | full |
-| **unauthorized** | No valid bound licence, past 30 days | restricted |
-| **unbound** | Valid token, bound to a different installation (a copy) | restricted |
-| **revoked** | A valid signed revocation for this licence has been received | restricted |
+| State            | Definition                                                   | Tier       |
+| ---------------- | ------------------------------------------------------------ | ---------- |
+| **evaluation**   | No valid bound licence, within 30 days of first use          | full       |
+| **authorized**   | Valid signed token, bound to this installation, not revoked  | full       |
+| **unauthorized** | No valid bound licence, past 30 days                         | restricted |
+| **unbound**      | Valid token, bound to a different installation (a copy)      | restricted |
+| **revoked**      | A valid signed revocation for this licence has been received | restricted |
 
 `invalid` (bad signature / wrong pharmacy / unknown key / unreadable / format-too-
 new) resolves to restricted as well, with its own message.
 
 ### Resolution order (why the clock dies on activation)
 
-1. Valid signed **revocation** present → **revoked**. *(clock not read)*
-2. Valid signed token **bound here** → **authorized** → return. *(clock not read)*
-3. Valid token **bound elsewhere**, or token invalid → **unbound / invalid**. *(clock not read)*
+1. Valid signed **revocation** present → **revoked**. _(clock not read)_
+2. Valid signed token **bound here** → **authorized** → return. _(clock not read)_
+3. Valid token **bound elsewhere**, or token invalid → **unbound / invalid**. _(clock not read)_
 4. No valid token → read the evaluation clock: within 30 days → **evaluation**,
    else → **unauthorized**.
 
@@ -690,23 +691,23 @@ restricted tier.
 
 `✓ available · ✗ blocked · (read) view only`
 
-| Workflow | evaluation (≤30d) | unauthorized / unbound / revoked | authorized |
-| --- | --- | --- | --- |
-| Sales (new) | ✓ | ✗ | ✓ |
-| Quick items (W6) | ✓ | ✗ | ✓ |
-| Udhaar / credit sales (new) | ✓ | ✗ | ✓ |
-| **Settlement of EXISTING udhaar** | ✓ | **✓ (carve-out)** | ✓ |
-| **Drain already-captured offline sales (outbox)** | ✓ | **✓ (carve-out)** | ✓ |
-| Customers create/edit | ✓ | ✗ | ✓ |
-| Receiving stock / purchases | ✓ | ✗ | ✓ |
-| Stock adjustments | ✓ | ✗ | ✓ |
-| Tenant product create/edit | ✓ | ✗ | ✓ |
-| Printing | ✓ | reprint existing ✓; new follows sales | ✓ |
-| Reports | ✓ | ✓ (read) | ✓ |
-| Catalogue browse/search | ✓ | ✓ (read) | ✓ |
-| **Catalogue updates/import (signed packs)** | ✓ | **✓ (never gated)** | ✓ |
-| Settings / configuration | ✓ | licence activation ✓; rest ✗ | ✓ |
-| **Export / recovery** | ✓ | **✓ (always)** | ✓ |
+| Workflow                                          | evaluation (≤30d) | unauthorized / unbound / revoked      | authorized |
+| ------------------------------------------------- | ----------------- | ------------------------------------- | ---------- |
+| Sales (new)                                       | ✓                 | ✗                                     | ✓          |
+| Quick items (W6)                                  | ✓                 | ✗                                     | ✓          |
+| Udhaar / credit sales (new)                       | ✓                 | ✗                                     | ✓          |
+| **Settlement of EXISTING udhaar**                 | ✓                 | **✓ (carve-out)**                     | ✓          |
+| **Drain already-captured offline sales (outbox)** | ✓                 | **✓ (carve-out)**                     | ✓          |
+| Customers create/edit                             | ✓                 | ✗                                     | ✓          |
+| Receiving stock / purchases                       | ✓                 | ✗                                     | ✓          |
+| Stock adjustments                                 | ✓                 | ✗                                     | ✓          |
+| Tenant product create/edit                        | ✓                 | ✗                                     | ✓          |
+| Printing                                          | ✓                 | reprint existing ✓; new follows sales | ✓          |
+| Reports                                           | ✓                 | ✓ (read)                              | ✓          |
+| Catalogue browse/search                           | ✓                 | ✓ (read)                              | ✓          |
+| **Catalogue updates/import (signed packs)**       | ✓                 | **✓ (never gated)**                   | ✓          |
+| Settings / configuration                          | ✓                 | licence activation ✓; rest ✗          | ✓          |
+| **Export / recovery**                             | ✓                 | **✓ (always)**                        | ✓          |
 
 The two carve-outs are deliberate: an evaluator who extended real credit can still
 **collect** it and close balances, and offline sales already captured during
@@ -759,12 +760,12 @@ The evaluation boundary needs a trustworthy "first use" anchor and a
 rollback-resistant "now," and **only** those:
 
 - **First-use anchor** = `min(installationFirstSeenAt, earliestEvent,
-  tenantCreatedAt, earliestObservation)` — already resistant to file deletion and
+tenantCreatedAt, earliestObservation)` — already resistant to file deletion and
   trial reset. Retained.
 - **Rollback-resistant now** = `max(systemNow, witness, ledgerHighWater)`, where
   the **witness is the corroborated K-th-largest clock observation**. Retained,
   because it is what stops "set the clock back to evaluate forever."
-- **Removed:** `clockCeiling` (it existed to protect a *paying* customer from a
+- **Removed:** `clockCeiling` (it existed to protect a _paying_ customer from a
   poisoned witness; authorized installs no longer read the clock, so a forward
   clock fault can only shorten a pirate's own free evaluation — self-harm, never
   an exploit). Also removed: the `licenceIssuedAt` clock anchor and all
@@ -791,7 +792,7 @@ retained model.
 
 Kept in full, because it is exactly what a perpetual anti-copy licence needs:
 Ed25519 trust root; the private signing key held outside the application, build
-and CI; signed licence tokens; installation identity (able to *restore* its id
+and CI; signed licence tokens; installation identity (able to _restore_ its id
 rather than mint a new one); licence-to-installation binding on first use;
 controlled rebinding within the existing allowance; signed revocation; signed
 catalogue packs; tenant scoping; and the data-integrity guarantees. No hardware
@@ -800,7 +801,7 @@ fingerprinting.
 ### What is removed from the core
 
 Statuses `licensed / expiring / grace / stale / lapsed`; tier `full_notice`; the
-`trial` concept (renamed to *evaluation*, lengthened to 30 days); all
+`trial` concept (renamed to _evaluation_, lengthened to 30 days); all
 entitlement/grace/warn computation; `clockCeiling`; the online **renewal-token**
 path (revocation delivery may remain, dormant); and every "days remaining /
 renew" affordance on the authorized path.
@@ -840,10 +841,820 @@ describing licensing as subscription/expiry enforcement.
 ### Explicitly deferred — do NOT build under this note
 
 **Mehvar Care** (optional recurring service: cloud backup, automatic updates,
-owner mobile reporting, priority support, recovery assistance) — any *time-based*
+owner mobile reporting, priority support, recovery assistance) — any _time-based_
 entitlement lives there, never in the core licence; it may reuse the dormant
 signed-refresh transport and must never hold the core product, its data, or an
 already-obtained catalogue pack hostage. **Mehvar Cloud** (separate SaaS,
 own subscription) — out of scope; must not influence this offline design.
 
 ### Nothing implemented at the time of filing.
+
+---
+
+## PCN-007 — supplier credit was built without a note, and its migration turned purchase history into debt
+
+Session: release hardening (Day 18) · Raised: 2026-10-21 · Status: decided
+
+**Plan sections in tension.** Phase 5 §6, _Explicitly out of the model (V1)_:
+"supplier balances/payables". T4: "Any derived figure — a balance, a total, a
+stock count — can be expanded into the transactions that produced it." T2:
+"Corrections, not erasures." ADR-1: append-only records, derived truth.
+
+**The contradiction or gap.** Two things, the second caused by the first.
+
+1. Supplier credit (Day 17: `purchases.cash_paid_paisa`, `supplier_payments`,
+   "Owed to suppliers") is a payables feature, which Phase 5 §6 excludes, and no
+   note was ever filed for it. Its code and CHANGELOG cite "PCN-006", which is
+   the licensing note; the CHANGELOG also calls its migration 0006 (it is 0009).
+2. Migration 0009 added `cash_paid_paisa` with `DEFAULT 0 NOT NULL`. Every
+   purchase that already existed was entered with no "Paid now" field, so its 0
+   is a default, not a fact — and every one read as owed in full. The upgrade
+   rehearsal (a populated pre-0009 install upgraded to 0009) showed "Owed to
+   suppliers Rs 2,131,851.60" on the Day screen: the shop's entire purchase
+   history, presented as debt. The only way to clear it in the product was to
+   record supplier payments that never happened, which ADR-1 then makes
+   permanent. A figure that cannot be expanded into real transactions breaks T4.
+
+**Options.**
+
+- **A. Edit 0009 in place** to add the column nullable. Correct for databases
+  that have not run it; databases that have (development, test installs) keep
+  the old shape. drizzle matches migrations by timestamp, not content, so
+  nothing would notice — schema drift between installs, silently. Rejected.
+- **B. Backfill in a new migration**: `UPDATE purchases SET … WHERE
+cash_paid_paisa = 0`. Cannot tell a historical 0 from a purchase genuinely
+  recorded as fully on credit since, and it rewrites rows of an event table.
+  Against ADR-1 and T2.
+- **C. Record what is actually known** (implemented, uncommitted): migration
+  0010 adds `purchases.credit_tracked boolean`, added with `DEFAULT false` and
+  then switched to `DEFAULT true`. Every row that existed reads false through
+  PostgreSQL's stored default — no row is rewritten, no payment invented — and
+  every purchase recorded since reads true. Balances count tracked purchases
+  only; an untracked invoice's detail page says its payment was not recorded.
+  Forward-only, survives dump and restore. Cost: on a database that already ran
+  0009 AND recorded credit purchases before 0010 (development and test installs
+  only; no pharmacy has run 0009), those purchases also become untracked.
+- **D. Withdraw supplier credit** until a payables decision is made: revert the
+  Day 17 feature. Honours Phase 5 §6 as written; loses a feature already built
+  and tested.
+- (Not proposed: an owner-entered opening balance per supplier, for debt that
+  genuinely predates tracking. A future feature, if the owner wants it.)
+
+**Recommendation.** C, and decide (1) explicitly: either amend Phase 5 §6 to
+admit supplier payables (this note becomes their decision of record, with its
+number, and the code's "[PCN-006]" labels are corrected to it) or choose D.
+C is safe under either: it only makes the existing feature stop inventing debt.
+
+**Decision.** 2026-10-21, the owner: **keep supplier credit**, adopt **C**,
+and reconcile the plan. Supplier payables are admitted to the model; this note
+is their decision of record. (The implementing session's note on why C: it
+stops the feature inventing debt without rewriting any record.)
+
+**Applied.** On `claude/epic-euler-jdspyu`, in the release-hardening commit
+that numbers this note: Phase 5 §6 amended (payables in, derived like a
+customer balance) and Phase 9 §3 amended (`purchases.cash_paid_paisa`,
+`purchases.credit_tracked`, `supplier_payments`); migration
+`0010_supplier_credit_tracked` with `schema.ts`, `supplier-queries.ts`,
+`purchase-queries.ts`, the purchase detail page and `commit-purchase.ts`; the
+supplier-credit code's "[PCN-006]" labels corrected to PCN-007 (licensing's
+own PCN-006 citations untouched) and the CHANGELOG's "migration 0006"
+corrected to 0009. Tests: `supplier-balance.integration.test.ts`,
+`tests/supplier-credit-migration.integration.test.ts`.
+
+---
+
+## PCN-008 — automatic FEFO sells expired batches first
+
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided, applied
+
+**Plan sections in tension.** Phase 5 §4, D1: "Sales consume stock from the
+earliest-expiry batch first, automatically. The salesman sees the price, not
+the batch." P2: "Never block a sale." T1: "The owner sees everything; the
+system forgets nothing." W12 manages near-expiry stock before it expires; no
+section says what a sale does with stock that already has.
+
+**The contradiction or gap.** Earliest-expiry-first is exactly the wrong order
+once a batch is past its date: an expired batch is always the earliest, so it is
+always consumed first. `lockBatchesForProducts` (`src/db/sales-queries.ts`)
+orders by `expiry_date ASC` with no filter, `allocate` (`domain/inventory/
+allocation.ts`) consumes in that order, and nothing on the Sale screen mentions
+expiry. A pharmacy holding one expired strip and one good box sells the expired
+strip, silently, and nothing records that it happened. Selling expired medicine
+is a patient-safety matter and an offence; D1 never contemplated it.
+
+**Options.**
+
+- **A. Block the sale** when only expired stock remains. Safe, but contradicts
+  P2, and the shelf may hold stock the system does not know about (D2).
+- **B. Require the owner's PIN** to sell expired stock. A permission wall in the
+  middle of a sale (Phase 7 cross-cutting rule 2), at a counter where the owner
+  is often absent.
+- **C. Skip expired batches when picking stock automatically; if only expired
+  stock remains, warn plainly, naming the expiry, and record an exception.**
+  The salesman decides, the owner sees it.
+- **D. Leave D1 as written.** Rejected: the current behaviour is the defect.
+
+**Recommendation.** C. It keeps P2 (nothing is blocked), makes the dangerous
+case loud at the moment it happens and visible afterwards (T1), and changes
+nothing for the ordinary case.
+
+**Decision.** 2026-10-22, the owner: **C**.
+
+**What C means, precisely** (the implementation contract):
+
+1. A batch is expired when its `expiry_date` is before the current business day
+   in the tenant's time zone. A batch with no expiry is never expired.
+2. Automatic allocation consumes unexpired batches first, in D1's order; then
+   expired batches; then the pending layer (D2). Expired stock is consumed only
+   when nothing unexpired is left, never ahead of it.
+3. Before commit, the Sale screen warns when a line would be met from expired
+   stock, naming the expiry date, in plain words (I5). The warning never blocks
+   payment.
+4. Every allocation against an expired batch appears in the owner's daily view
+   as its own exception kind, attributed like every other (T1, W10).
+5. Offline (ADR-3/5): the warning uses the counter's local snapshot; the
+   exception is derived from the allocation the server actually made, so an
+   offline sale cannot dodge it.
+
+**Applied.** 2026-10-22, uncommitted on `claude/epic-euler-jdspyu`. Phase 5 §4
+D1, W1's failure moments and W10's exception list amended (master plan and
+phase files). `planAllocation` takes the business day and orders unexpired
+batches before expired ones before the pending layer; `commitSale` passes the
+day the sale lands. The catalog payload carries expired stock per product, and
+the cart warns "only expired stock left" / "part from expired stock", naming the
+expiry, never blocking. The Day screen lists "Expired stock sold" first, derived
+from the allocations the server made (`expiredStockSoldInRange`). Tests:
+`allocation.test.ts` (seen failing against the old order),
+`commit-sale.integration.test.ts`, `reporting-queries.integration.test.ts`,
+`catalog-index.test.ts`, the stock-rebuild suite (expiry choices now always
+include a past date), `e2e/expiry.spec.ts`.
+
+---
+
+## PCN-009 — purchases cannot be corrected, and distributor returns do not reduce what is owed
+
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided, applied
+
+**Plan sections in tension.** Phase 5 §3, Adjustment: "Adjustments are the
+only non-sale, non-purchase path by which stock moves." T2: "Mistakes are
+reversed by compensating entries that reference what they fix." ADR-1:
+append-only records. W8 handles "return to distributor" as a reason-coded
+adjustment. PCN-007: a supplier balance is Σ tracked invoice cost − cash paid −
+supplier payments.
+
+**The contradiction or gap.**
+
+1. **A wrongly entered purchase has no correction.** `count_correction` can put
+   the stock right, but not the purchase: a mistyped unit cost distorts margin
+   for every unit sold from that batch, and a mistyped quantity or cost
+   overstates or understates what the shop owes that supplier, permanently. T2
+   promises a compensating entry; none exists.
+2. **A distributor return reduces stock but not the payable.** Before PCN-007
+   there was no payable to reduce. Since PCN-007 there is, and a return recorded
+   as an adjustment leaves the supplier balance overstated by the value
+   returned.
+
+**Options.**
+
+- **A. Edit the purchase rows.** Rejected: ADR-1, T2, and the app role cannot
+  update event tables.
+- **B. Two compensating records.** A _purchase correction_ referencing the
+  original purchase line (quantity change and/or corrected unit cost, with a
+  reason), and a _supplier return_ (supplier, batch, quantity, credit value).
+- **C. Reverse whole purchases and re-enter them.** One record kind, but a
+  reversal of a partly sold batch drives it below zero and loses the batch's
+  identity, and a one-line typo costs a twenty-line re-entry.
+- **D. Document the limits and wait.** The margin and payable errors are
+  silent, which is what T4 exists to prevent.
+
+**Recommendation.** B.
+
+- **Purchase correction.** Owner-only, online-only (like supplier payments).
+  A quantity change moves that line's batch through ADR-8's sanctioned stock
+  functions; a reduction larger than the batch still holds is refused, with
+  the plain advice to record a count correction instead. A cost correction is
+  applied by derivation, never by editing `batches` or allocations: reports and
+  supplier balances read the corrected cost, and allocations made afterwards use
+  it too. Supplier balances use the corrected invoice value.
+- **Supplier return.** Records supplier, batch, quantity and a credit value
+  defaulting to quantity × that batch's effective unit cost (editable). Reduces
+  stock like an adjustment and reduces the supplier balance. Existing
+  `distributor_return` adjustments stay readable; new returns use this record.
+- Both are keyboard-driven, listed in the owner's daily view (T1), and become
+  event kinds in the stock-rebuild suite.
+
+**Decision.** 2026-10-22, the owner: adopt the recommendation (**B**).
+
+**Applied.** 2026-10-22, uncommitted on `claude/epic-euler-jdspyu`. Phase 5 §3
+and §5 invariant 1, Phase 9 §3/§4 and W7/W8 amended (master plan and phase
+files). Migration `0011_purchase_corrections` adds `purchase_corrections` and
+`supplier_returns`, both in `EVENT_TABLES` (INSERT-only for the app role).
+Writers `commitPurchaseCorrection` and `commitSupplierReturn`, idempotent on a
+client id; a correction locks the line's batch, so two corrections to one line
+serialise. `batchLedger`/`rebuildQuantity` count both, so `db:verify` stays
+exact. Supplier balances (one and all) add correction invoice deltas over
+tracked purchases and subtract return credit. The data export now includes
+`supplier_payments` (missing since PCN-007) and both new tables.
+
+The open question is settled as expected: each correction records the batch's
+`effective_unit_cost_paisa` after it, and `reportFigures` values every
+allocation (and every restocked return) from a corrected batch at the latest
+one — so units sold before the mistake was found are re-valued too. New
+allocations still snapshot `batches.unit_cost_paisa`; reports override it, so
+nothing else needs to read corrections. A correction that adds units does not
+resolve the pending layer (a purchase or count correction still does).
+
+UI: the invoice review page shows the corrected total beside the entered one,
+the history, and one owner-only link to `/purchases/[id]/correct`, where both
+forms live; both acts appear on the Day screen. Tests:
+`purchase-correction.test.ts`, `supplier-return.test.ts`,
+`commit-purchase-correction.integration.test.ts` (ledger and balance terms each
+seen failing when removed), the stock-rebuild suite (two new event kinds and an
+independent supplier-balance invariant; seen failing with the return term
+dropped), `e2e/corrections.spec.ts`.
+
+---
+
+## PCN-010 — reconcile the plan with local-first and the pilot
+
+Session: gap audit (Day 20) · Raised: 2026-10-22 · Status: decided, applied
+
+**Plan sections in tension.** The gap audit (2026-10-22) compared the master
+plan with the code after PCN-004 (local-first), PCN-006 (perpetual licence) and
+PCN-007 (supplier payables):
+
+- **Payables.** PCN-007 admitted supplier payables, but the consolidated
+  master plan still excludes them: Phase 2 "What We Are NOT Building" ("Supplier
+  accounting / payables ledger"), Phase 5 §2 Supplier ("No payables"), Phase 5
+  §6 ("supplier balances/payables"), and Phase 13 §6's ledger. PCN-007 amended
+  `docs/planning/phase-05` but not `MASTER_PLAN.md`, which is authoritative.
+- **Phase 12** still describes a cloud deployment: Railway configuration,
+  Sentry and uptime alerting, TLS at the platform, a nightly verifier nothing
+  schedules. None of it exists for a local install.
+- **Phase 13 §3** is the original build week, now history; there is no
+  pilot-readiness plan.
+- **Phase 3 §3/§5** keeps subscription, 14-day-trial and Rs 2,000/month wording
+  that PCN-006 superseded.
+- **W11** promises the owner's view "from anywhere"; it is LAN-only. **W1**
+  promises "drawer opens"; nothing opens a drawer. **Phase 13 §2** targets a
+  1,500–3,000-product verified catalogue head; 138 are verified.
+- **OPERATIONS.md** says counters are added in Settings (there is no such
+  section) and that 58 mm receipts work (the print CSS is 80 mm only).
+
+**The contradiction or gap.** The authoritative plan no longer describes the
+product being piloted, and decisions the pilot depends on were never recorded.
+
+**Options.** A. Apply the amendments below to the master plan, the phase files
+and OPERATIONS.md. B. Leave the plan as is and rely on PCNs. Rejected: the
+plan wins every disagreement (CLAUDE.md), so a stale plan is a wrong spec.
+
+**Recommendation.** A.
+
+**Decision.** 2026-10-22, the owner, recorded for the pilot:
+
+1. **Customer.** Neighbourhood pharmacies, mostly not tech-literate. Setup,
+   opening stock and training are founder-done; development continues in
+   parallel with the pilot.
+2. **One counter** for the pilot. Multi-counter (a LAN, wired or Wi-Fi; no
+   internet needed) follows later and needs: a way to add counters, a session
+   that works over LAN HTTP, a refreshing search index, and a concurrency test.
+3. **Remote owner access is LAN-only in V1.** W11 is restated accordingly; the
+   cloud route stays in roadmap Phase 3.
+4. **Updates are installer-based through the pilot.** The in-app updater stays
+   deferred to roadmap Phase 2. The running version is shown in the app and a
+   one-page update procedure is written.
+5. **Backups are local and/or to a USB drive.** The backup folder is set from
+   Settings and the last successful backup is visible to the owner; offsite
+   backup stays in roadmap Phase 3.
+6. **Tenders are cash and udhaar.** Digital wallets (JazzCash, Easypaisa) are
+   the next tender type, soon after the pilot starts.
+7. **Prescriptions and controlled-drug registers stay out of V1**, as a
+   conscious exclusion rather than an oversight. The product makes no
+   regulatory-compliance claim. A product-level "scheduled drug" flag remains
+   possible later if a regulator or customer requires it.
+8. Expired stock: PCN-008. Purchase corrections and supplier returns: PCN-009.
+
+Open, not decided here: pilot pricing (free fixed-term pilot with written terms
+and a founding price was recommended), and remote screen-share support for
+non-technical shops (Phase 12 §7 currently excludes remote-control software).
+
+**Applied.** 2026-10-23, uncommitted on `claude/epic-euler-jdspyu`, in
+`MASTER_PLAN.md` and the matching phase files:
+
+- **Phase 2:** the payables exclusion amended to PCN-007; the prescriptions
+  exclusion widened to controlled-drug registers, with no compliance claim; a
+  "First customers" paragraph (decision 1); the owner success criterion now
+  reads "a phone on the shop's network".
+- **Phase 3:** pricing restated as a one-time licence fee, figure not set,
+  pilot terms open; collection amended; §5 items 4–6 amended. Superseded text
+  retained. **§4's revenue illustration (Rs 20,000/year) is left as written**:
+  it is arithmetic on a subscription price nobody now charges, and replacing it
+  needs the figure the pilots will set.
+- **Phase 5:** §2 Supplier carries the derived owed position; §6 adds
+  controlled-drug registers and carries PCN-007's amendment into the master.
+- **Phase 7:** W1 says nothing opens a drawer; W11 is LAN-only and depends on
+  the LAN session.
+- **Phase 12:** rewritten for the local install. Backup visibility, the nightly
+  verifier, owner password/PIN change and LAN sessions are stated as **not yet
+  built**, not described as if they existed.
+- **Phase 13:** §2 restates the catalogue (138 verified, 3,819 reference); §3
+  is now "Pilot readiness" with a status table, keeping the build-week record
+  and cut order; §5, §6 and §7 amended.
+- `phase-03` and `phase-12` were regenerated from the master blocks (keeping
+  their own status line); the other phase files were edited in step. A drift
+  check shows no non-status differences between master and phase files for
+  Phases 2, 3, 5, 7, 12 and 13.
+- **OPERATIONS.md:** 58 mm is not yet supported, the receipt printer is set as
+  the Windows default and a test receipt printed; §6 "Adding a second counter"
+  now says it is not yet possible and names the three missing prerequisites.
+
+## PCN-011 — a credit with a supplier is shown nowhere
+
+Session: Day 20 follow-up · Raised: 2026-10-23 · Status: decided, applied
+
+**Plan sections in tension.** PCN-007 made what a pharmacy owes a supplier a
+derived, signed position, "the mirror of a customer balance (invariant 3)".
+The customer side shows both directions on purpose (`domain/udhaar/position.ts`:
+an advance is "real money the shop is holding, so it must be visible"). PCN-009
+added supplier returns, whose credit routinely exceeds what is owed.
+
+**The contradiction or gap.** A negative supplier balance (an overpayment, or
+credit for goods sent back from an invoice already paid) was legal and correctly
+derived, but invisible: the owed list kept only balances above zero, the Day
+total floored each supplier at zero, and that line hid itself at zero. A
+supplier holding Rs 56 of the shop's money simply vanished from every screen.
+Demonstrated against a scratch database on 2026-10-23.
+
+**Options.** A. Show credit separately, as the customer side does, and warn
+before a payment that leaves credit. B. Refuse overpayments. Rejected:
+distributors take round sums and advances, and returns create credit with no
+payment at all. C. Net credits against debts. Rejected: one supplier's credit
+does not pay another's invoice.
+
+**Recommendation.** A.
+
+**Decision.** 2026-10-23, the owner: A, as recommended.
+
+**Applied.** 2026-10-23 on `claude/epic-euler-jdspyu`.
+`domain/suppliers/supplier-position.ts` holds the meaning (book summary, payment
+effect). The Purchases panel lists "Credit with suppliers" beneath "Owed to
+suppliers"; a payment larger than what is owed says how much will stay as credit
+before it is recorded (a warning, never a block). The Day screen adds "Rs X
+credit with N suppliers" beside the owed figure, only when there is credit.
+Owed and credit are never netted. Phase 5 §6 notes it.
+
+Not addressed here: a credit from a return against a purchase entered before
+supplier credit existed (PCN-007's untracked history) is shown like any other,
+although that invoice counts as owing nothing; the supplier payment action still
+mints its idempotency id on the server, so a double submit can record twice.
+
+## PCN-012 — pharmacists work in boxes and strips; Mehvar does the arithmetic
+
+Session: unit review (post Day 20) · Raised: 2026-10-24 · Status: decided, applied to the plan (not yet implemented)
+
+**Principle this note proposes (P9). Sophisticated inside, simple outside.**
+The owner and the salesman never need to understand base units, paisa
+conversions, batch valuation or migrations to sell a strip of medicine; those
+are Mehvar's job. _Test: does anyone at the counter have to convert, divide or
+know a stored figure to finish this task? If yes, the design is wrong._
+
+### Plan sections in tension
+
+- Phase 5 §2 says products have "selling prices **per unit level**", but Phase 9
+  stores one `default_price_per_base_unit`, and purchase costs and sale prices
+  are per base unit too. The plan intended per-level prices; the schema did not
+  carry them.
+- W7 says purchase quantity is entered at "any unit level", but the built
+  purchase, opening-stock (W9) and adjustment (W8) screens accept base units
+  only ("Qty (tab)", "Units to add"), with cost per tablet.
+- Phase 9 §1 allows reference entities to edit "never anything a report derives
+  from", yet a product's base unit and pack factors can be edited after stock
+  exists, which silently changes the meaning of every recorded quantity.
+- W5 and Phase 10 §4 put the unit behind the Tab key; the price column shows
+  the per-tablet price even on a strip line.
+
+### The problem, from the counter
+
+An owner knows what a box or a strip costs and sells for. Nobody in the shop
+counts tablets. Today Mehvar asks for both: cost per tablet on a box invoice,
+tablets on the opening-stock screen, a per-tablet price on the product form.
+Per-tablet storage also cannot represent real pack prices: a box of 14 at
+Rs 250 is 1,785.7 paisa a tablet, so the box sells for Rs 250.04 or Rs 249.90,
+and a box invoice drifts from the distributor's paper.
+
+### Options
+
+- **A. Units and prices per pack, conversions internal.** Recommended; detailed
+  below.
+- **B. Keep per-base-unit storage and convert in the screens.** Rejected: the
+  rounding is in the stored figures, so no screen can make a box total exact.
+- **C. Track stock per pack level (sealed boxes, open strips).** Rejected:
+  every cut strip becomes a stock movement nobody records, and the counts drift
+  from the shelf. Base-unit stock stays the single truth (Phase 5 §2, ADR-8).
+
+### Recommendation: A
+
+**What the owner and salesman see**
+
+1. **A product's units, in its own words.** "1 strip = 10 tablets, 1 box = 10
+   strips", pre-filled from the catalogue and confirmed against the pack. A
+   bottle, tube, vial or piece has one unit and shows no unit choice at all.
+2. **A price per unit, typed as the owner knows it.** Enter the strip price;
+   Mehvar suggests the box and loose prices (editable). Each saved price is
+   stored exactly. MRP is entered as printed, against the unit it is printed
+   for.
+3. **Only relevant units are offered.**
+   - Shop level, asked once at setup: "Do you sell loose tablets/capsules?" It
+     sets the default for new products.
+   - Product level: one tick per unit, "Sell by tablet / strip / box". A unit
+     not ticked never appears at the counter.
+   - No other unit settings.
+4. **One quantity control everywhere.** Large unit buttons labelled with the
+   product's own words (Tab · Strip · Box), with **− qty +**, as in the sale
+   line. Same control on sale, purchase, opening stock, adjustments, returns,
+   supplier returns and corrections. Keyboard shortcuts remain for speed but are
+   never required.
+
+   | Screen                       | Units offered                                                | Default                                                      |
+   | ---------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
+   | Sale                         | units ticked "Sell"                                          | last unit used for that product, else the smallest sold unit |
+   | Purchase                     | pack units (never loose)                                     | the largest pack                                             |
+   | Opening stock / count        | one box per offered unit: Boxes [ ] Strips [ ] (Tablets [ ]) | —                                                            |
+   | Adjust, returns, corrections | as sale or purchase                                          | the unit originally used                                     |
+
+5. **Prices and costs follow the chosen unit.** "× Rs 27.60" per strip at the
+   counter; "Cost per box" and "Bonus (boxes)" on a purchase. Opening-stock cost
+   is per unit too, and required (see decision 5).
+6. **Stock is stated as an amount, never as a shelf Mehvar has not seen.**
+   _(Modified on approval.)_ A quantity is the same amount written in the
+   product's own units, largest first: **"12 boxes, 3 strips, 7 tablets"**. It
+   says _how much_ there is, and nothing about what condition it is in: no
+   "loose", "open", "sealed" or "cut" anywhere, because Mehvar does not record
+   which packs are opened and a word implying it would be a claim it cannot
+   back. Rules:
+   - only units the product has, only non-zero parts, unit names as the owner
+     set them;
+   - the remainder is always shown, in the smallest unit, even when the shop
+     does not sell that unit, because hiding it would understate stock;
+   - each batch shows its own amount the same way beside its expiry, so the
+     product total is the sum of what is listed;
+   - negative stock reads "Short by 2 strips"; never a minus sign;
+   - the exact smallest-unit total is on the product's detail page, never
+     required.
+
+   A physical count is entered the same way (Boxes, Strips, Tablets as they sit
+   on the shelf), so what the owner types and what Mehvar shows use one
+   vocabulary.
+
+**What Mehvar does inside**
+
+- Stock, batches, FEFO, the pending layer and the ADR-8 verifier stay in
+  integer base units, unchanged.
+- Every transaction line stores what was actually entered and charged: the
+  unit, the count, the price or cost per that unit, and the exact line amount.
+  Invoices, receipts, sale totals and supplier balances add up line amounts, so
+  they match paper to the paisa.
+- **Margin-cost reconciliation** _(modified on approval)._ Each batch carries
+  its exact total cost (what was paid for the line, bonus units included at no
+  extra cost). Allocations are costed **cumulatively**: the cost of the first
+  _n_ units taken from a batch is the batch total × _n_ ÷ units received,
+  rounded **up** to the paisa, and each allocation's cost is the difference
+  between the running figure after it and before it. Both properties are
+  tested:
+  - at every point, recognised cost is never less than the true proportional
+    cost, so a reported margin is never better than the real one;
+  - when a batch is used up, its allocation costs add up to exactly what was
+    paid. No paisa is lost or invented.
+
+  Corrections (PCN-009) restate the batch total and apply the same rule to
+  units taken afterwards; returns restock at the cost the units left with.
+
+- **Correction to Day 6's rule.** `effectiveUnitCostPaisa` floors the per-unit
+  cost and claims this keeps margin "never better than the truth". It does the
+  opposite: a lower cost reports a higher margin. The error is at most one
+  paisa per unit, but the stated guarantee is false; the cumulative rule above
+  replaces it when this note is implemented.
+
+### Protecting pack configurations
+
+- Once any batch, purchase, sale, adjustment or return references a product,
+  its smallest unit and every existing pack size are **locked**. Adding a larger
+  pack (e.g. a carton) and renaming a label stay allowed.
+- Units get a stable internal key, so renaming "Tab" to "Tablet" never orphans
+  history; lines also keep the name as it was shown.
+- Pack sizes must nest: a box holds a whole number of strips.
+- A pack entered wrong after trading starts is fixed by a guided "replace this
+  product": a new product with the right pack, with stock moved across through
+  reason-coded adjustments, so history stays true.
+
+### Data model
+
+| Table                                                                          | Change                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `products`                                                                     | `units` JSONB: `[{key, name, factor, pricePaisa, sell}]`, smallest first; `mrp_paisa` + `mrp_unit_key`. The old `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are kept in step for one release, then retired. |
+| `tenants.settings`                                                             | `sellsLoose` boolean (no schema change).                                                                                                                                                                                          |
+| `sale_lines`                                                                   | add `unit_key`, `unit_name`, `unit_count`, `unit_price_paisa_entered`, `line_amount_paisa` (before line discount). `qty_base` stays.                                                                                              |
+| `purchase_lines`                                                               | add `unit_key`, `unit_name`, `unit_count`, `bonus_unit_count`, `unit_cost_paisa_entered`, `line_cost_paisa`.                                                                                                                      |
+| `batches`                                                                      | add `cost_total_paisa`, and `prices_at_receiving` JSONB (each unit's price when the batch arrived, so D1's batch-price rule applies per unit).                                                                                    |
+| `adjustments`, `sale_return_lines`, `supplier_returns`, `purchase_corrections` | add `unit_key`, `unit_name`, `unit_count` for display; corrections also the entered cost.                                                                                                                                         |
+| `global_products`                                                              | `reference_mrp_unit` beside `reference_mrp_paisa`; the catalogue CSV import asks whether a list's price is per pack (default) or per unit.                                                                                        |
+| Offline records (ADR-3)                                                        | carry the same entered fields; schema version bumped.                                                                                                                                                                             |
+
+### Migration and backward compatibility
+
+- **History is never rewritten (ADR-1).** New event-table columns are nullable;
+  old rows are read through a fallback (line amount = per-base price × base
+  quantity), which is exactly what was charged or invoiced at the time. No
+  backfill touches an event row.
+- **Products** (reference rows) are converted once: each pack level's price =
+  per-base price × factor, every unit ticked "Sell", `sellsLoose` = true for
+  existing shops, so nothing they sell today disappears.
+- **Figures do not move.** Every receipt reprints identically; day totals come
+  from stored sale totals; supplier balances, stock and margins for existing
+  rows are unchanged to the paisa (asserted by tests below).
+- **Offline skew:** ingestion accepts the previous record version for at least
+  one release; an old record is ingested as base units.
+- **Rollout (P8):** additive migration through the normal installer update; no
+  owner action, no counter downtime beyond the update itself. Export gains the
+  new columns.
+
+### Tests
+
+1. **Exact amounts:** a box of 14 at Rs 250 charges Rs 250.00; a mixed-unit
+   invoice totals the paper figure; supplier balance equals Σ line costs exactly.
+2. **Margin-cost reconciliation:** for every batch and every prefix of its
+   allocations, recognised cost ≥ the exact proportional cost; once a batch is
+   used up, Σ allocation costs = batch cost total exactly; per-unit flooring
+   must fail this test before it is believed (Day 8).
+3. **Crown suite (extended, not forked):** random sales, purchases, adjustments,
+   returns and corrections in random units; assert base-stock rebuild, Σ line
+   amounts − discounts = sale subtotal, Σ line costs = invoice total, plus every
+   existing Phase 5 §5 invariant.
+4. **Units:** nesting validation; conversion; display equivalence (never more,
+   never less than the base quantity; no sealed/opened claim); negative stock.
+5. **Guards:** editing a locked unit is refused; adding a larger pack and
+   renaming a label are allowed; history still displays after a rename.
+6. **Compatibility:** a database holding pre-change rows produces identical
+   receipts, day figures, supplier balances, stock and margins after the
+   migration (run against a restored pre-change dump, as the restore drill does).
+7. **Sync:** old and new record versions ingest to identical effects; replay N
+   times stays exactly-once.
+8. **E2E:** sell by strip and by box with the buttons (mouse and keyboard);
+   receive in boxes with cost per box; opening stock as boxes + strips; stock
+   view; a shop that does not sell loose tablets never sees a Tab button; no
+   stock view contains "loose", "open" or "sealed".
+
+### Out of scope
+
+- **Whole-rupee checkout rounding** (e.g. Rs 27.60 → Rs 28) is a separate
+  decision; nothing here assumes it.
+- The open PCN-011 items (untracked-history credit, server-minted supplier
+  payment id) are unaffected.
+
+### Plan amendments
+
+Phase 4 §1 (P9); Phase 5 §2 and the Purchase/Sale entries; W5, W7, W8, W9;
+Phase 9 §1 conventions and the `products`, `purchase_lines`, `sale_lines`,
+`batches` definitions; Phase 10 §4.
+
+### Decisions put to the owner
+
+1. Adopt P9 as a product principle.
+2. Selling prices per unit and exact line amounts (option A) rather than
+   per-base-unit prices.
+3. Unit configuration: one shop question ("sell loose?") plus one "Sell" tick
+   per unit per product, and nothing else.
+4. Margin valuation: exact batch cost total, allocation cost rounded down.
+   _Replaced on approval by the cumulative rule above._
+5. Opening-stock cost: required, pre-filled from that product's last purchase
+   when one exists. Alternative: allow "cost not known", which keeps the batch
+   out of margin figures.
+6. History: old rows read through the fallback, never backfilled.
+7. Wrong pack after trading starts: "replace this product" with stock moved
+   across, rather than allowing edits.
+8. Stock wording: "12 boxes, 3 strips + 7 loose" as an amount, with the exact
+   smallest-unit total on the product detail page only. _Replaced on approval:
+   "12 boxes, 3 strips, 7 tablets", with no condition words._
+9. Delivery order: the locks and nesting check first (they enforce Phase 9 §1
+   as written), then the data model, then the shared quantity control, then the
+   stock display.
+
+**Decision.** 2026-10-24, the owner: **approved**. Decisions 1–3, 5–7 and 9 as
+recommended (opening-stock cost required, pre-filled from the last purchase; a
+wrong pack fixed by "replace this product"), with two modifications:
+
+1. **Margin-cost reconciliation** replaces decision 4: allocations are costed
+   cumulatively, rounding up, so recognised cost is never understated and a
+   used-up batch reconciles exactly to what was paid.
+2. **Truthful stock wording** replaces decision 8: stock is stated as an amount
+   in the product's units ("12 boxes, 3 strips, 7 tablets"), with no word
+   implying opened, loose or sealed packs.
+
+Whole-rupee checkout rounding remains a separate, undecided question.
+
+**Applied.** 2026-10-24, to the plan only: Phase 4 §1 (P9), Phase 5 §2 and the
+Purchase/Sale entries, W5, W7, W8, W9, Phase 9 §1 and its table definitions,
+and Phase 10 §4, in `MASTER_PLAN.md` and the matching phase files. CLAUDE.md's
+identifier list now reads P1–P9, and its Day 6 costing lesson is marked
+superseded. Implementation follows decision 9's order.
+
+**Step 1 implemented** (2026-10-24, on `claude/epic-euler-jdspyu`):
+pack sizes must nest (a level holds a whole number of the level below), and a
+product with any batch, sale line, purchase line or adjustment refuses a change
+to its base unit or existing pack sizes, while price edits and a larger pack on
+top stay allowed. Levels a product already had before nesting existed are
+grandfathered for unrelated edits. The edit form says the units are fixed
+before Save. **Renames are refused for now**, stricter than this note's end
+state: a unit's name is still its identity (barcodes and sale lines refer to it
+by name); renames become allowed with the stable unit keys of step 2. A wrong
+pack is fixed today by adding the product again; the guided "replace this
+product" flow lands with step 2.
+
+**Step 2, slice 2a implemented** (2026-10-24, on
+`claude/epic-euler-jdspyu`) — selling at the owner's own unit prices:
+
+- `products.units` (migration 0012) holds each unit's own price with a stable
+  key; a product from before PCN-012 has none and derives its units from the
+  legacy columns, which is what it charged — nothing is backfilled. The legacy
+  per-base price is kept in step (the base unit's own price).
+- The product form asks for a price per unit; blanks show the suggestion Mehvar
+  will save (from the nearest typed unit: exact upwards, rounded up downwards).
+  At least one price is required.
+- Sale lines store the unit, count, price per unit and the exact line amount
+  (migration 0012, nullable; a database CHECK enforces amount = count × price).
+  The cart charges count × unit price, Tab keeps the count and moves to the
+  next unit at its own price, and +/− step by one unit. The receipt reads
+  "2 box".
+- Offline records: a sale whose lines carry units is recorded as version 2;
+  one captured before the update arrives as version 1 and is charged per base
+  as before (ADR-3).
+- Receipts, reprints and return refunds read the exact amount; a returned box
+  refunds as a share of the box price.
+- Not yet in 2a: MRP per named unit (the field is now labelled per base unit,
+  which is what it stores), the shop's "sell loose?" question and per-unit Sell
+  ticks (stored, all on), purchases priced per unit (2b), cumulative costing
+  (2c), renames and "replace this product" (2d).
+
+**Session 2 scope additions** (owner, 2026-10-25, from the pilot's scanning
+review). To be done with purchases priced per unit, so receiving is designed
+once:
+
+- **Fields to type after a 1D scan.** An EAN carries only the product number; a
+  GS1 DataMatrix also carries batch and expiry. After a 1D scan on Receive
+  Stock, mark Expiry and Batch as "type from the pack" and put the cursor in
+  Expiry; after a 2D scan they are filled and only checked.
+- **MRP captured at receiving.** Receive Stock never asks for the MRP printed on
+  the pack (`purchase_lines.mrp_at_receiving_paisa` is always null), and "Sells
+  for" is pre-filled from the product's saved price. Ask for "MRP on pack" per
+  line; warn, never block, when Sells for exceeds it (`exceedsMrp`), since the
+  printed MRP is the legal ceiling for registered medicines; and when a
+  delivery's MRP differs from the product's, ask whether to update the
+  product's price rather than changing it silently. No barcode carries the
+  price: GS1 pharma codes carry product number, expiry, batch and serial only.
+
+**Counter unit control, amended** (owner, 2026-10-26, built before Session 2).
+Decision 3's "one 'Sell' tick per unit; a unit not ticked never appears at the
+counter" is **replaced**. Asked how existing products should behave (every
+existing product would have started its first line in tablets, since all its
+units read as ticked), the owner decided:
+
+- **Every unit the product has is always on the sale line**, as buttons beside
+  − count + (Phase 10 §4 as amended). The pharmacist can switch at any time;
+  the count is kept and the line is priced and deducted in the chosen unit
+  (count × the unit's size, in base units). Tab still cycles them all.
+- **Which button starts pressed:** the unit the product was last sold in on
+  this counter (recorded when a sale commits, never from an abandoned cart);
+  for a product with no sale there, the shop's configured start.
+- **The shop's configured start** is one setting, "Start sales in loose
+  tablets/capsules": off starts a line in the smallest pack (the strip), on in
+  the loose unit. Absent reads as off, which is what the counter did before.
+  It applies to every product at once, existing ones included, so the
+  "apply to existing products" step the owner chose is the setting itself — a
+  separate bulk-write button would change nothing further.
+- **No per-product "Sell" ticks.** With every unit offered, a tick would only
+  pick the starting unit, which the setting and the last sale already do.
+  `ProductUnit.sell` stays in the stored data (all true) and is not read by the
+  counter.
+- A scanned code still adds the line in the code's own unit.
+
+Out of scope here and unchanged: the purchase defaults (pack units only, the
+largest pack) and the remaining Session 2 items above.
+
+**Session 2 decisions** (owner, 2026-10-27, before stock coming in was built):
+
+- **D1, corrections restate past sales.** When a purchase is corrected
+  (PCN-009) after some of the batch has been sold or otherwise taken out, the
+  cost of what already left is restated from the batch's corrected total, as
+  reports already value it today. This replaces this note's "apply the same
+  rule to units taken afterwards". Allocation cost is therefore derived when
+  read, from the batch's current total and the running units taken, never
+  frozen at sale time, so a used-up batch adds up exactly to what was finally
+  paid.
+- **D2, every outflow takes its share.** Sales, write-offs (negative
+  adjustments) and supplier returns all take the cumulative cost share of the
+  units they remove; a customer return restocked to its batch gives back the
+  cost those units left with. Every batch reconciles exactly to what was paid,
+  whichever way its units left.
+- **Scope:** Receive Stock in packs (largest pack first; quantity, bonus and
+  cost in that unit; exact line and invoice totals), exact batch costs under
+  D1 and D2, MRP on pack per line (warn when Sells for is above it; offer to
+  update the product's price when it changes), "type from the pack" after a
+  1D scan, and opening stock entered as Boxes + Strips + Tablets.
+
+**Session 2 implemented** (2026-10-27, on `claude/epic-euler-jdspyu`):
+migration 0013 (entered units, line cost and price on `purchase_lines`; cost
+total and prices at receiving on `batches`; MRP per named unit on `products`;
+per-pack cost corrections). All nullable; no event row was rewritten.
+
+- Receive Stock in packs (largest first, never loose), bonus and cost per pack,
+  exact line cost; every invoice total and supplier balance sums
+  `purchaseLineCostSql`. The writer refuses a pack size the product does not
+  have.
+- Cumulative cost (`domain/inventory/batch-cost.ts`, `db/batch-cost-queries.ts`)
+  under D1 and D2; reports cost of goods sold from it and show stock written
+  off beside the margin. The crown suite now enters purchases in strips and
+  checks, at every step, that no batch's cost is understated and that every
+  used-up batch reconciles exactly. Effective per-unit cost is nominal and
+  rounds up (Day 6's floor retired).
+- MRP on pack, with the owner's offer to record it (and the new price).
+- "Type from the pack" after a 1D scan.
+- Opening stock counted per unit, costed per the largest unit, cost required
+  and pre-filled from the last purchase (decision 5).
+- Purchase corrections stated in the line's own unit.
+
+Not in this session: returns to the supplier and stock removals still count
+in base units; the product form's MRP field is still per base unit (it is kept
+in step when a delivery's MRP is recorded); the stock view's "12 boxes, 3
+strips, 7 tablets" wording (decision 8) and renames / "replace this product"
+(2d) remain.
+
+**Final-pass decisions** (owner, 2026-10-27, before the rest of PCN-012 was
+built):
+
+- **Stock wording uses unit names as the owner set them**: "12 box, 3 strip,
+  7 tab" and "Short by 2 strip" — the cart's and receipt's words, never a
+  guessed plural. Decision 8's example plurals are illustrative only.
+- **Replace this product**: each batch of the old product is listed with its
+  expiry, batch number and cost, its quantity pre-filled from the old count;
+  the owner confirms or corrects it in the new pack (boxes, strips, tablets)
+  before anything moves. Each batch's remaining cost moves across exactly.
+- **On replace**, barcodes move to the new product, matched by unit name;
+  any that cannot be matched are listed to link again. Sales, shortfalls and
+  every other record stay on the old product, which becomes inactive; its
+  unsettled shortfalls stay on the exception list (ADR-1: history never moves).
+- **Units offered** follow decision 4's table: a customer return offers the
+  sale's units, starting in the unit sold; a stock removal offers every unit,
+  starting in the unit the batch arrived in; a return to the supplier offers
+  packs only, starting in the unit bought.
+
+**Final pass implemented** (2026-10-27, on `claude/epic-euler-jdspyu`).
+PCN-012 is complete; migration `0014_units_everywhere`.
+
+- Stock is stated in the product's own units everywhere: "12 box, 3 strip,
+  7 tab", "Short by 2 strip" (Stock, owner surface, Adjust, corrections).
+- Customer returns, stock removals and returns to the supplier are counted in
+  units per decision 4's table, and each records the unit and count it was
+  entered in (`unit_key`, `unit_name`, `unit_count`, with a CHECK that the
+  count makes the base quantity). The writers check the unit against the
+  product's own size and refuse a mismatch. History rows (Day screen, Adjust,
+  invoice and supplier pages) read as entered ("5 strip").
+- The product form states MRP for a chosen unit ("MRP printed on: box"),
+  stored as printed with its unit key; the per-base column follows it,
+  rounded down.
+- A unit may be renamed after stock or sales exist; its size may not. Units
+  keep their keys, so nothing recorded changes meaning; the product's
+  barcodes are renamed in the same transaction (swap-safe); history keeps the
+  words it was written in.
+- "Replace this product" (owner, from the product page): the new pack and
+  prices, then every batch with stock counted in the new pack, pre-filled
+  from the old count by unit name. One transaction moves each batch through
+  two `product_replaced` adjustments with its remaining cost exactly (the
+  batch total less the cumulative cost already taken), moves barcodes by unit
+  name and lists the rest, and retires the old product
+  (`replaced_by_product_id`). The move is a `transfer` in the cost ledger,
+  never a write-off. A stale screen or a batch counted at zero is refused,
+  and nothing is written.
+
+Known gaps, not built:
+
+- A customer return of a sale made before the replacement restocks the OLD
+  product's batch, which is no longer sold. Visible on Stock and Day, but
+  those units are stranded until written off or counted onto the new product.
+- A cost correction to an old purchase invoice after a replacement restates
+  the old batch (D1); the batch it moved to keeps the cost it moved with.
+- The crown suite replaces products at the same pack size (its sale generator
+  assumes strips of 10); the size-changing path is covered by the
+  integration and E2E tests.
+
+**Supplier-return credit, stated exactly** (owner, 2026-10-27). Returns to
+the supplier stay packs only, starting in the unit bought; strips from a box
+delivery are a pack and are offered. The suggested credit follows PCN-009's
+rule ("quantity × that batch's effective unit cost") exactly: the cost the
+returned units carry out of their batch, `C(taken + returned) − C(taken)` on
+the batch's current total and units received (bonus and corrections
+included) — the figure the cost ledger books for the movement. No rounded
+per-unit cost is multiplied. The credit stays editable; the stock cost is
+shown beside it on the return form, the invoice page, the supplier account
+and the Day screen, with any difference ("12.00 below stock cost") said in
+words. This replaces the final pass's per-pack invoice price for the unit
+bought, which departed from PCN-009.

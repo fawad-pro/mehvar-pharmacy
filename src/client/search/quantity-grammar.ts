@@ -91,14 +91,3 @@ export function nextUnitLevel(
   const next = levels[(index + 1) % levels.length];
   return next?.name ?? baseUnitName;
 }
-
-/**
- * The level a freshly added line should start at.
- *
- * A strip, when the product has one. Phase 1 §5 says the counter "frequently
- * cuts a strip to sell partial units", but the whole-strip sale is still the
- * common case, and I3 asks for "the common case pre-selected".
- */
-export function defaultUnitLevel(baseUnitName: string, packLevels: readonly PackLevel[]): string {
-  return packLevels[0]?.name ?? baseUnitName;
-}

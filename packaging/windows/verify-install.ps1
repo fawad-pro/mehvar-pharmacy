@@ -160,4 +160,24 @@ if ($failures.Count -gt 0) {
     exit 1
 }
 
+<#
+    Receipts print silently to the default printer (--kiosk-printing). Checked
+    for the user running Setup -- on a shop machine, the one who will sell.
+    Exit 2 tells mehvar.iss "passed, with something to fix": it shows the
+    warning without marking the install unverified.
+#>
+$printer = $null
+try {
+    $printer = (Get-CimInstance Win32_Printer -Filter 'Default=TRUE' -ErrorAction Stop |
+        Select-Object -First 1).Name
+} catch {
+    $printer = $null
+}
+$printerWarning = Get-DefaultPrinterWarning -PrinterName $printer
+if ($printerWarning) {
+    Write-Host "  [warn] $printerWarning"
+    Write-Host "`n  All checks passed, with a printer warning.`n"
+    exit 2
+}
+
 Write-Host "`n  All checks passed. The counter is ready to sell.`n"

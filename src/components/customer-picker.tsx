@@ -19,10 +19,9 @@ import { useEffect, useRef, useState } from 'react';
 import { searchCustomersAction, type CustomerHit } from '@/app/(counter)/customers/actions';
 import { CaptureBlockedError, useSync } from '@/client/sync/provider';
 import { validateCustomerDraft } from '@/domain/udhaar/customer';
-import { formatPaisa } from '@/lib/money';
-import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
+import { BalanceInline } from '@/components/balance-figure';
 
 export function CustomerPicker({
   title = 'Customer',
@@ -185,10 +184,9 @@ export function CustomerPicker({
                   {hit.phone ? <span className="text-ink/50 ml-2 text-xs">{hit.phone}</span> : null}
                 </span>
                 {/* T4 — the balance is shown before more credit gets extended. */}
-                <span
-                  className={`numeral text-sm ${hit.balancePaisa > 0 ? 'text-amber' : 'text-ink/50'}`}
-                >
-                  {formatPaisa(paisa(hit.balancePaisa))}
+                {/* Position, never a signed number: an advance reads "advance". */}
+                <span className="text-sm">
+                  <BalanceInline balancePaisa={hit.balancePaisa} />
                 </span>
               </button>
             </li>

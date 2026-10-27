@@ -16,12 +16,19 @@ import {
   findProduct,
   insertBarcode,
   insertProduct,
+  productHasHistory,
+  renameBarcodeUnits,
   updateProduct,
 } from '@/db/catalog-queries';
 import type { TenantScope } from '@/db/scoped';
+import { packFactor, paisa } from '@/lib/branded';
+import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
+import { legacyPricePerBase, unitsFromEnteredPrices, unitsOf, type ProductUnit } from './units';
 import {
+  packStructureChange,
+  unitRenames,
   validateBarcode,
   validateProductDraft,
   type BarcodeDraft,
@@ -35,11 +42,80 @@ export type CatalogResult<T = void> =
   | { ok: false; conflict: 'barcode_taken'; productName: string }
   | { ok: false; conflict: 'not_found' };
 
+/**
+ * [PCN-012] The units a draft describes, and the draft with its legacy
+ * per-base price brought in line with them.
+ *
+ * Prices typed per unit win; a draft with none (a quick item, an older caller)
+ * prices every pack from its per-base price, exactly as before PCN-012. Sell
+ * flags carry over by position from the product being edited.
+ */
+function withUnits(
+  draft: ProductDraft,
+  previous: readonly ProductUnit[] = [],
+): { draft: ProductDraft; units: ProductUnit[] } {
+  const structure = [
+    { name: draft.baseUnitName.trim(), factor: 1 },
+    ...draft.packLevels.map((level) => ({ name: level.name.trim(), factor: level.factor })),
+  ];
+  const sell = structure.map((_, index) => previous[index]?.sell ?? true);
+  const entered = draft.unitPrices
+    ? unitsFromEnteredPrices(structure, draft.unitPrices, sell)
+    : null;
+  if (entered) {
+    return { draft: { ...draft, pricePaisa: legacyPricePerBase(entered) }, units: entered };
+  }
+  // Structure invalid enough that units cannot be priced (a bad factor) is
+  // left to validation, which refuses the draft before anything is written.
+  const factorsUsable = structure.every(
+    (unit) => Number.isSafeInteger(unit.factor) && unit.factor > 0,
+  );
+  const priceUsable = Number.isSafeInteger(draft.pricePaisa) && draft.pricePaisa >= 0;
+  if (!factorsUsable || !priceUsable) {
+    return { draft, units: [] };
+  }
+  const derived = unitsOf({
+    baseUnitName: structure[0]?.name ?? '',
+    packLevels: structure.slice(1),
+    pricePerBasePaisa: draft.pricePaisa,
+    units: null,
+  }).map((unit, index) => ({ ...unit, sell: sell[index] ?? true }));
+  return { draft, units: derived };
+}
+
+/**
+ * [PCN-012] The MRP columns for a saved draft. An MRP stated for a named unit
+ * is stored as printed, against that unit's key; the legacy per-base column
+ * follows it, rounded down so it is never a higher ceiling than the pack's.
+ * A draft from before PCN-012 states MRP per base unit, as it always did.
+ */
+function mrpColumns(
+  draft: ProductDraft,
+  units: readonly ProductUnit[],
+): { mrpPaisa: number | null; mrpUnitKey: string | null; currentMrpPerBaseUnit: number | null } {
+  if (draft.mrpPaisa === null) {
+    return { mrpPaisa: null, mrpUnitKey: null, currentMrpPerBaseUnit: null };
+  }
+  const unit =
+    draft.mrpUnitIndex === undefined || draft.mrpUnitIndex === null
+      ? undefined
+      : units[draft.mrpUnitIndex];
+  if (!unit) {
+    return { mrpPaisa: null, mrpUnitKey: null, currentMrpPerBaseUnit: draft.mrpPaisa };
+  }
+  return {
+    mrpPaisa: draft.mrpPaisa,
+    mrpUnitKey: unit.key,
+    currentMrpPerBaseUnit: nominalPricePerBase(paisa(draft.mrpPaisa), packFactor(unit.factor)),
+  };
+}
+
 export async function createProduct(
   scope: TenantScope,
   draft: ProductDraft,
 ): Promise<CatalogResult<Uuid>> {
-  const validated = validateProductDraft(draft);
+  const priced = withUnits(draft);
+  const validated = validateProductDraft(priced.draft);
   if (!validated.ok) {
     return validated;
   }
@@ -59,8 +135,9 @@ export async function createProduct(
     formulaText: validated.value.formulaText,
     baseUnitName: validated.value.baseUnitName,
     packLevels: validated.value.packLevels,
+    units: priced.units,
     defaultPricePerBaseUnit: validated.value.pricePaisa,
-    currentMrpPerBaseUnit: validated.value.mrpPaisa,
+    ...mrpColumns(validated.value, priced.units),
     minStockBaseUnits: validated.value.minStockBaseUnits,
     needsCompletion: validated.value.needsCompletion,
   });
@@ -90,10 +167,20 @@ export async function createProduct(
  */
 export async function createQuickItem(
   scope: TenantScope,
-  input: { id: Uuid; name: string; pricePaisa: number; baseUnitName: string },
+  input: {
+    id: Uuid;
+    name: string;
+    pricePaisa: number;
+    baseUnitName: string;
+    /** The code scanned when the item was added, if it was added from a scan. */
+    barcode?: string | null;
+  },
 ): Promise<CatalogResult<Uuid>> {
   const existing = await findProduct(scope, input.id);
   if (existing) {
+    // A replay: the product is there. The code may not be, if the first
+    // delivery stopped between the two writes; attaching it is idempotent.
+    await attachQuickItemBarcode(scope, input.id, input.baseUnitName, input.barcode);
     return { ok: true, value: input.id };
   }
 
@@ -131,13 +218,36 @@ export async function createQuickItem(
     formulaText: null,
     baseUnitName: validated.value.baseUnitName,
     packLevels: [],
+    units: withUnits(validated.value).units,
     defaultPricePerBaseUnit: validated.value.pricePaisa,
     currentMrpPerBaseUnit: null,
     minStockBaseUnits: null,
     needsCompletion: true,
   });
 
+  await attachQuickItemBarcode(scope, input.id, validated.value.baseUnitName, input.barcode);
   return { ok: true, value: input.id };
+}
+
+/**
+ * The scanned code goes onto the new item at its one unit — unless another
+ * product already owns it. Then it is NOT attached: never onto the wrong
+ * product, and never a rejection, because this runs during sync and a sale may
+ * depend on the item (P2). The counter checks for a clash before saving and
+ * asks the operator; this is the backstop for one that arose meanwhile.
+ */
+async function attachQuickItemBarcode(
+  scope: TenantScope,
+  productId: Uuid,
+  baseUnitName: string,
+  barcode: string | null | undefined,
+): Promise<void> {
+  if (!barcode || barcode.trim() === '') {
+    return;
+  }
+  // `addBarcode` refuses a code another product owns; that refusal is the
+  // outcome wanted here, so its result is deliberately not escalated.
+  await addBarcode(scope, productId, { barcode, unitLevelName: baseUnitName });
 }
 
 export async function editProduct(
@@ -150,23 +260,51 @@ export async function editProduct(
     return { ok: false, conflict: 'not_found' };
   }
 
-  const validated = validateProductDraft(draft);
+  // [PCN-012] What the edit does to the product's units decides two things.
+  const change = packStructureChange(existing, draft);
+
+  // Once anything is recorded against the product, its existing units are
+  // fixed: every stored quantity is a count of its base unit (Phase 9 §1).
+  // Adding a larger pack on top changes the meaning of nothing recorded.
+  // Checked before field validation: for a locked product, "that name is
+  // already a pack level" would send the owner fixing the wrong thing.
+  if (change === 'changed' && (await productHasHistory(scope, productId))) {
+    return { ok: false, rejections: [{ reason: 'pack_structure_locked' }] };
+  }
+
+  const priced = withUnits(draft, existing.units);
+
+  // Levels the edit keeps exactly as they were are exempt from nesting:
+  // see `validatePackLevels`.
+  const validated = validateProductDraft(priced.draft, {
+    nestingCheckedFrom: change === 'changed' ? 0 : existing.packLevels.length,
+  });
   if (!validated.ok) {
     return validated;
   }
 
-  await updateProduct(scope, productId, {
-    name: validated.value.name,
-    manufacturer: validated.value.manufacturer,
-    form: validated.value.form,
-    strength: validated.value.strength,
-    formulaText: validated.value.formulaText,
-    baseUnitName: validated.value.baseUnitName,
-    packLevels: validated.value.packLevels,
-    defaultPricePerBaseUnit: validated.value.pricePaisa,
-    currentMrpPerBaseUnit: validated.value.mrpPaisa,
-    minStockBaseUnits: validated.value.minStockBaseUnits,
-    needsCompletion: validated.value.needsCompletion,
+  const { value } = validated;
+  // [PCN-012] A renamed unit keeps its key, so nothing recorded changes
+  // meaning; its barcodes are renamed with it, in the same transaction, so a
+  // scan never names a unit the product no longer has. History keeps the
+  // words it was written in.
+  const renames = change === 'changed' ? [] : unitRenames(existing, value);
+  await scope.transaction(async (tx) => {
+    await updateProduct(tx, productId, {
+      name: value.name,
+      manufacturer: value.manufacturer,
+      form: value.form,
+      strength: value.strength,
+      formulaText: value.formulaText,
+      baseUnitName: value.baseUnitName,
+      packLevels: value.packLevels,
+      units: priced.units,
+      defaultPricePerBaseUnit: value.pricePaisa,
+      ...mrpColumns(value, priced.units),
+      minStockBaseUnits: value.minStockBaseUnits,
+      needsCompletion: value.needsCompletion,
+    });
+    await renameBarcodeUnits(tx, productId, renames);
   });
 
   return { ok: true, value: undefined };
@@ -186,6 +324,54 @@ export async function setProductActive(
     return { ok: false, conflict: 'not_found' };
   }
   await updateProduct(scope, productId, { isActive });
+  return { ok: true, value: undefined };
+}
+
+/**
+ * [PCN-012] Records the MRP printed on a delivered pack, and — when the owner
+ * chooses — the price that pack's unit now sells for.
+ *
+ * Offered on Receive Stock when the pack's MRP differs from the record (D4:
+ * the pack in hand is authoritative), never applied silently. Only the named
+ * unit's price changes; the owner's other unit prices stand as set. The
+ * legacy per-base columns are kept in step for one release (PCN-012 data
+ * model): the base price follows the base unit, and the per-base MRP is the
+ * pack's, rounded down so it is never a higher ceiling than the pack's.
+ */
+export async function recordDeliveredMrp(
+  scope: TenantScope,
+  productId: Uuid,
+  input: { unitKey: string; mrpPaisa: number; pricePaisa: number | null },
+): Promise<CatalogResult> {
+  const existing = await findProduct(scope, productId);
+  if (!existing) {
+    return { ok: false, conflict: 'not_found' };
+  }
+  const unit = existing.units.find((candidate) => candidate.key === input.unitKey);
+  if (
+    !unit ||
+    !Number.isSafeInteger(input.mrpPaisa) ||
+    input.mrpPaisa <= 0 ||
+    (input.pricePaisa !== null &&
+      (!Number.isSafeInteger(input.pricePaisa) || input.pricePaisa <= 0))
+  ) {
+    return { ok: false, rejections: [{ reason: 'price_required' }] };
+  }
+
+  const units =
+    input.pricePaisa === null
+      ? existing.units
+      : existing.units.map((candidate) =>
+          candidate.key === unit.key ? { ...candidate, pricePaisa: input.pricePaisa! } : candidate,
+        );
+  await updateProduct(scope, productId, {
+    mrpPaisa: input.mrpPaisa,
+    mrpUnitKey: unit.key,
+    currentMrpPerBaseUnit: nominalPricePerBase(paisa(input.mrpPaisa), packFactor(unit.factor)),
+    ...(input.pricePaisa === null
+      ? {}
+      : { units, defaultPricePerBaseUnit: legacyPricePerBase(units) }),
+  });
   return { ok: true, value: undefined };
 }
 

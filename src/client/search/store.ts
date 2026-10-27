@@ -133,6 +133,7 @@ export async function loadCatalog(
           products: snapshot.products,
           barcodes: snapshot.barcodes,
           stock: snapshot.stock,
+          expired: snapshot.expired ?? {},
           syncedAt: snapshot.syncedAt,
         };
 

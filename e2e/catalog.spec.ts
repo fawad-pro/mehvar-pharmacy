@@ -114,3 +114,37 @@ test('the Products screen lists and edits the catalog', async ({ page }) => {
   // Pack structure is shown in plain words before it can be saved wrong.
   await expect(page.getByText('1 strip = 14 cap')).toBeVisible();
 });
+
+test('a product with stock keeps its pack sizes, and says so before Save (PCN-012)', async ({
+  page,
+}) => {
+  await setUpCounter(page);
+
+  // Any product with stock and a pack level: sized from the live catalog, not
+  // the seed, so the spec runs against a database other specs have used.
+  const response = await page.request.get('/api/catalog');
+  expect(response.ok()).toBe(true);
+  const snapshot = (await response.json()) as {
+    products: Array<{ id: string; packLevels: Array<{ name: string; factor: number }> }>;
+    stock: Record<string, number>;
+  };
+  const stocked = snapshot.products.find(
+    (row) => row.packLevels.length > 0 && (snapshot.stock[row.id] ?? 0) > 0,
+  );
+  expect(stocked, 'a stocked product with a pack level exists').toBeDefined();
+  const first = stocked?.packLevels[0];
+
+  await page.goto(`/products/${stocked?.id ?? ''}`);
+  await expect(
+    page.getByRole('note').filter({ hasText: 'already has stock or sales' }),
+  ).toBeVisible({ timeout: 30_000 });
+
+  const packField = page.getByLabel('Pack levels');
+  const before = await packField.inputValue();
+  await packField.fill(`${first?.name ?? 'strip'}:${(first?.factor ?? 10) + 2}`);
+  await page.getByRole('button', { name: 'Save product' }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'cannot change' })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('Pack levels')).toHaveValue(before, { timeout: 30_000 });
+});

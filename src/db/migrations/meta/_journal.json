@@ -71,6 +71,41 @@
       "when": 1790111708134,
       "tag": "0009_supplier_credit",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792587620514,
+      "tag": "0010_supplier_credit_tracked",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792713514119,
+      "tag": "0011_purchase_corrections",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792839459101,
+      "tag": "0012_unit_prices",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793051017351,
+      "tag": "0013_purchase_units",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793058878659,
+      "tag": "0014_units_everywhere",
+      "breakpoints": true
     }
   ]
 }

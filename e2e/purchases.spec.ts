@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { SEED_PRODUCTS } from '../scripts/db/seed-data';
 
-import { cart, lastSale, openCounter, search, unsynced } from './support/counter';
+import { cart, lastSale, openCounter, payAndSettle, search, unsynced } from './support/counter';
 
 /**
  * Day 6's "done when", verbatim: "a 20-line invoice enters at working rhythm
@@ -33,15 +33,15 @@ async function addLine(
   if (fields.bonus) {
     await page.getByLabel('Bonus').fill(fields.bonus);
   }
-  await page.getByLabel('Unit cost').fill(fields.cost);
+  await page.getByLabel(/^Cost \//).fill(fields.cost);
   if (fields.expiry) {
     await page.getByLabel('Expiry').fill(fields.expiry);
   }
   if (fields.price) {
-    await page.getByLabel('Sells for').fill(fields.price);
+    await page.getByLabel(/^Price \//).fill(fields.price);
   }
   // Enter from any field adds the line and returns focus to search.
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).press('Enter');
 }
 
 /**
@@ -53,6 +53,25 @@ async function addLine(
  * to skip. Adding a line now requires the cost to be entered; a genuinely free
  * line is an explicit "0", never a blank.
  */
+/**
+ * Enough whole boxes to sell more than the counter holds right now, by up to
+ * eight boxes. Read from the same catalog payload the counter's index uses.
+ */
+async function boxesBeyondStock(page: Page, name: string): Promise<number> {
+  const seeded = SEED_PRODUCTS.find((product) => product.name.startsWith(name));
+  const perBox = seeded?.packLevels[0]?.factor ?? 1;
+  const response = await page.request.get('/api/catalog');
+  expect(response.ok()).toBe(true);
+  const snapshot = (await response.json()) as {
+    products: Array<{ id: string; name: string }>;
+    stock: Record<string, number>;
+  };
+  const product = snapshot.products.find((row) => row.name.startsWith(name));
+  expect(product, `${name} is in the catalog`).toBeDefined();
+  const onHand = Math.max(0, snapshot.stock[product?.id ?? ''] ?? 0);
+  return Math.floor(onHand / perBox) + 8;
+}
+
 test('the invoice total reflects the cost of every entered line', async ({ page }) => {
   await openCounter(page);
   await page.keyboard.press('F7');
@@ -70,8 +89,8 @@ test('the invoice total reflects the cost of every entered line', async ({ page 
   await expect(invoiceTotal).toContainText('0 lines');
 
   // With the cost entered, the line lands and the total is qty × cost.
-  await page.getByLabel('Unit cost').fill('2.80');
-  await page.getByLabel('Unit cost').press('Enter');
+  await page.getByLabel(/^Cost \//).fill('2.80');
+  await page.getByLabel(/^Cost \//).press('Enter');
   await expect(page.getByRole('table')).toContainText('Panadol');
   await expect(invoiceTotal).toContainText('Rs 280.00');
   await expect(invoiceTotal).toContainText('1 line');
@@ -99,10 +118,11 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   const table = page.getByRole('table');
   await expect(table).toContainText('Panadol');
   await expect(table).toContainText('Brufen');
-  // The scheme line shows the blended cost it will actually carry, not the
-  // invoiced one — bonus-cost honesty, visible at entry time.
+  // The scheme line keeps its free units as their own count, and its line
+  // cost is what was paid for the 50 alone (PCN-012): the bonus is never
+  // charged, and never folded into the quantity.
   await expect(table).toContainText('+5');
-  await expect(table).toContainText('× 55');
+  await expect(table.getByRole('row').filter({ hasText: 'Brufen' })).toContainText('360.00');
 
   // A customer walks in mid-invoice. This is the case W7 exists for.
   await page.keyboard.press('F1');
@@ -110,9 +130,8 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   await search(page).fill('disprin');
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText('Disprin');
-  await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
-  await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
+  // Settled before the next key: see `payAndSettle`.
+  expect(await payAndSettle(page)).toMatch(/Saved — A-\d+/);
 
   // Back to the invoice — nothing lost.
   await page.keyboard.press('F7');
@@ -139,18 +158,24 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   // Day 3's promise first — sell far more than the system has, which D2 records
   // as a pending shortfall rather than refusing (P2).
   //
-  // Toradol is seeded with ten vials and no other spec touches it, so 40 is a
-  // shortfall whatever ran before, and receiving 500 of it at the end of this
-  // test cannot pull another spec's oversell back into stock. (It did: this
-  // test and sale.spec.ts both reached for Rocephin, and this one stocking it
-  // made the other's correct behaviour look like a regression.)
+  // Toradol is seeded with ten ampoules and no other spec touches it, so
+  // receiving it at the end of this test cannot pull another spec's oversell
+  // back into stock. (It did: this test and sale.spec.ts both reached for
+  // Rocephin, and this one stocking it made the other's correct behaviour look
+  // like a regression.)
+  //
+  // The quantity is sized from what the system holds NOW, not assumed from the
+  // seed: every run of this test receives 500, so a fixed 40 stopped being a
+  // shortfall after the first run, and the suite has to pass against a
+  // developer's database without resetting it.
   //
   // Not one of the two products seeded at zero, deliberately: a product that
   // has never had a batch is absent from the stock map, which the index reads
   // as *unknown* rather than zero (catalog-queries.ts), and unknown does not
   // warn. That is the right call — it just means the shortfall path has to be
   // tested with a product the system has an opinion about.
-  await search(page).fill(`40*${SHORTFALL_PRODUCT.toLowerCase()}`);
+  const boxes = await boxesBeyondStock(page, SHORTFALL_PRODUCT);
+  await search(page).fill(`${boxes}*${SHORTFALL_PRODUCT.toLowerCase()}`);
   await expect(page.getByRole('option').first()).toContainText(SHORTFALL_PRODUCT);
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText(/more than in stock|not in stock/);
@@ -195,9 +220,9 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   await page.keyboard.press('F6');
   await expect(page).toHaveURL(/\/stock$/);
   await expect(
-    page.getByRole('region', { name: 'Sold more than the system had' }).getByText(
-      SHORTFALL_PRODUCT,
-    ),
+    page
+      .getByRole('region', { name: 'Sold more than the system had' })
+      .getByText(SHORTFALL_PRODUCT),
   ).toBeHidden();
 });
 
@@ -219,7 +244,11 @@ test('W7: twenty lines go in without the invoice growing harder to enter', async
   const rows = page.getByRole('table').getByRole('row');
   // 20 lines plus the header.
   await expect(rows).toHaveCount(21);
-  await expect(page.getByText('20 lines')).toBeVisible();
+  // This draft's count, not the recent-purchases list beneath it, which on a
+  // database this test has run against before lists an earlier 20-line invoice.
+  await expect(
+    page.getByText('Invoice total').locator('..').getByText('20 lines', { exact: true }),
+  ).toBeVisible();
 
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('20 batches');
@@ -236,7 +265,10 @@ test('W8: an adjustment needs a coded reason, and says who made it', async ({ pa
   await search(page).fill('panadol');
   await page.getByRole('option').first().click();
 
-  await page.getByLabel('Units to add').fill('24');
+  // [PCN-012] Counted as the shelf holds it — here, 24 loose tablets — and,
+  // like all stock that appears, costed (decision 5).
+  await page.getByLabel('tab', { exact: true }).fill('24');
+  await page.getByLabel(/^Cost per/).fill('250');
   await page.getByLabel('Reason').selectOption('count_correction');
   await page.getByLabel('Note (optional)').fill('found behind the counter');
   await page.getByRole('button', { name: /Save/ }).click();
@@ -254,6 +286,24 @@ test('W8: an adjustment needs a coded reason, and says who made it', async ({ pa
   await expect(adjustments).toContainText('found behind the counter');
 });
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** A product with stock on hand now — Panadol when it has some. */
+async function stockedProduct(page: Page): Promise<{ id: string; name: string }> {
+  const response = await page.request.get('/api/catalog');
+  expect(response.ok()).toBe(true);
+  const snapshot = (await response.json()) as {
+    products: Array<{ id: string; name: string }>;
+    stock: Record<string, number>;
+  };
+  const stocked = snapshot.products.filter((row) => (snapshot.stock[row.id] ?? 0) > 0);
+  const product = stocked.find((row) => /panadol/i.test(row.name)) ?? stocked[0];
+  expect(product, 'some product has stock on hand').toBeDefined();
+  return { id: product?.id ?? '', name: product?.name ?? '' };
+}
+
 test('W8: removing stock must name the batch it leaves from', async ({ page }) => {
   await openCounter(page);
   await page.keyboard.press('F8');
@@ -262,14 +312,31 @@ test('W8: removing stock must name the batch it leaves from', async ({ page }) =
   // click as the adjustment screen mounts.
   await expect(page).toHaveURL(/\/stock\/adjust$/);
 
-  await search(page).fill('panadol');
-  await page.getByRole('option').first().click();
+  // Sized from live stock, never the seed (Day 20): other specs sell Panadol
+  // down, so its earliest batch can hold fewer units than any fixed number.
+  const product = await stockedProduct(page);
+  await search(page).fill(product.name);
+  await page
+    .getByRole('option', { name: new RegExp(escapeRegExp(product.name)) })
+    .first()
+    .click();
 
   // Removing is the default direction, and it asks which batch — FEFO-ordered,
   // so the one the operator most likely means is already chosen.
-  await expect(page.getByLabel('From batch')).toBeVisible();
+  const batch = page.getByLabel('From batch');
+  await expect(batch).toBeVisible();
+  const chosen = await batch.evaluate(
+    (select: HTMLSelectElement) => select.selectedOptions[0]?.textContent ?? '',
+  );
+  expect(chosen, 'the chosen batch says how much is left').toMatch(/\d+ \w+.* left\s*$/);
 
-  await page.getByLabel('Units to remove').fill('3');
+  // Counted in the product's own units (PCN-012). One of the smallest is
+  // always at most what the batch holds, whatever other specs sold.
+  const removeIn = page.getByRole('group', { name: 'Remove in' });
+  if (await removeIn.isVisible()) {
+    await removeIn.getByRole('button').last().click();
+  }
+  await page.getByLabel(/to remove$/).fill('1');
   await page.getByLabel('Reason').selectOption('damage');
   await page.getByRole('button', { name: /Save/ }).click();
   await expect(page.getByText('Saved.', { exact: false })).toBeVisible();

@@ -11,9 +11,10 @@
  * cannot drift. Every value is integer paisa; nothing here touches a float.
  */
 
+import type { ProductUnit } from '@/domain/catalog/units';
 import { addPaisa, multiplyPaisa, subtractPaisa, sumPaisa } from '@/lib/money';
-import { paisa, ZERO_PAISA, type BaseQty, type Paisa } from '@/lib/branded';
-import type { PackLevel } from '@/lib/quantity';
+import { packFactor, paisa, ZERO_PAISA, type BaseQty, type Paisa } from '@/lib/branded';
+import { toBaseUnits, type PackLevel } from '@/lib/quantity';
 
 export interface CartLine {
   /** Client-side identity; becomes `sale_lines.id` at commit. */
@@ -22,14 +23,53 @@ export interface CartLine {
   readonly name: string;
   readonly baseUnitName: string;
   readonly packLevels: readonly PackLevel[];
+  /** [PCN-012] The product's units, smallest first, each with its own price. */
+  readonly units: readonly ProductUnit[];
+  /** [PCN-012] The unit the line is sold in (`ProductUnit.key`). */
+  readonly unitKey: string;
+  /** [PCN-012] How many of that unit. */
+  readonly unitCount: number;
+  /**
+   * Base units: `unitCount × the unit's size`. Derived, never set on its own
+   * (`withQuantity` keeps it in step); stock checks and FEFO read it.
+   */
   readonly qtyBase: BaseQty;
-  /** The level the operator typed in, for display and the receipt (W5). */
+  /** The unit's name, for display and the receipt (W5). */
   readonly enteredUnitLevel: string;
-  /** Per base unit, as charged. */
-  readonly unitPricePaisa: Paisa;
-  /** What the catalog said, so an override is detectable rather than declared. */
-  readonly catalogPricePaisa: Paisa;
+  /** [PCN-012] The price of ONE of the line's unit, as charged. */
+  readonly pricePerUnitPaisa: Paisa;
+  /** What the catalog said for that unit, so an override is detectable. */
+  readonly catalogPricePerUnitPaisa: Paisa;
   readonly lineDiscountPaisa: Paisa;
+}
+
+/** The line's unit. A key the product no longer has falls back to its smallest. */
+export function lineUnit(line: Pick<CartLine, 'units' | 'unitKey'>): ProductUnit | undefined {
+  return line.units.find((unit) => unit.key === line.unitKey) ?? line.units[0];
+}
+
+/**
+ * [PCN-012] The line sold as `count` of the unit `unitKey`.
+ *
+ * Changing the unit re-prices the line at that unit's catalog price: an
+ * override was a price for the old unit, and carrying it to a box would charge
+ * a strip's price for ten strips.
+ */
+export function withQuantity(line: CartLine, unitKey: string, count: number): CartLine {
+  const unit = line.units.find((candidate) => candidate.key === unitKey) ?? lineUnit(line);
+  if (!unit) {
+    return line;
+  }
+  const sameUnit = unit.key === line.unitKey;
+  return {
+    ...line,
+    unitKey: unit.key,
+    unitCount: count,
+    enteredUnitLevel: unit.name,
+    qtyBase: toBaseUnits(count, packFactor(unit.factor)),
+    pricePerUnitPaisa: sameUnit ? line.pricePerUnitPaisa : paisa(unit.pricePaisa),
+    catalogPricePerUnitPaisa: sameUnit ? line.catalogPricePerUnitPaisa : paisa(unit.pricePaisa),
+  };
 }
 
 export interface CartTotals {
@@ -40,9 +80,43 @@ export interface CartTotals {
   readonly lineCount: number;
 }
 
+/**
+ * [PCN-012] A new cart line: `count` of the unit named `unitName` (the
+ * barcode's unit, or the counter's default), priced at that unit's own price.
+ */
+export function newCartLine(input: {
+  lineId: string;
+  productId: string;
+  name: string;
+  baseUnitName: string;
+  packLevels: readonly PackLevel[];
+  units: readonly ProductUnit[];
+  unitName: string;
+  count: number;
+}): CartLine {
+  const unit = input.units.find((candidate) => candidate.name === input.unitName) ?? input.units[0];
+  const start: CartLine = {
+    lineId: input.lineId,
+    productId: input.productId,
+    name: input.name,
+    baseUnitName: input.baseUnitName,
+    packLevels: input.packLevels,
+    units: input.units,
+    unitKey: unit?.key ?? 'u0',
+    unitCount: input.count,
+    qtyBase: toBaseUnits(input.count, packFactor(unit?.factor ?? 1)),
+    enteredUnitLevel: unit?.name ?? input.baseUnitName,
+    pricePerUnitPaisa: paisa(unit?.pricePaisa ?? 0),
+    catalogPricePerUnitPaisa: paisa(unit?.pricePaisa ?? 0),
+    lineDiscountPaisa: ZERO_PAISA,
+  };
+  return start;
+}
+
 /** What the line would cost with no discount at all — the discount's basis. */
 export function lineGrossPaisa(line: CartLine): Paisa {
-  return multiplyPaisa(line.unitPricePaisa, line.qtyBase);
+  // [PCN-012] Count × the price of one unit: a box at Rs 250 is Rs 250, exactly.
+  return multiplyPaisa(line.pricePerUnitPaisa, line.unitCount);
 }
 
 /** Line total after its own discount (Phase 5 invariant 4). Never negative. */
@@ -74,7 +148,7 @@ export function totalLineDiscountPaisa(lines: readonly CartLine[]): Paisa {
  * Derived by comparison rather than trusted from a flag the UI sets.
  */
 export function isPriceOverridden(line: CartLine): boolean {
-  return line.unitPricePaisa !== line.catalogPricePaisa;
+  return line.pricePerUnitPaisa !== line.catalogPricePerUnitPaisa;
 }
 
 export function cartTotals(
@@ -91,7 +165,8 @@ export function cartTotals(
     subtotalPaisa: subtotal,
     invoiceDiscountPaisa: discount,
     totalPaisa: subtractPaisa(subtotal, discount),
-    itemCount: lines.reduce<number>((sum, line) => sum + line.qtyBase, 0),
+    // Counted in the units sold: two strips are two items, not twenty.
+    itemCount: lines.reduce<number>((sum, line) => sum + line.unitCount, 0),
     lineCount: lines.length,
   };
 }
@@ -127,8 +202,8 @@ export function addToCart(lines: readonly CartLine[], incoming: CartLine): CartL
   const index = lines.findIndex(
     (line) =>
       line.productId === incoming.productId &&
-      line.enteredUnitLevel === incoming.enteredUnitLevel &&
-      line.unitPricePaisa === incoming.unitPricePaisa &&
+      line.unitKey === incoming.unitKey &&
+      line.pricePerUnitPaisa === incoming.pricePerUnitPaisa &&
       !isPriceOverridden(line),
   );
 
@@ -142,8 +217,7 @@ export function addToCart(lines: readonly CartLine[], incoming: CartLine): CartL
   }
 
   const merged: CartLine = {
-    ...existing,
-    qtyBase: (existing.qtyBase + incoming.qtyBase) as BaseQty,
+    ...withQuantity(existing, existing.unitKey, existing.unitCount + incoming.unitCount),
     lineDiscountPaisa: addPaisa(existing.lineDiscountPaisa, incoming.lineDiscountPaisa),
   };
   return lines.map((line, position) => (position === index ? merged : line));
@@ -153,23 +227,48 @@ export function updateLine(
   lines: readonly CartLine[],
   lineId: string,
   patch: Partial<
-    Pick<CartLine, 'qtyBase' | 'unitPricePaisa' | 'lineDiscountPaisa' | 'enteredUnitLevel'>
+    Pick<CartLine, 'unitKey' | 'unitCount' | 'pricePerUnitPaisa' | 'lineDiscountPaisa'>
   >,
 ): CartLine[] {
-  return lines.map((line) => (line.lineId === lineId ? { ...line, ...patch } : line));
+  return lines.map((line) => {
+    if (line.lineId !== lineId) {
+      return line;
+    }
+    const { unitKey, unitCount, ...rest } = patch;
+    const requantified =
+      unitKey !== undefined || unitCount !== undefined
+        ? withQuantity(line, unitKey ?? line.unitKey, unitCount ?? line.unitCount)
+        : line;
+    return { ...requantified, ...rest };
+  });
 }
 
 export function removeLine(lines: readonly CartLine[], lineId: string): CartLine[] {
   return lines.filter((line) => line.lineId !== lineId);
 }
 
-/** Rupee amounts arrive from a numeric field; this is the one conversion point. */
-export function paisaFromRupeeInput(raw: string): Paisa {
-  const value = Number(raw.trim());
-  if (!Number.isFinite(value) || value < 0) {
-    return ZERO_PAISA;
+/**
+ * A typed rupee amount in paisa, or null when the text is not one: blank,
+ * junk (a GS1 code ends in letters), negative, or more paisa than a number
+ * holds exactly (sixteen digits and up — a scanned code). For the fields where
+ * "not an amount" must not quietly read as zero: a drawer count, Paid now.
+ */
+export function parseRupeeInput(raw: string): Paisa | null {
+  const text = raw.trim();
+  const value = Number(text);
+  if (text === '' || !Number.isFinite(value) || value < 0) {
+    return null;
   }
-  return paisa(Math.round(value * 100));
+  const converted = Math.round(value * 100);
+  return Number.isSafeInteger(converted) ? paisa(converted) : null;
+}
+
+/**
+ * Rupee amounts arrive from a numeric field; this is the one conversion point.
+ * Anything that is not an amount reads as zero — never a throw mid-render.
+ */
+export function paisaFromRupeeInput(raw: string): Paisa {
+  return parseRupeeInput(raw) ?? ZERO_PAISA;
 }
 
 /**

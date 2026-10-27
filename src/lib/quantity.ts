@@ -7,7 +7,7 @@
  * sub-unit corruption bug.
  */
 
-import { baseQty, packFactor, type BaseQty, type PackFactor } from './branded';
+import { baseQty, packFactor, paisa, type BaseQty, type PackFactor, type Paisa } from './branded';
 
 /**
  * One grouping level above the base unit, as stored in `products.pack_levels`
@@ -87,17 +87,96 @@ export function decomposeQuantity(
 }
 
 /**
- * Natural-language quantity for the cart, receipts and reports — Phase 10 §4's
- * "1 strip + 4 tab" (W5). Zero renders in base units so a line never reads blank.
+ * An amount of stock in the product's own units — PCN-012 decision 8, as the
+ * owner decided it: "12 box, 3 strip, 7 tab", largest first, only the parts
+ * that are not zero, unit names exactly as the owner set them (never a guessed
+ * plural).
+ *
+ * It says HOW MUCH, and nothing about condition: no "loose", "open" or
+ * "sealed", because Mehvar does not record which packs are opened. The
+ * remainder always shows in the smallest unit, sold or not, because hiding it
+ * would understate stock. Below zero it reads "Short by 2 strip" — never a
+ * minus sign. Zero reads "0 tab", so a line is never blank.
  */
 export function describeQuantity(
   quantity: BaseQty,
   baseUnitName: string,
   packLevels: readonly PackLevel[] = [],
 ): string {
-  const parts = decomposeQuantity(quantity, baseUnitName, packLevels);
+  const parts = decomposeQuantity(baseQty(Math.abs(quantity)), baseUnitName, packLevels);
   if (parts.length === 0) {
     return `0 ${baseUnitName}`;
   }
-  return parts.map(({ level, count }) => `${count} ${level.name}`).join(' + ');
+  const amount = parts.map(({ level, count }) => `${count} ${level.name}`).join(', ');
+  return quantity < 0 ? `Short by ${amount}` : amount;
+}
+
+/**
+ * [PCN-012] A recorded movement in the words it was entered in — "5 strip" —
+ * or, for a row from before units were recorded, its base units described.
+ * Always a magnitude; the caller says which way it went.
+ */
+export function describeCounted(row: {
+  readonly qtyBase: number;
+  readonly baseUnitName: string;
+  readonly packLevels: readonly PackLevel[];
+  readonly unitName: string | null;
+  readonly unitCount: number | null;
+}): string {
+  return row.unitName && row.unitCount
+    ? `${row.unitCount} ${row.unitName}`
+    : describeQuantity(baseQty(Math.abs(row.qtyBase)), row.baseUnitName, row.packLevels);
+}
+
+/**
+ * [PCN-012] A price for one unit, worked out from the price of another unit
+ * of the same product: `price × toFactor ÷ fromFactor`, rounded UP to the paisa.
+ *
+ * Used only to SUGGEST a price the owner did not type (a box price from a strip
+ * price). Pack sizes nest, so a larger unit comes out exact; a smaller one
+ * (a loose tablet from a strip) rounds up, because a suggestion that undercuts
+ * the pack it came from is the one direction a pharmacy never wants. A price
+ * the owner typed is stored as typed and never passes through here.
+ *
+ * Lives here because it multiplies by pack factors (Phase 11 §2).
+ */
+export function scalePriceBetweenUnits(
+  price: Paisa,
+  fromFactor: PackFactor,
+  toFactor: PackFactor,
+): Paisa {
+  if (!Number.isSafeInteger(price) || price < 0) {
+    throw new RangeError(`A unit price must be a non-negative whole number of paisa: ${price}`);
+  }
+  const numerator = price * toFactor;
+  return paisa(Math.ceil(numerator / fromFactor));
+}
+
+/**
+ * [PCN-012] The nominal per-base price of a unit: its price ÷ its size,
+ * rounded DOWN. Written only to `sale_lines.unit_price_paisa`, a NOT NULL
+ * column kept for rows read by code from before PCN-012; money is always read
+ * from the exact line amount, never multiplied back from this.
+ */
+export function nominalPricePerBase(pricePerUnit: Paisa, factor: PackFactor): Paisa {
+  return paisa(Math.floor(pricePerUnit / factor));
+}
+
+/**
+ * [PCN-012] What `qty` base units cost at `costPerUnit` for a unit of size
+ * `unitFactor`: `cost × qty ÷ factor`, rounded UP to the paisa, once.
+ *
+ * Opening stock is counted as the shelf holds it ("2 boxes, 3 strips, 4
+ * tablets") and costed per box; the batch's exact total is this figure.
+ * Rounded once over the whole quantity rather than per unit, and upwards, so
+ * the cost on record is never understated (a low cost reports a margin better
+ * than the real one). BigInt, because `cost × qty` can pass 2^53.
+ */
+export function costOfBaseUnits(costPerUnit: Paisa, unitFactor: PackFactor, qty: BaseQty): Paisa {
+  if (!Number.isSafeInteger(costPerUnit) || costPerUnit < 0 || qty < 0) {
+    throw new RangeError(`A cost and a quantity must be non-negative: ${costPerUnit}, ${qty}`);
+  }
+  const numerator = BigInt(costPerUnit) * BigInt(qty);
+  const factor = BigInt(unitFactor);
+  return paisa(Number(numerator / factor + (numerator % factor === 0n ? 0n : 1n)));
 }

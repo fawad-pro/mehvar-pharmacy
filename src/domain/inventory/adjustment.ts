@@ -41,6 +41,8 @@ export interface BatchOnHand {
   qtyRemainingBase: number;
   unitCostPaisa: number;
   pricePerBaseUnitPaisa: number;
+  /** [PCN-012] The unit the batch arrived in, when its purchase line says. */
+  arrivedUnitKey: string | null;
 }
 
 export type AdjustmentReason =
@@ -71,7 +73,9 @@ export type AdjustmentRejection =
   | 'zero_delta'
   | 'reason_sign_mismatch'
   | 'batch_required'
-  | 'batch_not_allowed';
+  | 'batch_not_allowed'
+  /** [PCN-012] The entered unit does not describe the quantity. */
+  | 'invalid_unit';
 
 export interface AdjustmentDraft {
   readonly productId: string;
@@ -81,6 +85,11 @@ export interface AdjustmentDraft {
   /** Which batch is affected. Required when stock leaves; forbidden when it arrives. */
   readonly batchId: string | null;
   readonly note: string | null;
+  /**
+   * [PCN-012] The amount as entered — "3 strip" — when it was entered as a
+   * count of one unit. Kept for display; `qtyBaseDelta` is the truth.
+   */
+  readonly entered?: { readonly unitKey: string; readonly unitName: string; readonly unitCount: number };
 }
 
 /** Reasons that may only ever reduce stock. */
@@ -126,6 +135,17 @@ export function validateAdjustment(
   }
   if (draft.qtyBaseDelta > 0 && draft.batchId !== null) {
     return { ok: false, reason: 'batch_not_allowed' };
+  }
+
+  if (
+    draft.entered &&
+    (!Number.isSafeInteger(draft.entered.unitCount) ||
+      draft.entered.unitCount <= 0 ||
+      draft.entered.unitKey === '' ||
+      draft.entered.unitName.trim() === '' ||
+      Math.abs(draft.qtyBaseDelta) % draft.entered.unitCount !== 0)
+  ) {
+    return { ok: false, reason: 'invalid_unit' };
   }
 
   return { ok: true };

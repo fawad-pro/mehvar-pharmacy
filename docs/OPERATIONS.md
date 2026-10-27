@@ -21,13 +21,13 @@ guide.
 
 ## 1. Before you go (founder, at home)
 
-|          |                                                                                                                                                                |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hardware | 4 GB RAM minimum, 64-bit Windows 10/11, SSD. A dedicated machine, not the shop's household PC.                                                                 |
-| Printer  | 80 mm thermal (58 mm supported). Install its driver and print a Windows test page **first** — a printer that does not work in Notepad will not work in Mehvar. |
-| Scanner  | USB, configured to send Enter after the code.                                                                                                                  |
-| UPS      | Strongly recommended. A power cut mid-write is the one hardware failure the append-only design cannot fully absorb.                                            |
-| Network  | Not required to sell. Required only if the owner wants a second counter.                                                                                       |
+|          |                                                                                                                                                                                                                                                                          |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Hardware | 4 GB RAM minimum, 64-bit Windows 10/11, SSD. A dedicated machine, not the shop's household PC.                                                                                                                                                                           |
+| Printer  | 80 mm thermal (58 mm is not yet supported — the receipt is laid out for 80 mm). Install its driver, print a Windows test page **first**, and make it the Windows default printer — Setup warns if the default is a PDF printer. Then print a test receipt from Settings. |
+| Scanner  | USB, configured to send Enter after the code.                                                                                                                                                                                                                            |
+| UPS      | Strongly recommended. A power cut mid-write is the one hardware failure the append-only design cannot fully absorb.                                                                                                                                                      |
+| Network  | Not required to sell. A shop LAN will be needed for a second counter or the owner's phone, neither yet possible (§6).                                                                                                                                                    |
 
 Build the installer (on Windows):
 
@@ -53,6 +53,54 @@ Carry `dist\MehvarSetup-<version>.exe` on a USB stick. It needs no internet to i
    pairing key once.
 6. Print a test receipt. If it prints without a dialog appearing, ADR-6's kiosk
    printing is working.
+7. Check the test receipt's two bars with a ruler (see "Receipt printer
+   settings" below).
+
+### Receipt printer settings
+
+The receipt is laid out 72 mm wide, the usual printable width of an 80 mm
+roll, in solid black. The test receipt ends with two bars that check the
+printout on the actual printer:
+
+- **50 mm bar:** measure it. Shorter than 50 mm means something scaled the
+  page down; check the browser's print scale (100% / Default) and the driver's
+  paper size.
+- **72 mm bar:** both ends should print. A missing end means the printer's
+  printable width is narrower than 72 mm. Report it, with the printer model,
+  rather than shrinking the page.
+
+Verified on a **Speed-X SP-200U** (USB, 80 mm), 2026-10:
+
+| Setting       | Value                                                                   |
+| ------------- | ----------------------------------------------------------------------- |
+| Driver        | POS-80 (the generic 80 mm driver); the printer prints with it           |
+| Paper size    | `Printer Paper (80 x 3276mm)`, the driver's 80 mm continuous roll       |
+| Windows check | The Windows test page prints clearly, so the head and paper are working |
+
+Chrome print dialog on that printer (**More settings**; Chrome remembers these
+per printer), as found during the pilot, 2026-10-25:
+
+| Setting    | Value                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| Margins    | **None.** With margins on, a print once fed metres of blank paper         |
+| Paper size | **80 x 297mm** or **80(72) x 210mm**. Never **80 x 3276mm** (3.3 m pages) |
+| Scale      | **Custom, 133**                                                           |
+
+Why 133: Chrome printed this driver at about 75% (a 50 mm bar came out
+37–38 mm, pinned to the left), while the Windows test page prints centred and
+full width. 140 filled the roll; 133 is the exact inverse of 75%, so the
+receipt prints at its designed size. That figure has not yet been confirmed
+with a ruler: print the test receipt and check that the 50 mm bar measures
+50 mm. Why Chrome shrinks this driver's output and Windows does not is not
+known; a custom scale is a per-printer setting, and silent kiosk printing (no
+dialog) has not been tested with it.
+
+Not yet verified on that printer, so treat this as something to try, not a
+fix: if the bars or text still look grey or speckled, set the driver's
+halftoning option to its text or none setting. The driver exposes no density
+setting that has been found. If text is still faint once the bars measure
+true, the remaining cause is the printer's head heat or paper, which software
+cannot change.
 
 If anything fails, Setup names the step that failed and points at the log. **Do
 not hand the machine over.** Send `C:\ProgramData\Mehvar\logs\install-*.log`
@@ -118,6 +166,13 @@ safe, and it is why updates need no maintenance window.
 **Point `MEHVAR_BACKUP_DIR` at a USB drive or a second physical disk.** A backup
 on the same disk as the database survives a mistake; it does not survive the
 disk. Set it in `C:\ProgramData\Mehvar\.env` and restart the Mehvar Node service.
+Settings added to `.env` survive updates: Setup rewrites only the keys it owns
+(database credentials, paths, `PORT`) and logs any it corrected, by name.
+
+**Every update backs up first.** Before Setup replaces a single file, it dumps
+the database to `C:\ProgramData\Mehvar\backups\pre-update\`; if that dump
+cannot be taken, Setup stops with nothing changed. Nightly retention never
+prunes that folder. To drill one, point `MEHVAR_BACKUP_DIR` at it for the run.
 
 > **Known gap, and it is deliberate.** Phase 12 §3 requires an offsite copy —
 > "one provider failure must not take the backups with the database." Roadmap
@@ -131,9 +186,11 @@ disk. Set it in `C:\ProgramData\Mehvar\.env` and restart the Mehvar Node service
 npm run ops:restore-drill
 ```
 
-Restores the newest dump into a scratch database, runs the ADR-8 verifier,
-confirms Phase 5 §5 invariants, drops the scratch database. Never touches the
-live one.
+Restores the newest dump into a scratch database, migrates it to the installed
+schema (a dump from before an update restores into the schema it was taken
+under), re-applies grants, proves the application role can read it and cannot
+rewrite its event tables, runs the ADR-8 verifier as that role, and drops the
+scratch database. Never touches the live one.
 
 The drill closes its own database connection before the drop, and forces the
 drop past anything else still attached. Without the first of those it used to
@@ -145,19 +202,57 @@ Phase 12 §3: **once before the first paying customer, then quarterly.** An
 untested backup is not a backup, and a drill you have not run is a claim, not a
 fact.
 
+### Replacing the counter PC
+
+When the main machine dies, its records live in the newest backup — on the USB
+drive if `MEHVAR_BACKUP_DIR` points there, which is why section 5 says it should.
+
+1. **Install Mehvar on the new PC** with the normal installer. Any shop name and
+   PIN will do; this pharmacy is about to be replaced.
+2. **Copy the newest `mehvar-….dump`** from the USB drive onto the new PC.
+3. **Restore it**, from an Administrator command prompt:
+   ```
+   "C:\Program Files\Mehvar\mehvar-restore.cmd" E:\MehvarBackups\mehvar-….dump --replace
+   ```
+   The counter service is stopped for the swap and started again afterwards.
+   The backup is restored into a scratch database first, migrated to this
+   version's schema, granted, checked for immutability and verified as the
+   application role. Only then does it replace the live database, which is
+   **kept** (renamed `mehvar_pharmacy_replaced_<time>`) and also dumped to
+   `backups\pre-restore\`. If anything fails, the live database is unchanged.
+4. **Set up the counter** with the pharmacy code, counter name and setup key
+   the restore printed. The key is shown once and saved nowhere; the old one no
+   longer works, and the fresh install's `first-run.txt` (which described the
+   placeholder pharmacy) is removed. If a backup ever holds more than one
+   pharmacy, the restore stops and asks for `--pharmacy <code>`.
+5. **Log in with the owner's existing PIN** — it came back with the records.
+6. **Move the licence**: Settings → Licence says it is registered to a different
+   computer; press the button (self-service, up to three times a year — §6a).
+7. **Run the restore drill** (above) once the nightly backup has run, and check
+   the support bundle's verifier section reads OK.
+
+Once second counters exist (§6 — not yet possible), the new PC must also take
+the old one's LAN address (a reserved address on the router).
+
 ## 6. Adding a second counter
 
-The second machine installs nothing.
+**Not yet possible — one counter for the pilot** (PCN-010). A second machine
+would install nothing and reach the Node over the shop LAN, but three things are
+missing first:
 
-1. Give the server machine a **static IP** (name resolution on a shop LAN is
-   unreliable — a counter that cannot resolve the server cannot sell).
-2. On the second machine:
-   ```powershell
-   powershell -File counter-shortcut.ps1 -CounterHost 192.168.1.50 -Autostart
-   ```
-3. Add the device in Settings so it gets its own receipt prefix. `B-1`, `B-2`
-   cannot collide with `A-1` — `unique(tenant_id, receipt_prefix)` has enforced
-   that since Day 1 (PCN-001).
+- **A way to add the counter.** Only the installer creates a counter ("Counter
+  1", receipts `A-…`), and there is no Settings screen for another. Sharing
+  Counter 1's setup key with a second machine is unsafe: both would number
+  receipts `A-…`, and a receipt printed before its number was found taken would
+  not match the stored record.
+- **A session that works over the LAN.** The session cookie is `Secure`, which
+  browsers keep only over HTTPS or on `localhost`, so a counter at
+  `http://192.168.1.50:3000` cannot stay signed in.
+- **A search index that refreshes while open**, so one counter sees another's
+  new products, prices and stock without reloading.
+
+When those exist: give the server machine a static IP, then run
+`counter-shortcut.ps1 -CounterHost <ip> -Autostart` on the second machine.
 
 ## 6a. The licence
 

@@ -95,3 +95,26 @@ export const total = (page: Page) => page.locator('aside p.text-total');
 export const printedReceipt = (page: Page) => page.locator('#printable-receipt');
 export const lastSale = (page: Page) => page.getByRole('status', { name: 'Last sale' });
 export const unsynced = (page: Page) => page.getByRole('status', { name: /waiting to sync/ });
+
+/**
+ * Pays the cart (F12, Enter) and waits until the sale has synced and the
+ * screen has re-rendered for it. Returns the "Saved — …" text.
+ *
+ * The wait is about the test, not the product: when the pump delivers a sale,
+ * `RefreshOnSync` refreshes the server components, and Next holds a function
+ * key's navigation until that refresh lands. A spec that presses a key inside
+ * that window measures the refresh, not the key. Known product risk: on a slow
+ * server the keys feel dead for as long as the refresh takes.
+ */
+export async function payAndSettle(page: Page): Promise<string | null> {
+  const refreshed = page.waitForResponse((response) => /\/sale\?_rsc=/.test(response.url()), {
+    timeout: 30_000,
+  });
+  await page.keyboard.press('F12');
+  await page.keyboard.press('Enter');
+  await expect(lastSale(page)).toContainText(/Saved — /);
+  const saved = await lastSale(page).textContent();
+  await expect(unsynced(page)).toHaveCount(0, { timeout: 30_000 });
+  await (await refreshed).finished();
+  return saved;
+}

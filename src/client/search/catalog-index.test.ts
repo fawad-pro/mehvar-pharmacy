@@ -271,6 +271,44 @@ describe('barcodes bypass ranking (Phase 10 §5)', () => {
     expect(index.resolveBarcode(' 8964000101018 ')?.product.name).toBe('Panadol');
   });
 
+  it('finds a product saved by its EAN when the pack’s 2D code is scanned', () => {
+    // 8964000101018 is Panadol's EAN-13; the pack's GS1 code carries the same
+    // item as GTIN-14 0 8964000101018, followed by an expiry and a batch.
+    const hit = index.resolveBarcode('010896400010101817301231' + '10AB12C');
+    expect(hit?.product.name).toBe('Panadol');
+    expect(hit?.unitLevelName).toBe('strip');
+    // Through `search`, the path the counter takes, despite the letters.
+    expect(index.search('01089640001010181730123110AB12C')[0]?.product.name).toBe('Panadol');
+  });
+
+  it('finds a 2D code saved exactly as scanned, from this and any other batch', () => {
+    const saved = '01080026600316931728053110892302XV';
+    const withPack = CatalogIndex.build({
+      ...PAYLOAD,
+      barcodes: [
+        ...PAYLOAD.barcodes,
+        { barcode: saved, productId: 'augmentin', unitLevelName: 'box' },
+      ],
+    });
+    expect(withPack.search(saved)[0]?.product.name).toBe('Augmentin');
+    expect(withPack.resolveBarcode('0108002660031693173012311NEXT')?.product.name).toBe(
+      'Augmentin',
+    );
+    expect(withPack.resolveBarcode('8002660031693')?.product.name).toBe('Augmentin');
+  });
+
+  it('matches a non-GTIN code containing letters exactly, and nothing else', () => {
+    const withInternal = CatalogIndex.build({
+      ...PAYLOAD,
+      barcodes: [
+        ...PAYLOAD.barcodes,
+        { barcode: 'HERB-0042', productId: 'disprin', unitLevelName: 'tab' },
+      ],
+    });
+    expect(withInternal.search('HERB-0042')[0]?.product.name).toBe('Disprin');
+    expect(withInternal.resolveBarcode('HERB-0043')).toBeUndefined();
+  });
+
   it('returns nothing for an unknown code, so the UI can offer the link prompt', () => {
     expect(index.resolveBarcode('0000000000000')).toBeUndefined();
     // Falls through to ranking rather than dead-ending (P2).
@@ -287,6 +325,36 @@ describe('stock is advisory and separate', () => {
   it('reports zero as zero, not as unknown — the badge has to distinguish them', () => {
     // D2: a zero-stock line still sells. The badge says so; it never blocks.
     expect(index.search('brufen')[0]?.stockBase).toBe(0);
+  });
+
+  it('carries expired stock for the counter’s warning, and none where there is none (PCN-008)', () => {
+    const withExpired = CatalogIndex.build({
+      ...PAYLOAD,
+      expired: { augmentin: { qtyBase: 6, expiryDate: '2026-09-30' } },
+    });
+    expect(withExpired.expiredOf('augmentin')).toEqual({ qtyBase: 6, expiryDate: '2026-09-30' });
+    expect(withExpired.expiredOf('panadol')).toBeNull();
+    // A catalog cached before the field existed still builds.
+    expect(index.expiredOf('augmentin')).toBeNull();
+  });
+
+  it('replaces expired stock whole on refresh, and reads an absent field as none', () => {
+    const delta = {
+      products: [],
+      removedProductIds: [],
+      barcodes: [],
+      removedBarcodes: [],
+      stock: PAYLOAD.stock,
+      syncedAt: '2026-07-31T00:00:00.000Z',
+    };
+    const before = { ...PAYLOAD, expired: { augmentin: { qtyBase: 6, expiryDate: '2026-09-30' } } };
+    expect(applyDelta(before, delta).expired).toEqual({});
+    expect(
+      applyDelta(before, {
+        ...delta,
+        expired: { panadol: { qtyBase: 2, expiryDate: '2026-01-31' } },
+      }).expired,
+    ).toEqual({ panadol: { qtyBase: 2, expiryDate: '2026-01-31' } });
   });
 });
 

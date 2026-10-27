@@ -160,11 +160,11 @@ suite('commitSale against Postgres', () => {
 
   it('consumes earliest-expiry first, across batches (D1)', async () => {
     const soon = await addOpeningStock(tenant.scope, panadol.id, 20, {
-      expiryDate: '2026-09-01',
+      expiryDate: '2030-09-01',
       unitCostPaisa: 200,
     });
     const later = await addOpeningStock(tenant.scope, panadol.id, 100, {
-      expiryDate: '2027-09-01',
+      expiryDate: '2031-09-01',
       unitCostPaisa: 300,
     });
 
@@ -185,7 +185,7 @@ suite('commitSale against Postgres', () => {
       expiryDate: null,
     });
     const perishable = await addOpeningStock(tenant.scope, panadol.id, 50, {
-      expiryDate: '2026-10-01',
+      expiryDate: '2030-10-01',
     });
 
     await commitSale(
@@ -197,6 +197,43 @@ suite('commitSale against Postgres', () => {
     const [nonPerish] = await tenant.scope.select(batches, eq(batches.id, nonPerishable));
     expect(perish?.qtyRemainingBase).toBe(30);
     expect(nonPerish?.qtyRemainingBase).toBe(50);
+  });
+
+  it('skips an expired batch, though its expiry is the earliest (PCN-008)', async () => {
+    const expired = await addOpeningStock(tenant.scope, panadol.id, 50, {
+      expiryDate: '2020-01-01',
+    });
+    const good = await addOpeningStock(tenant.scope, panadol.id, 50, {
+      expiryDate: '2030-01-01',
+    });
+
+    await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 20)], cashPaisa: 7_000 }),
+    );
+
+    const [expiredBatch] = await tenant.scope.select(batches, eq(batches.id, expired));
+    const [goodBatch] = await tenant.scope.select(batches, eq(batches.id, good));
+    expect(expiredBatch?.qtyRemainingBase).toBe(50);
+    expect(goodBatch?.qtyRemainingBase).toBe(30);
+  });
+
+  it('sells expired stock rather than block, once nothing unexpired is left (PCN-008)', async () => {
+    const good = await addOpeningStock(tenant.scope, panadol.id, 5, { expiryDate: '2030-01-01' });
+    const expired = await addOpeningStock(tenant.scope, panadol.id, 50, {
+      expiryDate: '2020-01-01',
+    });
+
+    const result = await commitSale(
+      tenant.scope,
+      command({ lines: [saleLine(panadol.id, 20)], cashPaisa: 7_000 }),
+    );
+    expect(result.ok).toBe(true);
+
+    const [goodBatch] = await tenant.scope.select(batches, eq(batches.id, good));
+    const [expiredBatch] = await tenant.scope.select(batches, eq(batches.id, expired));
+    expect(goodBatch?.qtyRemainingBase).toBe(0);
+    expect(expiredBatch?.qtyRemainingBase).toBe(35);
   });
 
   it('creates a pending allocation on shortfall instead of refusing (D2, P2)', async () => {
@@ -392,5 +429,132 @@ suite('commitSale against Postgres', () => {
         command({ receiptNumber, lines: [saleLine(panadol.id, 5)], cashPaisa: 1_750 }),
       ),
     ).rejects.toThrow();
+  });
+});
+
+/** [PCN-012] A line sold in a named unit at that unit's own price. */
+function unitLine(
+  productId: string,
+  unitName: string,
+  factor: number,
+  count: number,
+  price: number,
+) {
+  return {
+    lineId: uuidv7(),
+    productId,
+    qtyBase: count * factor,
+    enteredUnitLevel: unitName,
+    unitPricePaisa: Math.floor(price / factor),
+    unitKey: 'u1',
+    unitName,
+    unitCount: count,
+    unitPricePaisaEntered: price,
+    lineDiscountPaisa: 0,
+    priceOverridden: false,
+  };
+}
+
+describe('unit-priced lines — validation (PCN-012)', () => {
+  it('charges count × unit price, not base quantity × a per-base price', () => {
+    // Three boxes of 14 at Rs 250: Rs 750, exactly.
+    const result = validateSaleCommand(
+      command({ lines: [unitLine('p', 'box', 14, 3, 25_000)], cashPaisa: 75_000 }),
+    );
+    expect(result).toEqual({ ok: true, subtotalPaisa: 75_000, totalPaisa: 75_000 });
+  });
+
+  it('refuses a line whose base quantity is not a whole number of its unit', () => {
+    const line = { ...unitLine('p', 'box', 14, 3, 25_000), qtyBase: 40 };
+    expect(validateSaleCommand(command({ lines: [line], cashPaisa: 75_000 }))).toEqual({
+      ok: false,
+      reason: 'invalid_quantity',
+    });
+  });
+
+  it('refuses a unit line with no unit name', () => {
+    const line = { ...unitLine('p', 'box', 14, 3, 25_000), unitName: '' };
+    expect(validateSaleCommand(command({ lines: [line], cashPaisa: 75_000 }))).toEqual({
+      ok: false,
+      reason: 'invalid_quantity',
+    });
+  });
+});
+
+suite('unit-priced lines against Postgres (PCN-012)', () => {
+  let tenant: TestTenant;
+  let product: TestProduct;
+
+  beforeAll(async () => {
+    tenant = await provisionTestTenant('unitsale');
+    product = await createTestProduct(tenant.scope, `Boxed ${uuidv7().slice(-6)}`, 1_786);
+    await addOpeningStock(tenant.scope, product.id, 100);
+  });
+
+  afterAll(async () => {
+    await tenant.cleanup();
+  });
+
+  it('stores what was entered and the exact amount, and the sale total follows it', async () => {
+    const saleId = uuidv7();
+    const result = await commitSale(
+      tenant.scope,
+      command({
+        saleId,
+        lines: [unitLine(product.id, 'box', 14, 3, 25_000)],
+        cashPaisa: 75_000,
+        clientSchemaVersion: 2,
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const [sale] = await tenant.scope.select(sales, eq(sales.id, saleId));
+    expect(sale?.totalPaisa).toBe(75_000);
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.saleId, saleId));
+    expect(line).toMatchObject({
+      qtyBase: 42,
+      unitKey: 'u1',
+      unitName: 'box',
+      unitCount: 3,
+      unitPricePaisaEntered: 25_000,
+      lineAmountPaisa: 75_000,
+      // Nominal, rounded down, derived on the server: 25,000 ÷ 14.
+      unitPricePaisa: 1_785,
+    });
+  });
+
+  it('a version-1 line still stores no entered unit, and is charged per base as before', async () => {
+    const saleId = uuidv7();
+    const result = await commitSale(
+      tenant.scope,
+      command({ saleId, lines: [saleLine(product.id, 4, 1_786)], cashPaisa: 7_144 }),
+    );
+    expect(result.ok).toBe(true);
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.saleId, saleId));
+    expect(line).toMatchObject({ unitCount: null, lineAmountPaisa: null, unitPricePaisa: 1_786 });
+  });
+
+  it('the database refuses an amount that is not count × price', async () => {
+    const saleId = uuidv7();
+    await commitSale(
+      tenant.scope,
+      command({ saleId, lines: [unitLine(product.id, 'box', 14, 1, 25_000)], cashPaisa: 25_000 }),
+    );
+    const [line] = await tenant.scope.select(saleLines, eq(saleLines.saleId, saleId));
+    await expect(
+      tenant.scope.insert(saleLines, {
+        id: uuidv7(),
+        saleId,
+        productId: product.id,
+        qtyBase: 14,
+        enteredUnitLevel: 'box',
+        unitPricePaisa: 1_785,
+        unitName: 'box',
+        unitCount: 1,
+        unitPricePaisaEntered: 25_000,
+        lineAmountPaisa: 24_990,
+      } as never),
+    ).rejects.toThrow();
+    expect(line?.lineAmountPaisa).toBe(25_000);
   });
 });

@@ -1,11 +1,18 @@
 /**
- * [PCN-006] Supplier balance and settlement queries — the mirror of the udhaar
+ * [PCN-007] Supplier balance and settlement queries — the mirror of the udhaar
  * side in `udhaar-queries.ts`.
  *
  * A supplier balance is the money the pharmacy owes a distributor, derived and
  * never stored as authority, exactly like a customer balance (ADR-1):
  *
  *   balance = Σ (invoice cost − cash paid at receiving) − Σ supplier payments
+ *             + Σ purchase-correction invoice deltas − Σ supplier-return credit
+ *             [PCN-009: a corrected invoice owes its corrected value, and goods
+ *             sent back reduce what is owed by the credit the supplier gave]
+ *
+ * over TRACKED purchases only (`purchases.credit_tracked`). A purchase entered
+ * before supplier credit existed has no recorded payment — its cash-paid 0 is
+ * a column default, not a fact — so it contributes nothing to what is owed.
  *
  * The first two terms come from `purchases` (cash paid) joined to
  * `purchase_lines` (the invoice cost, bonus units free); the third from
@@ -17,47 +24,95 @@
 
 import 'server-only';
 
-import { eq, sql, sum } from 'drizzle-orm';
+import { and, asc, eq, sql, sum } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
-import { purchaseLines, purchases, supplierPayments, suppliers } from './schema';
+import {
+  products,
+  purchaseCorrections,
+  purchaseLines,
+  purchases,
+  supplierPayments,
+  supplierReturns,
+  suppliers,
+  users,
+} from './schema';
+import { purchaseLineCostSql } from './purchase-line-cost';
 
+import { summariseSupplierBook, type SupplierBook } from '@/domain/suppliers/supplier-position';
+import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 /** Positive = the pharmacy owes; negative = an advance sits with the supplier. */
 export async function supplierBalance(scope: TenantScope, supplierId: Uuid): Promise<number> {
   const [lineCost] = await scope.db
     .select({
-      total: sql<string>`sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa})`,
+      total: sql<string>`sum(${purchaseLineCostSql})`,
     })
     .from(purchases)
     .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
-    .where(scope.scopeOf(purchases, eq(purchases.supplierId, supplierId)));
+    .where(
+      scope.scopeOf(
+        purchases,
+        eq(purchases.supplierId, supplierId),
+        eq(purchases.creditTracked, true),
+      ),
+    );
 
   const [cashPaid] = await scope.db
     .select({ total: sum(purchases.cashPaidPaisa).as('total') })
     .from(purchases)
-    .where(scope.scopeOf(purchases, eq(purchases.supplierId, supplierId)));
+    .where(
+      scope.scopeOf(
+        purchases,
+        eq(purchases.supplierId, supplierId),
+        eq(purchases.creditTracked, true),
+      ),
+    );
 
   const [paid] = await scope.db
     .select({ total: sum(supplierPayments.amountPaisa).as('total') })
     .from(supplierPayments)
     .where(scope.scopeOf(supplierPayments, eq(supplierPayments.supplierId, supplierId)));
 
-  return Number(lineCost?.total ?? 0) - Number(cashPaid?.total ?? 0) - Number(paid?.total ?? 0);
+  const [corrected] = await scope.db
+    .select({ total: sum(purchaseCorrections.invoiceDeltaPaisa).as('total') })
+    .from(purchaseCorrections)
+    .innerJoin(purchaseLines, eq(purchaseLines.id, purchaseCorrections.purchaseLineId))
+    .innerJoin(purchases, eq(purchases.id, purchaseLines.purchaseId))
+    .where(
+      scope.scopeOf(
+        purchaseCorrections,
+        eq(purchases.supplierId, supplierId),
+        eq(purchases.creditTracked, true),
+      ),
+    );
+
+  const [returned] = await scope.db
+    .select({ total: sum(supplierReturns.creditPaisa).as('total') })
+    .from(supplierReturns)
+    .where(scope.scopeOf(supplierReturns, eq(supplierReturns.supplierId, supplierId)));
+
+  return (
+    Number(lineCost?.total ?? 0) -
+    Number(cashPaid?.total ?? 0) -
+    Number(paid?.total ?? 0) +
+    Number(corrected?.total ?? 0) -
+    Number(returned?.total ?? 0)
+  );
 }
 
 /** Every named supplier's balance in one round of queries — avoids N+1. */
 export async function balancesBySupplier(scope: TenantScope): Promise<Record<string, number>> {
-  const [lineCosts, cashPaid, paid] = await Promise.all([
+  const [lineCosts, cashPaid, paid, corrected, returned] = await Promise.all([
     scope.db
       .select({
         supplierId: purchases.supplierId,
-        total: sql<string>`sum(${purchaseLines.qtyBase} * ${purchaseLines.unitCostPaisa})`,
+        total: sql<string>`sum(${purchaseLineCostSql})`,
       })
       .from(purchases)
       .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
-      .where(scope.scopeOf(purchases))
+      .where(scope.scopeOf(purchases, eq(purchases.creditTracked, true)))
       .groupBy(purchases.supplierId),
     scope.db
       .select({
@@ -65,7 +120,7 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
         total: sum(purchases.cashPaidPaisa).as('total'),
       })
       .from(purchases)
-      .where(scope.scopeOf(purchases))
+      .where(scope.scopeOf(purchases, eq(purchases.creditTracked, true)))
       .groupBy(purchases.supplierId),
     scope.db
       .select({
@@ -75,6 +130,24 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
       .from(supplierPayments)
       .where(scope.scopeOf(supplierPayments))
       .groupBy(supplierPayments.supplierId),
+    scope.db
+      .select({
+        supplierId: purchases.supplierId,
+        total: sum(purchaseCorrections.invoiceDeltaPaisa).as('total'),
+      })
+      .from(purchaseCorrections)
+      .innerJoin(purchaseLines, eq(purchaseLines.id, purchaseCorrections.purchaseLineId))
+      .innerJoin(purchases, eq(purchases.id, purchaseLines.purchaseId))
+      .where(scope.scopeOf(purchaseCorrections, eq(purchases.creditTracked, true)))
+      .groupBy(purchases.supplierId),
+    scope.db
+      .select({
+        supplierId: supplierReturns.supplierId,
+        total: sum(supplierReturns.creditPaisa).as('total'),
+      })
+      .from(supplierReturns)
+      .where(scope.scopeOf(supplierReturns))
+      .groupBy(supplierReturns.supplierId),
   ]);
 
   const balances: Record<string, number> = {};
@@ -85,6 +158,8 @@ export async function balancesBySupplier(scope: TenantScope): Promise<Record<str
   for (const row of lineCosts) apply(row.supplierId, Number(row.total ?? 0));
   for (const row of cashPaid) apply(row.supplierId, -Number(row.total ?? 0));
   for (const row of paid) apply(row.supplierId, -Number(row.total ?? 0));
+  for (const row of corrected) apply(row.supplierId, Number(row.total ?? 0));
+  for (const row of returned) apply(row.supplierId, -Number(row.total ?? 0));
   return balances;
 }
 
@@ -95,34 +170,51 @@ export interface SupplierBalanceItem {
   balancePaisa: number;
 }
 
-/**
- * Suppliers the pharmacy currently owes, largest first — the "Owed to
- * suppliers" panel on the Purchases surface, the payable mirror of the
- * customers-owing list (W11).
- */
-export async function listSuppliersOwed(scope: TenantScope): Promise<SupplierBalanceItem[]> {
-  const rows = await scope.db
-    .select({ id: suppliers.id, name: suppliers.name, phone: suppliers.phone })
-    .from(suppliers)
-    .where(scope.scopeOf(suppliers, eq(suppliers.isActive, true)));
-
-  const balances = await balancesBySupplier(scope);
-
-  return rows
-    .map((row) => ({
-      id: row.id,
-      name: row.name,
-      phone: row.phone,
-      balancePaisa: balances[row.id] ?? 0,
-    }))
-    .filter((row) => row.balancePaisa > 0)
-    .sort((a, b) => b.balancePaisa - a.balancePaisa);
+export interface SupplierPositions {
+  /** Suppliers the pharmacy owes, largest first. `balancePaisa` > 0. */
+  owed: SupplierBalanceItem[];
+  /**
+   * [PCN-011] Suppliers holding the pharmacy's money, largest first.
+   * `creditPaisa` is positive; the direction is in the list, never the sign.
+   */
+  inCredit: (Omit<SupplierBalanceItem, 'balancePaisa'> & { creditPaisa: number })[];
 }
 
-/** The all-time total the pharmacy owes suppliers — one figure for the Day screen. */
-export async function supplierOwedTotal(scope: TenantScope): Promise<number> {
-  const balances = await balancesBySupplier(scope);
-  return Object.values(balances).reduce((total, value) => total + Math.max(0, value), 0);
+/**
+ * Every active supplier's position for the Purchases panel: who is owed, and
+ * (PCN-011) who holds credit. The payable mirror of the customers lists (W11).
+ * A settled supplier appears in neither.
+ */
+export async function supplierPositions(scope: TenantScope): Promise<SupplierPositions> {
+  const [rows, balances] = await Promise.all([
+    scope.db
+      .select({ id: suppliers.id, name: suppliers.name, phone: suppliers.phone })
+      .from(suppliers)
+      .where(scope.scopeOf(suppliers, eq(suppliers.isActive, true))),
+    balancesBySupplier(scope),
+  ]);
+
+  const owed: SupplierPositions['owed'] = [];
+  const inCredit: SupplierPositions['inCredit'] = [];
+  for (const row of rows) {
+    const balancePaisa = balances[row.id] ?? 0;
+    if (balancePaisa > 0) {
+      owed.push({ ...row, balancePaisa });
+    } else if (balancePaisa < 0) {
+      inCredit.push({ ...row, creditPaisa: -balancePaisa });
+    }
+  }
+  owed.sort((a, b) => b.balancePaisa - a.balancePaisa);
+  inCredit.sort((a, b) => b.creditPaisa - a.creditPaisa);
+  return { owed, inCredit };
+}
+
+/**
+ * The all-time supplier book for the Day screen: what is owed and, separately
+ * (PCN-011), what suppliers hold in credit. Never netted across suppliers.
+ */
+export async function supplierBook(scope: TenantScope): Promise<SupplierBook> {
+  return summariseSupplierBook(Object.values(await balancesBySupplier(scope)));
 }
 
 /** Idempotency (ADR-3 posture, as `commitPurchase`): a payment id committed once. */
@@ -147,4 +239,189 @@ export async function findSupplier(
 ): Promise<{ id: string; name: string } | undefined> {
   const row = await scope.selectOne(suppliers, eq(suppliers.id, supplierId));
   return row ? { id: row.id, name: row.name } : undefined;
+}
+
+/**
+ * One supplier's account, expanded — T4: "any derived figure can be expanded
+ * into the transactions that produced it." The payable mirror of
+ * `customerLedger`.
+ *
+ * Each row carries the amount it moved the balance (positive = more owed), so
+ * the rows sum to `supplierBalance` exactly; `supplier-balance.integration`
+ * pins that. Same terms, same TRACKED-only rule: an invoice entered before
+ * supplier credit existed recorded no payment and is not in the account.
+ *
+ * Until this existed a payment made from "Owed to suppliers" was counted and
+ * shown nowhere: the balance dropped and nothing said when, how much, or who.
+ */
+export type SupplierLedgerRow =
+  | {
+      readonly kind: 'invoice';
+      readonly id: string;
+      readonly createdAt: Date;
+      readonly amountPaisa: number;
+      readonly invoiceRef: string | null;
+      readonly invoiceTotalPaisa: number;
+      readonly paidNowPaisa: number;
+      readonly byName: string;
+    }
+  | {
+      readonly kind: 'correction';
+      readonly id: string;
+      readonly createdAt: Date;
+      readonly amountPaisa: number;
+      readonly purchaseId: string;
+      readonly invoiceRef: string | null;
+      readonly note: string;
+      readonly byName: string;
+    }
+  | {
+      readonly kind: 'return';
+      readonly id: string;
+      readonly createdAt: Date;
+      readonly amountPaisa: number;
+      readonly productName: string;
+      readonly qtyBase: number;
+      readonly baseUnitName: string;
+      readonly packLevels: PackLevel[];
+      readonly unitName: string | null;
+      readonly unitCount: number | null;
+      readonly note: string | null;
+      readonly byName: string;
+    }
+  | {
+      readonly kind: 'payment';
+      readonly id: string;
+      readonly createdAt: Date;
+      readonly amountPaisa: number;
+      readonly note: string | null;
+      readonly byName: string;
+    };
+
+export async function supplierLedger(
+  scope: TenantScope,
+  supplierId: Uuid,
+): Promise<SupplierLedgerRow[]> {
+  const [invoices, corrections, returns, payments] = await Promise.all([
+    scope.db
+      .select({
+        id: purchases.id,
+        createdAt: purchases.createdAt,
+        invoiceRef: purchases.invoiceRef,
+        cashPaidPaisa: purchases.cashPaidPaisa,
+        byName: users.name,
+        total: sql<string>`sum(${purchaseLineCostSql})`,
+      })
+      .from(purchases)
+      .innerJoin(purchaseLines, eq(purchaseLines.purchaseId, purchases.id))
+      .innerJoin(users, eq(users.id, purchases.createdBy))
+      .where(
+        scope.scopeOf(
+          purchases,
+          eq(purchases.supplierId, supplierId),
+          eq(purchases.creditTracked, true),
+        ),
+      )
+      .groupBy(
+        purchases.id,
+        purchases.createdAt,
+        purchases.invoiceRef,
+        purchases.cashPaidPaisa,
+        users.name,
+      ),
+    scope.db
+      .select({
+        id: purchaseCorrections.id,
+        createdAt: purchaseCorrections.createdAt,
+        amountPaisa: purchaseCorrections.invoiceDeltaPaisa,
+        purchaseId: purchases.id,
+        invoiceRef: purchases.invoiceRef,
+        note: purchaseCorrections.note,
+        byName: users.name,
+      })
+      .from(purchaseCorrections)
+      .innerJoin(purchaseLines, eq(purchaseLines.id, purchaseCorrections.purchaseLineId))
+      .innerJoin(purchases, eq(purchases.id, purchaseLines.purchaseId))
+      .innerJoin(users, eq(users.id, purchaseCorrections.createdBy))
+      .where(
+        scope.scopeOf(
+          purchaseCorrections,
+          and(eq(purchases.supplierId, supplierId), eq(purchases.creditTracked, true)),
+        ),
+      ),
+    scope.db
+      .select({
+        id: supplierReturns.id,
+        createdAt: supplierReturns.createdAt,
+        creditPaisa: supplierReturns.creditPaisa,
+        productName: products.name,
+        qtyBase: supplierReturns.qtyBase,
+        baseUnitName: products.baseUnitName,
+        packLevels: products.packLevels,
+        unitName: supplierReturns.unitName,
+        unitCount: supplierReturns.unitCount,
+        note: supplierReturns.note,
+        byName: users.name,
+      })
+      .from(supplierReturns)
+      .innerJoin(products, eq(products.id, supplierReturns.productId))
+      .innerJoin(users, eq(users.id, supplierReturns.createdBy))
+      .where(scope.scopeOf(supplierReturns, eq(supplierReturns.supplierId, supplierId))),
+    scope.db
+      .select({
+        id: supplierPayments.id,
+        createdAt: supplierPayments.createdAt,
+        amountPaisa: supplierPayments.amountPaisa,
+        note: supplierPayments.note,
+        byName: users.name,
+      })
+      .from(supplierPayments)
+      .innerJoin(users, eq(users.id, supplierPayments.createdBy))
+      .where(scope.scopeOf(supplierPayments, eq(supplierPayments.supplierId, supplierId)))
+      .orderBy(asc(supplierPayments.createdAt)),
+  ]);
+
+  const rows: SupplierLedgerRow[] = [
+    ...invoices.map((row) => {
+      const invoiceTotalPaisa = Number(row.total ?? 0);
+      return {
+        kind: 'invoice' as const,
+        id: row.id,
+        createdAt: row.createdAt,
+        amountPaisa: invoiceTotalPaisa - row.cashPaidPaisa,
+        invoiceRef: row.invoiceRef,
+        invoiceTotalPaisa,
+        paidNowPaisa: row.cashPaidPaisa,
+        byName: row.byName,
+      };
+    }),
+    ...corrections.map((row) => ({ kind: 'correction' as const, ...row })),
+    ...returns.map((row) => ({
+      kind: 'return' as const,
+      id: row.id,
+      createdAt: row.createdAt,
+      amountPaisa: -row.creditPaisa,
+      productName: row.productName,
+      qtyBase: row.qtyBase,
+      baseUnitName: row.baseUnitName,
+      packLevels: row.packLevels,
+      unitName: row.unitName,
+      unitCount: row.unitCount,
+      note: row.note,
+      byName: row.byName,
+    })),
+    ...payments.map((row) => ({
+      kind: 'payment' as const,
+      id: row.id,
+      createdAt: row.createdAt,
+      amountPaisa: -row.amountPaisa,
+      note: row.note,
+      byName: row.byName,
+    })),
+  ];
+  // Oldest first, so the running balance reads as the account's history. Ids
+  // are v7, time-ordered, which settles rows written in the same millisecond.
+  return rows.sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id),
+  );
 }

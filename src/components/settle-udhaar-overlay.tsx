@@ -26,6 +26,7 @@ import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import { useSync } from '@/client/sync/provider';
+import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
@@ -159,6 +160,7 @@ export function SettleUdhaarOverlay({
                   Amount paid
                 </label>
                 <input
+                  autoComplete="off"
                   id="settle-amount"
                   ref={amountField}
                   value={amount}
@@ -169,6 +171,13 @@ export function SettleUdhaarOverlay({
                   }}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter') {
+                      const typed = paisaFromRupeeInput(amount);
+                      if (needsClickToCommit(typed)) {
+                        setError(
+                          `${formatPaisa(typed, { withSymbol: true })} looks like a barcode. If it is right, click Settle.`,
+                        );
+                        return;
+                      }
                       void commit(step.customer);
                     }
                     if (event.key === 'Escape') {

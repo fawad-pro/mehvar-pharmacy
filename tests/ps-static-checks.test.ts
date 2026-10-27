@@ -15,9 +15,13 @@
  * `$PSScriptRoot` default is still caught under either.
  */
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  checkInnoCommentBraces,
   checkScriptRootInParamBlock,
   stripComments,
 } from '../scripts/package/ps-static-checks';
@@ -45,7 +49,10 @@ const REAL_BUG = [
 
 describe('stripComments', () => {
   it('strips a # comment regardless of line ending', () => {
-    for (const source of ['  # $PSScriptRoot here\ncode\n', crlf('  # $PSScriptRoot here\ncode\n')]) {
+    for (const source of [
+      '  # $PSScriptRoot here\ncode\n',
+      crlf('  # $PSScriptRoot here\ncode\n'),
+    ]) {
       expect(stripComments(source)).not.toMatch(/\$PSScriptRoot/);
     }
   });
@@ -72,5 +79,37 @@ describe('checkScriptRootInParamBlock', () => {
     const findings = checkScriptRootInParamBlock('bad.ps1', crlf(REAL_BUG));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.line).toBe(2);
+  });
+});
+
+describe('checkInnoCommentBraces', () => {
+  const iss = (code: string): string => `[Setup]\nAppName=x\n\n[Code]\n${code}\n`;
+
+  it('flags an Inno constant inside a { } comment — it ends the comment early', () => {
+    const findings = checkInnoCommentBraces(
+      'mehvar.iss',
+      iss('{ Runs from {tmp}, before anything is installed. }\nprocedure A; begin end;'),
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.line).toBe(5);
+  });
+
+  it('allows constants in strings, in // comments, and plain brace comments', () => {
+    const code = [
+      '{ A plain comment that mentions the temp folder in words. }',
+      "procedure A; begin Log(ExpandConstant('{tmp}\\x') + 'it''s {app}'); end;",
+      '// a line comment may say {app} freely',
+    ].join('\n');
+    expect(checkInnoCommentBraces('mehvar.iss', iss(code))).toEqual([]);
+  });
+
+  it('behaves identically on a CRLF checkout', () => {
+    const findings = checkInnoCommentBraces('mehvar.iss', crlf(iss('{ under {app} }')));
+    expect(findings).toHaveLength(1);
+  });
+
+  it('passes the real mehvar.iss', () => {
+    const source = readFileSync(join(process.cwd(), 'packaging', 'windows', 'mehvar.iss'), 'utf8');
+    expect(checkInnoCommentBraces('mehvar.iss', source)).toEqual([]);
   });
 });

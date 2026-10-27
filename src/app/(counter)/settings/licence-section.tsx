@@ -13,7 +13,7 @@
  * own use and never re-exported from there (CLAUDE.md, Day 4/6/7).
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   installLicenceAction,
@@ -28,16 +28,18 @@ export function LicenceSection() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // The latest request's answer wins: a slow first load landing after a
+  // licence was pasted put the old state back beside "Licence installed."
+  const latest = useRef(0);
   async function refresh(): Promise<void> {
-    setPanel(await licencePanelAction());
+    const mine = ++latest.current;
+    const current = await licencePanelAction();
+    if (mine === latest.current) setPanel(current);
   }
 
   useEffect(() => {
-    // Same shape as `ReceiptSettingsForm` above it: the load is a promise the
-    // effect starts, not a setState the effect performs.
-    void licencePanelAction().then((current) => {
-      setPanel(current);
-    });
+    // The load is a promise the effect starts, not a setState it performs.
+    void refresh();
   }, []);
 
   async function paste(): Promise<void> {
@@ -83,6 +85,7 @@ export function LicenceSection() {
               Paste a licence from Mehvar — the whole line, in one go.
             </span>
             <textarea
+              autoComplete="off"
               value={token}
               onChange={(event) => {
                 setToken(event.target.value);

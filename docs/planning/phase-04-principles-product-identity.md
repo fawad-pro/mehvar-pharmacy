@@ -27,6 +27,8 @@ Each principle includes its test — the question that settles a dispute.
 
 **P8. The shop opens tomorrow.** The pharmacy's ability to trade is never hostage to our operations. Updates, deployments, migrations, and recovery procedures are designed so the counter works every morning, unconditionally — changes land quietly, never mid-rush, and never require the pharmacy to do anything to keep selling. *Test: describe the worst thing that can happen on our side tonight; show why the counter still sells at 9am.*
 
+**P9. Sophisticated inside, simple outside.** *(Added 2026-10-24, PCN-012.)* The owner and the salesman never need to understand base units, paisa conversions, batch valuation or migrations to sell a strip of medicine; those are Mehvar's job. *Test: does anyone at the counter have to convert, divide or know a stored figure to finish this task? If yes, the design is wrong.*
+
 ## 2. Interaction Principles
 
 **I1. Keyboard-first, shortcuts visible.** The entire sale — search, add, quantity, discount, payment, print — completes without the mouse. Shortcuts are printed on the interface itself, not hidden in help. The scanner is a keyboard: a scan anywhere sensible does the right thing.

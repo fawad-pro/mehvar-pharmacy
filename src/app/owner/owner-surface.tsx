@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
+import { BalanceInline } from '@/components/balance-figure';
 
 type Tab = 'today' | 'stock' | 'udhaar';
 
@@ -35,6 +36,8 @@ interface LowStockItem {
   onHandBase: number;
   minStockBaseUnits: number;
   baseUnitName: string;
+  /** [PCN-012] The amount in the product's own units ("3 box, 2 strip"). */
+  onHand: string;
 }
 
 interface ExpiringItem {
@@ -48,6 +51,8 @@ interface IncidentItem {
   productName: string;
   pendingBase: number;
   baseUnitName: string;
+  /** [PCN-012] The shortfall in the product's own units. */
+  amount: string;
 }
 
 interface CustomerItem {
@@ -144,9 +149,7 @@ function TodayTab({
             {incidents.map((incident) => (
               <li key={incident.productName} className="flex justify-between px-3 py-2">
                 <span>{incident.productName}</span>
-                <span className="numeral text-amber">
-                  {incident.pendingBase} {incident.baseUnitName}
-                </span>
+                <span className="numeral text-amber">{incident.amount}</span>
               </li>
             ))}
           </ul>
@@ -199,9 +202,7 @@ function StockTab({
             {lowStock.map((row) => (
               <li key={row.productName} className="flex justify-between px-3 py-2">
                 <span>{row.productName}</span>
-                <span className="numeral text-sm">
-                  {row.onHandBase} {row.baseUnitName}
-                </span>
+                <span className="numeral text-sm">{row.onHand}</span>
               </li>
             ))}
           </ul>
@@ -222,8 +223,8 @@ function UdhaarTab({ customers }: { customers: CustomerItem[] }) {
           {customers.map((customer) => (
             <li key={customer.id} className="flex justify-between px-3 py-2">
               <span>{customer.name}</span>
-              <span className="numeral font-medium">
-                {formatPaisa(paisa(customer.balancePaisa))}
+              <span className="font-medium">
+                <BalanceInline balancePaisa={customer.balancePaisa} />
               </span>
             </li>
           ))}

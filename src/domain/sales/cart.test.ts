@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { baseQty, paisa } from '@/lib/branded';
+import type { ProductUnit } from '@/domain/catalog/units';
+import { paisa } from '@/lib/branded';
 
 import {
   addToCart,
@@ -9,34 +10,79 @@ import {
   isPriceOverridden,
   lineGrossPaisa,
   lineTotal,
+  newCartLine,
   paisaFromRupeeInput,
+  parseRupeeInput,
   parseDiscountInput,
   removeLine,
   splitPayment,
   totalLineDiscountPaisa,
   updateLine,
+  withQuantity,
   type CartLine,
 } from './cart';
 
-function line(overrides: Partial<CartLine> = {}): CartLine {
-  return {
-    lineId: 'line-1',
-    productId: 'panadol',
-    name: 'Panadol',
-    baseUnitName: 'tab',
-    packLevels: [{ name: 'strip', factor: 10 }],
-    qtyBase: baseQty(10),
-    enteredUnitLevel: 'strip',
-    unitPricePaisa: paisa(350),
-    catalogPricePaisa: paisa(350),
-    lineDiscountPaisa: paisa(0),
-    ...overrides,
+/** Panadol: a tablet at Rs 3.50, a strip of 10 at Rs 35, a box of 100 at Rs 330. */
+const UNITS: ProductUnit[] = [
+  { key: 'u0', name: 'tab', factor: 1, pricePaisa: 350, sell: true },
+  { key: 'u1', name: 'strip', factor: 10, pricePaisa: 3_500, sell: true },
+  { key: 'u2', name: 'box', factor: 100, pricePaisa: 33_000, sell: true },
+];
+
+function line(
+  overrides: Partial<Pick<CartLine, 'lineId' | 'productId' | 'lineDiscountPaisa'>> & {
+    unit?: string;
+    count?: number;
+    price?: number;
+  } = {},
+): CartLine {
+  const { unit = 'strip', count = 1, price, ...rest } = overrides;
+  const built = {
+    ...newCartLine({
+      lineId: 'line-1',
+      productId: 'panadol',
+      name: 'Panadol',
+      baseUnitName: 'tab',
+      packLevels: [
+        { name: 'strip', factor: 10 },
+        { name: 'box', factor: 100 },
+      ],
+      units: UNITS,
+      unitName: unit,
+      count,
+    }),
+    ...rest,
   };
+  return price === undefined ? built : { ...built, pricePerUnitPaisa: paisa(price) };
 }
 
-describe('line totals', () => {
-  it('multiplies price by quantity in base units', () => {
+describe('line totals — count × the price of one unit (PCN-012)', () => {
+  it('a strip is the strip price', () => {
     expect(lineTotal(line())).toBe(3_500);
+    expect(line().qtyBase).toBe(10);
+  });
+
+  it('a box is the box price exactly, not 100 × a tablet price', () => {
+    expect(lineTotal(line({ unit: 'box' }))).toBe(33_000);
+    expect(line({ unit: 'box' }).qtyBase).toBe(100);
+  });
+
+  it('a box of 14 at Rs 250 charges Rs 250.00', () => {
+    const box14 = newCartLine({
+      lineId: 'x',
+      productId: 'p',
+      name: 'Capsules',
+      baseUnitName: 'cap',
+      packLevels: [{ name: 'box', factor: 14 }],
+      units: [
+        { key: 'u0', name: 'cap', factor: 1, pricePaisa: 1_786, sell: true },
+        { key: 'u1', name: 'box', factor: 14, pricePaisa: 25_000, sell: true },
+      ],
+      unitName: 'box',
+      count: 3,
+    });
+    expect(lineTotal(box14)).toBe(75_000);
+    expect(box14.qtyBase).toBe(42);
   });
 
   it('subtracts the line discount', () => {
@@ -47,23 +93,27 @@ describe('line totals', () => {
     expect(lineTotal(line({ lineDiscountPaisa: paisa(99_999) }))).toBe(0);
   });
 
-  it('handles a sub-strip quantity — the sale that competitors get wrong (W5)', () => {
-    // 4 loose tablets at Rs 3.50 each.
-    expect(lineTotal(line({ qtyBase: baseQty(4), enteredUnitLevel: 'tab' }))).toBe(1_400);
+  it('handles loose tablets — the sale that competitors get wrong (W5)', () => {
+    expect(lineTotal(line({ unit: 'tab', count: 4 }))).toBe(1_400);
+  });
+
+  it('an unknown unit name falls back to the smallest unit rather than failing a sale', () => {
+    expect(line({ unit: 'carton' }).enteredUnitLevel).toBe('tab');
   });
 });
 
 describe('cart totals — Phase 5 invariant 4', () => {
-  it('sums line totals into the subtotal', () => {
+  it('sums line totals into the subtotal, counting items in the units sold', () => {
     const totals = cartTotals([
       line({ lineId: 'a' }),
-      line({ lineId: 'b', qtyBase: baseQty(4), unitPricePaisa: paisa(900) }),
+      line({ lineId: 'b', unit: 'tab', count: 4, price: 900 }),
     ]);
 
     expect(totals.subtotalPaisa).toBe(3_500 + 3_600);
     expect(totals.totalPaisa).toBe(7_100);
     expect(totals.lineCount).toBe(2);
-    expect(totals.itemCount).toBe(14);
+    // One strip and four tablets: five items, not fourteen.
+    expect(totals.itemCount).toBe(5);
   });
 
   it('total = subtotal − invoice discount, exactly', () => {
@@ -74,8 +124,6 @@ describe('cart totals — Phase 5 invariant 4', () => {
   });
 
   it('clamps an over-large invoice discount rather than going negative', () => {
-    // Rounding a total down to a friendly number is routine (Phase 1 §5); a
-    // fat-fingered discount must not produce a total no drawer can honour.
     const totals = cartTotals([line()], paisa(99_999));
     expect(totals.totalPaisa).toBe(0);
     expect(totals.invoiceDiscountPaisa).toBe(3_500);
@@ -114,36 +162,32 @@ describe('payment split', () => {
   it('treats cash beyond the total as change, not overpayment', () => {
     const split = splitPayment(paisa(8_500), paisa(10_000));
     expect(split).toEqual({ cashPaisa: 8_500, creditPaisa: 0, changePaisa: 1_500 });
-    // The invariant the schema enforces: cash + credit = total, exactly.
     expect(split.cashPaisa + split.creditPaisa).toBe(8_500);
   });
 });
 
 describe('adding to the cart', () => {
   it('merges a repeat scan into the existing line', () => {
-    // Three strips of the same thing should read "3 strip", not three rows.
     const first = addToCart([], line({ lineId: 'a' }));
     const second = addToCart(first, line({ lineId: 'b' }));
 
     expect(second).toHaveLength(1);
+    expect(second[0]?.unitCount).toBe(2);
     expect(second[0]?.qtyBase).toBe(20);
+    expect(lineTotal(second[0]!)).toBe(7_000);
   });
 
-  it('keeps a different unit level as its own line', () => {
-    const cart = addToCart(
-      [line({ lineId: 'a', enteredUnitLevel: 'strip' })],
-      line({ lineId: 'b', enteredUnitLevel: 'tab', qtyBase: baseQty(4) }),
-    );
+  it('keeps a different unit as its own line', () => {
+    const cart = addToCart([line({ lineId: 'a' })], line({ lineId: 'b', unit: 'tab', count: 4 }));
     expect(cart).toHaveLength(2);
   });
 
   it('never merges into a line whose price was overridden', () => {
-    // Merging would silently reprice the operator's decision.
-    const overridden = line({ lineId: 'a', unitPricePaisa: paisa(300) });
+    const overridden = line({ lineId: 'a', price: 3_000 });
     const cart = addToCart([overridden], line({ lineId: 'b' }));
 
     expect(cart).toHaveLength(2);
-    expect(cart[0]?.unitPricePaisa).toBe(300);
+    expect(cart[0]?.pricePerUnitPaisa).toBe(3_000);
   });
 
   it('keeps a different product separate', () => {
@@ -153,20 +197,35 @@ describe('adding to the cart', () => {
 });
 
 describe('editing lines in place (Phase 10 §4)', () => {
-  it('changes quantity', () => {
-    const cart = updateLine([line()], 'line-1', { qtyBase: baseQty(30) });
+  it('changes the count, keeping base units in step', () => {
+    const cart = updateLine([line()], 'line-1', { unitCount: 3 });
+    expect(cart[0]?.unitCount).toBe(3);
     expect(cart[0]?.qtyBase).toBe(30);
   });
 
+  it('changing the unit re-prices at that unit’s own price', () => {
+    const cart = updateLine([line({ count: 2 })], 'line-1', { unitKey: 'u2' });
+    expect(cart[0]?.enteredUnitLevel).toBe('box');
+    expect(cart[0]?.qtyBase).toBe(200);
+    expect(lineTotal(cart[0]!)).toBe(66_000);
+  });
+
+  it('an override does not travel to another unit', () => {
+    const overridden = line({ price: 3_000 });
+    const asBox = withQuantity(overridden, 'u2', 1);
+    expect(asBox.pricePerUnitPaisa).toBe(33_000);
+    expect(isPriceOverridden(asBox)).toBe(false);
+  });
+
   it('changes price, and the change is detectable as an override (T1)', () => {
-    const cart = updateLine([line()], 'line-1', { unitPricePaisa: paisa(300) });
+    const cart = updateLine([line()], 'line-1', { pricePerUnitPaisa: paisa(3_000) });
     expect(isPriceOverridden(cart[0]!)).toBe(true);
     expect(isPriceOverridden(line())).toBe(false);
   });
 
   it('leaves other lines alone', () => {
     const cart = updateLine([line({ lineId: 'a' }), line({ lineId: 'b' })], 'a', {
-      qtyBase: baseQty(1),
+      unitCount: 5,
     });
     expect(cart[1]?.qtyBase).toBe(10);
   });
@@ -186,6 +245,21 @@ describe('rupee input', () => {
     expect(paisaFromRupeeInput('')).toBe(0);
     expect(paisaFromRupeeInput('abc')).toBe(0);
     expect(paisaFromRupeeInput('-5')).toBe(0);
+  });
+
+  it('treats an amount too large to hold exactly as unreadable, never a throw', () => {
+    // "12" typed into Unit cost, then a scanned EAN-13 that was not caught.
+    expect(paisaFromRupeeInput('122030297825992')).toBe(0);
+  });
+
+  it('says "not an amount" rather than zero, for the fields that must tell them apart', () => {
+    expect(parseRupeeInput('250.50')).toBe(25_050);
+    expect(parseRupeeInput('0')).toBe(0);
+    expect(parseRupeeInput('')).toBeNull();
+    // A pack's GS1 code ends in letters; a long one overflows.
+    expect(parseRupeeInput('01089640015901701728033110563C')).toBeNull();
+    expect(parseRupeeInput('122030297825992')).toBeNull();
+    expect(parseRupeeInput('-5')).toBeNull();
   });
 });
 
@@ -259,7 +333,7 @@ describe('a per-line discount, applied through a real cart line', () => {
   });
 
   it('a fixed-amount line discount reduces only that line, via the existing field', () => {
-    const lines = [line({ lineId: 'a' }), line({ lineId: 'b', qtyBase: baseQty(4) })];
+    const lines = [line({ lineId: 'a' }), line({ lineId: 'b', unit: 'tab', count: 4 })];
     const discounted = updateLine(lines, 'a', {
       lineDiscountPaisa: parseDiscountInput('5', lineGrossPaisa(lines[0]!)),
     });
@@ -275,7 +349,7 @@ describe('a per-line discount, applied through a real cart line', () => {
 
 describe('the receipt figures — gross Subtotal and the summed Discount row', () => {
   it('no-discount sale: gross subtotal equals the total, and there is nothing to discount', () => {
-    const lines = [line({ lineId: 'a' }), line({ lineId: 'b', qtyBase: baseQty(4) })];
+    const lines = [line({ lineId: 'a' }), line({ lineId: 'b', unit: 'tab', count: 4 })];
 
     expect(grossSubtotalPaisa(lines)).toBe(3_500 + 1_400);
     expect(totalLineDiscountPaisa(lines)).toBe(0);
@@ -285,7 +359,7 @@ describe('the receipt figures — gross Subtotal and the summed Discount row', (
   it('discounted sale: gross subtotal is what the customer would have paid before any discount', () => {
     const lines = [
       line({ lineId: 'a', lineDiscountPaisa: paisa(500) }), // Rs 35.00 gross, Rs 5.00 off
-      line({ lineId: 'b', qtyBase: baseQty(4) }), // Rs 14.00 gross, no discount
+      line({ lineId: 'b', unit: 'tab', count: 4 }), // Rs 14.00 gross, no discount
     ];
 
     // Subtotal is the GROSS figure — never lowered by a line's own discount,
@@ -305,7 +379,7 @@ describe('the receipt figures — gross Subtotal and the summed Discount row', (
   it('sums every line’s discount into one Discount row, not per line', () => {
     const lines = [
       line({ lineId: 'a', lineDiscountPaisa: paisa(200) }),
-      line({ lineId: 'b', qtyBase: baseQty(4), lineDiscountPaisa: paisa(100) }),
+      line({ lineId: 'b', unit: 'tab', count: 4, lineDiscountPaisa: paisa(100) }),
     ];
     expect(totalLineDiscountPaisa(lines)).toBe(300);
   });

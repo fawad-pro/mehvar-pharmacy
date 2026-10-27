@@ -19,12 +19,21 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCatalog } from '@/client/search/provider';
 import { parseQuantityQuery } from '@/client/search/quantity-grammar';
+import { lastSaleUnit } from '@/client/sale/last-unit';
+import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { MatchTier, type SearchHit } from '@/client/search/catalog-index';
+import { looksLikeScannedCode } from '@/domain/catalog/barcode';
+import { defaultSaleUnit, findUnit, unitsOf } from '@/domain/catalog/units';
 import { formatPaisa } from '@/lib/money';
-import { describeQuantity } from '@/lib/quantity';
+import { describeQuantity, unitLevels } from '@/lib/quantity';
 import { baseQty, paisa } from '@/lib/branded';
 
 const RESULT_LIMIT = 10;
+
+/** What linking an unknown code produced — declared here, not imported from a server action file. */
+export type LinkOutcome = { ok: true } | { ok: false; message: string };
+
+type CodeOption = 'link' | 'add';
 
 export function ProductSearch({
   onSelect,
@@ -32,6 +41,7 @@ export function ProductSearch({
   inputRef,
   onEnterCart,
   onQuickAdd,
+  onLinkCode,
 }: {
   /** Receives the chosen hit and the raw query, so quantity grammar survives. */
   onSelect: (hit: SearchHit, rawQuery: string) => void;
@@ -46,13 +56,40 @@ export function ProductSearch({
    * clears; a cancelled quick-add leaves the typing alone, because the operator
    * is most likely about to correct a spelling.
    */
-  onQuickAdd?: (name: string) => Promise<boolean>;
+  /** `code` is the unknown scanned code, when the quick item comes from one. */
+  onQuickAdd?: (name: string, code?: string) => Promise<boolean>;
+  /**
+   * Phase 10 §5 / Phase 6 §4 — links an unknown scanned code to a product, at
+   * the unit the code is printed on. Absent where linking is not offered.
+   */
+  onLinkCode?: (code: string, productId: string, unitLevelName: string) => Promise<LinkOutcome>;
 }) {
-  const { index, status, productCount } = useCatalog();
+  const { index, status, productCount, refresh } = useCatalog();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
+  // An unknown scanned code (Phase 10 §5's inline prompt). `codeChosen` says
+  // the operator moved onto an option: the scanner's own Enter, which arrives
+  // with the code, must not act on its behalf.
+  const [codeChosen, setCodeChosen] = useState(false);
+  const [linking, setLinking] = useState<{ code: string } | null>(null);
+  const [linkTarget, setLinkTarget] = useState<SearchHit | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
   const ownRef = useRef<HTMLInputElement>(null);
   const field = inputRef ?? ownRef;
+
+  // The catalog index lives in the counter layout and survives navigation, so
+  // a barcode linked or a product edited on another screen was invisible here
+  // until a full reload — a fresh code scanned as unknown and offered a quick
+  // item. Arriving with an index already built (never on first load, which is
+  // fetching one anyway) pulls the incremental changes since it was built.
+  const hadIndexOnArrival = useRef(index !== null);
+  useEffect(() => {
+    if (hadIndexOnArrival.current) {
+      refresh();
+    }
+    // Once per arrival: re-running when `refresh` changes identity would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (autoFocus) {
@@ -73,32 +110,124 @@ export function ProductSearch({
     [index, parsed.query],
   );
 
+  // A scanned code that matched no barcode is an unknown CODE: whatever the
+  // name search would make of a run of digits is noise, and offering to add the
+  // code itself as a product is how junk products were made. While linking,
+  // the box is a plain product search.
+  const unknownCode =
+    linking === null &&
+    looksLikeScannedCode(parsed.query) &&
+    !hits.some((hit) => hit.tier === MatchTier.Barcode);
+  const visibleHits = unknownCode ? [] : hits;
+  const codeOptions: CodeOption[] = unknownCode
+    ? [...(onLinkCode ? (['link'] as const) : []), ...(onQuickAdd ? (['add'] as const) : [])]
+    : [];
+
+  function resetBox(): void {
+    setQuery('');
+    setActive(0);
+    setCodeChosen(false);
+    field.current?.focus();
+  }
+
   function choose(hit: SearchHit | undefined): void {
     if (!hit) {
       return;
     }
+    if (linking) {
+      // The product the code belongs to; the unit comes next.
+      setLinkTarget(hit);
+      setLinkError(null);
+      return;
+    }
     onSelect(hit, query);
-    setQuery('');
-    setActive(0);
-    field.current?.focus();
+    resetBox();
+  }
+
+  function runCodeOption(option: CodeOption | undefined): void {
+    if (option === 'link') {
+      setLinking({ code: parsed.query });
+      setLinkTarget(null);
+      setLinkError(null);
+      resetBox();
+    } else if (option === 'add') {
+      // Never the code as the name: the operator types what the product is.
+      // The code travels with it, so the new product keeps it.
+      void quickAdd('', parsed.query);
+    }
+  }
+
+  function cancelLinking(): void {
+    setLinking(null);
+    setLinkTarget(null);
+    setLinkError(null);
+    resetBox();
+  }
+
+  async function link(unitLevelName: string): Promise<void> {
+    if (!linking || !linkTarget || !onLinkCode) {
+      return;
+    }
+    const outcome = await onLinkCode(linking.code, linkTarget.product.id, unitLevelName).catch(
+      (): LinkOutcome => ({
+        ok: false,
+        message: 'Needs internet — linking a code is saved on the server. Try again shortly.',
+      }),
+    );
+    if (!outcome.ok) {
+      setLinkError(outcome.message);
+      return;
+    }
+    // The scan was a sale: the product lands at the unit the code is on.
+    onSelect({ ...linkTarget, tier: MatchTier.Barcode, matchedOn: 'barcode', unitLevelName }, '');
+    setLinking(null);
+    setLinkTarget(null);
+    setLinkError(null);
+    resetBox();
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'Escape' && linking) {
+      event.preventDefault();
+      cancelLinking();
+      return;
+    }
+    if (unknownCode && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+      event.preventDefault();
+      // The first press lands on the first option; later presses move.
+      setActive((current) =>
+        !codeChosen
+          ? 0
+          : event.key === 'ArrowDown'
+            ? Math.min(current + 1, codeOptions.length - 1)
+            : Math.max(current - 1, 0),
+      );
+      setCodeChosen(true);
+      return;
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
-      setActive((current) => Math.min(current + 1, hits.length - 1));
+      setActive((current) => Math.min(current + 1, visibleHits.length - 1));
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       // At the top of the list — or with nothing typed — ArrowUp leaves search
       // and enters the cart, which is how a line gets edited without the mouse.
-      if (active === 0 || hits.length === 0) {
+      if (active === 0 || visibleHits.length === 0) {
         onEnterCart?.();
         return;
       }
       setActive((current) => Math.max(current - 1, 0));
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (hits.length === 0 && parsed.query !== '') {
+      if (unknownCode) {
+        // Only an option the operator moved onto. The Enter a scanner sends
+        // with an unknown code does nothing but leave the prompt showing.
+        if (codeChosen) {
+          runCodeOption(codeOptions[active]);
+        }
+        return;
+      }
+      if (visibleHits.length === 0 && parsed.query !== '' && !linking) {
         // W6: "from an empty search result, one key". The key is Enter, because
         // it is the one the operator's finger is already on and because P2 says
         // a missing product is never a dead end.
@@ -108,21 +237,19 @@ export function ProductSearch({
       // A scanner types its digits and presses Enter. When exactly one result
       // came back it is unambiguous, so Enter takes it whatever the cursor says
       // — that is the "scan anywhere adds the item" behaviour of I1.
-      choose(hits[hits.length === 1 ? 0 : active]);
+      choose(visibleHits[visibleHits.length === 1 ? 0 : active]);
     }
   }
 
-  async function quickAdd(): Promise<void> {
+  async function quickAdd(name: string = parsed.query, code?: string): Promise<void> {
     if (!onQuickAdd || parsed.query === '') {
       return;
     }
-    const added = await onQuickAdd(parsed.query);
+    const added = await onQuickAdd(name, code);
     if (added) {
       // Same reset choosing a hit performs: the item is in the cart, so the box
       // is ready for the next one (Phase 7 rule 1).
-      setQuery('');
-      setActive(0);
-      field.current?.focus();
+      resetBox();
     }
   }
 
@@ -141,14 +268,18 @@ export function ProductSearch({
           // Done here rather than in an effect: it is a consequence of the
           // edit, not a synchronisation with anything outside React.
           setActive(0);
+          setCodeChosen(false);
+          setLinkTarget(null);
         }}
         onKeyDown={onKeyDown}
         autoComplete="off"
         spellCheck={false}
         placeholder="Search or scan…"
+        // Scans belong here; the counter's scan guard leaves this field alone.
+        data-scan-target=""
         aria-autocomplete="list"
         aria-controls="product-search-results"
-        aria-expanded={hits.length > 0}
+        aria-expanded={visibleHits.length > 0 || codeOptions.length > 0}
         role="combobox"
         className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
       />
@@ -169,14 +300,100 @@ export function ProductSearch({
               : `${productCount} products`}
       </p>
 
-      {parsed.query !== '' ? (
+      {linking ? (
+        <div className="border-green-600 bg-green-100/40 mt-2 rounded border px-3 py-2 text-sm">
+          <p role="status">
+            Linking code <span className="numeral font-medium">{linking.code}</span> — find the
+            product it belongs to.{' '}
+            <button type="button" onClick={cancelLinking} className="text-ink/60 underline">
+              Cancel (Esc)
+            </button>
+          </p>
+          {linkTarget ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="font-medium">{linkTarget.product.name}:</span>
+              <span className="text-ink/70">which unit is this code printed on?</span>
+              {/* Largest first: a code on a pack is far more often the box's. */}
+              {unitLevels(linkTarget.product.baseUnitName, linkTarget.product.packLevels)
+                .reverse()
+                .map((level, position) => (
+                  <button
+                    key={level.name}
+                    type="button"
+                    autoFocus={position === 0}
+                    onClick={() => {
+                      void link(level.name);
+                    }}
+                    className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium"
+                  >
+                    Link to {level.name}
+                  </button>
+                ))}
+            </div>
+          ) : null}
+          {linkError ? (
+            <p className="text-red mt-1" role="alert">
+              {linkError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {parsed.query !== '' && unknownCode ? (
+        <ul
+          id="product-search-results"
+          role="listbox"
+          aria-label="Unknown code"
+          className="border-line bg-paper absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded border shadow-lg"
+        >
+          <li className="px-3 py-2 text-sm">
+            <span className="font-medium">This code is not linked to a product yet</span>
+            <span className="text-ink/60 numeral block truncate text-xs">{parsed.query}</span>
+          </li>
+          {codeOptions.map((option, position) => (
+            <li
+              key={option}
+              role="option"
+              aria-selected={codeChosen && position === active}
+              onClick={() => {
+                runCodeOption(option);
+              }}
+              onMouseEnter={() => {
+                setActive(position);
+                setCodeChosen(true);
+              }}
+              className={`cursor-pointer px-3 py-2 ${codeChosen && position === active ? 'bg-green-100/60' : ''}`}
+            >
+              <span className="text-green-600 block font-medium">
+                {option === 'link' ? 'Link it to a product' : 'Add a new product'}
+              </span>
+              <span className="text-ink/50 block text-xs">
+                {option === 'link'
+                  ? 'Find the product and choose the unit — the next scan adds it directly'
+                  : 'Type its name and price — the code is not used as a name'}
+              </span>
+            </li>
+          ))}
+          {codeOptions.length === 0 ? (
+            <li className="text-ink/60 px-3 py-2 text-xs">
+              Link it from the product’s page on the Products screen.
+            </li>
+          ) : null}
+        </ul>
+      ) : parsed.query !== '' ? (
         <ul
           id="product-search-results"
           role="listbox"
           aria-label="Search results"
           className="border-line bg-paper absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded border shadow-lg"
         >
-          {hits.length === 0 ? (
+          {visibleHits.length === 0 && linking ? (
+            // Linking attaches a code to a product that exists; offering to
+            // invent one here would be the junk-product path again.
+            <li className="text-ink/60 px-3 py-2 text-sm">
+              No product matches — check the spelling, or press Esc to cancel linking.
+            </li>
+          ) : visibleHits.length === 0 ? (
             // P2: an empty result is never an error state — it is W6's trigger,
             // and the quick-add is the first-class result rather than a
             // consolation message under one.
@@ -200,7 +417,7 @@ export function ProductSearch({
               </button>
             </li>
           ) : (
-            hits.map((hit, position) => (
+            visibleHits.map((hit, position) => (
               <ResultRow
                 key={hit.product.id}
                 hit={hit}
@@ -277,12 +494,38 @@ function ResultRow({
         <StockBadge stockBase={hit.stockBase} product={product} />
 
         {/* Paisa crosses the wire as a plain number; it becomes branded again
-            at this boundary rather than being cast (Phase 11 §2). */}
-        <span className="numeral w-20 shrink-0 tabular-nums">
-          {formatPaisa(paisa(product.pricePaisa))}
-        </span>
+            at this boundary rather than being cast (Phase 11 §2).
+            [PCN-012] The price of the unit Enter will add — the scanned
+            barcode's unit, or the counter's default — never a per-tablet
+            figure for a product sold by the strip. */}
+        <UnitPrice hit={hit} />
       </button>
     </li>
+  );
+}
+
+function UnitPrice({ hit }: { hit: SearchHit }) {
+  const { product } = hit;
+  const startsLoose = useReceiptContext()?.saleStartsLoose ?? false;
+  const units = unitsOf({
+    baseUnitName: product.baseUnitName,
+    packLevels: product.packLevels,
+    pricePerBasePaisa: product.pricePaisa,
+    units: product.units,
+  });
+  // The price of the unit a pick will add: the scanned code's own, else the
+  // Sale screen's default (PCN-012).
+  const unit =
+    (hit.unitLevelName ? findUnit(units, hit.unitLevelName) : undefined) ??
+    defaultSaleUnit(units, lastSaleUnit(product.id), startsLoose) ??
+    units[0];
+  return (
+    <span className="numeral w-28 shrink-0 text-right tabular-nums">
+      {formatPaisa(paisa(unit?.pricePaisa ?? product.pricePaisa))}
+      {unit && units.length > 1 ? (
+        <span className="text-ink/50 text-xs"> / {unit.name}</span>
+      ) : null}
+    </span>
   );
 }
 

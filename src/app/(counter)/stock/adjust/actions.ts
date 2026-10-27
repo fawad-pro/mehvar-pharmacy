@@ -13,6 +13,7 @@
 import { requireCapability } from '@/auth/capabilities';
 import { currentSession, scopeFor } from '@/auth/session';
 import { batchesOnHand } from '@/db/adjustment-queries';
+import { lastPurchaseCost } from '@/db/purchase-queries';
 import { commitAdjustment, type AdjustmentCommand } from '@/domain/inventory/commit-adjustment';
 
 import { revalidateAfter } from '../../revalidate';
@@ -40,6 +41,8 @@ function messageFor(reason: AdjustmentRejection | 'stale_batch_state'): string {
       return 'Choose which batch the stock is leaving.';
     case 'batch_not_allowed':
       return 'Stock being added creates its own batch — no batch to choose.';
+    case 'invalid_unit':
+      return 'That count no longer matches the product’s packs. Choose the product again.';
     case 'stale_batch_state':
       return 'That batch does not have that many left. Check the figure and try again.';
     default:
@@ -68,4 +71,15 @@ export async function adjustStockAction(command: AdjustmentCommand): Promise<Adj
   }
   revalidateAfter('stock');
   return { ok: true, resolvedPendingBase: result.value.resolvedPendingBase };
+}
+
+/** [PCN-012] What opening stock's cost is pre-filled from: the last purchase. */
+export async function lastPurchaseCostAction(
+  productId: string,
+): Promise<{ unitKey: string | null; costPaisa: number } | null> {
+  const session = await currentSession();
+  if (!session) {
+    return null;
+  }
+  return lastPurchaseCost(scopeFor(session), productId);
 }

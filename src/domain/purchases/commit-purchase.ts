@@ -39,6 +39,7 @@ import {
   insertPurchase,
   insertPurchaseLines,
   pendingAllocationsForProducts,
+  productUnitsFor,
   resolveAllocation,
 } from '@/db/purchase-queries';
 import { consumeFromBatch } from '@/db/sales-queries';
@@ -49,7 +50,10 @@ import { planResolution, type ArrivedBatch } from '../inventory/resolve-pending'
 import { effectiveUnitCostPaisa, receivedQty } from './costing';
 import {
   effectiveCashPaidPaisa,
+  enteredUnitFactor,
+  lineCostPaisa,
   validatePurchaseCommand,
+  type EnteredPurchaseUnit,
   type PurchaseCommand,
   type PurchaseRejection,
 } from './purchase-command';
@@ -59,6 +63,8 @@ export {
   purchaseWarnings,
   invoiceCostPaisa,
   effectiveCashPaidPaisa,
+  lineCostPaisa,
+  type EnteredPurchaseUnit,
   type PurchaseCommand,
   type PurchaseLineCommand,
   type PurchaseRejection,
@@ -77,8 +83,7 @@ export interface PurchaseCommitted {
 }
 
 export type PurchaseResult =
-  | { ok: true; value: PurchaseCommitted }
-  | { ok: false; reason: PurchaseRejection; lineId?: Uuid };
+  { ok: true; value: PurchaseCommitted } | { ok: false; reason: PurchaseRejection; lineId?: Uuid };
 
 export async function commitPurchase(
   scope: TenantScope,
@@ -105,6 +110,21 @@ export async function commitPurchase(
       } satisfies PurchaseResult;
     }
 
+    // [PCN-012] An entered unit must be one the product has, at its size:
+    // "10 boxes" means 10 × the box's size, never a size the screen guessed.
+    const unitsByProduct = await productUnitsFor(tx, [
+      ...new Set(command.lines.filter((line) => line.entered).map((line) => line.productId)),
+    ]);
+    for (const line of command.lines) {
+      if (!line.entered) continue;
+      const unit = unitsByProduct
+        .get(line.productId)
+        ?.find((candidate) => candidate.key === line.entered?.unitKey);
+      if (!unit || unit.factor !== enteredUnitFactor(line)) {
+        return { ok: false, reason: 'invalid_unit', lineId: line.lineId } satisfies PurchaseResult;
+      }
+    }
+
     await insertPurchase(tx, {
       id: command.purchaseId,
       supplierId: command.supplierId,
@@ -112,6 +132,8 @@ export async function commitPurchase(
       invoiceDate: command.invoiceDate,
       note: command.note,
       cashPaidPaisa: effectiveCashPaidPaisa(command),
+      // Recorded through "Paid now", so it counts toward what is owed.
+      creditTracked: true,
     });
 
     await insertPurchaseLines(
@@ -127,6 +149,17 @@ export async function commitPurchase(
         batchNumber: line.batchNumber,
         mrpAtReceivingPaisa: line.mrpAtReceivingPaisa,
         priceAtReceivingPaisa: line.priceAtReceivingPaisa,
+        ...(line.entered
+          ? {
+              unitKey: line.entered.unitKey,
+              unitName: line.entered.unitName,
+              unitCount: line.entered.unitCount,
+              bonusUnitCount: line.entered.bonusUnitCount,
+              unitCostPaisaEntered: line.entered.unitCostPaisa,
+              lineCostPaisa: lineCostPaisa(line),
+              pricePaisaEntered: line.entered.pricePaisa,
+            }
+          : {}),
       })),
     );
 
@@ -139,7 +172,8 @@ export async function commitPurchase(
       const batchId = uuidv7();
       batchIds.push(batchId);
       const received = receivedQty(line);
-      const unitCost = effectiveUnitCostPaisa(line);
+      const costTotal = lineCostPaisa(line);
+      const unitCost = effectiveUnitCostPaisa({ ...line, lineCostPaisa: costTotal });
 
       arrived.push({
         batchId,
@@ -159,6 +193,8 @@ export async function commitPurchase(
         pricePerBaseUnitPaisa: line.priceAtReceivingPaisa,
         qtyReceivedBase: received,
         qtyRemainingBase: received,
+        costTotalPaisa: costTotal,
+        pricesAtReceiving: pricesAtReceiving(unitsByProduct.get(line.productId), line.entered),
       };
     });
 
@@ -176,8 +212,7 @@ export async function commitPurchase(
         allocationId: resolution.allocationId,
         batchId: resolution.batchId,
         unitCostPaisa: resolution.unitCostPaisa,
-        purchaseLineId:
-          batchRows.find((row) => row.id === resolution.batchId)?.sourceId ?? null,
+        purchaseLineId: batchRows.find((row) => row.id === resolution.batchId)?.sourceId ?? null,
         adjustmentId: null,
       });
 
@@ -217,9 +252,30 @@ export async function commitPurchase(
   });
 }
 
+/**
+ * Each unit's selling price as this batch arrived: the price typed on the line
+ * for the unit it was entered in, the product's own price for the others.
+ * Null for a line entered in base units (before PCN-012's screen), which keeps
+ * its one price in `price_per_base_unit_paisa`.
+ */
+function pricesAtReceiving(
+  units: readonly { key: string; pricePaisa: number }[] | undefined,
+  entered: EnteredPurchaseUnit | undefined,
+): { key: string; pricePaisa: number }[] | null {
+  if (!units || !entered) {
+    return null;
+  }
+  return units.map((unit) => ({
+    key: unit.key,
+    pricePaisa: unit.key === entered.unitKey ? entered.pricePaisa : unit.pricePaisa,
+  }));
+}
+
 export class StaleAllocationError extends Error {
   constructor(allocationId: string) {
-    super(`Pending allocation ${allocationId} changed under a locked read; the purchase was not received.`);
+    super(
+      `Pending allocation ${allocationId} changed under a locked read; the purchase was not received.`,
+    );
     this.name = 'StaleAllocationError';
   }
 }

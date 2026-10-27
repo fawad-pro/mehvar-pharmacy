@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { paisaFromRupeeInput, splitPayment } from '@/domain/sales/cart';
 import { keyFor } from '@/client/keyboard/registry';
+import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { formatPaisa } from '@/lib/money';
 import type { Paisa } from '@/lib/branded';
 
@@ -41,6 +42,8 @@ export function PaymentOverlay({
 }) {
   const [tenderedInput, setTenderedInput] = useState(() => (totalPaisa / 100).toFixed(2));
   const field = useRef<HTMLInputElement>(null);
+  /** Why Enter did not commit: an amount too large to be cash (see amount-guard). */
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     field.current?.focus();
@@ -82,16 +85,24 @@ export function PaymentOverlay({
           Cash tendered
         </label>
         <input
+          autoComplete="off"
           id="tendered"
           ref={field}
           value={tenderedInput}
           inputMode="decimal"
           onChange={(event) => {
             setTenderedInput(event.target.value);
+            setNotice(null);
           }}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
+              if (needsClickToCommit(tenderedPaisa)) {
+                setNotice(
+                  `${formatPaisa(tenderedPaisa, { withSymbol: true })} tendered looks like a barcode. If it is right, click Commit.`,
+                );
+                return;
+              }
               commit();
             }
             if (event.key === 'Escape') {
@@ -100,6 +111,12 @@ export function PaymentOverlay({
           }}
           className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-2xl outline-none"
         />
+
+        {notice ? (
+          <p className="text-red mt-2 text-sm" role="alert">
+            {notice}
+          </p>
+        ) : null}
 
         {split.changePaisa > 0 ? (
           <div className="mt-3 text-center">

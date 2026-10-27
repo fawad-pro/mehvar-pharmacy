@@ -8,12 +8,17 @@ import {
   lateSyncedInRange,
   overridesAndDiscountsInRange,
   reportFigures,
+  expiredStockSoldInRange,
+  purchaseCorrectionsInRange,
+  supplierReturnsInRange,
   returnsInRange,
   quickItemsInRange,
   threeNumbers,
 } from '@/db/reporting-queries';
-import { supplierOwedTotal } from '@/db/supplier-queries';
+import { supplierBook } from '@/db/supplier-queries';
 import { businessDayBounds, businessDayOf, type BusinessDay } from '@/lib/business-day';
+import { describeCounted } from '@/lib/quantity';
+import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
 
 import { DaySurface } from './day-surface';
 
@@ -60,19 +65,25 @@ export default async function DayPage({
     numbers,
     overrides,
     returns,
+    expiredSold,
     quickItems,
     adjustments,
+    corrections,
+    supplierReturns,
     cashMovements,
     lateSynced,
     figures,
     openingFloat,
-    supplierOwedPaisa,
+    suppliers,
   ] = await Promise.all([
     threeNumbers(scope, range.start, range.end),
     overridesAndDiscountsInRange(scope, range.start, range.end),
     returnsInRange(scope, range.start, range.end),
+    expiredStockSoldInRange(scope, range.start, range.end),
     quickItemsInRange(scope, range.start, range.end),
     adjustmentsInRange(scope, range.start, range.end),
+    purchaseCorrectionsInRange(scope, range.start, range.end),
+    supplierReturnsInRange(scope, range.start, range.end),
     cashMovementsExceptionInRange(scope, range.start, range.end),
     lateSyncedInRange(scope, range.start, range.end),
     reportFigures(scope, range.start, range.end),
@@ -80,9 +91,11 @@ export default async function DayPage({
     // in front of the owner right now.
     hasOpeningFloat(scope, start, end),
     // A position, not an event in a window (like the udhaar total): what the
-    // pharmacy owes suppliers right now, whatever range is being viewed.
-    supplierOwedTotal(scope),
+    // pharmacy owes suppliers, and what they hold in credit (PCN-011), right
+    // now, whatever range is being viewed.
+    supplierBook(scope),
   ]);
+  const stockCosts = supplierReturns.length > 0 ? await supplierReturnStockCosts(scope) : new Map();
 
   return (
     <DaySurface
@@ -93,12 +106,26 @@ export default async function DayPage({
       figures={figures}
       overrides={overrides}
       returns={returns}
+      expiredSold={expiredSold}
       quickItems={quickItems}
-      adjustments={adjustments}
+      // [PCN-012] In the words they were counted in, worked out here so the
+      // client needs no pack arithmetic.
+      adjustments={adjustments.map((row) => ({
+        ...row,
+        amount: describeCounted({ ...row, qtyBase: row.qtyBaseDelta }),
+      }))}
+      corrections={corrections}
+      supplierReturns={supplierReturns.map((row) => ({
+        ...row,
+        amount: describeCounted(row),
+        stockCostPaisa: stockCosts.get(row.id) ?? 0,
+      }))}
       cashMovements={cashMovements}
       lateSynced={lateSynced}
       hasOpeningFloat={openingFloat}
-      supplierOwedPaisa={supplierOwedPaisa}
+      supplierOwedPaisa={suppliers.owedPaisa}
+      supplierCreditPaisa={suppliers.creditPaisa}
+      suppliersInCredit={suppliers.suppliersInCredit}
     />
   );
 }

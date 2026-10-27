@@ -125,17 +125,41 @@
     visibility: visible;
   }
 
+  /*
+   * 72 mm, not 80. An 80 mm roll's head prints about 72 mm (576 dots at
+   * 8 dots/mm); a page laid out at 80 mm is wider than that, and the browser
+   * shrinks the whole receipt to fit — about 90%, on top of small type. The
+   * test receipt's measured bars confirm the width on a given printer.
+   */
   #printable-receipt {
     display: block;
     position: absolute;
     top: 0;
     left: 0;
-    width: 80mm;
-    padding: 2mm;
+    width: 72mm;
+    padding: 0 1mm;
   }
 
+  /*
+   * Solid black on paper, whatever the screen palette says. A thermal driver
+   * prints one colour; any grey, tint or opacity reaches it as halftone dots,
+   * which is the "faint" look. Rules are borders, which print even with the
+   * browser's "background graphics" off.
+   */
+  #printable-receipt,
+  #printable-receipt * {
+    color: #000;
+    border-color: #000;
+    opacity: 1;
+  }
+
+  /*
+   * No `size` here: `72mm auto` is invalid CSS, Chrome dropped it silently and
+   * scaled the slip to whatever paper the dialog chose. The page size — 72 mm
+   * wide, exactly one receipt tall — is written just before printing by
+   * `setReceiptPageSize` (client/print/use-print-receipt.ts).
+   */
   @page {
-    size: 80mm auto;
     margin: 0;
   }
 }

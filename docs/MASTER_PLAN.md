@@ -11,7 +11,7 @@ Status: Planning complete. This package is the authoritative specification for t
 1. **This package is the spec.** Implement it; do not re-litigate it. If implementation reveals a genuine flaw, raise a plan-change note, get a decision, then proceed (Phase 11 §4). Never silently patch around the plan.
 2. **Reading order for the implementation session:** Phase 5 (domain) → Phase 9 (schema) → Phase 8 (ADRs) → Phase 7 (workflows) → Phase 10 (screens) → Phase 11 (standards) → Phase 13 (day plan). Phases 1–4, 6, 12 are context and constraints; consult as referenced.
 3. **Identifier system, used throughout:**
-   - **P1–P8** product principles, **I1–I7** interaction principles, **T1–T5** trust principles (Phase 4)
+   - **P1–P9** product principles, **I1–I7** interaction principles, **T1–T5** trust principles (Phase 4)
    - **D1–D5** domain semantic decisions (Phase 5 §4)
    - **W1–W12** core workflows (Phase 7)
    - **ADR-1–ADR-8** architecture decisions (Phase 8) — note: Mehvar Hospital's ADR numbering is a separate series; references to "Mehvar ADR-2/16/18 lineage" mean the hospital product's records, cited as philosophical ancestry only.
@@ -196,11 +196,11 @@ A counter-first pharmacy operations system:
 
 ## What We Are NOT Building (V1)
 
-- Prescription management, dispensing records, or any clinical functionality
+- Prescription management, dispensing records, or any clinical functionality — including controlled-drug registers, as a conscious exclusion; the product makes no regulatory-compliance claim *(PCN-010)*
 - Patient/medical records of any kind
 - Customer relationship management: a customer is a name and phone number attached to a debt — no addresses, notes, loyalty, messaging, or marketing
 - Multi-branch operation (single branch in V1; nothing in the product may make future multi-branch impossible)
-- Supplier accounting / payables ledger (purchase recording yes; distributor credit management no)
+- Supplier accounting beyond what is owed *(amended 2026-10-22, PCN-010, applying PCN-007)*: what the pharmacy owes each supplier is tracked as a derived position — invoices, payments, corrections and returns — but there are no supplier statements, ledgers or accounting beyond that
 - FBR POS integration (not required for our non-Tier-1 segment; must remain adoptable later without disrupting the product)
 - Accounting beyond the pharmacy's operational money flow (no general ledger, no financial statements)
 - E-commerce, delivery, or customer-facing apps
@@ -224,6 +224,8 @@ Exclusions exist to protect speed and clarity. Each is revisitable post-V1; none
 
 **Secondary:** The owner as evening operator and remote reader of the day's numbers.
 
+**First customers (amended 2026-10-22, PCN-010):** neighbourhood pharmacies, mostly not tech-literate. Setup, opening stock and training are founder-done, and nothing in the first installs may depend on the owner configuring the software.
+
 **Future:** Small chains (2–5 branches); the multi-branch path is preserved architecturally and deferred entirely as product.
 
 ## Reference Customer Posture
@@ -244,7 +246,7 @@ A quality entrant in a crowded checklist market. Feature parity is assumed (sear
 **Trust (the decisive measure):**
 - By day 60 at the reference pharmacy, the owner has retired the parallel paper registers for stock, cash, and udhaar — the system is the sole record of the business. Supporting evidence: unannounced physical spot counts match system stock, and the owner settles udhaar disputes by showing the customer the screen.
 
-**Owner (answered within seconds, from a phone):**
+**Owner (answered within seconds, from a phone — in V1, a phone on the shop's own network; PCN-010):**
 - What did I sell today, and how much cash should be in the drawer?
 - Who owes me money, and how much?
 - What is running out, and what is about to expire?
@@ -316,16 +318,13 @@ The trust argument inverts with the deployment: the pitch now leads with "your d
 
 _Superseded text (retained for the record):_ "Deployment: cloud, single multi-tenant service, browser-based, one codebase. This is the only deployment a solo founder can operate at near-zero marginal support cost, and it is the only one that delivers the owner's-phone visibility and the survives-a-dead-PC data guarantee."
 
-**Pricing: one plan, two cadences, annual-led — set as an initial V1 target, not a permanent decision.**
-- Target: **Rs 2,000/month**, or **Rs 20,000/year** (two months free — the closer in every demo)
-- No setup fee (market norm; violating it loses demos)
-- 14-day full trial, no card, assisted setup included
-- One plan in V1. Tiering (multi-terminal, multi-branch) is future revenue, not launch complexity.
-- These numbers are validated during the first reference-customer deployments — willingness to pay, cadence preference, and renewal behavior are the evidence. The *structure* (one plan, two cadences, annual-led, no setup fee) is the strategy; the figures are the opening position.
+**Pricing (amended 2026-10-22, PCN-010, applying PCN-006): a one-time licence fee per installation; the figure is not yet set.** It is set from the first pilots, against the market anchor above. No setup fee (market norm). The 30-day evaluation (PCN-006) replaces the trial. One plan in V1; multi-counter and multi-branch tiers are future revenue. The pilot's own terms — a free fixed-term pilot with written terms and a founding price was recommended — are open (PCN-010).
+
+_Superseded text (retained for the record):_ "Target: Rs 2,000/month, or Rs 20,000/year … 14-day full trial, no card … The structure (one plan, two cadences, annual-led, no setup fee) is the strategy."
 
 Positioning at Pharma Pro parity is deliberate: we price as a peer and win on the five-minute experience gap, not on discount. Underpricing signals inferiority in a trust purchase.
 
-**Collection:** annual invoices collected at renewal; monthly via bank transfer / JazzCash / Easypaisa with automated reminders and a grace period. Non-payment handling is an operational policy decided post-launch, bound by one non-negotiable outcome: the customer's data is never held hostage — export remains available regardless of payment state. This is both ethics and the strongest possible answer to the cloud-trust objection.
+**Collection (amended 2026-10-22, PCN-010):** the licence fee is paid once, by bank transfer, JazzCash or Easypaisa, and the founder issues the licence (`licence:issue`). No reminders or renewals exist to automate. Bound by the same non-negotiable outcome: the customer's data is never held hostage — export remains available in every licence state.
 
 **Hardware: recommend, don't sell.** Publish a tested hardware list (PC minimums, 80mm thermal printer models, USB scanners) and a one-page setup guide. Carrying hardware inventory adds capital risk and support scope for margin that isn't ours to chase. The channel partner may source hardware at his own margin if he wishes; the software company stays a software company.
 
@@ -340,9 +339,9 @@ At Rs 20,000/year: 10 pharmacies ≈ Rs 200k/yr, 25 ≈ Rs 500k/yr, 50 ≈ Rs 1M
 1. **The tenant chokepoint ships from day one in every install** (architecture phase). Amended 2026-08-03 by PCN-004: the *isolation mechanism* is universal; multi-*tenancy* is a deployment option rather than a deployment fact. `src/db/scoped.ts` costs nothing at runtime in a single-tenant install and is what keeps one codebase serving both homes — a single-tenant build that dropped it would contradict this document.
 2. Owner data export as a V1 feature (workflows, IA phases).
 3. The service must support restricting a tenant's access on non-payment without ever compromising that tenant's ability to export their data (architecture phase); the enforcement policy itself is operational and post-launch. **Implemented 2026-09-16 by PCN-005 (accepted)** as the graduated capability ladder: selling, receipt printing and export are unconditional in every licence state, and past grace the restriction falls on receiving, stock adjustment, catalogue packs and automatic updates, with reports read-only. This requirement and `docs/research/commercialization.md` §6 previously disagreed about how much a licence may withhold; §6 is amended to match.
-4. Trial-to-paid needs no data migration — trial data becomes production data (architecture phase).
-5. Mobile-usable owner reporting (IA phase) — the phone dashboard is part of what the price buys.
-6. Payment tracking for subscriptions is founder-side tooling and may be manual at launch; do not build billing automation into V1.
+4. Evaluation-to-licensed needs no data migration — the evaluation's data is the production data (architecture phase; amended by PCN-010 for PCN-006's evaluation).
+5. Mobile-usable owner reporting (IA phase) — the phone dashboard is part of what the price buys. In V1 it is reached on the shop's own network (PCN-010).
+6. Licence issuing is founder-side tooling (`licence:issue`); do not build billing automation into V1 (amended by PCN-010; there are no subscriptions to track).
 
 ## 6. Future Considerations
 
@@ -382,6 +381,8 @@ Each principle includes its test — the question that settles a dispute.
 **P7. The salesman is the bar.** A non-technical operator, comfortable in Roman Urdu, learns any workflow in minutes and runs it at rush hour. If training is required, the design failed. *Test: could a new hire run this on day one having watched it done twice?*
 
 **P8. The shop opens tomorrow.** The pharmacy's ability to trade is never hostage to our operations. Updates, deployments, migrations, and recovery procedures are designed so the counter works every morning, unconditionally — changes land quietly, never mid-rush, and never require the pharmacy to do anything to keep selling. *Test: describe the worst thing that can happen on our side tonight; show why the counter still sells at 9am.*
+
+**P9. Sophisticated inside, simple outside.** *(Added 2026-10-24, PCN-012.)* The owner and the salesman never need to understand base units, paisa conversions, batch valuation or migrations to sell a strip of medicine; those are Mehvar's job. *Test: does anyone at the counter have to convert, divide or know a stored figure to finish this task? If yes, the design is wrong.*
 
 ## 2. Interaction Principles
 
@@ -486,6 +487,8 @@ Anything the pharmacy sells. Medicines are the primary case but not the only one
 
 **All stock arithmetic happens in base units.** "3 strips + 4 tablets" is stored and computed as 34 tablets; presentation converts back to natural language. This single rule eliminates the classic sub-unit corruption bug (P4 via arithmetic honesty).
 
+*Amended 2026-10-24 by PCN-012.* Stock arithmetic stays in base units, and nobody at the counter sees them (P9). Each unit level carries its own selling price, entered as the owner knows it (strip, box), and an MRP entered against the unit it is printed for. At the counter every unit the product has is offered; a sale line starts in the unit the product was last sold in on that counter, else in the shop's configured start, the smallest pack or the loose unit (amended 2026-10-26, PCN-012). A product's smallest unit and existing pack sizes lock once any record references them; adding a larger pack and renaming a label stay allowed, and pack sizes must nest (a box holds a whole number of strips). A wrong pack after trading starts is fixed by replacing the product, with stock moved across by adjustments. Quantities are shown as an amount in the product's own units, largest first ("12 boxes, 3 strips, 7 tablets"), never with a word implying opened, loose or sealed packs.
+
 ### Batch (stock layer)
 A quantity of a product that arrived together: batch number (as printed, optional in practice), expiry date, unit cost, and MRP/selling price at the time of arrival. Created by purchase entries and opening-stock entries. Batches are how expiry tracking, FEFO, and cost-basis reporting exist at all.
 
@@ -495,7 +498,7 @@ A quantity of a product that arrived together: batch number (as printed, optiona
 A name and a phone number attached to a debt (charter boundary). Exists only to make udhaar recordable. Balance is derived, never stored.
 
 ### Supplier
-A name on purchase entries, for "what did I buy from whom" visibility. No payables, no accounting (charter boundary).
+A name on purchase entries, for "what did I buy from whom" visibility — and, since PCN-007 (applied to this section by PCN-010), what the pharmacy owes them: a derived position (tracked invoices as corrected − cash paid − supplier payments − supplier-return credit), never stored. No accounting beyond that (charter boundary).
 
 ## 3. Event records
 
@@ -505,6 +508,8 @@ Goods arriving: supplier, date, lines. Each line: product, quantity (any unit le
 ### Sale
 The counter event: lines + payment. Each line: product, quantity in base units, unit level as entered (for display/receipt), unit price, discount (line or invoice level), and the batch consumption it resolved to (recorded automatically). Payment: cash amount and/or credit amount against a named customer. A fully-paid cash sale and a fully-credit udhaar sale are the same record shape with different payment splits.
 
+*Amended 2026-10-24 by PCN-012.* Purchase and sale lines record the unit entered, its count, the price or cost per that unit and the exact line amount; sale totals, invoices and supplier balances add line amounts, so they match paper to the paisa. Each batch carries its exact total cost; allocations are costed cumulatively, rounding up, so recognised cost is never understated and a used-up batch reconciles exactly to what was paid.
+
 ### Payment
 Money received from a customer independent of a new sale — the udhaar settlement. Amount, customer, method (cash in V1). A customer's balance = credit extended (from sales) − payments − credit reversed by returns.
 
@@ -512,14 +517,14 @@ Money received from a customer independent of a new sale — the udhaar settleme
 References the original sale (whole or lines). Restores stock (to the batch it came from when known), records cash returned or credit reduced. A compensating record, not an edit (T2).
 
 ### Adjustment
-Stock change with a mandatory coded reason: damage, expiry write-off, return to distributor, count correction, opening stock. Attributed and visible in the owner's daily view (T1). Adjustments are the only non-sale, non-purchase path by which stock moves.
+Stock change with a mandatory coded reason: damage, expiry write-off, return to distributor, count correction, opening stock. Attributed and visible in the owner's daily view (T1). Adjustments are the only non-sale, non-purchase path by which stock moves — together, since 2026-10-22 (PCN-009), with two compensating records: a *purchase correction* (what a received line should have said: quantity, bonus, unit cost, with a reason) and a *supplier return* (goods sent back from a batch, with the credit the supplier gives, which reduces what is owed).
 
 ### Cash Movement
 Cash placed into or taken out of the drawer outside of sales: opening float, owner withdrawal, small expense with a note ("chai, rickshaw"). Included because without it the drawer never reconciles and the owner's "today's cash" number becomes fiction — a small entity that protects a headline promise. Not an expense-management feature (boundary holds); just drawer honesty.
 
 ## 4. Key semantic decisions
 
-**D1. Automatic FEFO consumption.** Sales consume stock from the earliest-expiry batch first, automatically. The salesman sees the price, not the batch. When two batches carry different prices, the sale line uses the consuming batch's price and shows it plainly — the price ambiguity moment (Phase 1 §5) resolves by rule, not by conversation. Owner can review batch-price transitions in the daily view.
+**D1. Automatic FEFO consumption.** Sales consume stock from the earliest-expiry batch first, automatically — among batches that have not yet expired. *(Amended 2026-10-22 by PCN-008: expired batches are consumed only when nothing unexpired is left; the counter warns, naming the expiry, before payment, and the sale is an exception in the owner's daily view. Never blocked, P2.)* The salesman sees the price, not the batch. When two batches carry different prices, the sale line uses the consuming batch's price and shows it plainly — the price ambiguity moment (Phase 1 §5) resolves by rule, not by conversation. Owner can review batch-price transitions in the daily view.
 
 **D2. Stock may go negative; sales are never blocked.** When the shelf has it and the system doesn't (unentered purchase, count drift), the sale proceeds (P2), consumption is recorded against a *pending layer*, and the discrepancy surfaces in the owner's daily view for reconciliation. When the missing purchase is later entered or a count correction made, pending consumption resolves against real batches. Negative stock is a visible exception state, never a silent one.
 
@@ -531,7 +536,7 @@ Cash placed into or taken out of the drawer outside of sales: opening float, own
 
 ## 5. Invariants
 
-1. Product stock (base units) = Σ purchases + Σ positive adjustments − Σ sales − Σ negative adjustments − Σ returns-to-distributor + Σ sale returns. Always derivable, never stored as authority.
+1. Product stock (base units) = Σ purchases + Σ positive adjustments − Σ sales − Σ negative adjustments − Σ returns-to-distributor + Σ sale returns ± Σ purchase-correction quantity deltas − Σ supplier returns (PCN-009). Always derivable, never stored as authority.
 2. Batch quantity ≥ 0; the pending layer is the only construct that may represent unresolved negative consumption, and it is always visible.
 3. Customer balance = Σ credit extended − Σ payments − Σ credit reversals. Never stored as authority.
 4. Sale total = Σ line totals − invoice discount; cash + credit split = total, exactly.
@@ -540,7 +545,9 @@ Cash placed into or taken out of the drawer outside of sales: opening float, own
 
 ## 6. Explicitly out of the model (V1)
 
-Prescriptions and clinical data; supplier balances/payables; expenses beyond drawer cash movements; loyalty, pricing tiers, or customer data beyond name+phone; multi-branch stock; purchase orders (a low-stock *list* exists; ordering happens on WhatsApp as it does today); inter-pharmacy anything.
+Prescriptions and clinical data, including controlled-drug registers (PCN-010); expenses beyond drawer cash movements; loyalty, pricing tiers, or customer data beyond name+phone; multi-branch stock; purchase orders (a low-stock *list* exists; ordering happens on WhatsApp as it does today); inter-pharmacy anything.
+
+*Amended by PCN-007:* supplier payables are **in** the model. What a pharmacy owes a supplier is a derived position — Σ (invoice cost − cash paid at receiving) over purchases whose payment was recorded, minus Σ supplier payments — the mirror of a customer balance (invariant 3), never stored as authority. Purchases entered before supplier credit existed have no recorded payment and owe nothing. *Since PCN-009* the position also adds each correction's invoice delta and subtracts supplier-return credit. A negative position — a credit with the supplier — is shown separately from what is owed, never netted or dropped (PCN-011).
 
 ## 7. Exports to later phases
 
@@ -630,11 +637,11 @@ Each workflow states: trigger, the path (with its keyboard shape), failure momen
 
 **Trigger:** customer at counter. **Frequency:** dozens to hundreds daily.
 
-Path: focus is always in search → type a few characters or scan → best match highlighted, arrow/enter to select → quantity (defaults to 1; typing "2" then unit toggles strip/tablet where relevant) → line lands in cart, focus returns to search → repeat → payment key → amount tendered (defaults to exact) → change displayed large → commit → receipt prints, drawer opens, focus returns to search for the next customer.
+Path: focus is always in search → type a few characters or scan → best match highlighted, arrow/enter to select → quantity (defaults to 1; typing "2" then unit toggles strip/tablet where relevant) → line lands in cart, focus returns to search → repeat → payment key → amount tendered (defaults to exact) → change displayed large → commit → receipt prints, focus returns to search for the next customer. *(Amended 2026-10-22, PCN-010: the product sends no drawer command; a cash drawer opens only where the printer driver is set to kick it on print.)*
 
 - Never leaves the keyboard (I1). Scan-anywhere adds the scanned item (I1).
 - Batch consumption and pricing are automatic (D1); if the consuming batch's price differs from the last-sold price, the line shows it plainly — no interruption.
-- **Failure moments:** product not found → quick-add (W6) or refine search; stock shows zero but shelf has it → sale proceeds, pending layer records it (D2); customer disputes price → line price editable (logged as override, visible to owner, T1); connectivity drops mid-sale → nothing about the path changes (charter outcome; mechanics in Phase 8 ADR).
+- **Failure moments:** product not found → quick-add (W6) or refine search; stock shows zero but shelf has it → sale proceeds, pending layer records it (D2); only expired stock left → warned before payment, naming the expiry; the sale proceeds and is an exception (PCN-008); customer disputes price → line price editable (logged as override, visible to owner, T1); connectivity drops mid-sale → nothing about the path changes (charter outcome; mechanics in Phase 8 ADR).
 - **Speed:** routine repeat sale well under half a minute; working target ~15 seconds (I2).
 
 ## W2. Udhaar sale (full or partial credit)
@@ -657,6 +664,8 @@ Same path as W1 until payment: credit key → customer picker (type-ahead on nam
 
 Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry accepts the unit level ("4" + tab in tablet mode, or "1" strip), display always shows natural language ("1 strip + 4 tab"), arithmetic always in base units (Phase 5 §2). Called out because it is a known competitor-parity trap: it must feel native, not modal.
 
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the line, labelled in the product's own words; on a sale line, every unit the product has (Tab · Strip · Box; amended 2026-10-26), beside − qty +; the price shows per chosen unit. Keyboard shortcuts remain and are never required. The same control serves W7, W8 and W9.
+
 ## W6. Quick item (unknown product mid-sale)
 
 **Trigger:** shelf item not in catalog; customer waiting. Path: from an empty search result, one key → name + price → line lands in cart, sale continues. Creates a real product flagged *needs completion* (D3); appears in owner's daily view and completion queue. **Speed:** under 10 seconds. Guardrail: quick items cannot be silently forgotten — the queue nags until enriched or merged.
@@ -665,26 +674,32 @@ Not a separate workflow — a quantity affordance inside W1 (I3): quantity entry
 
 **Trigger:** distributor delivery with invoice; entered between customers, interruptible and resumable (a rush must not lose a half-entered invoice).
 
-Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date → lines: product search → quantity + bonus quantity (10+1 entered as 10 + 1, kept distinct — Phase 5 §3) → unit cost → expiry (always asked) → batch number (optional) → MRP/selling price confirmation (capture-at-receiving, Phase 1 §3; changed price flags the transition for the owner) → next line. Commit creates batches (D1 feeds from here).
+Path: new purchase → supplier (type-ahead, inline create) → invoice ref/date → lines: product search → quantity + bonus quantity (10+1 entered as 10 + 1, kept distinct — Phase 5 §3) → unit cost → expiry (always asked) → batch number (optional) → MRP/selling price confirmation (capture-at-receiving, Phase 1 §3; changed price flags the transition for the owner) → next line. Commit creates batches (D1 feeds from here). A line entered wrong is corrected afterwards from the invoice, owner-only, by stating what it should have said — never by editing it (PCN-009, T2).
+
+*Amended 2026-10-24 by PCN-012.* Quantity, bonus and cost are entered per pack as invoiced ("Cost per box", "Bonus (boxes)"); the line total matches the paper invoice to the paisa.
 
 - Unknown product → inline create with global-catalog assist (Phase 6): pick identity, confirm pack structure, price — richer than W6's quick-add because time pressure is lower.
 - **Speed:** a 20-line invoice in a handful of minutes; per-line rhythm matters more than total.
 
 ## W8. Stock adjustment
 
-**Trigger:** damage, expiry write-off, return to distributor, count correction. Path: adjustment → product → quantity ± → mandatory coded reason (+ optional note) → commit. Attributed, listed in owner's daily view without exception (T1). Count corrections resolve pending layers (D2). Salesman may adjust; visibility is the control, not permission friction (P7 balanced with T1).
+**Trigger:** damage, expiry write-off, return to distributor, count correction. (Goods returned to a distributor *for credit* are a supplier return from the invoice, owner-only, which also reduces what is owed — PCN-009; the reason-coded adjustment remains for returns with no credit.) Path: adjustment → product → quantity ± → mandatory coded reason (+ optional note) → commit. Attributed, listed in owner's daily view without exception (T1). Count corrections resolve pending layers (D2). Salesman may adjust; visibility is the control, not permission friction (P7 balanced with T1).
+
+*Amended 2026-10-24 by PCN-012.* Quantities are entered in the product's own units with the shared quantity control.
 
 ## W9. Opening stock (onboarding)
 
 A guided variant of W7 without a supplier invoice: walk the shelves, search/create products, enter quantity + expiry + price. Creates opening batches (reason-coded, D-model §3). Assisted by founder during onboarding (Phase 3: assisted setup is part of the trial). Import path (CSV from a competitor system) lands here too (Phase 6 §3.3). This workflow is the adoption gate — it must be genuinely fast, and its quality determines whether trust starts at day one or never.
 
+*Amended 2026-10-24 by PCN-012.* Stock is counted as it sits — Boxes [ ] Strips [ ] Tablets [ ], only the units the product has — with a cost per unit that is required and pre-filled from the product's last purchase when there is one.
+
 ## W10. Day close
 
-**Trigger:** shutter down. Path: one screen, three numbers first — today's sales, expected cash in drawer, running udhaar total — then the exception list: discounts and overrides, adjustments, returns, quick items created, negative-stock incidents, cash movements (D5, T1). Owner counts the drawer against the expected figure; a recorded over/short entry closes the ritual. Nothing locks (D5). **Speed:** the three numbers in one glance; the ritual in two minutes.
+**Trigger:** shutter down. Path: one screen, three numbers first — today's sales, expected cash in drawer, running udhaar total — then the exception list: expired stock sold (PCN-008), discounts and overrides, adjustments, returns, quick items created, negative-stock incidents, cash movements (D5, T1). Owner counts the drawer against the expected figure; a recorded over/short entry closes the ritual. Nothing locks (D5). **Speed:** the three numbers in one glance; the ritual in two minutes.
 
 ## W11. Owner remote view
 
-**Trigger:** owner's phone, any time. Mobile-usable (Phase 3 §5.5): today's three numbers, the exception list, low stock and near-expiry counts. Read-only in V1. This is what "check your shop from anywhere" in the sales pitch concretely is.
+**Trigger:** owner's phone, any time. Mobile-usable (Phase 3 §5.5): today's three numbers, the exception list, low stock and near-expiry counts. Read-only in V1. *(Amended 2026-10-22, PCN-010.)* **In V1 this is reached on the shop's own network**: the Node in the shop serves it, and nothing reaches it from outside until roadmap Phase 3 adds a cloud route — so the pitch is "check your shop from your phone in the shop", not "from anywhere". It also needs a session that works over LAN HTTP, which is not yet built (Phase 12 §5).
 
 ## W12. Expiry & low-stock management
 
@@ -814,6 +829,7 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 - **Attribution:** `created_by` (user id) + `created_at` on every business row (T1). Immutable tables have no `updated_at` — there are no updates.
 - **Money:** integer paisa (`bigint`). No floats anywhere near money.
 - **Quantities:** integer base units (Phase 5 §2) everywhere. Presentation converts.
+- **Entered units (2026-10-24, PCN-012):** event lines also store the entered unit, its count, the per-unit price or cost and the exact line amount. All additive: rows written before PCN-012 are read through a fallback (line amount = per-base price × base quantity) and never backfilled (ADR-1).
 - **Immutability:** business-event tables accept INSERT only (enforced §5). Products/customers/suppliers are reference entities: editable fields limited to identity/settings, never to anything a report derives from.
 - **Soft archive:** reference entities carry `is_active`; nothing is ever deleted (referenced history must resolve).
 - **Business day:** derived from `created_at` in tenant-local time (single timezone country); no stored day-close lock (D5). Over/short entries are cash movements with a reason code.
@@ -844,6 +860,8 @@ CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 
 **sale_lines** — id, tenant_id, sale_id, product_id, qty_base, entered_unit_level, unit_price_paisa (per base unit as charged), line_discount_paisa, price_overridden boolean (T1 exposure).
 
+*Amended 2026-10-24 by PCN-012.* **products** gains `units` JSONB (`[{key, name, factor, price_paisa, sell}]`, smallest first) and `mrp_paisa` + `mrp_unit_key`; `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are kept in step for one release, then retired. **purchase_lines** gains `unit_key`, `unit_name`, `unit_count`, `bonus_unit_count`, `unit_cost_paisa_entered`, `line_cost_paisa`. **sale_lines** gains `unit_key`, `unit_name`, `unit_count`, `unit_price_paisa_entered`, `line_amount_paisa` (before line discount). **batches** gains `cost_total_paisa` and `prices_at_receiving` JSONB. Adjustments, sale-return lines, supplier returns and purchase corrections gain `unit_key`, `unit_name`, `unit_count` for display. **global_products** gains `reference_mrp_unit`. Tenant settings gain `sellsLoose`.
+
 **sale_line_allocations** — id, tenant_id, sale_line_id, batch_id (nullable), qty_base, unit_cost_paisa (from batch; null while pending).
 *The D1/D2 mechanism: server-side FEFO writes one row per consumed batch (ADR-5); `batch_id NULL` rows are the pending layer, plus resolved_by (nullable FK to the purchase_line or adjustment that later resolved it) and resolved_at. Pending rows are the only "mutable" business rows in the system, and only their resolution fields may be set — once, forward-only.*
 
@@ -855,12 +873,16 @@ CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 **adjustments** — id, tenant_id, product_id, batch_id (nullable), qty_base_delta (signed), reason (`damage | expiry_writeoff | distributor_return | count_correction | opening_stock`), note, created_by/at.
 *Positive opening/count deltas materialize batches (§4).*
 
+**purchase_corrections** — id (client-generated), tenant_id, purchase_line_id, batch_id, qty_delta_base, bonus_delta_base, corrected_unit_cost_paisa (nullable), effective_unit_cost_paisa, invoice_delta_paisa, note (required), created_by/at.
+**supplier_returns** — id (client-generated), tenant_id, supplier_id (the batch's invoice supplier), product_id, batch_id, qty_base, credit_paisa, note, created_by/at.
+*PCN-009: compensating records, never edits. A correction states what the line should have said; its deltas move the batch through ADR-8's guarded functions, `effective_unit_cost_paisa` values every allocation from the batch in reports, and `invoice_delta_paisa` adds to the supplier balance. A supplier return removes stock and subtracts its credit from the supplier balance.*
+
 **cash_movements** — id, tenant_id, direction (`in | out`), amount_paisa, reason (`opening_float | owner_withdrawal | expense | over_short`), note, created_by/at.
 
 ## 4. Batches
 
 **batches** — id, tenant_id, product_id, source (`purchase_line | adjustment`), source_id, batch_number (nullable), expiry_date (nullable only for non-perishables), unit_cost_paisa, price_per_base_unit_paisa, qty_received_base, **qty_remaining_base** (the single ADR-8 transactional cache), created_at.
-Derivation contract: qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments + Σ restocked returns. The rebuild/verifier routine (ADR-8) recomputes and compares; mismatch alerts.
+Derivation contract: qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments + Σ restocked returns + Σ purchase-correction deltas (quantity + bonus) − Σ supplier returns (PCN-009). The rebuild/verifier routine (ADR-8) recomputes and compares; mismatch alerts.
 FEFO order: expiry_date ASC NULLS LAST, created_at ASC.
 
 ## 5. Enforcement
@@ -943,6 +965,8 @@ Layout logic (not pixels): three zones with fixed roles.
 **Payment overlay (Space or F12 from cart):** tendered amount (numpad-first, defaults exact), change rendered enormous, Enter commits → receipt prints (ADR-6) → overlay closes → focus returns to search, cart clears. Split cash/credit lives here when a customer is attached.
 
 **Quantity grammar (I3):** `3*pana` in search = quantity 3 of the selected result; bare selection = qty 1; Tab on the qty cell cycles unit levels (tab/strip/box) where the product defines them.
+
+*Amended 2026-10-24 by PCN-012.* The unit is chosen with visible buttons on the cart line (every unit the product has; amended 2026-10-26), beside − qty +; the price column shows the price per chosen unit. Tab still cycles the same buttons.
 
 **States that must be visible calmly (I7):** consuming-batch price change (D1 — line shows "price updated" chip), zero/negative stock (line proceeds, amber chip, D2), unsynced count in top bar (ADR-3), quick-add result row when search is empty (W6: one key → name+price mini-form inline).
 
@@ -1067,82 +1091,193 @@ This document answers P8's test directly: *describe the worst thing that can hap
 
 ## 1. Topology & environments
 
-**Production (amended 2026-08-03, PCN-004): the Mehvar Node — one Windows machine per pharmacy**, bundling the Next.js standalone build, a pinned Node runtime, PostgreSQL as a Windows service, the updater and the backup job. Both services start automatically and restart on failure. Counters are Chrome in kiosk mode against the Node: `localhost` on the server machine, a LAN address elsewhere.
+> **Rewritten 2026-10-22 by PCN-010** for the local install PCN-004 chose. The
+> cloud-era text it replaces (Railway production, platform TLS, Sentry and an
+> uptime check, platform snapshots) is in this file's history and in PCN-004.
 
-**Railway is retained** for staging, the sales demo environment, and the additive cloud services introduced in roadmap Phase 3 (licence issuing, update manifests, offsite backup, owner remote view). Custom domain under the parent brand (Phase 4 §6). TLS terminated at the platform for anything cloud-hosted; a local Node serves the shop LAN.
+**Production: the Mehvar Node — one Windows machine per pharmacy**, installed by
+one `MehvarSetup` `.exe`. It bundles the Next.js standalone build, a pinned Node
+runtime, PostgreSQL as a Windows service (`MehvarPostgres`, port 5433,
+listening on `localhost` only), the counter service (`MehvarNode`, port 3000,
+hosted by WinSW), the nightly backup task and the support tools. Both services
+start automatically and restart on failure. Data lives in
+`C:\ProgramData\Mehvar`; program files in `C:\Program Files\Mehvar`.
 
-_Superseded text (retained for the record):_ "Production: Railway — one Next.js service, one PostgreSQL instance, one region."
+**Counters.** The pilot runs **one counter**: Chrome in kiosk mode against
+`localhost` on the Node itself. Further counters are browsers on the shop LAN
+(wired or Wi-Fi; no internet needed), and are **not yet possible**: they need a
+way to add a counter with its own receipt prefix, a session that works over
+plain HTTP on a LAN (the session cookie is `Secure`, which browsers keep only
+on HTTPS or `localhost`), a search index that refreshes while open, and a test
+of two counters selling at once.
 
-**Environments:** `local` (developer machine), `staging` (Railway, own database, seeded demo pharmacy — doubles as the sales demo environment per Phase 11 §5), `production`. Three, no more; each additional environment is maintenance a solo founder pays for weekly.
+**Railway is retained** for the sales demo and for the cloud services roadmap
+Phase 3 adds (offsite backup, owner remote view, licence and update services).
+Nothing on it is on the path of a sale.
 
-**Configuration:** environment variables only, held in Railway; no secrets in the repository, no `.env` committed. Secret rotation is a documented manual procedure at this scale (P6).
+**Environments:** `local` (developer machine), `staging`/demo (Railway), and
+each pharmacy's Node.
+
+**Configuration:** `C:\ProgramData\Mehvar\.env`, written by the installer with
+an ACL restricted to SYSTEM and Administrators. The installer owns its keys
+(credentials, paths, port) and rewrites them on every install; every other line
+is the shop's and is kept verbatim across updates. The build machine's `.env`
+never enters the payload (stripped, then refused if present). No secrets in the
+repository.
 
 ## 2. Release procedure (P8 made operational)
 
-1. **Release window (amended 2026-08-03, PCN-004): per installation, and gated on an empty outbox.** The updater must not restart the Node while that counter holds unsynced records; when the outbox is empty, ADR-3's offline capture means the browser keeps selling from IndexedDB across the restart and drains afterwards. That property — not a clock — is what makes a local update safe, and it is an acceptance criterion for the updater, not an implementation detail. The deep-night preference survives as a default for fleet-wide rollouts; it is no longer load-bearing, which is what resolves it for a shop with no quiet hour.
-2. **Forward-only migrations, committed with their feature** (Phase 11 §4). Every migration must be additive-safe: new columns nullable or defaulted, no destructive column drops in the same release that stops using them (drop in a later release, once verified). Deploys therefore never require a maintenance window.
-3. **Pre-deploy gate:** typecheck + full test suite green, `db:reset && db:migrate && db:seed` clean from zero, W1 E2E passing (Phase 11 §3.5).
-4. **Post-deploy verification:** run the ADR-8 rebuild verifier against production immediately after migration; confirm the sale path with one test transaction on the demo tenant; confirm receipt renders.
-5. **Rollback posture:** application rollback is a platform redeploy of the previous image (minutes). Because migrations are additive-safe, the previous image runs against the migrated schema — this is *why* additive-safety is mandatory rather than tidy. Data is never rolled back; append-only records make forward correction the only honest repair (ADR-1).
-6. **Client version skew:** the counter client may be running yesterday's build when a deploy lands. Offline-captured records carry client IDs and a schema version; ingestion accepts prior-version payloads for at least one release cycle (ADR-3 idempotency plus tolerance). A hard-refresh prompt appears only between sales, never mid-cart.
+1. **Updates are installer-based through the pilot** (PCN-010). An update is the
+   newer `MehvarSetup` run over the old one, by the founder or with the founder
+   on a call. Setup, in order: dumps the database to `backups\pre-update\` and
+   **stops with nothing changed** if it cannot; stops both services, and stops
+   with nothing changed if either refuses; replaces the files; migrates and
+   re-applies grants; restarts and verifies. The shop name and PIN pages are
+   skipped on an existing pharmacy.
+2. **Forward-only migrations, committed with their feature** (Phase 11 §4),
+   additive-safe: new columns nullable or defaulted, no destructive drop in the
+   release that stops using a column. A migration is never renumbered once it
+   has run anywhere (Day 19).
+3. **Release gate:** `npm run verify` green with the database suites running;
+   the E2E suite green; the installer built from a clean commit (a dirty tree is
+   refused) and stamped `<version>+<commit>`; the Windows validation checklist
+   run on real hardware for any release that changes the installer.
+4. **Post-install verification** is built into Setup: services running and
+   automatic, the counter answering, event tables immutable for the app role,
+   the ADR-8 verifier clean, a backup taken and restore-drilled, the nightly
+   task scheduled, and the default printer checked (a warning, not a failure).
+5. **Rollback posture:** the pre-update dump plus the previous installer.
+   Because migrations are additive-safe, the previous build runs against the
+   migrated schema; data is never rolled back — append-only records make
+   forward correction the only honest repair (ADR-1).
+6. **The in-app updater is deferred** to roadmap Phase 2, when installs outrun
+   the founder's visits. Its acceptance criteria stand: a signed manifest, a
+   code-signed installer, **no restart while the counter holds unsynced
+   records**, a backup before migrating, staged rollout and a rehearsed
+   rollback.
+7. **Client version skew:** offline-captured records carry client IDs and a
+   schema version; ingestion accepts prior-version payloads for at least one
+   release (ADR-3).
 
-**P8 answer:** the counter client holds its catalog index locally and can capture sales without us (ADR-3/4). If our service is down at 9am, the pharmacy opens, sells, prints, and syncs later. If our latest release is broken, the previous image is minutes away and the schema still accepts it. Nothing about tomorrow's trading depends on tonight going well.
+**P8 answer:** the counter sells from its local index and captures offline
+(ADR-3/4), so a stopped Node during an update or a crash means the counter keeps
+selling and syncs when the service returns. A broken release is undone by the
+previous installer and the pre-update dump.
 
 ## 3. Backups & recovery
 
-The pharmacy's entire business lives in one database; backup is a trust feature (T3), not an IT chore.
+The pharmacy's entire business lives in one database on one machine; backup is
+a trust feature (T3), not an IT chore.
 
-- **Local nightly dump (amended 2026-08-03, PCN-004):** `pg_dump` on the Node to a second local location, timestamped, with retention. Ships in roadmap Phase 1 — going local moves backup risk from the platform to a shop with one disk, so this is not deferrable.
-- **Encrypted offsite copy:** to object storage outside the shop, 30-day retention. One failure must not take the backups with the database — still the single most important line in this document, and **explicitly in deficit until roadmap Phase 3 delivers it.** Local-only backup is the accepted, time-boxed cost of shipping to the first pharmacy sooner.
-- **Platform backups:** Railway automated daily snapshots for anything cloud-hosted (staging, demo, and any cloud-hosted tenant).
-- **Targets:** RPO ≤ 24 hours for catastrophic loss (realistically minutes, since counter clients retain unsynced local records and the loss window is server-side only); RTO ≤ 4 hours to a restored, verified service.
-- **Restore drill:** performed once before first paying customer and quarterly thereafter — restore latest dump into a scratch database, run the ADR-8 verifier, confirm invariants (Phase 5 §5) hold. An untested backup is not a backup.
-- **Tenant self-service export** (Phase 3 §5.2, Phase 9 §8) is always available, in every payment state. It is simultaneously the trust argument, the retention ethic, and a customer-side backup we don't have to operate.
+- **Nightly dump:** `pg_dump` at 02:30 by the `Mehvar\NightlyBackup` task, to
+  `MEHVAR_BACKUP_DIR` (a USB drive is the recommended target — PCN-010
+  decision 5), 30-day retention, refusing to keep an empty dump.
+- **Pre-update and pre-restore dumps:** every update and every restore dumps the
+  live database first, and refuses to proceed without it.
+- **Visible to the owner — not yet built.** The last successful backup's age
+  belongs on the Day screen, and the backup folder belongs in Settings; today a
+  failing backup is silent in the app and the folder is set by editing `.env`.
+- **Offsite copy:** encrypted, outside the shop — **in deficit until roadmap
+  Phase 3.** Local and USB copies are the accepted, time-boxed cost of a local
+  install, and who owns a dead disk with no checked backup is a commercial
+  question still open (`commercialization.md`, open question 2).
+- **Restore drill:** run by Setup at install, and quarterly — the newest dump
+  restored into a scratch database, migrated, granted, checked for immutability
+  and verified as the app role. An untested backup is not a backup.
+- **Replacing the counter PC:** install, then `mehvar-restore.cmd <dump>
+  --replace`. The backup proves itself in a scratch database before it replaces
+  anything; the replaced database is kept and dumped; a new pairing key is shown
+  once; the licence moves from Settings → Licence.
+- **Owner export** (Phase 3 §5.2, Phase 9 §8) is available in every licence
+  state.
+- **Targets:** RPO ≤ 24 hours (the nightly dump); RTO ≤ 4 hours to a restored,
+  verified Node, given the USB drive and a Windows PC.
 
 ## 4. Monitoring & the verifier
 
-- **Error tracking** (Sentry or platform-equivalent) with a hard rule: any exception on the sale commit or sync ingestion path pages the founder. Everything else is a queue reviewed daily.
-- **Uptime check** on the sale surface, 5-minute interval, alerting to phone.
-- **ADR-8 rebuild verifier on schedule** (nightly) and after every sync-ingestion batch. A mismatch is sev-1: it means a derived number disagreed with the records, which is precisely the promise the product sells (P4/T4). Alert loudly, investigate before anything else ships.
-- **Business-health glance** (founder-side, weekly): tenants active, sales volume per tenant, unsynced-record ages, pending-layer backlog, quick-item completion queue depth. Unsynced ages and pending backlogs are early warnings of a pharmacy quietly falling out of the system — the churn signal that matters more than logins.
+There is no cloud monitoring in a local install, and nothing phones home.
+
+- **Logs** in `C:\ProgramData\Mehvar\logs` (installer, services, backups),
+  credentials masked before they are written.
+- **Support bundle** (Start menu → Mehvar → Support bundle): build identity,
+  verifier result, backup age, licence state and log tails, with secrets
+  redacted, sent over WhatsApp.
+- **ADR-8 verifier:** runs in post-install verification and in every restore
+  drill. A **nightly run beside the backup, with a mismatch shown in the app, is
+  not yet built**; until it is, a mismatch surfaces only when someone runs it. A
+  mismatch is sev-1: a derived number disagreed with the records.
+- **Founder glance** (weekly, from support bundles during the pilot): backup
+  age, pending-layer backlog, unsynced-record ages, quick-item queue.
 
 ## 5. Security posture
 
 Scaled honestly to a two-role, single-shop product holding no clinical data.
 
-- **Tenant isolation:** the `scoped.ts` chokepoint (ADR-2, Phase 11 §1) is the guarantee; a test asserts that no query path constructs without tenant context. Postgres RLS remains the documented post-V1 hardening step.
-- **Sessions:** device-bound long-lived session cookie for the counter (HttpOnly, Secure, SameSite=Lax), short-lived sessions for owner remote logins. PIN switching (ADR-7) changes the acting user within the device session; PINs are hashed (Argon2id), rate-limited, lockout after repeated failures with owner override.
-- **Authorization** is enforced server-side per role on every mutation — never by hiding UI. Salesman scope per Phase 5 §2.
-- **Data minimization as a genuine asset:** the product stores customer *name and phone only* (charter boundary) and no health or prescription data whatsoever. This is worth stating in sales conversations — there is no sensitive patient dataset to leak, by design.
-- **Transport & storage:** HTTPS only; database encrypted at rest by the platform; backup dumps encrypted before upload to independent storage.
-- **Counter machine hygiene** (documented in the setup guide, not enforceable by us): dedicated browser profile, no shared personal browsing, screen lock, UPS. Physical access to the counter machine is the realistic threat model, which is exactly why PIN attribution exists (T1).
-- **Dependencies:** lockfile committed; monthly patch review; no unmaintained packages in the money path.
+- **Tenant isolation:** the `scoped.ts` chokepoint (ADR-2); kept in a
+  single-tenant install so one codebase serves both homes.
+- **Database:** the app connects as a non-owning role; event tables are
+  INSERT-only for it (PCN-001), proven at install by an UPDATE that must be
+  refused. PostgreSQL listens on `localhost` only, with SCRAM authentication.
+- **Sessions:** a long-lived device session for the counter, a 12-hour session
+  for the owner's remote view; cookies are HttpOnly and SameSite=Lax, and
+  `Secure` in production — which works on `localhost` and **blocks LAN counters
+  and the owner's phone until the LAN-session decision is made and built.**
+- **PINs and passwords:** Argon2id; four-digit PINs; five wrong PINs lock that
+  person out for five minutes. The owner's password is generated at install.
+  **Changing the owner's password or the owner's own PIN is not yet built.**
+- **Authorization** is enforced server-side per role on every mutation, never by
+  hiding UI; licence capabilities are checked at the action.
+- **Data minimization:** customer name and phone only; no health or prescription
+  data (Phase 2). There is no patient dataset to leak, by design.
+- **Secrets:** none in the repository or the installer payload; the installer
+  log and the support bundle mask credentials, pairing keys and passwords.
+- **The machine:** physical access to the counter PC is the realistic threat,
+  which is why PIN attribution exists (T1). Dedicated browser profile, screen
+  lock, UPS — documented, not enforceable by us.
+- **Dependencies:** lockfile committed; monthly patch review.
 
 ## 6. Counter setup guide (onboarding artifact)
 
-A one-page, screenshot-led document the founder or channel partner follows per pharmacy:
+Founder-done for the first pharmacies (PCN-010 decision 1). One page,
+screenshot-led:
 
-1. Hardware check: PC minimums, 80mm (or 58mm) thermal printer, USB scanner, UPS.
-2. Printer install; print a test receipt from the app.
-3. Browser: dedicated profile, `--kiosk-printing` shortcut created (ADR-6), app pinned, PWA installed, autostart on boot.
-4. Scanner: verify it emits Enter after the code; scan test.
-5. Tenant setup: receipt header/footer, users and PINs, expiry horizons.
-6. Opening stock (W9) — assisted, the adoption gate.
-7. First live sale together, with the salesman driving.
-8. Hand over: WhatsApp support number, the one-page keyboard cheat sheet (Phase 10 §3) printed and taped to the counter.
+1. Hardware: 64-bit Windows 10/11, 4 GB RAM, SSD, a dedicated machine; an
+   80 mm thermal printer (58 mm is not yet supported); a USB scanner that sends
+   Enter; a UPS.
+2. Printer driver installed, a Windows test page printed, the receipt printer
+   set as the Windows default (Setup warns if the default is a PDF or similar).
+3. Run `MehvarSetup` attended (a silent first install is not supported); enter
+   the shop name and owner PIN; note the pairing key.
+4. Open the counter, pair it, print a test receipt from Settings.
+5. Settings: receipt header/footer, users & PINs, the licence.
+6. Point backups at the USB drive (`MEHVAR_BACKUP_DIR` in `.env` until Settings
+   has it) and confirm one lands.
+7. Opening stock (W9), assisted — the adoption gate.
+8. First live sale together, with the salesman driving.
+9. Hand over: WhatsApp support number and the keyboard cheat sheet.
 
 ## 7. Support model
 
-WhatsApp-first, founder-answered, at V1 scale — the channel this market already lives in. Response expectation set explicitly at sale: same-day for questions, immediate for anything blocking selling. Every support contact is logged in one place with its cause; recurring causes become product fixes, not FAQ entries (P5/P6 discipline). Remote assistance uses the owner surface plus screen-share; no remote-control software installed on counter machines.
+WhatsApp-first, founder-answered. Same-day for questions, immediate for anything
+blocking selling. Every contact logged with its cause; recurring causes become
+fixes. The support bundle is the first thing asked for. **Open (PCN-010):**
+whether remote screen-share is allowed for non-technical shops; this section
+previously excluded remote-control software.
 
 ## 8. Incident posture
 
-Severity 1 = selling is blocked, or a derived number disagrees with records (verifier mismatch). Response: acknowledge to affected pharmacies by WhatsApp within minutes, restore selling first (the offline path usually means selling never stopped — say so plainly, it is reassurance backed by architecture), diagnose second. Corrections to data are always compensating records (ADR-1/T2), never edits, even during incidents. Every sev-1 gets a written note to self: cause, fix, and the test or guard that prevents recurrence.
+Severity 1 = selling is blocked, or the verifier disagrees with the records.
+Acknowledge on WhatsApp within minutes, restore selling first (usually the
+counter never stopped — say so), diagnose second. Corrections to data are always
+compensating records (ADR-1/T2), never edits, even during incidents. Every sev-1
+gets a written note: cause, fix, and the test or guard that prevents recurrence.
 
 ## 9. Exports
 
-- Phase 13: restore drill and printer setup are scheduled items in the launch sequence, not implied work.
-- Master plan: this document owns every operational promise the commercial strategy makes (Phase 3 §5.3 suspension outcome, §5.2 export, uptime posture behind the subscription).
+- Phase 13: Windows validation, the restore drill and printer setup are
+  scheduled pilot-readiness items, not implied work.
+- Master plan: this document owns every operational promise the commercial
+  strategy makes (Phase 3 §5.3 suspension outcome, §5.2 export).
 
 
 <!-- ==================== phase-13-implementation-roadmap.md ==================== -->
@@ -1166,59 +1301,57 @@ Three rules order this plan:
 
 These do not consume implementation-week hours and are the most common cause of a slipped launch if left late:
 
-- **Catalog curation (Phase 6 §3):** the hand-verified head of ~1,500–3,000 fast movers with pack structures and MRPs, sourced from the reference pharmacy's shelves and a distributor price list. **This is the long-lead item.** DRAP seed import can follow post-launch.
+- **Catalog curation (Phase 6 §3):** the hand-verified head of ~1,500–3,000 fast movers with pack structures and MRPs, sourced from the reference pharmacy's shelves and a distributor price list. **This is the long-lead item.** DRAP seed import can follow post-launch. *(Restated 2026-10-22, PCN-010: the starter catalogue holds 138 verified products with MRPs and 3,819 reference products without; the verified head is still the gap, and the pilot pharmacy's own shelves are the fastest way to grow it.)*
 - **Brand assets:** wordmark treatment for Mehvar Pharmacy, receipt mark, tokens confirmed against Phase 10 §6.
 - **Hardware:** reference pharmacy's printer and scanner models identified and tested against ADR-6 kiosk printing before Day 1 — printer surprises are the classic week-one derailment.
-- **Infrastructure:** Railway project, Postgres, staging, domain, error tracking, backup storage bucket.
+- **Infrastructure (amended 2026-10-22, PCN-010):** a Windows build machine with Inno Setup, a code-signing certificate (the long lead — start now), and Railway for the demo and the later cloud services.
 
-## 3. The build week
+## 3. Pilot readiness
 
-Each day: goal, deliverables, tests landing, and its risk note.
+> **Replaced 2026-10-22 by PCN-010.** The build week this section scheduled is
+> complete; its day-by-day record is `CHANGELOG.md`, and the original schedule is
+> in this file's history. What follows is the plan from here: what must be true
+> before a real pharmacy trades on Mehvar, what can land while the pilot runs,
+> and what waits for after it. Development continues in parallel with the pilot.
 
-**Day 1 — Foundation.**
-Repo scaffold (Phase 11 §1 structure), Drizzle schema verbatim from Phase 9, `scoped.ts` tenant chokepoint, migrations + seed (demo pharmacy: ~50 curated products with real pack structures, one customer with balance, opening batches), design tokens and app shell (top bar, key bar, F-key registry), auth: device login + PIN switch (ADR-7).
-*Tests:* chokepoint enforcement; PIN hash/lockout.
-*Done when:* `db:reset && db:migrate && db:seed` yields a logged-in shell with a switchable user.
-*Risk:* schema churn later is expensive — Phase 9 is implemented as written, not improvised.
+**The build week, for the record.** Days 1–7 shipped as planned; Day 8's
+hardening became the release-hardening sessions that followed. Its cut order
+(weekly/monthly report tabs → CSV import in W9 → returns without receipt →
+near-expiry 60/90 horizons → quick-item completion queue polish) was applied
+once, to the report tabs, and recorded. Never cut, then or now:
+rebuild-equivalence tests, offline capture, receipt printing, exception
+visibility.
 
-**Day 2 — Catalog & search.**
-Products/barcodes CRUD, pack-level editing, tenant catalog list, client-side index build (ADR-4), ranking ladder with transliteration-tolerant fuzzy matching, barcode resolution, search UI per Phase 10 §5.
-*Tests:* ranking table incl. "pandol"→Panadol, formula matches, barcode unit-level mapping.
-*Done when:* typing three characters returns correctly ranked results instantly against the seeded catalog.
-*Risk:* fuzzy tuning is a rabbit hole — time-box it; the ranking table defines "good enough."
+**Before the pilot — one counter, one neighbourhood pharmacy, founder on site:**
 
-**Day 3 — Sale core (the heart).**
-`commitSale` as one transaction: lines, FEFO allocation, pending layer on shortfall, discounts, override flags, cash split (Phase 9 §5.3); cart UI, quantity grammar, unit-level cycling, in-place line edit.
-*Tests:* **rebuild-equivalence suite** (property-style, the crown), transaction semantics, FEFO ordering with NULLS LAST, pending-layer creation.
-*Done when:* a keyboard-only cash sale commits, stock derives correctly, and the verifier agrees.
-*Risk:* the highest-consequence day in the week. If anything slips, it slips *into* this day, never out of it.
+| Item | State |
+|---|---|
+| Expired stock skipped by automatic selling, warned and listed (PCN-008) | Built |
+| Purchase corrections and supplier returns (PCN-009) | Built |
+| Receipt settings apply without a restart; test receipt; default-printer warning | Built |
+| Real-Windows validation: install, upgrade, repair, failure paths, restore, uninstall, the bundled PostgreSQL, the pilot's own printer and scanner | **Pending** — the Windows validation checklist |
+| Owner can change the owner password and the owner's own PIN (Settings) | **Not built** |
+| Last successful backup visible to the owner; backup folder set from Settings | **Not built** |
+| Running version shown in the app; one-page update procedure | **Not built** |
+| A founder-issued licence installed (the 30-day evaluation restricts receiving after it ends) | At install |
 
-**Day 4 — Payment, receipt, udhaar.**
-Payment overlay (tendered/change, split cash-credit), device-scoped receipt numbering (Phase 9 §3), receipt render + kiosk silent print (ADR-6, Phase 10 §7), udhaar sale with inline customer create (W2), settlement with mini-statement receipt (W3), customer balance derivation.
-*Tests:* split invariants (cash+credit=total), balance derivation, settlement idempotency.
-*Done when:* W1, W2, W3 complete end-to-end on real hardware with a printed receipt in hand.
-*Risk:* thermal printing is the classic surprise — hardware was tested pre-week (§2) precisely to keep it a half-day, not a day.
+**While the pilot runs:** the nightly verifier beside the backup, with a
+mismatch shown in the app; code signing (long lead — start now); digital-wallet
+tenders (JazzCash, Easypaisa), the next tender after cash and udhaar; whatever
+week one at the counter shows is slow or confusing (§4).
 
-**Day 5 — Offline capture & sync.**
-PWA shell + service worker, IndexedDB local queue for W1/W2/W3/W6, instant local commit and print-from-local, idempotent server ingestion through the *same* domain writer (ADR-3/5), unsynced badge and late-sync surfacing.
-*Tests:* replay-N-times idempotency, ingestion equivalence (offline-origin sale produces byte-equivalent domain effects to an online one), disruption simulation mid-cart.
-*Done when:* network disabled → sell, print, re-enable → everything reconciles with no user action.
-*Risk:* second-highest of the week; placed adjacent to Day 3–4 while the commit contract is fresh in context.
+**After the pilot:**
 
-**Day 6 — Purchases, batches, stock operations.**
-Purchase entry with resumable drafts (W7): bonus quantities, expiry always requested, MRP/price capture-at-receiving, batch materialization; adjustments with coded reasons (W8); opening stock guided flow + CSV import (W9); pending-layer resolution on purchase/count-correction; low-stock and near-expiry lists (W12).
-*Tests:* batch materialization, bonus-cost honesty in margin math, pending resolution, adjustment reason integrity.
-*Done when:* a 20-line invoice enters at working rhythm and resolves a pending shortfall from Day 3.
-
-**Day 7 — Day close, reports, owner surface, export.**
-W10 day view (three numbers, exception list, drawer count with over/short), cash movements, daily/weekly/monthly/overall reports, owner phone views (W11), returns (W4), settings (receipt config, users/PINs, export per Phase 9 §8).
-*Tests:* daily-summary correctness against seeded scenarios; export completeness.
-*Done when:* the owner's three questions answer in one glance on a phone.
-
-**Day 8 (buffer & hardening — plan for it, don't pretend otherwise).**
-E2E W1 keyboard path, token lint pass, empty/error posture sweep (Phase 10 §8), backup + restore drill (Phase 12 §3), verifier scheduling and alerting, production deploy, setup-guide dry run on the reference pharmacy's actual hardware.
-
-**If a day slips, this is the cut order** (decided now, calmly, rather than at 2am): weekly/monthly report tabs → CSV import in W9 → returns without receipt → near-expiry 60/90 horizons → quick-item completion queue polish. Never cut: rebuild-equivalence tests, offline capture, receipt printing, exception visibility.
+- **Multi-counter on the shop LAN** — a screen to add counters with their own
+  receipt prefixes, a session that works over LAN HTTP, a search index that
+  refreshes while open, and a two-counters-at-once test (Phase 12 §1).
+- **The in-app updater** — roadmap Phase 2, with Phase 12 §2's acceptance
+  criteria.
+- **Cloud services** — offsite backup and the owner's remote view from outside
+  the shop, roadmap Phase 3 (`commercialization.md`).
+- Weekly and monthly report tabs, product-level sales and margin reports, 58 mm
+  receipts, a cash-drawer kick, and the rest of §6's ledger — each when a named
+  customer need exists (P6).
 
 ## 4. Post-launch: first 30 days
 
@@ -1234,7 +1367,7 @@ Week 1 — founder onsite/on-call during counter hours at the reference pharmacy
 | Verifier mismatch in production | The core promise breaks | Nightly + post-ingestion verification, sev-1 posture (Phase 12 §4) |
 | One-week estimate optimistic | Rushed money paths | Day 8 buffer planned; pre-decided cut list (§3); tests-with-feature is non-negotiable |
 | Crowded market, thin differentiation | Me-too positioning at me-too price | Experience-quality thesis (Phase 1 §4); demo-able from Day 3 to test the five-minute gap early |
-| Solo support load | Founder becomes the bottleneck | Cloud single deployment (Phase 3), WhatsApp support, recurring causes become fixes not FAQs |
+| Solo support load | Founder becomes the bottleneck | Founder-installed local Nodes (PCN-004), WhatsApp support with the redacted support bundle, recurring causes become fixes not FAQs; whether remote screen-share is allowed is open (PCN-010) |
 | Negative-stock model misread as sloppiness | Owner distrust in demos | Explain as designed exposure (D2); exception list makes it a feature — never blocks a sale, never hides one |
 
 **Trade-offs consciously taken:** row-scoped multi-tenancy over stronger isolation (chokepoint now, RLS later); one cached quantity over pure derivation (verifier as the honesty mechanism); client-side search over a search service (speed and offline for free, index staleness accepted); no billing automation (manual founder-side tracking); two roles only; single branch; kiosk printing over a print agent.
@@ -1246,9 +1379,9 @@ Deferred deliberately, with the phase that raised each:
 - **Commercial/deployment:** containerized local deployment for chains or compliance-driven buyers (P3-E); multi-branch and multi-terminal pricing tiers (P3); hardware bundle partnership (P3); billing automation (P3 §5.6); tiering beyond one plan (P3).
 - **Regulatory:** FBR digital invoicing as a paid add-on when customers cross Tier-1 thresholds, wrapping receipt generation server-side (P1 §3, ADR-6).
 - **Architecture:** Postgres RLS hardening (ADR-2, P12 §5); background job infrastructure if verification or catalog work outgrows scheduled runs; websocket live updates for multi-terminal counters.
-- **Product:** supplier payables and purchase orders (P5 §6); expenses beyond drawer cash movements; prescription capture; loyalty or customer tiers; WhatsApp receipt delivery and udhaar reminders; multi-branch stock; distributor return workflows beyond reason-coded adjustments; barcode label printing.
+- **Product:** purchase orders (P5 §6; supplier payables were admitted by PCN-007); expenses beyond drawer cash movements; prescription capture; loyalty or customer tiers; WhatsApp receipt delivery and udhaar reminders; multi-branch stock; distributor return workflows beyond supplier returns from the invoice (PCN-009); barcode label printing.
 - **Catalog:** automated DRAP price-notification ingestion; contribution tooling beyond the founder-reviewed proposal queue (P6 §5).
-- **Platform:** Urdu-script localization; native mobile app (responsive web serves V1); multi-currency (irrelevant until outside Pakistan).
+- **Platform:** the in-app updater (roadmap Phase 2) and multi-counter on the shop LAN (PCN-010); Urdu-script localization; native mobile app (responsive web serves V1); multi-currency (irrelevant until outside Pakistan).
 
 Nothing in this ledger is promised. Each item re-enters planning only when a named customer need and a business case exist (P6).
 
@@ -1258,6 +1391,6 @@ Nothing in this ledger is promised. Each item re-enters planning only when a nam
 - Rebuild-equivalence suite green; production verifier scheduled and quiet
 - Selling survives a connectivity disruption with no user action and no data loss
 - Receipts print correctly for sales, udhaar, settlements, and returns
-- Owner's three questions answered on a phone in one glance
-- Backup running, restore drill passed, export working
+- Owner's three questions answered on a phone in one glance (in V1, on the shop's own network — PCN-010)
+- Backup running and its last success visible to the owner, restore drill passed, export working
 - Reference pharmacy onboarded with opening stock entered and its first live day sold through the system

@@ -230,7 +230,10 @@ suite('commitReturn against Postgres', () => {
     expect(second.ok && second.value.alreadyCommitted).toBe(true);
 
     expect(
-      await tenant.scope.select(saleReturnLines, eq(saleReturnLines.saleReturnId, command.returnId)),
+      await tenant.scope.select(
+        saleReturnLines,
+        eq(saleReturnLines.saleReturnId, command.returnId),
+      ),
     ).toHaveLength(1);
 
     const [batch] = await tenant.scope.select(batches, eq(batches.id, batchId));
@@ -257,5 +260,58 @@ suite('commitReturn against Postgres', () => {
 
     const [row] = await tenant.scope.select(saleReturns, eq(saleReturns.id, result.value.returnId));
     expect(row?.receiptNumber).toBe(receiptNumber);
+  });
+
+  it('records a return counted in strips, and refuses a count the strip does not make (PCN-012)', async () => {
+    const product = await freshProduct();
+    const batchId = await addOpeningStock(tenant.scope, product.id, 40, { pricePaisa: 500 });
+    const { saleId, lineId } = await sellCash(product.id, 20);
+
+    // "1 strip" that claims 5 tablets: the product's strip is 10.
+    const wrong = await commitReturn(tenant.scope, {
+      returnId: uuidv7(),
+      saleId,
+      receiptNumber: nextReceipt(),
+      lines: [
+        {
+          saleLineId: lineId,
+          qtyBase: 5,
+          restockBatchId: batchId,
+          entered: { unitKey: 'u1', unitName: 'strip', unitCount: 1 },
+        },
+      ],
+      refundMethod: 'cash',
+      reasonNote: null,
+    });
+    expect(wrong).toMatchObject({ ok: false, reason: 'invalid_quantity' });
+
+    const returnId = uuidv7();
+    const right = await commitReturn(tenant.scope, {
+      returnId,
+      saleId,
+      receiptNumber: nextReceipt(),
+      lines: [
+        {
+          saleLineId: lineId,
+          qtyBase: 10,
+          restockBatchId: batchId,
+          entered: { unitKey: 'u1', unitName: 'strip', unitCount: 1 },
+        },
+      ],
+      refundMethod: 'cash',
+      reasonNote: null,
+    });
+    expect(right.ok).toBe(true);
+    if (!right.ok) return;
+    expect(right.value.cashOutPaisa).toBe(5_000);
+
+    const [line] = await tenant.scope.select(
+      saleReturnLines,
+      eq(saleReturnLines.saleReturnId, returnId),
+    );
+    expect(line).toMatchObject({ qtyBase: 10, unitKey: 'u1', unitName: 'strip', unitCount: 1 });
+    const [batch] = await tenant.scope.select(batches, eq(batches.id, batchId));
+    expect(batch?.qtyRemainingBase).toBe(30);
+    expect((await verifyBatches(tenant.scope)).ok).toBe(true);
   });
 });

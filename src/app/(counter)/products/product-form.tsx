@@ -15,7 +15,10 @@ import { DuplicateNotice } from '@/components/duplicate-notice';
 
 import { saveProduct, type ActionState } from './actions';
 import { CatalogPicker } from './catalog-picker';
+import { useCatalog } from '@/client/search/provider';
 import { exceedsMrp, parsePackLevels } from '@/domain/catalog/product';
+import { unitsFromEnteredPrices } from '@/domain/catalog/units';
+import { parseRupeeInput } from '@/domain/sales/cart';
 import type { PackLevel } from '@/lib/quantity';
 
 export interface ProductFormValues {
@@ -29,10 +32,21 @@ export interface ProductFormValues {
   formulaText: string;
   baseUnitName: string;
   packLevels: string;
-  priceRupees: string;
+  /** [PCN-012] Rupees per unit, keyed by unit name; blank for none typed. */
+  unitPriceRupees: Readonly<Record<string, string>>;
   mrpRupees: string;
+  /**
+   * [PCN-012] The unit the MRP is printed on, by name; null for none recorded,
+   * which starts at the largest pack — where an MRP is printed.
+   */
+  mrpUnitName: string | null;
   minStock: string;
   needsCompletion: boolean;
+  /**
+   * [PCN-012] The product has stock or sales recorded, so its base unit and
+   * existing pack sizes are fixed (the server enforces it; this only says so).
+   */
+  unitsLocked?: boolean;
 }
 
 export function ProductForm({ initial }: { initial: ProductFormValues }) {
@@ -59,25 +73,46 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
   const [manufacturer, setManufacturer] = useState(initial.manufacturer);
   const [formulaText, setFormulaText] = useState(initial.formulaText);
 
-  const [price, setPrice] = useState(initial.priceRupees);
+  const [prices, setPrices] = useState<Record<string, string>>({ ...initial.unitPriceRupees });
   const [mrp, setMrp] = useState(initial.mrpRupees);
+  const [mrpUnitName, setMrpUnitName] = useState(initial.mrpUnitName);
   const [baseUnit, setBaseUnit] = useState(initial.baseUnitName);
   const [packLevels, setPackLevels] = useState(initial.packLevels);
 
+  const { refresh: refreshCatalog } = useCatalog();
+
   useEffect(() => {
     if (state.status === 'saved') {
+      // The counter's search index is client state that revalidation does not
+      // reach; refresh it so the saved product, price or units are what the
+      // next search and scan see.
+      refreshCatalog();
       router.push('/products');
       router.refresh();
     }
-  }, [state, router]);
+  }, [state, router, refreshCatalog]);
 
   // D4 — the warning shows as it is typed, and never blocks: "the pack in hand
   // is authoritative, not our data".
-  const overMrp = exceedsMrp(
-    Math.round(Number(price) * 100),
-    mrp === '' ? null : Math.round(Number(mrp) * 100),
-  );
   const parsed = parsePackLevels(packLevels);
+
+  // [PCN-012] One price per unit, smallest first. Blanks show the price Mehvar
+  // will fill in from the nearest typed unit, so nothing is a surprise on save.
+  const structure = [
+    { name: baseUnit.trim(), factor: 1 },
+    ...parsed.filter((level) => Number.isSafeInteger(level.factor) && level.factor > 1),
+  ].filter((unit) => unit.name !== '');
+  // Not an amount (junk, or a number too large to hold exactly) is "not
+  // typed" — never a throw mid-render.
+  const typedPaisa = structure.map((unit) => parseRupeeInput(prices[unit.name] ?? ''));
+  const suggested = unitsFromEnteredPrices(structure, typedPaisa) ?? [];
+
+  // [PCN-012] The MRP is stated for one unit; a unit that has gone from the
+  // pack levels while typing falls back to the largest, never to a guess.
+  const named = structure.findIndex((unit) => unit.name === mrpUnitName);
+  const mrpUnitAt = named >= 0 ? named : structure.length - 1;
+  const mrpUnit = structure[mrpUnitAt];
+  const overMrp = exceedsMrp(suggested[mrpUnitAt]?.pricePaisa ?? 0, parseRupeeInput(mrp));
 
   if (picking) {
     return (
@@ -92,6 +127,8 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           setBaseUnit(medicine.baseUnitName);
           setPackLevels(medicine.packLevels);
           setMrp(medicine.mrpRupees);
+          // The catalogue's reference MRP is per base unit.
+          setMrpUnitName(medicine.mrpRupees === '' ? null : medicine.baseUnitName);
           setPicking(false);
         }}
         onSkip={() => {
@@ -113,7 +150,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           <span className="text-green-900 font-medium">From Mehvar&rsquo;s catalogue.</span>{' '}
           <span className="text-ink/70">
             The details below came with it — change any of them if your pack differs. Only the
-            selling price is yours to set.
+            selling prices are yours to set.
           </span>
         </p>
       ) : null}
@@ -186,23 +223,71 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           onChange={setPackLevels}
         />
         <PackLevelPreview baseUnit={baseUnit} levels={parsed} />
+        {initial.unitsLocked ? (
+          <p className="text-ink/70 text-sm leading-snug" role="note">
+            This product already has stock or sales, so its pack sizes stay as they are —
+            everything recorded so far is counted in them. You can rename a unit (pack to strip) or
+            add a bigger pack at the end, like a carton.
+          </p>
+        ) : null}
       </Section>
 
       <Section title="Price">
-        <Field
-          name="price"
-          label={`Selling price per ${baseUnit || 'unit'}`}
-          hint="In rupees"
-          type="number"
-          step="0.01"
-          value={price}
-          onChange={setPrice}
-          required
-        />
+        <p className="text-ink/60 text-sm leading-snug">
+          Type the prices you know, in rupees. Mehvar fills in the rest from the pack sizes — shown
+          faintly until you type your own.
+        </p>
+        {structure.map((unit, index) => (
+          <Field
+            key={unit.name}
+            name={`unitPrice-${index}`}
+            label={`Price per ${unit.name}`}
+            type="number"
+            step="0.01"
+            value={prices[unit.name] ?? ''}
+            placeholder={
+              typedPaisa[index] === null && suggested[index]
+                ? (suggested[index].pricePaisa / 100).toFixed(2)
+                : undefined
+            }
+            onChange={(next) => {
+              setPrices((current) => ({ ...current, [unit.name]: next }));
+            }}
+          />
+        ))}
+        {structure.length > 1 ? (
+          <div className="flex items-center gap-3">
+            <span className="text-ink/70 text-sm">MRP printed on</span>
+            <div role="group" aria-label="MRP printed on" className="flex">
+              {structure.map((unit, index) => {
+                const pressed = index === mrpUnitAt;
+                return (
+                  <button
+                    key={unit.name}
+                    type="button"
+                    aria-pressed={pressed}
+                    onClick={() => setMrpUnitName(unit.name)}
+                    className={[
+                      'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                      index === 0 ? 'rounded-l' : '-ml-px',
+                      index === structure.length - 1 ? 'rounded-r' : '',
+                      pressed
+                        ? 'bg-green-600 text-paper border-green-600 font-medium'
+                        : 'bg-paper text-ink hover:bg-green-100',
+                    ].join(' ')}
+                  >
+                    {unit.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+        <input type="hidden" name="mrpUnit" value={mrpUnitAt < 0 ? '' : String(mrpUnitAt)} />
         <Field
           name="mrp"
-          label="MRP printed on the pack"
-          hint="In rupees. Optional."
+          label={`MRP per ${mrpUnit?.name || 'unit'}`}
+          hint={`In rupees, as printed on one ${mrpUnit?.name || 'unit'}. Optional.`}
           type="number"
           step="0.01"
           value={mrp}
@@ -210,7 +295,8 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
         />
         {overMrp ? (
           <p className="text-amber text-sm">
-            This is above the MRP you recorded. That is allowed — the pack in hand is what counts.
+            The {mrpUnit?.name} price is above the MRP you recorded. That is allowed — the pack in
+            hand is what counts.
           </p>
         ) : null}
         <Field
@@ -301,6 +387,7 @@ function Field({
   autoFocus = false,
   defaultValue,
   value,
+  placeholder,
   onChange,
 }: {
   name: string;
@@ -312,6 +399,7 @@ function Field({
   autoFocus?: boolean;
   defaultValue?: string;
   value?: string;
+  placeholder?: string | undefined;
   onChange?: (next: string) => void;
 }) {
   const hintId = `${name}-hint`;
@@ -333,6 +421,7 @@ function Field({
         required={required}
         autoFocus={autoFocus}
         autoComplete="off"
+        {...(placeholder !== undefined ? { placeholder } : {})}
         {...(hint ? { 'aria-describedby': hintId } : {})}
         {...(onChange
           ? {

@@ -24,9 +24,10 @@
  */
 import 'dotenv/config';
 
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
+
+import { currentRelease } from '../../src/lib/release';
 
 /**
  * `server.js` sits two levels up from `app/bin/ops/serve.js`.
@@ -54,7 +55,9 @@ function serverEntryPoint(): string {
  * entitlement elapse on a machine that never trades.
  */
 function startLicensingBoot(): void {
-  const version = process.env.npm_package_version ?? readVersionFile() ?? '0.0.0';
+  // The exact build (VERSION's `build`): what `installations.last_version`
+  // records, so the database says which release each machine last ran.
+  const version = currentRelease().build;
 
   void import('../../src/db/licence-boot')
     .then(({ reconcileOnBoot }) => reconcileOnBoot(version))
@@ -109,15 +112,6 @@ function startLicenceRefresh(): void {
   // never keeps the process alive on its own.
   setTimeout(run, 30_000).unref();
   setInterval(run, REFRESH_INTERVAL_MS).unref();
-}
-
-function readVersionFile(): string | undefined {
-  try {
-    const raw = readFileSync(join(__dirname, '..', '..', '..', 'VERSION'), 'utf8');
-    return (JSON.parse(raw) as { version?: string }).version;
-  } catch {
-    return undefined;
-  }
 }
 
 function main(): void {

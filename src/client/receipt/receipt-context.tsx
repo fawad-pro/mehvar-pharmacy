@@ -12,7 +12,7 @@
  * device that went straight to Customers had no seeded counter yet.
  */
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import { saleContext, type SaleContext } from '@/app/(counter)/sale/actions';
 import {
@@ -24,15 +24,25 @@ import {
 export interface ReceiptContextValue extends SaleContext {
   nextReceiptNumber: () => string;
   skipReceiptNumber: (taken: string) => void;
+  /** Re-reads the receipt settings — Settings calls it after saving them. */
+  reload: () => Promise<void>;
 }
 
 const ReceiptContext = createContext<ReceiptContextValue | null>(null);
 
 export function ReceiptContextProvider({
   tenantId,
+  salesmanName,
   children,
 }: {
   tenantId: string;
+  /**
+   * Whoever is acting now, from the session. The context is fetched once, so
+   * the name it carried was whoever was acting when the counter opened — the
+   * owner, for a freshly opened counter — and every receipt after a PIN switch
+   * still printed it. The shell re-renders with the new name on every switch.
+   */
+  salesmanName: string;
   children: React.ReactNode;
 }) {
   const [context, setContext] = useState<SaleContext | null>(null);
@@ -103,18 +113,40 @@ export function ReceiptContextProvider({
     };
   }, [context, attempt]);
 
+  /**
+   * The settings in this context (auto-print, header, footer) used to be read
+   * once per app load, so unticking "Print a receipt for every sale" in
+   * Settings saved correctly and changed nothing until the counter was
+   * restarted. Settings now awaits this after a save. A failed re-read keeps
+   * the values already held: a stale footer is better than a counter that
+   * cannot number a receipt.
+   */
+  const reload = useCallback(async () => {
+    try {
+      const ctx = await saleContext();
+      if (ctx) {
+        seedReceiptCounter(tenantId, ctx.receiptPrefix, ctx.highestReceiptCounter);
+        setContext(ctx);
+      }
+    } catch {
+      // Kept as it was; the next app load reads the settings afresh.
+    }
+  }, [tenantId]);
+
   const value = useMemo<ReceiptContextValue | null>(() => {
     if (!context) {
       return null;
     }
     return {
       ...context,
+      salesmanName,
       nextReceiptNumber: () => nextReceiptNumber(tenantId, context.receiptPrefix),
       skipReceiptNumber: (taken: string) => {
         skipReceiptNumber(tenantId, context.receiptPrefix, taken);
       },
+      reload,
     };
-  }, [context, tenantId]);
+  }, [context, tenantId, salesmanName, reload]);
 
   return <ReceiptContext.Provider value={value}>{children}</ReceiptContext.Provider>;
 }

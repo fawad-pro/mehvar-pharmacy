@@ -14,6 +14,7 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 - **Attribution:** `created_by` (user id) + `created_at` on every business row (T1). Immutable tables have no `updated_at` — there are no updates.
 - **Money:** integer paisa (`bigint`). No floats anywhere near money.
 - **Quantities:** integer base units (Phase 5 §2) everywhere. Presentation converts.
+- **Entered units (2026-10-24, PCN-012):** event lines also store the entered unit, its count, the per-unit price or cost and the exact line amount. All additive: rows written before PCN-012 are read through a fallback (line amount = per-base price × base quantity) and never backfilled (ADR-1).
 - **Immutability:** business-event tables accept INSERT only (enforced §5). Products/customers/suppliers are reference entities: editable fields limited to identity/settings, never to anything a report derives from.
 - **Soft archive:** reference entities carry `is_active`; nothing is ever deleted (referenced history must resolve).
 - **Business day:** derived from `created_at` in tenant-local time (single timezone country); no stored day-close lock (D5). Over/short entries are cash movements with a reason code.
@@ -35,7 +36,8 @@ Conventions first, tables second, enforcement third. Column lists name the seman
 
 ## 3. Event tables (append-only)
 
-**purchases** — id, tenant_id, supplier_id, invoice_ref, invoice_date, note, created_by/at.
+**purchases** — id, tenant_id, supplier_id, invoice_ref, invoice_date, note, cash_paid_paisa, credit_tracked, created_by/at.
+*PCN-007: `cash_paid_paisa` is what was paid at receiving; the remainder is owed to the supplier. `credit_tracked` is false for every purchase entered before supplier credit existed (no payment was recorded; migration 0010 marks them by stored default, rewriting no row) — those owe nothing.*
 **purchase_lines** — id, tenant_id, purchase_id, product_id, qty_base, bonus_qty_base, unit_cost_paisa (per base unit; bonus units carry zero cost by derivation, not by column), expiry_date, batch_number (nullable), mrp_at_receiving_paisa, price_at_receiving_paisa.
 *Each line materializes a batch (§4).*
 
@@ -44,10 +46,15 @@ CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 
 **sale_lines** — id, tenant_id, sale_id, product_id, qty_base, entered_unit_level, unit_price_paisa (per base unit as charged), line_discount_paisa, price_overridden boolean (T1 exposure).
 
+*Amended 2026-10-24 by PCN-012.* **products** gains `units` JSONB (`[{key, name, factor, price_paisa, sell}]`, smallest first) and `mrp_paisa` + `mrp_unit_key`; `base_unit_name`, `pack_levels` and `default_price_per_base_unit` are kept in step for one release, then retired. **purchase_lines** gains `unit_key`, `unit_name`, `unit_count`, `bonus_unit_count`, `unit_cost_paisa_entered`, `line_cost_paisa`. **sale_lines** gains `unit_key`, `unit_name`, `unit_count`, `unit_price_paisa_entered`, `line_amount_paisa` (before line discount). **batches** gains `cost_total_paisa` and `prices_at_receiving` JSONB. Adjustments, sale-return lines, supplier returns and purchase corrections gain `unit_key`, `unit_name`, `unit_count` for display. **global_products** gains `reference_mrp_unit`. Tenant settings gain `sellsLoose`.
+
 **sale_line_allocations** — id, tenant_id, sale_line_id, batch_id (nullable), qty_base, unit_cost_paisa (from batch; null while pending).
 *The D1/D2 mechanism: server-side FEFO writes one row per consumed batch (ADR-5); `batch_id NULL` rows are the pending layer, plus resolved_by (nullable FK to the purchase_line or adjustment that later resolved it) and resolved_at. Pending rows are the only "mutable" business rows in the system, and only their resolution fields may be set — once, forward-only.*
 
 **payments** — id (client-generated), tenant_id, customer_id, amount_paisa, method (`cash`), sale_id (nullable: set when part of a sale commit; standalone = settlement W3), origin, client_committed_at, created_by/at.
+
+**supplier_payments** — id, tenant_id, supplier_id, amount_paisa, method (`cash`), purchase_id (nullable), note, created_by/at.
+*PCN-007: the payable mirror of `payments`. A supplier balance is derived: Σ (line cost − cash paid) over tracked purchases − Σ supplier payments.*
 
 **sale_returns** — id, tenant_id, sale_id, cash_out_paisa, credit_reduced_paisa, reason_note, created_by/at.
 **sale_return_lines** — id, tenant_id, sale_return_id, sale_line_id, qty_base, restock_batch_id (nullable — known source batch or write-off).
@@ -55,12 +62,16 @@ CHECK: cash + credit = total; credit > 0 ⇒ customer_id set.
 **adjustments** — id, tenant_id, product_id, batch_id (nullable), qty_base_delta (signed), reason (`damage | expiry_writeoff | distributor_return | count_correction | opening_stock`), note, created_by/at.
 *Positive opening/count deltas materialize batches (§4).*
 
+**purchase_corrections** — id (client-generated), tenant_id, purchase_line_id, batch_id, qty_delta_base, bonus_delta_base, corrected_unit_cost_paisa (nullable), effective_unit_cost_paisa, invoice_delta_paisa, note (required), created_by/at.
+**supplier_returns** — id (client-generated), tenant_id, supplier_id (the batch's invoice supplier), product_id, batch_id, qty_base, credit_paisa, note, created_by/at.
+*PCN-009: compensating records, never edits. A correction states what the line should have said; its deltas move the batch through ADR-8's guarded functions, `effective_unit_cost_paisa` values every allocation from the batch in reports, and `invoice_delta_paisa` adds to the supplier balance. A supplier return removes stock and subtracts its credit from the supplier balance.*
+
 **cash_movements** — id, tenant_id, direction (`in | out`), amount_paisa, reason (`opening_float | owner_withdrawal | expense | over_short`), note, created_by/at.
 
 ## 4. Batches
 
 **batches** — id, tenant_id, product_id, source (`purchase_line | adjustment`), source_id, batch_number (nullable), expiry_date (nullable only for non-perishables), unit_cost_paisa, price_per_base_unit_paisa, qty_received_base, **qty_remaining_base** (the single ADR-8 transactional cache), created_at.
-Derivation contract: qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments + Σ restocked returns. The rebuild/verifier routine (ADR-8) recomputes and compares; mismatch alerts.
+Derivation contract: qty_remaining = qty_received − Σ allocations − Σ negative batch adjustments + Σ restocked returns + Σ purchase-correction deltas (quantity + bonus) − Σ supplier returns (PCN-009). The rebuild/verifier routine (ADR-8) recomputes and compares; mismatch alerts.
 FEFO order: expiry_date ASC NULLS LAST, created_at ASC.
 
 ## 5. Enforcement

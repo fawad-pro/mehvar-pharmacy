@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   exceedsMrp,
+  packStructureChange,
+  unitRenames,
   validateBarcode,
   validatePackLevels,
   validateProductDraft,
@@ -85,6 +87,167 @@ describe('pack levels — the structure stock arithmetic depends on', () => {
   });
 });
 
+describe('pack sizes nest (PCN-012)', () => {
+  it('accepts a box that holds whole strips', () => {
+    expect(
+      validatePackLevels(
+        [
+          { name: 'strip', factor: 10 },
+          { name: 'box', factor: 100 },
+        ],
+        'tab',
+      ),
+    ).toEqual([]);
+  });
+
+  it('refuses a box that holds two and a half strips, naming the level below', () => {
+    // No screen can state 25 tablets as boxes and strips truthfully.
+    expect(
+      validatePackLevels(
+        [
+          { name: 'strip', factor: 10 },
+          { name: 'box', factor: 25 },
+        ],
+        'tab',
+      ),
+    ).toEqual([{ reason: 'pack_level_not_nested', index: 1, below: 'strip' }]);
+  });
+
+  it('exempts levels an edit keeps unchanged, but not one it adds', () => {
+    const legacy = [
+      { name: 'strip', factor: 10 },
+      { name: 'box', factor: 25 },
+    ];
+    // A product already trading with this structure can still have its price edited.
+    expect(validatePackLevels(legacy, 'tab', 2)).toEqual([]);
+    // A carton added on top must nest in the box below it.
+    expect(validatePackLevels([...legacy, { name: 'carton', factor: 60 }], 'tab', 2)).toEqual([
+      { reason: 'pack_level_not_nested', index: 2, below: 'box' },
+    ]);
+    expect(validatePackLevels([...legacy, { name: 'carton', factor: 250 }], 'tab', 2)).toEqual([]);
+  });
+
+  it('reaches the draft validator', () => {
+    const result = validateProductDraft(
+      draft({
+        packLevels: [
+          { name: 'strip', factor: 10 },
+          { name: 'box', factor: 25 },
+        ],
+      }),
+    );
+    expect(reasons(result)).toEqual(['pack_level_not_nested']);
+  });
+});
+
+describe('what an edit does to a product’s units (PCN-012)', () => {
+  const current = {
+    baseUnitName: 'tab',
+    packLevels: [
+      { name: 'strip', factor: 10 },
+      { name: 'box', factor: 100 },
+    ],
+  };
+
+  it('the same units are unchanged, whitespace aside', () => {
+    expect(packStructureChange(current, { ...current, baseUnitName: ' tab ' })).toBe('unchanged');
+  });
+
+  it('a larger pack added on top extends it', () => {
+    expect(
+      packStructureChange(current, {
+        ...current,
+        packLevels: [...current.packLevels, { name: 'carton', factor: 1000 }],
+      }),
+    ).toBe('extended');
+  });
+
+  it('a quick item gaining its strip during completion extends it', () => {
+    expect(
+      packStructureChange(
+        { baseUnitName: 'tab', packLevels: [] },
+        { baseUnitName: 'tab', packLevels: [{ name: 'strip', factor: 10 }] },
+      ),
+    ).toBe('extended');
+  });
+
+  it('a new pack size, a removed pack or an insertion change it', () => {
+    expect(
+      packStructureChange(current, {
+        ...current,
+        packLevels: [
+          { name: 'strip', factor: 10 },
+          { name: 'box', factor: 200 },
+        ],
+      }),
+    ).toBe('changed');
+    expect(
+      packStructureChange(current, { ...current, packLevels: [{ name: 'strip', factor: 10 }] }),
+    ).toBe('changed');
+    // A level slipped in BELOW an existing one renumbers it, so it is not an extension.
+    expect(
+      packStructureChange(current, {
+        ...current,
+        packLevels: [
+          { name: 'pair', factor: 2 },
+          { name: 'strip', factor: 10 },
+          { name: 'box', factor: 100 },
+        ],
+      }),
+    ).toBe('changed');
+  });
+});
+
+describe('renaming a unit (PCN-012)', () => {
+  const current = {
+    baseUnitName: 'tab',
+    packLevels: [
+      { name: 'pack', factor: 10 },
+      { name: 'box', factor: 100 },
+    ],
+  };
+
+  it('a rename at the same size leaves the units unchanged, and is listed', () => {
+    const next = {
+      baseUnitName: 'tablet',
+      packLevels: [
+        { name: 'strip', factor: 10 },
+        { name: 'box', factor: 100 },
+      ],
+    };
+    expect(packStructureChange(current, next)).toBe('unchanged');
+    expect(unitRenames(current, next)).toEqual([
+      { from: 'tab', to: 'tablet' },
+      { from: 'pack', to: 'strip' },
+    ]);
+  });
+
+  it('a renamed unit with a larger pack on top still extends', () => {
+    const next = {
+      ...current,
+      packLevels: [
+        { name: 'strip', factor: 10 },
+        { name: 'box', factor: 100 },
+        { name: 'carton', factor: 1000 },
+      ],
+    };
+    expect(packStructureChange(current, next)).toBe('extended');
+    expect(unitRenames(current, next)).toEqual([{ from: 'pack', to: 'strip' }]);
+  });
+
+  it('a new size under an old name is a different unit, never a rename', () => {
+    const next = {
+      ...current,
+      packLevels: [
+        { name: 'pack', factor: 10 },
+        { name: 'carton', factor: 200 },
+      ],
+    };
+    expect(packStructureChange(current, next)).toBe('changed');
+    expect(unitRenames(current, next)).toEqual([]);
+  });
+});
+
 describe('product drafts', () => {
   it('accepts a well-formed draft and trims it', () => {
     const result = validateProductDraft(draft({ name: '  Panadol  ', manufacturer: '   ' }));
@@ -161,6 +324,15 @@ describe('barcodes map to a unit level', () => {
     expect(
       validateBarcode({ barcode: '8964000101018', unitLevelName: 'tab' }, 'tab', levels).ok,
     ).toBe(true);
+  });
+
+  it('saves a pack’s 2D code as its GTIN, not one batch’s full string', () => {
+    const result = validateBarcode(
+      { barcode: '01080026600316931728053110892302XV', unitLevelName: 'box' },
+      'tab',
+      levels,
+    );
+    expect(result.ok && result.value.barcode).toBe('08002660031693');
   });
 
   it('strips the whitespace a scanner sometimes emits', () => {

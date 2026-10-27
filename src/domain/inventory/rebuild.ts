@@ -55,7 +55,14 @@ export function rebuildQuantity(row: BatchLedgerRow): number {
   // load-bearing rather than incidental. In short: a positive adjustment
   // materializes a batch rather than adding to one, so its quantity arrives as
   // `qtyReceivedBase` and must not be counted a second time here.
-  return row.qtyReceivedBase - row.allocatedBase + row.adjustedBase + row.restockedBase;
+  return (
+    row.qtyReceivedBase -
+    row.allocatedBase +
+    row.adjustedBase +
+    row.restockedBase +
+    row.correctedBase -
+    row.supplierReturnedBase
+  );
 }
 
 /**

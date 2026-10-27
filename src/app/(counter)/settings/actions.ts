@@ -76,6 +76,23 @@ export async function updateReceiptSettingsAction(input: {
   return { ok: true };
 }
 
+/** [PCN-012] Which unit a sale line starts in, for a product not sold before. */
+export async function updateSaleStartsLooseAction(
+  saleStartsLoose: boolean,
+): Promise<SettingsOutcome> {
+  const session = await currentSession();
+  if (!requireOwner(session)) {
+    return { ok: false, message: 'Only the owner can change this.' };
+  }
+  const current = await tenantSettings(session.tenantId);
+  if (!current) {
+    return { ok: false, message: 'Could not load current settings.' };
+  }
+  await updateTenantSettings(session.tenantId, { ...current, saleStartsLoose });
+  revalidateAfter('settings');
+  return { ok: true };
+}
+
 export async function listUsersAction(): Promise<UserListItem[]> {
   const session = await currentSession();
   if (!requireOwner(session)) {

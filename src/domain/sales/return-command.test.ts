@@ -13,6 +13,7 @@ const LINE: ReturnableSaleLine = {
   qtyBase: 10,
   alreadyReturnedBase: 0,
   unitPricePaisa: 350,
+  lineAmountPaisa: null,
   lineDiscountPaisa: 0,
 };
 
@@ -50,6 +51,20 @@ describe('refundForLine', () => {
   it('refunds the whole line when the whole line is returned', () => {
     expect(refundForLine(LINE, 10)).toBe(3_500);
   });
+
+  it('refunds a box from the box price, not from a rounded per-tablet figure (PCN-012)', () => {
+    // One box of 14 sold at Rs 250: the nominal per-base price is 1,785, and
+    // 1,785 × 14 = 24,990 would short the customer by ten paisa.
+    const box: ReturnableSaleLine = {
+      ...LINE,
+      qtyBase: 14,
+      unitPricePaisa: 1_785,
+      lineAmountPaisa: 25_000,
+    };
+    expect(refundForLine(box, 14)).toBe(25_000);
+    // Seven capsules back: half the box, exactly.
+    expect(refundForLine(box, 7)).toBe(12_500);
+  });
 });
 
 describe('totalRefundPaisa', () => {
@@ -59,6 +74,7 @@ describe('totalRefundPaisa', () => {
       qtyBase: 5,
       alreadyReturnedBase: 0,
       unitPricePaisa: 720,
+      lineAmountPaisa: null,
       lineDiscountPaisa: 0,
     };
     const cmd = command({
