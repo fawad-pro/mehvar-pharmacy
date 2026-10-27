@@ -11,10 +11,13 @@
  * (ADR-3). It says so rather than pretending.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { createSupplierAction, searchSuppliersAction, type SupplierHit } from './actions';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
+
+/** How long typing must pause before suppliers are searched (as for customers). */
+const SEARCH_PAUSE_MS = 200;
 
 export function SupplierPicker({
   onPick,
@@ -24,7 +27,18 @@ export function SupplierPicker({
   onCancel: () => void;
 }) {
   const [term, setTerm] = useState('');
-  const [hits, setHits] = useState<SupplierHit[]>([]);
+  /**
+   * Results carry the term they answer, and Enter acts only on the answer for
+   * what is typed now — the customer picker's rule. On a slow answer, an
+   * earlier list put a delivery, and what it costs, on the wrong supplier, or
+   * an empty one created a duplicate of a supplier who already exists.
+   */
+  const [answered, setAnswered] = useState<{ term: string | null; hits: SupplierHit[] }>({
+    term: null,
+    hits: [],
+  });
+  /** The term an Enter is waiting on, until its answer arrives. */
+  const enterFor = useRef<string | null>(null);
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,25 +50,51 @@ export function SupplierPicker({
 
   useEffect(() => {
     let cancelled = false;
-    void searchSuppliersAction(term)
-      .then((result) => {
-        if (!cancelled) {
-          setHits(result);
-          setActive(0);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setError('Needs internet — selling keeps working.');
-        }
-      });
+    const asked = term.trim();
+    // The customer picker's pause after the last key, for its reason; the
+    // first list, for nothing typed, loads at once.
+    const timer = window.setTimeout(
+      () => {
+        void searchSuppliersAction(term)
+          .then((result) => {
+            if (!cancelled) {
+              setAnswered({ term: asked, hits: result });
+              setActive(0);
+              answerArrived(asked, result);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setError('Needs internet — selling keeps working.');
+            }
+          });
+      },
+      asked === '' ? 0 : SEARCH_PAUSE_MS,
+    );
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [term]);
 
-  async function createInline(): Promise<void> {
-    const name = term.trim();
+  const hits = answered.term === term.trim() ? answered.hits : [];
+
+  const answerArrived = useEffectEvent((answeredTerm: string, found: SupplierHit[]) => {
+    if (enterFor.current !== answeredTerm) return;
+    enterFor.current = null;
+    choose(found[0], answeredTerm);
+  });
+
+  /** Enter's meaning: the highlighted supplier, or a new one by this name. */
+  function choose(hit: SupplierHit | undefined, name: string): void {
+    if (hit) {
+      onPick(hit);
+    } else {
+      void createInline(name);
+    }
+  }
+
+  async function createInline(name: string = term.trim()): Promise<void> {
     if (name === '' || busy) {
       return;
     }
@@ -97,12 +137,13 @@ export function SupplierPicker({
             }
             if (event.key === 'Enter') {
               event.preventDefault();
-              const hit = hits[active];
-              if (hit) {
-                onPick(hit);
-              } else {
-                void createInline();
+              const trimmed = term.trim();
+              if (answered.term !== trimmed) {
+                // Not answered yet: act the moment it is, on that answer.
+                enterFor.current = trimmed;
+                return;
               }
+              choose(hits[active], trimmed);
             }
           }}
           autoComplete="off"
