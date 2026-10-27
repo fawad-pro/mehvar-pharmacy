@@ -619,6 +619,36 @@ exception visibility.
   `supplier-balance.integration` asserts the rows sum to the balance (Day 8).
   A new term in one is a new term in the other.
 
+## Things PCN-013 (fixing mistakes) established
+
+- **A correction is a row in the same table as what it corrects.** A
+  cancellation in `payments`, `supplier_payments` or `cash_movements` carries
+  `reverses_id` and the opposite sign or direction, so every reader that sums
+  the table is right without knowing. Before choosing a separate table, count
+  its readers: each one would have to learn to exclude, and the one that does
+  not is the Day 8 bug.
+- **"Sums correctly" is not "offsets exactly".** The crown suite recomputes
+  balances and expected cash from the entries that still stand (`standing`),
+  so a cancellation that undid the wrong amount fails, which re-summing the
+  same rows cannot catch. A reader that COUNTS instead of sums
+  (`hasOpeningFloat`) is where a compensating row breaks things.
+- **A reason that keeps something out of the loss figures is a way to hide a
+  loss.** "Entered by mistake" is owner only, only on stock typed in by hand,
+  and always on the exception list; invoiced stock is corrected on the
+  purchase, where the money is.
+- **Removing a record never hides its money.** A customer or supplier may be
+  removed only at zero, and a removed one that later has a balance (an offline
+  sale arriving after removal) is listed anyway.
+- **A control whose action can be refused must leave its confirm state.**
+  "Yes, remove" left showing after a refusal invites a press that cannot
+  succeed.
+- **A component that prints must outlive the refresh its own action causes.**
+  The cancel control renders for cancelled rows too, so the slip in its state
+  is still mounted when the row turns into "cancelled".
+- **Playwright types like a scanner.** Digits then Enter at machine speed is
+  a scan, and the scan guard rightly keeps it out of an ordinary field. Type
+  at a person's speed (`{ delay }`) in a spec; never weaken the guard.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

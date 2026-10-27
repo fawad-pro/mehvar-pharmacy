@@ -2,6 +2,27 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Every typing mistake has a fix that tells the truth (PCN-013)
+
+- **Customers and suppliers can be corrected.** Fix a name or phone from
+  their page; the owner can remove one added by mistake, and restore it.
+  Removal is refused while money is owed either way, and the message says how
+  much. **All suppliers**, on Purchases, lists every supplier, including ones
+  with nothing owed.
+- **A payment typed wrong can be cancelled** — udhaar payments, supplier
+  payments and cash entries (expense, withdrawal, float). The owner presses
+  **Cancel entry**; the opposite entry is written and both stay on record,
+  marked. A cancelled udhaar payment prints a "PAYMENT CANCELLED" slip for the
+  customer. Balances, what is owed and expected cash return to what they would
+  have been. Cancellations show on the Day screen.
+- **"Entered by mistake — never there"** on Adjust stock takes back opening
+  stock or a count typed too high without reporting it as a loss. Owner only,
+  only for stock entered by hand, and listed on the Day screen. Stock that came
+  on an invoice is corrected on the purchase instead.
+- **Replace this product → "A product I already have"** moves stock typed
+  under the wrong product to the right one, at the count you confirm, with its
+  cost. Any sale that went short on the right product is answered by it.
+
 ## A product entered by mistake can be removed
 
 - **Remove product**, on the product's page, takes it off the counter's

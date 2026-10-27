@@ -1747,5 +1747,43 @@ design check.
 **Decision.** 2026-10-27, the owner: options 1, 2A, 3A and 4, as
 recommended. Option 5 waits for its design check.
 
-**Applied.** Not yet. Product Remove / Restore (the table's product row) was
-built ahead of this note at the owner's request; it needs no plan change.
+**Applied.** 2026-10-27 on `claude/inspiring-brahmagupta-cf9nfj`. Product
+Remove / Restore (the table's product row) was built first, at the owner's
+request; it needed no plan change.
+
+1. Customers and suppliers: Edit name and phone (anyone who may create one),
+   Remove / Restore (owner only), refused while the balance is not zero either
+   way. Lists never hide a removed record that has a balance, because an
+   udhaar sale captured offline can still arrive after removal. A Suppliers
+   page lists every supplier, so a settled one can be reached at all.
+2. Reversals, as 2A: `reverses_id` on `payments`, `supplier_payments` and
+   `cash_movements` (migration 0015), unique per tenant, with the payment
+   CHECKs restated so that only a reversal may be negative. Writers:
+   `commitPaymentReversal`, `commitSupplierPaymentReversal`,
+   `commitCashReversal`, all idempotent on client id, owner only, online
+   only. The ledgers show both halves; a cancelled udhaar payment prints a
+   "PAYMENT CANCELLED" slip with its own receipt number, and Receipts names
+   each half; cash cancellations sit beside their original on the Day screen;
+   cancelled payments are an exception group. One reader needed more than a
+   sum: `hasOpeningFloat` no longer counts a cancelled float.
+3. "Entered by mistake" (`entered_by_mistake`, migration 0016): negative
+   only, owner only, and only on stock typed in by hand (opening stock or a
+   count). Stock that came on an invoice is refused and pointed at the
+   purchase correction, so money paid to a supplier never vanishes from the
+   reports. Its cost is a movement of its own (`mistake`), neither cost of
+   goods nor a write-off. It is on the exception list like any adjustment.
+4. Replace into an existing product (`replaceIntoProduct`): same base unit
+   required, counts confirmed in the receiving product's packs, cost moved
+   exactly as a replacement's, and the receiving product's shortfalls answered
+   by the arriving stock (D2).
+
+The crown suite gained every new event kind (payment, supplier payment and
+cash cancellations; entered by mistake, including its refusal; moving into an
+existing product) and an expected-cash invariant. Customer, supplier and cash
+figures are now recomputed independently from the entries that still stand,
+so a cancellation that did not exactly offset its entry fails the suite —
+each writer was broken on purpose and seen to fail it.
+
+Not addressed: option 5 (a purchase against the wrong supplier) awaits its
+design check. A reversal is not an outbox record, so it needs a connection to
+the shop's computer.
