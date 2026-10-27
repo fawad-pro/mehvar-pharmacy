@@ -5,12 +5,18 @@
  * it. Counts are pre-filled from the old count, unit for unit by name ("3 box"
  * stays 3 box of the new box), so the owner checks the shelf and corrects
  * what differs. Nothing moves until they confirm.
+ *
+ * [PCN-013] Or into a product the shop already has: picked from the counter's
+ * own search, counted in that product's packs, and only when both count the
+ * same base unit (the server checks again).
  */
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import type { SearchHit } from '@/client/search/catalog-index';
 import { useCatalog } from '@/client/search/provider';
+import { ProductSearch } from '@/components/product-search';
 import { parsePackLevels } from '@/domain/catalog/product';
 import { unitsFromEnteredPrices } from '@/domain/catalog/units';
 import { parseRupeeInput } from '@/domain/sales/cart';
@@ -22,7 +28,7 @@ import {
   type PackLevel,
 } from '@/lib/quantity';
 
-import { replaceProductAction } from '../../actions';
+import { replaceIntoProductAction, replaceProductAction } from '../../actions';
 
 interface Unit {
   name: string;
@@ -92,13 +98,32 @@ export function ReplaceSurface({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** [PCN-013] A new product, or one the shop already has. */
+  const [mode, setMode] = useState<'new' | 'existing'>('new');
+  const [into, setInto] = useState<{
+    id: string;
+    name: string;
+    baseUnitName: string;
+    packLevels: readonly PackLevel[];
+  } | null>(null);
+  const moving = mode === 'existing';
+  const baseDiffers =
+    moving &&
+    into !== null &&
+    into.baseUnitName.trim().toLowerCase() !== product.baseUnitName.trim().toLowerCase();
 
-  const structure: Unit[] = [
-    { name: baseUnit.trim(), factor: 1 },
-    ...parsePackLevels(packLevels).filter(
-      (level) => Number.isSafeInteger(level.factor) && level.factor > 1,
-    ),
-  ].filter((unit) => unit.name !== '');
+  const structure: Unit[] = (
+    moving
+      ? into
+        ? [{ name: into.baseUnitName, factor: 1 }, ...into.packLevels]
+        : []
+      : [
+          { name: baseUnit.trim(), factor: 1 },
+          ...parsePackLevels(packLevels).filter(
+            (level) => Number.isSafeInteger(level.factor) && level.factor > 1,
+          ),
+        ]
+  ).filter((unit) => unit.name !== '');
   const largestFirst = [...structure].reverse();
   const typedPaisa = structure.map((unit) => parseRupeeInput(prices[unit.name] ?? ''));
   const suggested = unitsFromEnteredPrices(structure, typedPaisa) ?? [];
@@ -119,8 +144,31 @@ export function ReplaceSurface({
   const names = new Set(structure.map((unit) => unit.name));
   const unlinking = product.barcodes.filter((code) => !names.has(code.unitLevelName));
 
+  function pickInto(hit: SearchHit): void {
+    if (hit.product.id === product.id) {
+      setError('That is this product. Choose the one the stock really belongs to.');
+      return;
+    }
+    setError(null);
+    setTyped({});
+    setInto({
+      id: hit.product.id,
+      name: hit.product.name,
+      baseUnitName: hit.product.baseUnitName,
+      packLevels: hit.product.packLevels,
+    });
+  }
+
   async function confirm(): Promise<void> {
     if (busy) return;
+    if (moving && (!into || baseDiffers)) {
+      setError(
+        into
+          ? `${into.name} is counted in ${into.baseUnitName}, this one in ${product.baseUnitName}. Choose a product counted the same way, or replace with a new product.`
+          : 'Choose the product the stock belongs to.',
+      );
+      return;
+    }
     const totals = batches.map((batch) => ({ batch, total: totalOf(batch) }));
     if (totals.some(({ total }) => total === null || total <= 0)) {
       setError(
@@ -130,18 +178,26 @@ export function ReplaceSurface({
     }
     setBusy(true);
     setError(null);
-    const outcome = await replaceProductAction(product.id, {
-      name,
-      baseUnitName: baseUnit,
-      packLevels,
-      unitPrices: structure.map((unit) => prices[unit.name] ?? ''),
-      batches: totals.map(({ batch, total }) => ({
-        batchId: batch.batchId,
-        expectedRemainingBase: batch.qtyRemainingBase,
-        newQtyBase: total ?? 0,
-      })),
-      note,
-    });
+    const confirmed = totals.map(({ batch, total }) => ({
+      batchId: batch.batchId,
+      expectedRemainingBase: batch.qtyRemainingBase,
+      newQtyBase: total ?? 0,
+    }));
+    const outcome =
+      moving && into
+        ? await replaceIntoProductAction(product.id, {
+            intoProductId: into.id,
+            batches: confirmed,
+            note,
+          })
+        : await replaceProductAction(product.id, {
+            name,
+            baseUnitName: baseUnit,
+            packLevels,
+            unitPrices: structure.map((unit) => prices[unit.name] ?? ''),
+            batches: confirmed,
+            note,
+          });
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.message);
@@ -166,116 +222,175 @@ export function ReplaceSurface({
         void confirm();
       }}
     >
-      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
-          The right pack
-        </legend>
-        <label className="text-ink/70 text-xs">
-          Name
-          <input
-            autoComplete="off"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            className={fieldClass}
-          />
-        </label>
-        <label className="text-ink/70 text-xs">
-          Base unit
-          <input
-            autoComplete="off"
-            value={baseUnit}
-            onChange={(event) => setBaseUnit(event.target.value)}
-            className={fieldClass}
-          />
-        </label>
-        <label className="text-ink/70 text-xs">
-          Pack levels
-          <input
-            autoComplete="off"
-            value={packLevels}
-            placeholder="strip:14, box:140"
-            onChange={(event) => setPackLevels(event.target.value)}
-            className={fieldClass}
-          />
-        </label>
-        {structure.map((unit, index) => (
-          <label key={unit.name} className="text-ink/70 text-xs">
-            Price per {unit.name}
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Replace with">
+        {(
+          [
+            ['new', 'A new product with the right pack'],
+            ['existing', 'A product I already have'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={mode === value}
+            onClick={() => {
+              setMode(value);
+              setTyped({});
+              setError(null);
+            }}
+            className={`min-h-touch rounded border px-4 text-sm ${
+              mode === value ? 'border-green-600 bg-green-100/60 font-medium' : 'border-line'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {moving ? (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
+            Move the stock to
+          </legend>
+          {into ? (
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <span className="font-medium">{into.name}</span>
+              <span className="text-ink/60">counted in {into.baseUnitName}</span>
+              <button
+                type="button"
+                onClick={() => setInto(null)}
+                className="text-green-700 min-h-touch px-1 underline-offset-2 hover:underline"
+              >
+                Choose another
+              </button>
+              {baseDiffers ? (
+                <p className="text-red w-full" role="alert">
+                  {into.name} is counted in {into.baseUnitName}, this one in {product.baseUnitName},
+                  so the counts would change meaning. Choose a product counted the same way, or
+                  replace with a new product.
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <ProductSearch onSelect={pickInto} />
+          )}
+        </fieldset>
+      ) : (
+        <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
+            The right pack
+          </legend>
+          <label className="text-ink/70 text-xs">
+            Name
             <input
               autoComplete="off"
-              inputMode="decimal"
-              value={prices[unit.name] ?? ''}
-              placeholder={
-                typedPaisa[index] === null && suggested[index]
-                  ? (suggested[index].pricePaisa / 100).toFixed(2)
-                  : undefined
-              }
-              onChange={(event) =>
-                setPrices((current) => ({ ...current, [unit.name]: event.target.value }))
-              }
-              className={`${fieldClass} numeral`}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className={fieldClass}
             />
           </label>
-        ))}
-      </fieldset>
+          <label className="text-ink/70 text-xs">
+            Base unit
+            <input
+              autoComplete="off"
+              value={baseUnit}
+              onChange={(event) => setBaseUnit(event.target.value)}
+              className={fieldClass}
+            />
+          </label>
+          <label className="text-ink/70 text-xs">
+            Pack levels
+            <input
+              autoComplete="off"
+              value={packLevels}
+              placeholder="strip:14, box:140"
+              onChange={(event) => setPackLevels(event.target.value)}
+              className={fieldClass}
+            />
+          </label>
+          {structure.map((unit, index) => (
+            <label key={unit.name} className="text-ink/70 text-xs">
+              Price per {unit.name}
+              <input
+                autoComplete="off"
+                inputMode="decimal"
+                value={prices[unit.name] ?? ''}
+                placeholder={
+                  typedPaisa[index] === null && suggested[index]
+                    ? (suggested[index].pricePaisa / 100).toFixed(2)
+                    : undefined
+                }
+                onChange={(event) =>
+                  setPrices((current) => ({ ...current, [unit.name]: event.target.value }))
+                }
+                className={`${fieldClass} numeral`}
+              />
+            </label>
+          ))}
+        </fieldset>
+      )}
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
-          Count each batch in the new pack
-        </legend>
-        {batches.length === 0 ? (
-          <p className="text-ink/60 text-sm">No stock on hand — nothing to move.</p>
-        ) : null}
-        {batches.map((batch) => {
-          const counts = countsOf(batch);
-          const total = totalOf(batch);
-          return (
-            <div
-              key={batch.batchId}
-              role="group"
-              aria-label={`Batch ${batch.batchNumber ?? ''} ${batch.expiryDate ? `expiring ${batch.expiryDate}` : ''}`.trim()}
-              className="border-line flex flex-wrap items-end gap-3 rounded border p-3"
-            >
-              <div className="min-w-40 text-sm">
-                <p className="font-medium">
-                  {batch.batchNumber ? `Batch ${batch.batchNumber}` : 'Batch'}
-                  {batch.expiryDate ? ` · exp ${batch.expiryDate}` : ''}
-                </p>
-                <p className="text-ink/60 text-xs">
-                  Recorded:{' '}
-                  {describeQuantity(
-                    baseQty(batch.qtyRemainingBase),
-                    product.baseUnitName,
-                    product.packLevels,
-                  )}
+      {moving && (!into || baseDiffers) ? null : (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
+            {moving && into
+              ? `Count each batch in ${into.name}'s packs`
+              : 'Count each batch in the new pack'}
+          </legend>
+          {batches.length === 0 ? (
+            <p className="text-ink/60 text-sm">No stock on hand — nothing to move.</p>
+          ) : null}
+          {batches.map((batch) => {
+            const counts = countsOf(batch);
+            const total = totalOf(batch);
+            return (
+              <div
+                key={batch.batchId}
+                role="group"
+                aria-label={`Batch ${batch.batchNumber ?? ''} ${batch.expiryDate ? `expiring ${batch.expiryDate}` : ''}`.trim()}
+                className="border-line flex flex-wrap items-end gap-3 rounded border p-3"
+              >
+                <div className="min-w-40 text-sm">
+                  <p className="font-medium">
+                    {batch.batchNumber ? `Batch ${batch.batchNumber}` : 'Batch'}
+                    {batch.expiryDate ? ` · exp ${batch.expiryDate}` : ''}
+                  </p>
+                  <p className="text-ink/60 text-xs">
+                    Recorded:{' '}
+                    {describeQuantity(
+                      baseQty(batch.qtyRemainingBase),
+                      product.baseUnitName,
+                      product.packLevels,
+                    )}
+                  </p>
+                </div>
+                {largestFirst.map((unit) => (
+                  <label key={unit.name} className="text-ink/70 w-20 text-xs">
+                    {unit.name}
+                    <input
+                      autoComplete="off"
+                      inputMode="numeric"
+                      value={counts[unit.name] ?? '0'}
+                      onChange={(event) =>
+                        setTyped((current) => ({
+                          ...current,
+                          [batch.batchId]: { ...counts, [unit.name]: event.target.value },
+                        }))
+                      }
+                      className={`${fieldClass} numeral`}
+                    />
+                  </label>
+                ))}
+                <p className="text-ink/60 ml-auto text-xs" aria-live="polite">
+                  {total === null ? 'Whole numbers only' : `= ${total} ${structure[0]?.name ?? ''}`}
                 </p>
               </div>
-              {largestFirst.map((unit) => (
-                <label key={unit.name} className="text-ink/70 w-20 text-xs">
-                  {unit.name}
-                  <input
-                    autoComplete="off"
-                    inputMode="numeric"
-                    value={counts[unit.name] ?? '0'}
-                    onChange={(event) =>
-                      setTyped((current) => ({
-                        ...current,
-                        [batch.batchId]: { ...counts, [unit.name]: event.target.value },
-                      }))
-                    }
-                    className={`${fieldClass} numeral`}
-                  />
-                </label>
-              ))}
-              <p className="text-ink/60 ml-auto text-xs" aria-live="polite">
-                {total === null ? 'Whole numbers only' : `= ${total} ${structure[0]?.name ?? ''}`}
-              </p>
-            </div>
-          );
-        })}
-      </fieldset>
+            );
+          })}
+        </fieldset>
+      )}
 
-      {unlinking.length > 0 ? (
+      {unlinking.length > 0 && (!moving || into) ? (
         <p className="text-amber text-sm">
           {unlinking.length === 1 ? 'One barcode is' : `${unlinking.length} barcodes are`} on a unit
           the new pack does not have ({unlinking.map((code) => code.unitLevelName).join(', ')}). It
@@ -306,7 +421,11 @@ export function ReplaceSurface({
           disabled={busy}
           className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
         >
-          {busy ? 'Replacing…' : 'Replace and move the stock'}
+          {busy
+            ? 'Moving…'
+            : moving && into
+              ? `Move the stock to ${into.name}`
+              : 'Replace and move the stock'}
         </button>
       </div>
     </form>

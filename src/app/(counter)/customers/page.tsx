@@ -15,7 +15,7 @@ import { formatPaisa } from '@/lib/money';
 export default async function CustomersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; removed?: string }>;
 }) {
   const session = await currentSession();
   if (!session) {
@@ -23,8 +23,10 @@ export default async function CustomersPage({
   }
 
   const params = await searchParams;
+  const showRemoved = params.removed === '1';
   const page = await listCustomers(scopeFor(session), {
     search: params.q,
+    includeRemoved: showRemoved,
     page: Number(params.page ?? 1),
   });
 
@@ -60,9 +62,16 @@ export default async function CustomersPage({
           aria-label="Search customers"
           className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
         />
+        {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}
         <button type="submit" className="border-line min-h-touch rounded border px-4">
           Search
         </button>
+        <Link
+          href={removedToggleHref(params, !showRemoved)}
+          className="text-green-600 min-h-touch flex items-center px-2 text-sm"
+        >
+          {showRemoved ? 'Hide removed customers' : 'Show removed customers'}
+        </Link>
       </form>
 
       {page.items.length === 0 ? (
@@ -88,6 +97,9 @@ export default async function CustomersPage({
                     <Link href={`/customers/${item.id}`} className="text-green-900 font-medium">
                       {item.name}
                     </Link>
+                    {!item.isActive ? (
+                      <span className="text-ink/40 ml-2 text-xs">removed</span>
+                    ) : null}
                   </td>
                   <td className="text-ink/70 px-3 py-2">{item.phone ?? '—'}</td>
                   {/* The same vocabulary as the customer page and the
@@ -125,7 +137,7 @@ function PageLink({
   disabled,
   children,
 }: {
-  params: { q?: string };
+  params: { q?: string; removed?: string };
   page: number;
   disabled: boolean;
   children: React.ReactNode;
@@ -135,6 +147,7 @@ function PageLink({
   }
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
+  if (params.removed) query.set('removed', params.removed);
   query.set('page', String(page));
 
   return (
@@ -142,4 +155,12 @@ function PageLink({
       {children}
     </Link>
   );
+}
+
+function removedToggleHref(params: { q?: string }, show: boolean): string {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (show) query.set('removed', '1');
+  const text = query.toString();
+  return text ? `/customers?${text}` : '/customers';
 }

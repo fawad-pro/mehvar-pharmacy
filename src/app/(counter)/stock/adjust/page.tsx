@@ -38,7 +38,7 @@ export default async function AdjustPage({
 
   return (
     <>
-      <AdjustSurface openingStock={params.opening === '1'} />
+      <AdjustSurface openingStock={params.opening === '1'} isOwner={session.userRole === 'owner'} />
       <AdjustmentHistory
         rows={history.map((row) => ({
           id: row.id,

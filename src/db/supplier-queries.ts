@@ -24,7 +24,7 @@
 
 import 'server-only';
 
-import { and, asc, eq, sql, sum } from 'drizzle-orm';
+import { and, asc, eq, ilike, or, sql, sum } from 'drizzle-orm';
 
 import type { TenantScope } from './scoped';
 import {
@@ -181,16 +181,20 @@ export interface SupplierPositions {
 }
 
 /**
- * Every active supplier's position for the Purchases panel: who is owed, and
+ * Every supplier's position for the Purchases panel: who is owed, and
  * (PCN-011) who holds credit. The payable mirror of the customers lists (W11).
  * A settled supplier appears in neither.
+ *
+ * [PCN-013] Removed suppliers are included: removal is refused while a
+ * balance is open, so one appearing here means money still moving, which is
+ * exactly when it must not be hidden.
  */
 export async function supplierPositions(scope: TenantScope): Promise<SupplierPositions> {
   const [rows, balances] = await Promise.all([
     scope.db
       .select({ id: suppliers.id, name: suppliers.name, phone: suppliers.phone })
       .from(suppliers)
-      .where(scope.scopeOf(suppliers, eq(suppliers.isActive, true))),
+      .where(scope.scopeOf(suppliers)),
     balancesBySupplier(scope),
   ]);
 
@@ -226,6 +230,33 @@ export async function findSupplierPaymentById(
   return row ? { id: row.id, amountPaisa: row.amountPaisa } : undefined;
 }
 
+/** [PCN-013] A supplier payment as a reversal needs it. */
+export async function findSupplierPaymentForReversal(
+  scope: TenantScope,
+  paymentId: Uuid,
+): Promise<
+  { id: string; supplierId: string; amountPaisa: number; reversesId: string | null } | undefined
+> {
+  const row = await scope.selectOne(supplierPayments, eq(supplierPayments.id, paymentId));
+  return row
+    ? {
+        id: row.id,
+        supplierId: row.supplierId,
+        amountPaisa: row.amountPaisa,
+        reversesId: row.reversesId,
+      }
+    : undefined;
+}
+
+/** [PCN-013] The row cancelling this supplier payment, if one exists. */
+export async function findSupplierPaymentReversalOf(
+  scope: TenantScope,
+  paymentId: Uuid,
+): Promise<{ id: string } | undefined> {
+  const row = await scope.selectOne(supplierPayments, eq(supplierPayments.reversesId, paymentId));
+  return row ? { id: row.id } : undefined;
+}
+
 export async function insertSupplierPayment(
   scope: TenantScope,
   row: Omit<typeof supplierPayments.$inferInsert, 'tenantId' | 'createdBy'>,
@@ -236,9 +267,58 @@ export async function insertSupplierPayment(
 export async function findSupplier(
   scope: TenantScope,
   supplierId: Uuid,
-): Promise<{ id: string; name: string } | undefined> {
+): Promise<{ id: string; name: string; phone: string | null; isActive: boolean } | undefined> {
   const row = await scope.selectOne(suppliers, eq(suppliers.id, supplierId));
-  return row ? { id: row.id, name: row.name } : undefined;
+  return row ? { id: row.id, name: row.name, phone: row.phone, isActive: row.isActive } : undefined;
+}
+
+/** [PCN-013] Identity fields and the soft archive only (Phase 9 §1). */
+export async function updateSupplier(
+  scope: TenantScope,
+  supplierId: Uuid,
+  patch: { name?: string; phone?: string | null; isActive?: boolean },
+): Promise<void> {
+  await scope.update(suppliers, patch, eq(suppliers.id, supplierId));
+}
+
+export interface SupplierListItem extends SupplierBalanceItem {
+  isActive: boolean;
+}
+
+/**
+ * [PCN-013] Every supplier, with its balance, by name. The Purchases panel
+ * lists only open balances, so before this a settled supplier — the usual
+ * state of one created by mistake — had no page anyone could reach. A removed
+ * supplier still holding a balance is always listed, like a customer.
+ */
+export async function listSuppliers(
+  scope: TenantScope,
+  query: { search?: string | undefined; includeRemoved?: boolean | undefined } = {},
+): Promise<SupplierListItem[]> {
+  const term = query.search?.trim();
+  const [rows, balances] = await Promise.all([
+    scope.db
+      .select({
+        id: suppliers.id,
+        name: suppliers.name,
+        phone: suppliers.phone,
+        isActive: suppliers.isActive,
+      })
+      .from(suppliers)
+      .where(
+        term
+          ? scope.scopeOf(
+              suppliers,
+              or(ilike(suppliers.name, `%${term}%`), ilike(suppliers.phone, `%${term}%`)),
+            )
+          : scope.scopeOf(suppliers),
+      )
+      .orderBy(asc(suppliers.name)),
+    balancesBySupplier(scope),
+  ]);
+  return rows
+    .map((row) => ({ ...row, balancePaisa: balances[row.id] ?? 0 }))
+    .filter((row) => row.isActive || query.includeRemoved || row.balancePaisa !== 0);
 }
 
 /**
@@ -296,6 +376,19 @@ export type SupplierLedgerRow =
       readonly amountPaisa: number;
       readonly note: string | null;
       readonly byName: string;
+      /** [PCN-013] Cancelled by a later row; still counted, and offset by it. */
+      readonly reversed: boolean;
+    }
+  | {
+      /** [PCN-013] Cancels a payment typed wrong: adds its amount back to what is owed. */
+      readonly kind: 'payment_reversal';
+      readonly id: string;
+      readonly createdAt: Date;
+      readonly amountPaisa: number;
+      readonly note: string | null;
+      readonly byName: string;
+      /** When the cancelled payment was made, so the row can name it. */
+      readonly reversesPaidAt: Date | null;
     };
 
 export async function supplierLedger(
@@ -374,12 +467,17 @@ export async function supplierLedger(
         amountPaisa: supplierPayments.amountPaisa,
         note: supplierPayments.note,
         byName: users.name,
+        reversesId: supplierPayments.reversesId,
       })
       .from(supplierPayments)
       .innerJoin(users, eq(users.id, supplierPayments.createdBy))
       .where(scope.scopeOf(supplierPayments, eq(supplierPayments.supplierId, supplierId)))
       .orderBy(asc(supplierPayments.createdAt)),
   ]);
+
+  // A cancellation is always the same supplier's, so both halves are here.
+  const paidAt = new Map(payments.map((row) => [row.id, row.createdAt]));
+  const cancelled = new Set(payments.map((row) => row.reversesId).filter((id) => id !== null));
 
   const rows: SupplierLedgerRow[] = [
     ...invoices.map((row) => {
@@ -410,14 +508,28 @@ export async function supplierLedger(
       note: row.note,
       byName: row.byName,
     })),
-    ...payments.map((row) => ({
-      kind: 'payment' as const,
-      id: row.id,
-      createdAt: row.createdAt,
-      amountPaisa: -row.amountPaisa,
-      note: row.note,
-      byName: row.byName,
-    })),
+    ...payments.map((row) =>
+      row.reversesId === null
+        ? {
+            kind: 'payment' as const,
+            id: row.id,
+            createdAt: row.createdAt,
+            amountPaisa: -row.amountPaisa,
+            note: row.note,
+            byName: row.byName,
+            reversed: cancelled.has(row.id),
+          }
+        : {
+            kind: 'payment_reversal' as const,
+            id: row.id,
+            createdAt: row.createdAt,
+            // Stored negative; negated, it adds back to what is owed.
+            amountPaisa: -row.amountPaisa,
+            note: row.note,
+            byName: row.byName,
+            reversesPaidAt: paidAt.get(row.reversesId) ?? null,
+          },
+    ),
   ];
   // Oldest first, so the running balance reads as the account's history. Ids
   // are v7, time-ordered, which settles rows written in the same millisecond.

@@ -14,6 +14,7 @@
  * to serve a customer.
  */
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { ProductSearch } from '@/components/product-search';
@@ -895,6 +896,15 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       </div>
 
       <SupplierCreditPanel reloadKey={receivedCount} />
+
+      {/* [PCN-013] The panel lists only open balances; a settled supplier,
+          the usual state of one added by mistake, is reached from here. */}
+      <Link
+        href="/purchases/suppliers"
+        className="text-green-600 min-h-touch flex items-center self-start text-sm underline-offset-2 hover:underline"
+      >
+        All suppliers →
+      </Link>
 
       <RecentPurchases reloadKey={receivedCount} />
 

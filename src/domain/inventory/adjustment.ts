@@ -20,6 +20,11 @@
  *  - `count_correction` — the shelf disagreed with the system. Either
  *    direction, because either direction happens, and a correction that could
  *    only go one way would quietly bias every count toward it.
+ *  - `entered_by_mistake` — [PCN-013] stock typed in that never existed:
+ *    opening stock or a count entered too high. Only ever removes, only from
+ *    stock that was itself entered by hand (an invoice is corrected instead,
+ *    PCN-009), and owner only — it is kept out of every loss figure, which is
+ *    exactly what would make it the way to hide a real loss.
  */
 
 /**
@@ -43,6 +48,11 @@ export interface BatchOnHand {
   pricePerBaseUnitPaisa: number;
   /** [PCN-012] The unit the batch arrived in, when its purchase line says. */
   arrivedUnitKey: string | null;
+  /**
+   * [PCN-013] Typed in by hand (opening stock, a count) rather than received
+   * on an invoice — the only stock "Entered by mistake" may remove.
+   */
+  enteredByHand: boolean;
 }
 
 export type AdjustmentReason =
@@ -50,7 +60,8 @@ export type AdjustmentReason =
   | 'expiry_writeoff'
   | 'distributor_return'
   | 'count_correction'
-  | 'opening_stock';
+  | 'opening_stock'
+  | 'entered_by_mistake';
 
 export const ADJUSTMENT_REASONS: readonly AdjustmentReason[] = [
   'count_correction',
@@ -58,6 +69,7 @@ export const ADJUSTMENT_REASONS: readonly AdjustmentReason[] = [
   'expiry_writeoff',
   'distributor_return',
   'opening_stock',
+  'entered_by_mistake',
 ] as const;
 
 /** What the operator sees. Plain words, no system vocabulary (I5). */
@@ -67,7 +79,14 @@ export const REASON_LABELS: Readonly<Record<AdjustmentReason, string>> = {
   expiry_writeoff: 'Expired — written off',
   distributor_return: 'Returned to distributor',
   opening_stock: 'Opening stock',
+  entered_by_mistake: 'Entered by mistake — never there',
 };
+
+/**
+ * [PCN-013] The reasons only the owner may use. Everything else on the Adjust
+ * screen is ordinary shop work.
+ */
+export const OWNER_ONLY_REASONS: readonly AdjustmentReason[] = ['entered_by_mistake'];
 
 export type AdjustmentRejection =
   | 'zero_delta'
@@ -75,7 +94,9 @@ export type AdjustmentRejection =
   | 'batch_required'
   | 'batch_not_allowed'
   /** [PCN-012] The entered unit does not describe the quantity. */
-  | 'invalid_unit';
+  | 'invalid_unit'
+  /** [PCN-013] "Entered by mistake" names a batch that arrived on an invoice. */
+  | 'mistake_on_purchased_stock';
 
 export interface AdjustmentDraft {
   readonly productId: string;
@@ -97,6 +118,7 @@ const NEGATIVE_ONLY: readonly AdjustmentReason[] = [
   'damage',
   'expiry_writeoff',
   'distributor_return',
+  'entered_by_mistake',
 ];
 
 export function isNegativeOnly(reason: AdjustmentReason): boolean {

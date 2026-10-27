@@ -50,7 +50,8 @@ import type { Uuid } from '@/lib/uuid';
  * Declared here and redeclared by the client components that render it, per
  * the Day 7 rule — a client component never names this module.
  */
-export type ReceiptKind = 'sale' | 'settlement' | 'return';
+/** [PCN-013] `payment_cancelled`: the receipt for cancelling a payment typed wrong. */
+export type ReceiptKind = 'sale' | 'settlement' | 'payment_cancelled' | 'return';
 
 export interface ReceiptListRow {
   readonly receiptNumber: string;
@@ -156,6 +157,7 @@ export async function listReceipts(
       salesmanName: users.name,
       amountPaisa: payments.amountPaisa,
       createdAt: payments.createdAt,
+      reversesId: payments.reversesId,
     })
     .from(payments)
     .leftJoin(customers, eq(payments.customerId, customers.id))
@@ -213,11 +215,12 @@ export async function listReceipts(
     })),
     ...paymentRows.map((row) => ({
       receiptNumber: row.receiptNumber,
-      kind: 'settlement' as const,
+      kind: row.reversesId === null ? ('settlement' as const) : ('payment_cancelled' as const),
       id: row.id,
       customerName: row.customerName,
       salesmanName: row.salesmanName ?? 'Unknown',
-      amountPaisa: row.amountPaisa,
+      // A cancellation is stored negative; the kind says which way it went.
+      amountPaisa: Math.abs(row.amountPaisa),
       createdAt: row.createdAt,
       onCredit: false,
       hasReturns: false,
@@ -294,8 +297,12 @@ export interface ReceiptDetail {
   /** Returns made against this sale, if any. */
   readonly returns?: readonly ReceiptReturnSummary[];
 
-  /** Settlement only. */
+  /** Settlement or cancellation only; always positive. */
   readonly amountPaisa?: number;
+  /** [PCN-013] A settlement: the receipt that cancelled it, if one did. */
+  readonly cancelledByReceiptNumber?: string;
+  /** [PCN-013] A cancellation: the settlement it cancels. */
+  readonly cancelsReceiptNumber?: string;
 
   /** Return only. */
   readonly againstReceiptNumber?: string;
@@ -435,6 +442,7 @@ export async function findReceipt(
       customerName: customers.name,
       origin: payments.origin,
       amountPaisa: payments.amountPaisa,
+      reversesId: payments.reversesId,
     })
     .from(payments)
     .leftJoin(customers, eq(payments.customerId, customers.id))
@@ -443,8 +451,21 @@ export async function findReceipt(
     .limit(1);
 
   if (payment) {
+    // [PCN-013] Each half of a cancellation names the other.
+    const [other] = await scope.db
+      .select({ receiptNumber: payments.receiptNumber })
+      .from(payments)
+      .where(
+        scope.scopeOf(
+          payments,
+          payment.reversesId === null
+            ? eq(payments.reversesId, payment.id)
+            : eq(payments.id, payment.reversesId),
+        ),
+      )
+      .limit(1);
     return {
-      kind: 'settlement',
+      kind: payment.reversesId === null ? 'settlement' : 'payment_cancelled',
       id: payment.id,
       receiptNumber: payment.receiptNumber,
       createdAt: payment.createdAt,
@@ -452,7 +473,12 @@ export async function findReceipt(
       customerId: payment.customerId,
       customerName: payment.customerName,
       origin: payment.origin,
-      amountPaisa: payment.amountPaisa,
+      amountPaisa: Math.abs(payment.amountPaisa),
+      ...(other
+        ? payment.reversesId === null
+          ? { cancelledByReceiptNumber: other.receiptNumber }
+          : { cancelsReceiptNumber: other.receiptNumber }
+        : {}),
     };
   }
 

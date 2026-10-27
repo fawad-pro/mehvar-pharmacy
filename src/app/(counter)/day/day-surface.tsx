@@ -27,7 +27,9 @@ import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
 import type { BusinessDay } from '@/lib/business-day';
 
-import { recordCashMovementAction } from './actions';
+import { CancelEntryButton } from '@/components/cancel-entry-button';
+
+import { cancelCashMovementAction, recordCashMovementAction } from './actions';
 
 interface ThreeNumbers {
   salesPaisa: number;
@@ -135,6 +137,21 @@ interface CashMovementExceptionRow {
   note: string | null;
   byName: string;
   createdAt: Date;
+  /** [PCN-013] Set when this row cancels another. */
+  reversesId: string | null;
+  /** [PCN-013] Cancelled by a later row. */
+  reversed: boolean;
+}
+
+/** [PCN-013] — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface PaymentReversalExceptionRow {
+  id: string;
+  kind: 'udhaar' | 'supplier';
+  name: string;
+  amountPaisa: number;
+  receiptNumber: string | null;
+  byName: string;
+  createdAt: Date;
 }
 
 interface LateSyncedRow {
@@ -159,6 +176,7 @@ export function DaySurface({
   corrections,
   supplierReturns,
   cashMovements,
+  paymentReversals,
   lateSynced,
   hasOpeningFloat,
   supplierOwedPaisa,
@@ -181,6 +199,8 @@ export function DaySurface({
   /** [PCN-009] Goods sent back to suppliers. */
   supplierReturns: SupplierReturnExceptionRow[];
   cashMovements: CashMovementExceptionRow[];
+  /** [PCN-013] Udhaar and supplier payments cancelled. */
+  paymentReversals: PaymentReversalExceptionRow[];
   lateSynced: LateSyncedRow[];
   hasOpeningFloat: boolean;
   /** [PCN-007] What the pharmacy owes suppliers — a position, always all-time. */
@@ -203,6 +223,7 @@ export function DaySurface({
     corrections.length +
     supplierReturns.length +
     cashMovements.length +
+    paymentReversals.length +
     lateSynced.length;
 
   return (
@@ -322,6 +343,7 @@ export function DaySurface({
           [corrections.length, 'purchase correction'],
           [supplierReturns.length, 'return to supplier'],
           [cashMovements.length, 'cash movement'],
+          [paymentReversals.length, 'cancelled payment'],
           [lateSynced.length, 'synced late'],
         ]}
       />
@@ -523,6 +545,7 @@ export function DaySurface({
               {cashMovements.map((row) => (
                 <Row key={row.id}>
                   <span className="font-medium">
+                    {row.reversesId ? 'Cancelled: ' : ''}
                     {CASH_REASON_LABELS[row.reason as CashReason]}
                   </span>
                   <span
@@ -532,6 +555,36 @@ export function DaySurface({
                     {formatPaisa(paisa(row.amountPaisa))}
                   </span>
                   {row.note ? <span className="text-ink/50 ml-2 text-xs">“{row.note}”</span> : null}
+                  {/* [PCN-013] Typed wrong: cancel it with the opposite entry.
+                      Both stay listed, so the owner sees what was fixed. */}
+                  {row.reversed ? (
+                    <span className="text-ink/50 ml-2 text-xs">— cancelled</span>
+                  ) : row.reversesId === null ? (
+                    <span className="ml-2">
+                      <CancelEntryButton
+                        what={`this ${formatPaisa(paisa(row.amountPaisa), { withSymbol: true })} ${CASH_REASON_LABELS[row.reason as CashReason].toLowerCase()}`}
+                        run={() => cancelCashMovementAction(row.id)}
+                      />
+                    </span>
+                  ) : null}
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
+            <ExceptionGroup title="Cancelled payments" rows={paymentReversals} empty={false}>
+              {paymentReversals.map((row) => (
+                <Row key={row.id}>
+                  <span className="font-medium">
+                    {row.kind === 'udhaar' ? 'Udhaar payment' : 'Supplier payment'} cancelled
+                  </span>
+                  <span className="text-ink/70 ml-2">{row.name}</span>
+                  <span className="numeral text-amber ml-2">
+                    {formatPaisa(paisa(row.amountPaisa))}
+                  </span>
+                  {row.receiptNumber ? (
+                    <span className="text-ink/50 ml-2 text-xs">receipt {row.receiptNumber}</span>
+                  ) : null}
                   <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}

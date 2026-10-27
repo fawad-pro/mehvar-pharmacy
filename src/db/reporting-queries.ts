@@ -13,7 +13,7 @@
 
 import 'server-only';
 
-import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
+import { desc, eq, gte, inArray, isNotNull, isNull, lt, ne, sql, sum } from 'drizzle-orm';
 
 import { summariseBook } from '@/domain/udhaar/position';
 import { DEFAULT_TIME_ZONE } from '@/lib/business-day';
@@ -25,6 +25,7 @@ import {
   adjustments,
   batches,
   cashMovements,
+  customers,
   payments,
   products,
   purchaseCorrections,
@@ -33,6 +34,7 @@ import {
   saleLines,
   saleReturns,
   sales,
+  supplierPayments,
   supplierReturns,
   suppliers,
   users,
@@ -522,18 +524,41 @@ export async function adjustmentsInRange(
  * every expected-cash figure, and the one input nothing else would ask for.
  */
 export async function hasOpeningFloat(scope: TenantScope, from: Date, to: Date): Promise<boolean> {
-  const [row] = await scope.db
-    .select({ count: sql<string>`count(*)` })
+  // [PCN-013] A float that was cancelled was never put in the drawer, and its
+  // cancellation is itself an `opening_float` row, so a count would say yes
+  // twice over. The floats, then which of them were cancelled: two plain
+  // queries, never a correlated subquery (CLAUDE.md, Day 3).
+  const floats = await scope.db
+    .select({ id: cashMovements.id })
     .from(cashMovements)
     .where(
       scope.scopeOf(
         cashMovements,
         eq(cashMovements.reason, 'opening_float'),
+        isNull(cashMovements.reversesId),
         gte(cashMovements.createdAt, from),
         lt(cashMovements.createdAt, to),
       ),
     );
-  return Number(row?.count ?? 0) > 0;
+  if (floats.length === 0) return false;
+  const cancelled = await reversedCashMovementIds(
+    scope,
+    floats.map((row) => row.id),
+  );
+  return floats.some((row) => !cancelled.has(row.id));
+}
+
+/** [PCN-013] Which of these cash movements a later row cancelled. */
+async function reversedCashMovementIds(
+  scope: TenantScope,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await scope.db
+    .select({ reversesId: cashMovements.reversesId })
+    .from(cashMovements)
+    .where(scope.scopeOf(cashMovements, inArray(cashMovements.reversesId, [...ids])));
+  return new Set(rows.map((row) => row.reversesId).filter((id): id is string => id !== null));
 }
 
 export interface CashMovementExceptionRow {
@@ -544,6 +569,10 @@ export interface CashMovementExceptionRow {
   readonly note: string | null;
   readonly byName: string;
   readonly createdAt: Date;
+  /** [PCN-013] Set when this row cancels another. */
+  readonly reversesId: string | null;
+  /** [PCN-013] Cancelled by a later row (which may fall in another range). */
+  readonly reversed: boolean;
 }
 
 export async function cashMovementsExceptionInRange(
@@ -551,7 +580,7 @@ export async function cashMovementsExceptionInRange(
   from: Date,
   to: Date,
 ): Promise<CashMovementExceptionRow[]> {
-  return scope.db
+  const rows = await scope.db
     .select({
       id: cashMovements.id,
       direction: cashMovements.direction,
@@ -560,6 +589,7 @@ export async function cashMovementsExceptionInRange(
       note: cashMovements.note,
       byName: users.name,
       createdAt: cashMovements.createdAt,
+      reversesId: cashMovements.reversesId,
     })
     .from(cashMovements)
     .innerJoin(users, eq(cashMovements.createdBy, users.id))
@@ -571,6 +601,88 @@ export async function cashMovementsExceptionInRange(
       ),
     )
     .orderBy(desc(cashMovements.createdAt));
+  const reversed = await reversedCashMovementIds(
+    scope,
+    rows.filter((row) => row.reversesId === null).map((row) => row.id),
+  );
+  return rows.map((row) => ({ ...row, reversed: reversed.has(row.id) }));
+}
+
+/**
+ * [PCN-013] Payments cancelled in the range — udhaar and supplier alike.
+ *
+ * T1: putting money back onto a customer's debt, or onto what the shop owes a
+ * distributor, is exactly the kind of act the owner must see. A cancelled cash
+ * movement is already in the cash movements list, beside the entry it cancels.
+ */
+export interface PaymentReversalExceptionRow {
+  readonly id: string;
+  readonly kind: 'udhaar' | 'supplier';
+  readonly name: string;
+  /** The amount cancelled, positive. */
+  readonly amountPaisa: number;
+  /** The cancellation's own receipt, for an udhaar payment. */
+  readonly receiptNumber: string | null;
+  readonly byName: string;
+  readonly createdAt: Date;
+}
+
+export async function paymentReversalsInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+): Promise<PaymentReversalExceptionRow[]> {
+  const [udhaar, supplier] = await Promise.all([
+    scope.db
+      .select({
+        id: payments.id,
+        name: customers.name,
+        amountPaisa: payments.amountPaisa,
+        receiptNumber: payments.receiptNumber,
+        byName: users.name,
+        createdAt: payments.createdAt,
+      })
+      .from(payments)
+      .innerJoin(customers, eq(payments.customerId, customers.id))
+      .innerJoin(users, eq(payments.createdBy, users.id))
+      .where(
+        scope.scopeOf(
+          payments,
+          isNotNull(payments.reversesId),
+          gte(payments.createdAt, from),
+          lt(payments.createdAt, to),
+        ),
+      ),
+    scope.db
+      .select({
+        id: supplierPayments.id,
+        name: suppliers.name,
+        amountPaisa: supplierPayments.amountPaisa,
+        byName: users.name,
+        createdAt: supplierPayments.createdAt,
+      })
+      .from(supplierPayments)
+      .innerJoin(suppliers, eq(supplierPayments.supplierId, suppliers.id))
+      .innerJoin(users, eq(supplierPayments.createdBy, users.id))
+      .where(
+        scope.scopeOf(
+          supplierPayments,
+          isNotNull(supplierPayments.reversesId),
+          gte(supplierPayments.createdAt, from),
+          lt(supplierPayments.createdAt, to),
+        ),
+      ),
+  ]);
+  const rows: PaymentReversalExceptionRow[] = [
+    ...udhaar.map((row) => ({ ...row, kind: 'udhaar' as const, amountPaisa: -row.amountPaisa })),
+    ...supplier.map((row) => ({
+      ...row,
+      kind: 'supplier' as const,
+      amountPaisa: -row.amountPaisa,
+      receiptNumber: null,
+    })),
+  ];
+  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 export interface LateSyncedRow {

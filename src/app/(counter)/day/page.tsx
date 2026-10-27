@@ -4,6 +4,7 @@ import { currentSession, scopeFor } from '@/auth/session';
 import {
   adjustmentsInRange,
   cashMovementsExceptionInRange,
+  paymentReversalsInRange,
   hasOpeningFloat,
   lateSyncedInRange,
   overridesAndDiscountsInRange,
@@ -71,6 +72,7 @@ export default async function DayPage({
     corrections,
     supplierReturns,
     cashMovements,
+    paymentReversals,
     lateSynced,
     figures,
     openingFloat,
@@ -85,6 +87,7 @@ export default async function DayPage({
     purchaseCorrectionsInRange(scope, range.start, range.end),
     supplierReturnsInRange(scope, range.start, range.end),
     cashMovementsExceptionInRange(scope, range.start, range.end),
+    paymentReversalsInRange(scope, range.start, range.end),
     lateSyncedInRange(scope, range.start, range.end),
     reportFigures(scope, range.start, range.end),
     // Always today's bounds, never the range: the prompt is about the drawer
@@ -121,6 +124,7 @@ export default async function DayPage({
         stockCostPaisa: stockCosts.get(row.id) ?? 0,
       }))}
       cashMovements={cashMovements}
+      paymentReversals={paymentReversals}
       lateSynced={lateSynced}
       hasOpeningFloat={openingFloat}
       supplierOwedPaisa={suppliers.owedPaisa}

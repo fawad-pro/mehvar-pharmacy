@@ -44,7 +44,13 @@ export default async function ReceiptDetailPage({
   }
 
   const heading =
-    receipt.kind === 'sale' ? 'Sale' : receipt.kind === 'settlement' ? 'Payment' : 'Return';
+    receipt.kind === 'sale'
+      ? 'Sale'
+      : receipt.kind === 'settlement'
+        ? 'Payment'
+        : receipt.kind === 'payment_cancelled'
+          ? 'Payment cancelled'
+          : 'Return';
 
   // [PCN-012] What the line actually charged: the stored amount when there is
   // one, per-base price × base quantity for a line from before PCN-012.
@@ -218,7 +224,38 @@ export default async function ReceiptDetailPage({
         ) : null}
 
         {receipt.kind === 'settlement' ? (
-          <Line label="Paid" amountPaisa={receipt.amountPaisa ?? 0} bold />
+          <>
+            <Line label="Paid" amountPaisa={receipt.amountPaisa ?? 0} bold />
+            {receipt.cancelledByReceiptNumber ? (
+              <p className="text-amber mt-1 text-sm">
+                Cancelled — see receipt{' '}
+                <Link
+                  href={`/receipts/${encodeURIComponent(receipt.cancelledByReceiptNumber)}`}
+                  className="text-green-700 hover:underline"
+                >
+                  {receipt.cancelledByReceiptNumber}
+                </Link>
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        {receipt.kind === 'payment_cancelled' ? (
+          <>
+            <Line label="Payment cancelled" amountPaisa={receipt.amountPaisa ?? 0} bold />
+            {receipt.cancelsReceiptNumber ? (
+              <p className="text-ink/60 mt-1 text-sm">
+                Cancels receipt{' '}
+                <Link
+                  href={`/receipts/${encodeURIComponent(receipt.cancelsReceiptNumber)}`}
+                  className="text-green-700 hover:underline"
+                >
+                  {receipt.cancelsReceiptNumber}
+                </Link>
+                ; the amount is back on the customer&rsquo;s balance.
+              </p>
+            ) : null}
+          </>
         ) : null}
 
         {receipt.kind === 'return' ? (

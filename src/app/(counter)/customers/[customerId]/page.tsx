@@ -7,6 +7,10 @@ import { customerBalance, customerLedger, findCustomer } from '@/db/udhaar-queri
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 
+import { ContactCorrections } from '@/components/contact-corrections';
+
+import { editCustomerAction, removeCustomerAction, restoreCustomerAction } from '../actions';
+import { CancelPayment } from './cancel-payment';
 import { SettleButton } from './settle-button';
 
 /**
@@ -58,6 +62,20 @@ export default async function CustomerDetailPage({
         {customer.phone ? <p className="text-ink/50 text-sm">{customer.phone}</p> : null}
       </header>
 
+      {/* [PCN-013] A removed customer's balance is still settled here: removal
+          is refused while one is owed, but a sale captured offline can arrive
+          after it. */}
+      <ContactCorrections
+        kind="customer"
+        name={customer.name}
+        phone={customer.phone}
+        isActive={customer.isActive}
+        canRemove={session.userRole === 'owner'}
+        save={editCustomerAction.bind(null, customer.id)}
+        remove={removeCustomerAction.bind(null, customer.id)}
+        restore={restoreCustomerAction.bind(null, customer.id)}
+      />
+
       <div className="border-line bg-green-100/50 flex flex-wrap items-end justify-between gap-4 rounded border p-4">
         {/* Never "-Rs 100". The direction is a word and the amount is positive
             — see domain/udhaar/position.ts. */}
@@ -107,7 +125,37 @@ export default async function CustomerDetailPage({
                   </td>
                   <td className="px-3 py-2">
                     {row.kind === 'sale' ? 'Udhaar sale' : null}
-                    {row.kind === 'payment' ? 'Payment' : null}
+                    {row.kind === 'payment' ? (
+                      <span className="inline-flex flex-wrap items-center gap-x-2">
+                        Payment
+                        {row.reversed ? (
+                          <span className="text-ink/50 text-xs">— cancelled</span>
+                        ) : null}
+                        {session.userRole === 'owner' ? (
+                          <CancelPayment
+                            key={row.id}
+                            paymentId={row.id}
+                            amountPaisa={-row.amountPaisa}
+                            customerName={customer.name}
+                            reversed={row.reversed === true}
+                          />
+                        ) : null}
+                      </span>
+                    ) : null}
+                    {row.kind === 'payment_reversal' ? (
+                      <>
+                        Payment cancelled
+                        <span className="text-ink/50 ml-1 text-xs">
+                          receipt{' '}
+                          <Link
+                            href={`/receipts/${encodeURIComponent(row.againstReceiptNumber ?? '')}`}
+                            className="text-green-700 hover:underline"
+                          >
+                            {row.againstReceiptNumber}
+                          </Link>
+                        </span>
+                      </>
+                    ) : null}
                     {row.kind === 'return' ? (
                       <>
                         Return

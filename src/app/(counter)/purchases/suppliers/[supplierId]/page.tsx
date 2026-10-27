@@ -10,6 +10,15 @@ import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
 import { creditAgainstStockCost } from '@/domain/suppliers/supplier-return';
 import type { Uuid } from '@/lib/uuid';
 
+import { CancelEntryButton } from '@/components/cancel-entry-button';
+import { ContactCorrections } from '@/components/contact-corrections';
+
+import {
+  cancelSupplierPaymentAction,
+  editSupplierAction,
+  removeSupplierAction,
+  restoreSupplierAction,
+} from '../actions';
 import { SupplierPayRow } from './pay-row';
 
 /**
@@ -54,14 +63,26 @@ export default async function SupplierAccountPage({
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
-      <Link href="/purchases" className="text-green-600 text-sm">
-        ← Purchases
+      <Link href="/purchases/suppliers" className="text-green-600 text-sm">
+        ← Suppliers
       </Link>
 
       <header>
         <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Supplier account</p>
         <h1 className="text-green-900 text-2xl font-semibold">{supplier.name}</h1>
+        {supplier.phone ? <p className="text-ink/50 text-sm">{supplier.phone}</p> : null}
       </header>
+
+      <ContactCorrections
+        kind="supplier"
+        name={supplier.name}
+        phone={supplier.phone}
+        isActive={supplier.isActive}
+        canRemove={session.userRole === 'owner'}
+        save={editSupplierAction.bind(null, supplier.id as Uuid)}
+        remove={removeSupplierAction.bind(null, supplier.id as Uuid)}
+        restore={restoreSupplierAction.bind(null, supplier.id as Uuid)}
+      />
 
       <div className="border-line bg-green-100/50 flex flex-col gap-3 rounded border p-4">
         <SupplierPosition name={supplier.name} balancePaisa={balancePaisa} />
@@ -103,7 +124,11 @@ export default async function SupplierAccountPage({
                     </span>
                   </td>
                   <td className="px-3 py-2">
-                    <LedgerWhat row={row} stockCostPaisa={stockCosts.get(row.id)} />
+                    <LedgerWhat
+                      row={row}
+                      stockCostPaisa={stockCosts.get(row.id)}
+                      isOwner={session.userRole === 'owner'}
+                    />
                   </td>
                   <td className="text-ink/70 px-3 py-2">{row.byName}</td>
                   <td
@@ -167,10 +192,13 @@ function RunningPosition({ balancePaisa }: { balancePaisa: number }) {
 function LedgerWhat({
   row,
   stockCostPaisa,
+  isOwner,
 }: {
   row: Awaited<ReturnType<typeof supplierLedger>>[number];
   /** [PCN-012] For a return: what it took out of its batch, at cost. */
   stockCostPaisa: number | undefined;
+  /** [PCN-013] Only the owner may cancel a payment. */
+  isOwner: boolean;
 }) {
   switch (row.kind) {
     case 'invoice':
@@ -212,9 +240,32 @@ function LedgerWhat({
       );
     case 'payment':
       return (
-        <>
+        <span className="inline-flex flex-wrap items-center gap-x-2">
           Payment
-          {row.note ? <span className="text-ink/50 ml-1 text-xs">“{row.note}”</span> : null}
+          {row.note ? <span className="text-ink/50 text-xs">“{row.note}”</span> : null}
+          {row.reversed ? (
+            <span className="text-ink/50 text-xs">— cancelled</span>
+          ) : isOwner ? (
+            <CancelEntryButton
+              what={`the ${formatPaisa(paisa(-row.amountPaisa), { withSymbol: true })} payment`}
+              run={cancelSupplierPaymentAction.bind(null, row.id as Uuid)}
+            />
+          ) : null}
+        </span>
+      );
+    case 'payment_reversal':
+      return (
+        <>
+          Payment cancelled
+          {row.reversesPaidAt ? (
+            <span className="text-ink/50 ml-1 text-xs">
+              the one of {row.reversesPaidAt.toLocaleDateString('en-PK')}{' '}
+              {row.reversesPaidAt.toLocaleTimeString('en-PK', {
+                hour: 'numeric',
+                minute: '2-digit',
+              })}
+            </span>
+          ) : null}
         </>
       );
   }

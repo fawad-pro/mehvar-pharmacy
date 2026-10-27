@@ -61,6 +61,13 @@ export interface ReceiptData {
   readonly refund?: { readonly againstReceiptNumber: string };
 
   /**
+   * [PCN-013] A payment typed wrong, cancelled: the customer holds a slip for
+   * the original, so this one says plainly that it no longer stands. Carries
+   * the mini-statement, in which the amount comes back onto the balance.
+   */
+  readonly cancellation?: { readonly againstReceiptNumber: string };
+
+  /**
    * Test receipts only: two measured bars (50 mm and 72 mm) so the printout
    * itself shows whether the page was scaled or clipped (see `ReceiptView`).
    */

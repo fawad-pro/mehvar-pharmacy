@@ -19,6 +19,7 @@
  */
 
 import {
+  batchEnteredByHand,
   findAdjustmentById,
   insertAdjustment,
   materializeAdjustmentBatch,
@@ -85,6 +86,18 @@ export async function commitAdjustment(
     if (!unit || unit.factor * command.entered.unitCount !== Math.abs(command.qtyBaseDelta)) {
       return { ok: false, reason: 'invalid_unit' };
     }
+  }
+
+  // [PCN-013] Stock that arrived on an invoice was paid for: if the invoice
+  // said too many, the purchase is corrected (PCN-009), which also reduces
+  // what is owed. Removing it as "never there" would make that money vanish
+  // from every report.
+  if (
+    command.reason === 'entered_by_mistake' &&
+    command.batchId !== null &&
+    !(await batchEnteredByHand(scope, command.batchId as Uuid))
+  ) {
+    return { ok: false, reason: 'mistake_on_purchased_stock' };
   }
 
   try {

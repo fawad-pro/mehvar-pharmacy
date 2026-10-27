@@ -59,7 +59,7 @@ const SURFACES: Record<Area, readonly string[]> = {
   stock: ['/stock', '/stock/adjust', '/products', '/sale', '/day'],
   money: ['/day'],
   customers: ['/customers', '/day'],
-  purchases: ['/purchases', '/stock', '/day'],
+  purchases: ['/purchases', '/purchases/suppliers', '/stock', '/day'],
   receipts: ['/receipts', '/returns', '/day'],
   settings: ['/settings'],
 };
@@ -74,7 +74,7 @@ const DYNAMIC: Record<Area, readonly string[]> = {
   stock: ['/products/[productId]'],
   money: [],
   customers: ['/customers/[customerId]'],
-  purchases: ['/purchases/[purchaseId]'],
+  purchases: ['/purchases/[purchaseId]', '/purchases/suppliers/[supplierId]'],
   receipts: ['/receipts/[receiptNumber]', '/customers/[customerId]'],
   settings: [],
 };

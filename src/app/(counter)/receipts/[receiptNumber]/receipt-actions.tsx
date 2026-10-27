@@ -16,7 +16,7 @@
 
 import Link from 'next/link';
 
-type ReceiptKind = 'sale' | 'settlement' | 'return';
+type ReceiptKind = 'sale' | 'settlement' | 'payment_cancelled' | 'return';
 
 export function ReceiptActions({
   kind,

@@ -136,7 +136,7 @@ export function RemovePanel({
           {refusal.blockedBy === 'stock' ? (
             <p className="mt-1 flex flex-wrap gap-x-4">
               <Link href="/stock/adjust" className="text-green-700 hover:underline">
-                Write it off
+                Remove the stock
               </Link>
               {canReplace ? (
                 <Link

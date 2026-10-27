@@ -24,6 +24,7 @@
 
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -64,6 +65,12 @@ export const adjustmentReason = pgEnum('adjustment_reason', [
    * entered wrong: out of the old product's batch, into the new one's.
    */
   'product_replaced',
+  /**
+   * [PCN-013] Stock typed in that never existed — opening stock or a count
+   * entered too high. Negative only, and kept out of every loss figure: it is
+   * not stock that was lost.
+   */
+  'entered_by_mistake',
 ]);
 
 export const cashDirection = pgEnum('cash_direction', ['in', 'out']);
@@ -694,6 +701,13 @@ export const payments = pgTable(
     origin: saleOrigin('origin').notNull(),
     clientSchemaVersion: integer('client_schema_version').notNull(),
     clientCommittedAt: timestamp('client_committed_at', { withTimezone: true }).notNull(),
+    /**
+     * [PCN-013] Set on the row that cancels a payment typed wrong: the same
+     * customer, the amount negated, its own receipt number. Every reader sums
+     * `amount_paisa`, so the balance is right without any of them knowing.
+     * Unique: a payment is cancelled once.
+     */
+    reversesId: uuid('reverses_id').references((): AnyPgColumn => payments.id),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -703,7 +717,12 @@ export const payments = pgTable(
     index('payments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('payments_tenant_customer_idx').on(table.tenantId, table.customerId),
     uniqueIndex('payments_tenant_receipt_key').on(table.tenantId, table.receiptNumber),
-    check('payments_amount_positive', sql`${table.amountPaisa} > 0`),
+    uniqueIndex('payments_tenant_reverses_key').on(table.tenantId, table.reversesId),
+    // [PCN-013] Negative only on a reversal, positive only on a payment.
+    check(
+      'payments_amount_signed',
+      sql`(${table.reversesId} IS NULL AND ${table.amountPaisa} > 0) OR (${table.reversesId} IS NOT NULL AND ${table.amountPaisa} < 0)`,
+    ),
   ],
 );
 
@@ -738,6 +757,8 @@ export const supplierPayments = pgTable(
     /** Optional: the invoice this payment is against, when the shop pays one. */
     purchaseId: uuid('purchase_id').references(() => purchases.id),
     note: text('note'),
+    /** [PCN-013] As `payments.reverses_id`: the row cancelling a payment typed wrong. */
+    reversesId: uuid('reverses_id').references((): AnyPgColumn => supplierPayments.id),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -746,7 +767,11 @@ export const supplierPayments = pgTable(
   (table) => [
     index('supplier_payments_tenant_created_idx').on(table.tenantId, table.createdAt),
     index('supplier_payments_tenant_supplier_idx').on(table.tenantId, table.supplierId),
-    check('supplier_payments_amount_positive', sql`${table.amountPaisa} > 0`),
+    uniqueIndex('supplier_payments_tenant_reverses_key').on(table.tenantId, table.reversesId),
+    check(
+      'supplier_payments_amount_signed',
+      sql`(${table.reversesId} IS NULL AND ${table.amountPaisa} > 0) OR (${table.reversesId} IS NOT NULL AND ${table.amountPaisa} < 0)`,
+    ),
   ],
 );
 
@@ -975,7 +1000,7 @@ export const adjustments = pgTable(
       // Compared as text: a migration that adds an enum value cannot use it in
       // the same transaction, and drizzle applies every pending migration in
       // one — a cast literal would refuse the whole update (0014).
-      sql`(${table.reason}::text IN ('damage', 'expiry_writeoff', 'distributor_return') AND ${table.qtyBaseDelta} < 0)
+      sql`(${table.reason}::text IN ('damage', 'expiry_writeoff', 'distributor_return', 'entered_by_mistake') AND ${table.qtyBaseDelta} < 0)
           OR (${table.reason}::text = 'opening_stock' AND ${table.qtyBaseDelta} > 0)
           OR ${table.reason}::text IN ('count_correction', 'product_replaced')`,
     ),
@@ -993,6 +1018,12 @@ export const cashMovements = pgTable(
     amountPaisa: bigint('amount_paisa', { mode: 'number' }).notNull(),
     reason: cashReason('reason').notNull(),
     note: text('note'),
+    /**
+     * [PCN-013] Set on the row cancelling a movement typed wrong: the same
+     * amount and reason in the opposite direction, so every in-minus-out
+     * reader is right without knowing. Unique: a movement is cancelled once.
+     */
+    reversesId: uuid('reverses_id').references((): AnyPgColumn => cashMovements.id),
     createdBy: uuid('created_by')
       .notNull()
       .references(() => users.id),
@@ -1000,6 +1031,7 @@ export const cashMovements = pgTable(
   },
   (table) => [
     index('cash_movements_tenant_created_idx').on(table.tenantId, table.createdAt),
+    uniqueIndex('cash_movements_tenant_reverses_key').on(table.tenantId, table.reversesId),
     check('cash_movements_amount_positive', sql`${table.amountPaisa} > 0`),
   ],
 );

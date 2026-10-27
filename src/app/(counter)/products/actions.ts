@@ -26,7 +26,11 @@ import {
   globalCatalogSize,
   searchGlobalCatalog,
 } from '@/db/catalog-queries';
-import { replaceProduct } from '@/domain/inventory/replace-product';
+import {
+  replaceIntoProduct,
+  replaceProduct,
+  type ReplaceProductResult,
+} from '@/domain/inventory/replace-product';
 import {
   parsePackLevels,
   type CatalogSearchResult,
@@ -296,7 +300,7 @@ export async function removeProductAction(productId: Uuid): Promise<RemoveOutcom
       blockedBy: 'stock',
       message:
         result.stockBase > 0
-          ? `It still has ${counted(result.stockBase)} on hand. Write that stock off, or move it to the right product, first.`
+          ? `It still has ${counted(result.stockBase)} on hand. Remove that stock first — “Entered by mistake” if it was never there — or replace it with the right product.`
           : `It is ${counted(-result.stockBase)} below zero. Correct the count first.`,
     };
   }
@@ -428,30 +432,7 @@ export async function replaceProductAction(
   });
 
   if (!result.ok) {
-    switch (result.reason) {
-      case 'already_replaced':
-        return { ok: false, message: 'This product has already been replaced.' };
-      case 'stale_batches':
-        return {
-          ok: false,
-          message: 'Stock of this product changed while you were counting. Reload and count again.',
-        };
-      case 'invalid_count':
-        return {
-          ok: false,
-          message:
-            'Every batch needs a count above zero. If a batch is gone, write it off on Adjust first.',
-        };
-      case 'invalid_product':
-        return {
-          ok: false,
-          message: messageFor(
-            result.detail as Extract<CatalogResult<unknown>, { ok: false }>,
-          ),
-        };
-      default:
-        return { ok: false, message: 'That product no longer exists.' };
-    }
+    return { ok: false, message: replaceRefusalMessage(result) };
   }
 
   revalidateAfter('catalog', 'stock');
@@ -460,4 +441,62 @@ export async function replaceProductAction(
     newProductId: result.value.newProductId,
     unlinkedBarcodes: result.value.unlinkedBarcodes,
   };
+}
+
+/**
+ * [PCN-013] Moves the stock into a product the shop already has. Same owner
+ * gate and the same confirmed counts as a replacement; the counts are in the
+ * receiving product's packs.
+ */
+export async function replaceIntoProductAction(
+  oldProductId: Uuid,
+  input: {
+    intoProductId: string;
+    batches: { batchId: string; expectedRemainingBase: number; newQtyBase: number }[];
+    note: string;
+  },
+): Promise<ReplaceOutcome> {
+  const gate = await requireAuthoring();
+  if ('error' in gate) {
+    return { ok: false, message: gate.error };
+  }
+  const result = await replaceIntoProduct(scopeFor(gate.session), {
+    oldProductId,
+    intoProductId: input.intoProductId as Uuid,
+    batches: input.batches.map((batch) => ({
+      batchId: batch.batchId as Uuid,
+      expectedRemainingBase: batch.expectedRemainingBase,
+      newQtyBase: batch.newQtyBase,
+    })),
+    note: input.note.trim() === '' ? null : input.note.trim(),
+  });
+  if (!result.ok) {
+    return { ok: false, message: replaceRefusalMessage(result) };
+  }
+  revalidateAfter('catalog', 'stock');
+  return {
+    ok: true,
+    newProductId: result.value.newProductId,
+    unlinkedBarcodes: result.value.unlinkedBarcodes,
+  };
+}
+
+/** I5 — what to do next, for either kind of replacement. */
+function replaceRefusalMessage(result: Extract<ReplaceProductResult, { ok: false }>): string {
+  switch (result.reason) {
+    case 'already_replaced':
+      return 'This product has already been replaced.';
+    case 'stale_batches':
+      return 'Stock of this product changed while you were counting. Reload and count again.';
+    case 'invalid_count':
+      return 'Every batch needs a count above zero. If a batch is gone, write it off on Adjust first.';
+    case 'invalid_product':
+      return messageFor(result.detail as Extract<CatalogResult<unknown>, { ok: false }>);
+    case 'invalid_target':
+      return 'Choose another product to move the stock to — one that is on sale, and not this one.';
+    case 'base_unit_differs':
+      return 'Those two count different units, so the counts would change meaning. Choose a product counted the same way, or replace with a new product.';
+    default:
+      return 'That product no longer exists.';
+  }
 }

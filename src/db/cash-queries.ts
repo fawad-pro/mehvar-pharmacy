@@ -23,6 +23,41 @@ export async function findCashMovementById(
   return row ? { id: row.id } : undefined;
 }
 
+/** [PCN-013] A movement as a reversal needs it. */
+export async function findCashMovementForReversal(
+  scope: TenantScope,
+  movementId: Uuid,
+): Promise<
+  | {
+      id: string;
+      direction: CashDirection;
+      amountPaisa: number;
+      reason: CashReason;
+      reversesId: string | null;
+    }
+  | undefined
+> {
+  const row = await scope.selectOne(cashMovements, eq(cashMovements.id, movementId));
+  return row
+    ? {
+        id: row.id,
+        direction: row.direction,
+        amountPaisa: row.amountPaisa,
+        reason: row.reason,
+        reversesId: row.reversesId,
+      }
+    : undefined;
+}
+
+/** [PCN-013] The row cancelling this movement, if one exists. */
+export async function findCashMovementReversalOf(
+  scope: TenantScope,
+  movementId: Uuid,
+): Promise<{ id: string } | undefined> {
+  const row = await scope.selectOne(cashMovements, eq(cashMovements.reversesId, movementId));
+  return row ? { id: row.id } : undefined;
+}
+
 export async function insertCashMovement(
   scope: TenantScope,
   row: Omit<typeof cashMovements.$inferInsert, 'tenantId' | 'createdBy'>,

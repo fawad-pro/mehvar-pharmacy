@@ -20,7 +20,7 @@ import { useEffect, useRef, useState } from 'react';
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 
-type ReceiptKind = 'sale' | 'settlement' | 'return';
+type ReceiptKind = 'sale' | 'settlement' | 'payment_cancelled' | 'return';
 
 interface Row {
   receiptNumber: string;
@@ -44,6 +44,9 @@ function kindLabel(kind: ReceiptKind): { text: string; className: string } {
       return { text: 'Sale', className: 'text-ink/60' };
     case 'settlement':
       return { text: 'Payment', className: 'text-green-700' };
+    // [PCN-013] Money back onto a customer's debt: worth the second look.
+    case 'payment_cancelled':
+      return { text: 'Payment cancelled', className: 'text-amber' };
     case 'return':
       return { text: 'Return', className: 'text-amber' };
   }

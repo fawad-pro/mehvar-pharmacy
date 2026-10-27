@@ -114,7 +114,7 @@ export default async function ProductDetailPage({
         </p>
       ) : hasHistory ? (
         <p className="text-ink/70 text-sm">
-          Pack sizes set up wrong?{' '}
+          Pack sizes set up wrong, or stock under the wrong product?{' '}
           <Link href={`/products/${product.id}/replace`} className="text-green-700 hover:underline">
             Replace this product
           </Link>{' '}

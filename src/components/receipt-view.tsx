@@ -59,6 +59,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           RETURN — against receipt {receipt.refund.againstReceiptNumber}
         </p>
       ) : null}
+      {receipt.cancellation ? (
+        <p className="text-center font-bold">
+          PAYMENT CANCELLED — receipt {receipt.cancellation.againstReceiptNumber}
+        </p>
+      ) : null}
       {receipt.customerName ? <p>Customer: {receipt.customerName}</p> : null}
 
       {receipt.lines && receipt.lines.length > 0 ? (
@@ -132,9 +137,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
             label={
               refund
                 ? 'Returned'
-                : receipt.miniStatement.amountPaisa >= 0
-                  ? 'Udhaar (this sale)'
-                  : 'Paid'
+                : receipt.cancellation
+                  ? 'Payment cancelled'
+                  : receipt.miniStatement.amountPaisa >= 0
+                    ? 'Udhaar (this sale)'
+                    : 'Paid'
             }
             amountPaisa={Math.abs(receipt.miniStatement.amountPaisa)}
           />

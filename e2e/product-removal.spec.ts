@@ -103,10 +103,53 @@ test('a product with stock on hand is not removed, and the screen says what to d
 
   const refusal = page.getByRole('alert').filter({ hasText: 'still has' });
   await expect(refusal).toContainText('3 strip on hand', { timeout: 30_000 });
-  await expect(refusal.getByRole('link', { name: 'Write it off' })).toBeVisible();
+  await expect(refusal.getByRole('link', { name: 'Remove the stock' })).toBeVisible();
   await expect(
     refusal.getByRole('link', { name: 'Replace it with the right product' }),
   ).toBeVisible();
   // Still on sale.
   await expect(page.getByRole('button', { name: 'Remove product' })).toBeVisible();
+});
+
+test('[PCN-013] opening stock typed for the wrong product: removed as never there, then the product', async ({
+  page,
+}) => {
+  const name = `Wrong product ${Date.now()}`;
+  await openCounter(page);
+  await newProduct(page, name);
+
+  await page.goto('/stock/adjust?opening=1');
+  await expect(search(page)).toBeVisible({ timeout: 30_000 });
+  await search(page).fill(name.toLowerCase());
+  await page.getByRole('option').first().click({ timeout: 30_000 });
+  await page.getByLabel('strip', { exact: true }).fill('3');
+  await page.getByLabel(/^Cost per strip/).fill('30');
+  await page.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
+
+  // Taken back as never there — not as damage, not as a count that came up short.
+  await page.goto('/stock/adjust');
+  await expect(search(page)).toBeVisible({ timeout: 30_000 });
+  await search(page).fill(name.toLowerCase());
+  await page.getByRole('option').first().click({ timeout: 30_000 });
+  await page.getByLabel('Reason').selectOption('entered_by_mistake');
+  await expect(page.getByText('It is not counted as a loss')).toBeVisible();
+  await page
+    .getByRole('group', { name: 'Remove in' })
+    .getByRole('button', { name: 'strip' })
+    .click();
+  await page.getByLabel(/to remove$/).fill('3');
+  await page.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
+  await expect(
+    page.getByRole('list').filter({ hasText: 'entered by mistake' }).filter({ hasText: name }),
+  ).toHaveCount(1, { timeout: 30_000 });
+
+  // Nothing on hand, so the product itself can go.
+  await openProduct(page, name);
+  await page.getByRole('button', { name: 'Remove product' }).click();
+  await page.getByRole('button', { name: 'Yes, remove it' }).click();
+  await expect(page.getByText('Removed — not shown at the counter')).toBeVisible({
+    timeout: 30_000,
+  });
 });
