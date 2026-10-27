@@ -1959,5 +1959,15 @@ rounding shortcut for now.
   refunds exactly it; with the share ignored it fails. It runs 16 histories
   instead of 4, because the guard that checks each rare event was actually
   generated failed on some seeds with fewer; it now passes on 25 seeds.
-- Steps 2–4 (stored shares and backfill; the counter, cap and approval; Day
-  screen and receipt page): not yet.
+- *Step 2, stored shares (2026-10-27).* `sale_lines.invoice_discount_share_paisa`
+  (migration 0017, not null, default 0, never negative) is written by
+  `commitSale` from the values the rows store, and returns read it. The
+  migration backfills sales written before it with the same rule in SQL;
+  `invoice-discount-backfill.integration.test.ts` runs that very statement on
+  sales with tied and awkward remainders and requires the TypeScript's answer.
+  The backfill writes an event row's new column once, as a schema change, not
+  as a correction (ADR-1): the app role still cannot update it. The crown
+  suite checks every stored share against the rule and that a sale's shares
+  sum to its discount.
+- Steps 3–4 (the counter, cap and approval; Day screen and receipt page): not
+  yet.

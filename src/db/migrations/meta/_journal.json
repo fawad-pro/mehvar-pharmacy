@@ -120,6 +120,13 @@
       "when": 1793115963056,
       "tag": "0016_entered_by_mistake",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793123321799,
+      "tag": "0017_invoice_discount_shares",
+      "breakpoints": true
     }
   ]
 }

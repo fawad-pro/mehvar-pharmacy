@@ -39,7 +39,12 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 
 import { commitSale, type SaleCommand } from '@/domain/sales/commit-sale';
-import { saleLineGrossPaisa, type SaleLineCommand } from '@/domain/sales/sale-command';
+import {
+  invoiceDiscountShares,
+  saleLineGrossPaisa,
+  storedLineGrossPaisa,
+  type SaleLineCommand,
+} from '@/domain/sales/sale-command';
 import { commitSettlement, type SettlementCommand } from '@/domain/udhaar/commit-settlement';
 import { commitPaymentReversal } from '@/domain/udhaar/commit-payment-reversal';
 import { commitSupplierPayment } from '@/domain/suppliers/commit-supplier-payment';
@@ -1061,14 +1066,34 @@ async function assertInvariants(world: World, label: string): Promise<void> {
     returnedByLine.set(row.saleLineId, (returnedByLine.get(row.saleLineId) ?? 0) + row.qtyBase);
   }
   for (const sale of allSales) {
+    // [PCN-014] The stored shares are exactly the rule's, and sum to the
+    // sale's bill discount.
+    const ownLines = soldLines.filter((line) => line.saleId === sale.id);
+    const expectedShares = invoiceDiscountShares(
+      ownLines.map((line) => ({
+        id: line.id,
+        totalPaisa: storedLineGrossPaisa(line) - line.lineDiscountPaisa,
+      })),
+      sale.invoiceDiscountPaisa,
+    );
+    for (const line of ownLines) {
+      expect(line.invoiceDiscountSharePaisa, `${label}: share on ${sale.receiptNumber}`).toBe(
+        expectedShares.get(line.id),
+      );
+    }
+    expect(
+      ownLines.reduce((sum, line) => sum + line.invoiceDiscountSharePaisa, 0),
+      `${label}: shares of ${sale.receiptNumber}`,
+    ).toBe(sale.invoiceDiscountPaisa);
+
     const refunded = returnedBySale.get(sale.id) ?? 0;
     expect(
       refunded,
       `${label}: ${sale.receiptNumber} refunded more than it collected`,
     ).toBeLessThanOrEqual(sale.totalPaisa);
-    const own = soldLines.filter((line) => line.saleId === sale.id);
     const wholeBack =
-      own.length > 0 && own.every((line) => (returnedByLine.get(line.id) ?? 0) === line.qtyBase);
+      ownLines.length > 0 &&
+      ownLines.every((line) => (returnedByLine.get(line.id) ?? 0) === line.qtyBase);
     if (wholeBack) {
       expect(refunded, `${label}: ${sale.receiptNumber} returned whole`).toBe(sale.totalPaisa);
       if (sale.invoiceDiscountPaisa > 0) observed.discountedSalesReturnedWhole += 1;

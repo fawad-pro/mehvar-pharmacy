@@ -601,6 +601,16 @@ export const saleLines = pgTable(
     /** `unit_count × unit_price_paisa_entered`, before the line discount. */
     lineAmountPaisa: bigint('line_amount_paisa', { mode: 'number' }),
     lineDiscountPaisa: bigint('line_discount_paisa', { mode: 'number' }).notNull().default(0),
+    /**
+     * [PCN-014] This line's share of the sale's bill discount, written once at
+     * commit by `invoiceDiscountShares`, so a refund gives back what the line
+     * paid and no later change to the rule can change a past refund. The
+     * shares of a sale sum to its `invoice_discount_paisa` (the crown suite
+     * checks it; no CHECK can span rows).
+     */
+    invoiceDiscountSharePaisa: bigint('invoice_discount_share_paisa', { mode: 'number' })
+      .notNull()
+      .default(0),
     /** T1 exposure — surfaces in the owner's daily view. */
     priceOverridden: boolean('price_overridden').notNull().default(false),
     createdAt: createdAt(),
@@ -609,6 +619,7 @@ export const saleLines = pgTable(
     index('sale_lines_sale_idx').on(table.tenantId, table.saleId),
     index('sale_lines_tenant_created_idx').on(table.tenantId, table.createdAt),
     check('sale_lines_qty_positive', sql`${table.qtyBase} > 0`),
+    check('sale_lines_invoice_share_nonnegative', sql`${table.invoiceDiscountSharePaisa} >= 0`),
     // [PCN-012] The entered columns arrive together or not at all, and the
     // amount is exactly count × price — the database refuses anything else.
     check(

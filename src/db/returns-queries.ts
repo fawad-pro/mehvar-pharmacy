@@ -23,7 +23,6 @@ import {
 } from './schema';
 
 import { unitsOf } from '@/domain/catalog/units';
-import { invoiceDiscountShares, storedLineGrossPaisa } from '@/domain/sales/sale-command';
 import type { FoundSale, ReturnableLineRow } from '@/domain/sales/return-command';
 import type { Uuid } from '@/lib/uuid';
 
@@ -76,6 +75,8 @@ export async function returnableLinesForSale(
       unitPricePaisa: saleLines.unitPricePaisa,
       lineAmountPaisa: saleLines.lineAmountPaisa,
       lineDiscountPaisa: saleLines.lineDiscountPaisa,
+      // [PCN-014] Stored at commit (and backfilled by migration 0017).
+      invoiceDiscountSharePaisa: saleLines.invoiceDiscountSharePaisa,
       soldUnitKey: saleLines.unitKey,
       packLevels: products.packLevels,
       pricePerBasePaisa: products.defaultPricePerBaseUnit,
@@ -90,20 +91,6 @@ export async function returnableLinesForSale(
     return [];
   }
   const lineIds = lines.map((line) => line.saleLineId);
-
-  // [PCN-014] Each line's share of the bill discount, by the one rule
-  // (`invoiceDiscountShares`), so a refund gives back what the line paid.
-  const [sale] = await scope.db
-    .select({ invoiceDiscountPaisa: sales.invoiceDiscountPaisa })
-    .from(sales)
-    .where(scope.scopeOf(sales, eq(sales.id, saleId)));
-  const shares = invoiceDiscountShares(
-    lines.map((line) => ({
-      id: line.saleLineId,
-      totalPaisa: storedLineGrossPaisa(line) - line.lineDiscountPaisa,
-    })),
-    sale?.invoiceDiscountPaisa ?? 0,
-  );
 
   const [returned, allocations] = await Promise.all([
     scope.db
@@ -161,7 +148,6 @@ export async function returnableLinesForSale(
         .map(({ key, name, factor }) => ({ key, name, factor })),
       soldUnitKey: sold.key,
       alreadyReturnedBase: returnedByLine.get(line.saleLineId) ?? 0,
-      invoiceDiscountSharePaisa: shares.get(line.saleLineId) ?? 0,
       sourceBatches: batchesByLine.get(line.saleLineId) ?? [],
     };
   });
