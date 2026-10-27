@@ -10,6 +10,7 @@ import { useState } from 'react';
 
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
+import { BalanceInline } from '@/components/balance-figure';
 
 type Tab = 'today' | 'stock' | 'udhaar';
 
@@ -222,8 +223,8 @@ function UdhaarTab({ customers }: { customers: CustomerItem[] }) {
           {customers.map((customer) => (
             <li key={customer.id} className="flex justify-between px-3 py-2">
               <span>{customer.name}</span>
-              <span className="numeral font-medium">
-                {formatPaisa(paisa(customer.balancePaisa))}
+              <span className="font-medium">
+                <BalanceInline balancePaisa={customer.balancePaisa} />
               </span>
             </li>
           ))}

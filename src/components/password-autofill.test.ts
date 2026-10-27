@@ -98,3 +98,43 @@ describe('password fields do not invite credential autofill', () => {
     });
   }
 });
+
+/**
+ * Every text field states what the browser may fill into it.
+ *
+ * A counter field the browser fills on its own — a saved login, a saved phone
+ * number, a value typed weeks ago — is data nobody at the counter entered.
+ * Forty-two fields said nothing about it until the Settings PIN showed what
+ * that costs. `off` for ordinary fields (it stops the browser's own
+ * suggestions there); a password field needs a token from RESPECTED above.
+ */
+describe('every text field declares autoComplete', () => {
+  it('has no input or textarea without one', () => {
+    const undeclared: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(path);
+          continue;
+        }
+        if (!entry.name.endsWith('.tsx') || entry.name.includes('.test.')) continue;
+        const source = readFileSync(path, 'utf8');
+        for (const match of source.matchAll(/<(input|textarea)\b/g)) {
+          // An element's attributes run to its `/>` (JSX inputs and textareas
+          // here are self-closing); an arrow function's `=>` must not end it.
+          const from = (match.index ?? 0) + match[0].length;
+          const end = source.indexOf('/>', from);
+          const attributes = source.slice(from, end);
+          if (/type="(checkbox|radio|hidden|date|file|button|submit)"/.test(attributes)) continue;
+          if (!attributes.includes('autoComplete')) {
+            const line = source.slice(0, match.index).split('\n').length;
+            undeclared.push(`${relative(process.cwd(), path)}:${line}`);
+          }
+        }
+      }
+    };
+    walk(join(process.cwd(), 'src'));
+    expect(undeclared).toEqual([]);
+  });
+});

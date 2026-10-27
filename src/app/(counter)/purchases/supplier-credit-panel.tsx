@@ -22,7 +22,7 @@
  */
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
@@ -56,9 +56,16 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
   const [positions, setPositions] = useState<Positions | null>(null);
   const [bump, setBump] = useState(0);
 
+  // Loads on mount and again after every receipt or payment. The answer to the
+  // LATEST request is the one shown: an earlier, slower one landing last put
+  // back the owed figure from before the payment just made.
+  const latest = useRef(0);
   const load = useCallback(() => {
+    const mine = ++latest.current;
     void supplierPositionsAction()
-      .then(setPositions)
+      .then((answer) => {
+        if (mine === latest.current) setPositions(answer);
+      })
       .catch(() => {
         // Offline (ADR-3): purchases and their payments need the server, so the
         // list of what is owed does too. Silence is right.
@@ -238,6 +245,7 @@ export function SupplierCreditRow({
               Amount paid
             </label>
             <input
+              autoComplete="off"
               id={`pay-${row.id}`}
               value={amount}
               inputMode="decimal"

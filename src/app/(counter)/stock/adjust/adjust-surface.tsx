@@ -429,6 +429,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                   <label key={unit.key} className="w-24">
                     <span className="text-ink/60 block text-xs capitalize">{unit.name}</span>
                     <input
+                      autoComplete="off"
                       ref={index === 0 ? qtyRef : undefined}
                       value={counts[unit.key] ?? ''}
                       inputMode="numeric"
@@ -477,6 +478,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                     {removeUnit ? `${removeUnit.name} to remove` : 'Units to remove'}
                   </label>
                   <input
+                    autoComplete="off"
                     id="adjust-qty"
                     ref={qtyRef}
                     value={qty}
@@ -546,6 +548,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                   Cost per {costUnit?.name ?? 'unit'}
                 </label>
                 <input
+                  autoComplete="off"
                   id="adjust-cost"
                   value={cost}
                   inputMode="decimal"
@@ -560,6 +563,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
                   Sells for (per {costUnit?.name ?? 'unit'})
                 </label>
                 <input
+                  autoComplete="off"
                   id="adjust-price"
                   value={price}
                   inputMode="decimal"
@@ -600,6 +604,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
               Note (optional)
             </label>
             <input
+              autoComplete="off"
               id="adjust-note"
               value={note}
               onChange={(event) => {

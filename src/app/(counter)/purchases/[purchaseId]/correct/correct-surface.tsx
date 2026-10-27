@@ -230,6 +230,7 @@ function CorrectionForm({
       <label className="text-ink/70 text-xs">
         Quantity ({line.unitName})
         <input
+          autoComplete="off"
           autoFocus
           inputMode="numeric"
           value={qty}
@@ -240,6 +241,7 @@ function CorrectionForm({
       <label className="text-ink/70 text-xs">
         Bonus ({line.unitName})
         <input
+          autoComplete="off"
           inputMode="numeric"
           value={bonus}
           onChange={(event) => setBonus(event.target.value)}
@@ -249,6 +251,7 @@ function CorrectionForm({
       <label className="text-ink/70 text-xs">
         Unit cost (Rs per {line.unitName})
         <input
+          autoComplete="off"
           inputMode="decimal"
           value={cost}
           onChange={(event) => setCost(event.target.value)}
@@ -258,6 +261,7 @@ function CorrectionForm({
       <label className="text-ink/70 text-xs">
         Why
         <input
+          autoComplete="off"
           value={note}
           placeholder="e.g. cost typed wrong"
           onChange={(event) => setNote(event.target.value)}
@@ -387,6 +391,7 @@ function ReturnForm({
       <label className="text-ink/70 text-xs">
         Quantity going back ({unit.name}, up to {upTo})
         <input
+          autoComplete="off"
           autoFocus
           inputMode="numeric"
           value={qty}
@@ -397,6 +402,7 @@ function ReturnForm({
       <label className="text-ink/70 text-xs">
         Credit from {supplierName} (Rs)
         <input
+          autoComplete="off"
           inputMode="decimal"
           value={creditShown}
           onChange={(event) => {
@@ -419,6 +425,7 @@ function ReturnForm({
       <label className="text-ink/70 text-xs">
         Note
         <input
+          autoComplete="off"
           value={note}
           placeholder="e.g. near expiry"
           onChange={(event) => setNote(event.target.value)}

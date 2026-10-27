@@ -190,6 +190,9 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
   await expect(receipt(page)).toContainText(name);
   await expect(receipt(page)).toContainText('Paid');
   await expect(receipt(page)).toContainText(/Receipt A-\d+/);
+  // And the paper says it the same way: the customer takes this home.
+  await expect(receipt(page)).toContainText('New balance50.00 advance');
+  await expect(receipt(page)).not.toContainText(/-[\d,]+\.\d{2}/);
 
   await overlay.getByRole('button', { name: 'Done — Esc' }).click();
   await expect(overlay).toBeHidden();

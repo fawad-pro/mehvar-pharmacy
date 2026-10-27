@@ -53,6 +53,7 @@ export default async function CustomersPage({
 
       <form className="flex flex-wrap items-center gap-2" action="/customers">
         <input
+          autoComplete="off"
           name="q"
           defaultValue={params.q ?? ''}
           placeholder="Search name or phone"

@@ -155,6 +155,7 @@ export function QuickItemForm({
               Price
             </label>
             <input
+              autoComplete="off"
               id="quick-price"
               ref={priceField}
               value={price}

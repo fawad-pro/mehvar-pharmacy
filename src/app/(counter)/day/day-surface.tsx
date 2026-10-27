@@ -718,6 +718,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
             What&rsquo;s actually in the drawer
           </label>
           <input
+            autoComplete="off"
             id="drawer-counted"
             value={counted}
             inputMode="decimal"
@@ -842,6 +843,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
             Amount
           </label>
           <input
+            autoComplete="off"
             id="movement-amount"
             value={amount}
             inputMode="decimal"
@@ -857,6 +859,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
             Note (optional)
           </label>
           <input
+            autoComplete="off"
             id="movement-note"
             value={note}
             onChange={(event) => {

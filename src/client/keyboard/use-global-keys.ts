@@ -17,6 +17,8 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
+import { markNavigationIntent } from '@/client/navigation/intent';
+
 import { BACK_KEY, GLOBAL_KEYS, HOME_ROUTE } from './registry';
 
 export interface GlobalKeyHandlers {
@@ -40,6 +42,7 @@ export function useGlobalKeys(handlers: GlobalKeyHandlers = {}): void {
       if (event.key === BACK_KEY) {
         const closed = handlers.onEscape?.() ?? false;
         if (!closed && window.location.pathname !== HOME_ROUTE) {
+          markNavigationIntent();
           router.push(HOME_ROUTE);
         }
         return;
@@ -63,6 +66,7 @@ export function useGlobalKeys(handlers: GlobalKeyHandlers = {}): void {
         return;
       }
       if (binding.href) {
+        markNavigationIntent();
         router.push(binding.href);
       }
     }

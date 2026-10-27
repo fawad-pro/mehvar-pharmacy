@@ -160,6 +160,7 @@ export function SettleUdhaarOverlay({
                   Amount paid
                 </label>
                 <input
+                  autoComplete="off"
                   id="settle-amount"
                   ref={amountField}
                   value={amount}

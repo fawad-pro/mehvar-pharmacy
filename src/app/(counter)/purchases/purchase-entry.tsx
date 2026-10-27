@@ -497,6 +497,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             Invoice no.
           </label>
           <input
+            autoComplete="off"
             id="invoice-ref"
             value={draft.invoiceRef}
             onChange={(event) => {
@@ -587,6 +588,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             <div className="flex flex-wrap items-end gap-2 lg:grid lg:grid-cols-[minmax(5rem,1fr)_minmax(5rem,1fr)_minmax(6.5rem,1fr)_minmax(9.5rem,1.3fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_minmax(7rem,1fr)_auto]">
               <Field label={`Qty (${unitLabel})`} width="w-24 lg:w-auto">
                 <input
+                  autoComplete="off"
                   ref={qtyRef}
                   value={qty}
                   inputMode="numeric"
@@ -599,6 +601,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
               <Field label={`Bonus (${unitLabel})`} width="w-24 lg:w-auto">
                 <input
+                  autoComplete="off"
                   value={bonus}
                   inputMode="numeric"
                   placeholder="0"
@@ -611,6 +614,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
               <Field label={`Cost / ${unitLabel}`} width="w-28 lg:w-auto">
                 <input
+                  autoComplete="off"
                   value={cost}
                   inputMode="decimal"
                   onChange={(event) => {
@@ -646,6 +650,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                 attention={pending.fromPack.batch && batchNumber === ''}
               >
                 <input
+                  autoComplete="off"
                   value={batchNumber}
                   onChange={(event) => {
                     setBatchNumber(event.target.value);
@@ -659,6 +664,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                 is warned, never refused. */}
               <Field label={`MRP / ${unitLabel}`} width="w-32 lg:w-auto">
                 <input
+                  autoComplete="off"
                   value={mrp}
                   inputMode="decimal"
                   onChange={(event) => {
@@ -670,6 +676,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
               <Field label={`Price / ${unitLabel}`} width="w-28 lg:w-auto">
                 <input
+                  autoComplete="off"
                   value={price}
                   inputMode="decimal"
                   onChange={(event) => {
@@ -835,6 +842,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             Paid now
           </label>
           <input
+            autoComplete="off"
             id="cash-paid"
             value={draft.cashPaidText ?? ''}
             inputMode="decimal"

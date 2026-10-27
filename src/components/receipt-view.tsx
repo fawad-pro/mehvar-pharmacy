@@ -29,6 +29,7 @@ import { Fragment } from 'react';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import type { ReceiptData } from '@/client/print/receipt';
+import { positionOf } from '@/domain/udhaar/position';
 
 export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
   const refund = receipt.refund !== undefined;
@@ -123,7 +124,10 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
         <>
           <Rule />
           {/* T4/T5 — the dispute-ender: previous balance → this transaction → new. */}
-          <Row label="Previous balance" amountPaisa={receipt.miniStatement.previousBalancePaisa} />
+          <BalanceRow
+            label="Previous balance"
+            balancePaisa={receipt.miniStatement.previousBalancePaisa}
+          />
           <Row
             label={
               refund
@@ -134,7 +138,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
             }
             amountPaisa={Math.abs(receipt.miniStatement.amountPaisa)}
           />
-          <Row label="New balance" amountPaisa={receipt.miniStatement.newBalancePaisa} bold />
+          <BalanceRow
+            label="New balance"
+            balancePaisa={receipt.miniStatement.newBalancePaisa}
+            bold
+          />
         </>
       ) : null}
 
@@ -168,6 +176,34 @@ function Calibration() {
       <div className="-mx-[1mm] mt-1 w-[72mm] border-x-[3px] border-t-[3px] border-solid pt-1" />
       <p>72 mm — both ends should print</p>
     </section>
+  );
+}
+
+/**
+ * A customer's balance in the position vocabulary (`domain/udhaar/position`):
+ * what they owe, "Settled", or an advance — never a signed number. An
+ * overpaid settlement or a return past zero used to print "New balance
+ * -50.00" on the slip the customer takes home.
+ */
+function BalanceRow({
+  label,
+  balancePaisa,
+  bold = false,
+}: {
+  label: string;
+  balancePaisa: number;
+  bold?: boolean;
+}) {
+  const position = positionOf(balancePaisa);
+  return (
+    <div className={`flex justify-between ${bold ? 'font-bold' : ''}`}>
+      <span>{label}</span>
+      <span className="numeral">
+        {position.kind === 'settled'
+          ? 'Settled'
+          : `${formatPaisa(paisa(position.amountPaisa))}${position.kind === 'in_credit' ? ' advance' : ''}`}
+      </span>
+    </div>
   );
 }
 

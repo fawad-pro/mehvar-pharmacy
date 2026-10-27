@@ -56,6 +56,7 @@ export default async function ProductsPage({
 
       <form className="flex flex-wrap items-center gap-2" action="/products">
         <input
+          autoComplete="off"
           name="q"
           defaultValue={params.q ?? ''}
           placeholder="Search name, salt or maker"

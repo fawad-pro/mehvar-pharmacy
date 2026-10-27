@@ -695,3 +695,13 @@ pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
   `src` and fails until each is declared opted-out or a real login. The same
   autofill sends a key-less `keydown`: a native key listener must not assume
   `event.key` is a string.
+- **`router.refresh()` cancels a navigation already in flight.** `RefreshOnSync`
+  refreshed the moment a sale was delivered — exactly when the next key is
+  pressed — and lost about one navigation in eight. Navigation intent is
+  marked by link clicks and the global keys (`client/navigation/intent.ts`) and
+  a background refresh yields to it. A refresh run straight after the user's
+  own action, before they can click elsewhere, is safe.
+- **The position vocabulary covers paper too.** `position.ts` said the receipt
+  used it; the receipt did not, and printed "New balance -50.00". Any balance a
+  person reads — screen or slip — goes through `positionOf`/`BalanceInline`.
+

@@ -173,6 +173,7 @@ export function ReplaceSurface({
         <label className="text-ink/70 text-xs">
           Name
           <input
+            autoComplete="off"
             value={name}
             onChange={(event) => setName(event.target.value)}
             className={fieldClass}
@@ -181,6 +182,7 @@ export function ReplaceSurface({
         <label className="text-ink/70 text-xs">
           Base unit
           <input
+            autoComplete="off"
             value={baseUnit}
             onChange={(event) => setBaseUnit(event.target.value)}
             className={fieldClass}
@@ -189,6 +191,7 @@ export function ReplaceSurface({
         <label className="text-ink/70 text-xs">
           Pack levels
           <input
+            autoComplete="off"
             value={packLevels}
             placeholder="strip:14, box:140"
             onChange={(event) => setPackLevels(event.target.value)}
@@ -199,6 +202,7 @@ export function ReplaceSurface({
           <label key={unit.name} className="text-ink/70 text-xs">
             Price per {unit.name}
             <input
+              autoComplete="off"
               inputMode="decimal"
               value={prices[unit.name] ?? ''}
               placeholder={
@@ -250,6 +254,7 @@ export function ReplaceSurface({
                 <label key={unit.name} className="text-ink/70 w-20 text-xs">
                   {unit.name}
                   <input
+                    autoComplete="off"
                     inputMode="numeric"
                     value={counts[unit.name] ?? '0'}
                     onChange={(event) =>
@@ -281,6 +286,7 @@ export function ReplaceSurface({
       <label className="text-ink/70 text-xs">
         Why
         <input
+          autoComplete="off"
           value={note}
           placeholder="e.g. strips hold 14, not 10"
           onChange={(event) => setNote(event.target.value)}

@@ -85,6 +85,7 @@ export function PaymentOverlay({
           Cash tendered
         </label>
         <input
+          autoComplete="off"
           id="tendered"
           ref={field}
           value={tenderedInput}

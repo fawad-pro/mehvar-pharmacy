@@ -256,6 +256,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
             Receipt number or customer name
           </label>
           <input
+            autoComplete="off"
             id="return-search"
             ref={searchRef}
             value={query}
@@ -377,6 +378,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                             Return quantity for {line.productName}
                           </label>
                           <input
+                            autoComplete="off"
                             id={`return-qty-${line.saleLineId}`}
                             value={draft?.qty ?? ''}
                             inputMode="numeric"
@@ -459,6 +461,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                 Reason (optional)
               </label>
               <input
+                autoComplete="off"
                 id="return-reason"
                 value={reasonNote}
                 onChange={(event) => {

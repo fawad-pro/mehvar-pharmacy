@@ -14,6 +14,16 @@ All approved plan changes and implementation milestones will be recorded here.
 - **Chrome no longer fills the device login into a new salesman's name and
   PIN** on Settings, and browser autofill no longer throws an error in the
   barcode guard.
+- **The next key after a sale goes where it says.** A link or function key
+  pressed right after a sale was sometimes ignored, because the background
+  refresh that follows a delivered sale cancelled the navigation.
+- **Balances on paper speak like the screen.** An overpaid settlement or a
+  return past zero printed "New balance -50.00"; the slip now says
+  "50.00 advance", or "Settled". The customer picker and the owner's list no
+  longer show an advance as a negative number.
+- **The browser's own suggestions are off in every field**, as the product
+  form already had them, and lists on Receive Stock and the licence panel can
+  no longer be overwritten by a slower, older answer.
 - **Settings keeps what you change.** A slow load could overwrite a ticked box
   on the Settings screen and save the old value back.
 

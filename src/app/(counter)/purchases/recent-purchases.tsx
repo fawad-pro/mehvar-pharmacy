@@ -13,7 +13,7 @@
  * list are never telling different stories.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
@@ -37,9 +37,14 @@ interface PurchaseRow {
 export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
   const [rows, setRows] = useState<PurchaseRow[] | null>(null);
 
+  // The latest request's answer wins; see `SupplierCreditPanel`.
+  const latest = useRef(0);
   const load = useCallback(() => {
+    const mine = ++latest.current;
     void recentPurchasesAction()
-      .then(setRows)
+      .then((answer) => {
+        if (mine === latest.current) setRows(answer);
+      })
       .catch(() => {
         // Offline (ADR-3): receiving needs the server, so a list of what was
         // received does too. Silence is right — the entry form above still

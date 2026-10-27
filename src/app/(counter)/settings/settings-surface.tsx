@@ -186,6 +186,7 @@ function ReceiptSettingsForm() {
               Header (printed at the top, one line per row)
             </label>
             <textarea
+              autoComplete="off"
               id="receipt-header"
               value={settings.receiptHeader}
               onChange={(event) => {
@@ -201,6 +202,7 @@ function ReceiptSettingsForm() {
               Footer (thank-you line)
             </label>
             <input
+              autoComplete="off"
               id="receipt-footer"
               value={settings.receiptFooter}
               onChange={(event) => {
