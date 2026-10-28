@@ -131,7 +131,8 @@ test('a correction with no answer says it did not save, and leaves the record as
   await expect(page.getByRole('alert').filter({ hasText: 'That did not save' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeEnabled();
 
-  await page.getByRole('button', { name: 'Cancel' }).click();
+  // Exact: the ledger's "Cancel entry" buttons are also called Cancel…
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Rashid Sahib' })).toBeVisible({
     timeout: 30_000,
