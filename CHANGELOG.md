@@ -2,6 +2,32 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## The five common tasks, measured
+
+Each task was walked with every key logged; `e2e/key-budget.spec.ts` now
+does each with exactly its keys, so a change that adds a step fails.
+
+| Task | Keys (besides what is typed) |
+| --- | --- |
+| Sell one item | Enter · F12 · Enter (or scan · F12 · Enter) |
+| Sell several | Enter per item · F12 · Enter |
+| Udhaar sale | Enter · F4 · Enter · F12 · Enter, typing 0 for no cash |
+| Receive a one-line delivery | 10 (was 11) |
+| Return from a receipt | F2 · Enter · Tab · Tab · Enter · Enter |
+
+- **Receiving: Enter on an empty search goes to Paid now.** Tab got there by
+  way of the last line's Remove button, where a stray Enter deleted the line.
+- **The payment screen says how to put a sale on udhaar.** With a customer
+  attached it read only "Billing to …"; typing what they pay now (0 for all
+  of it) had to be taught.
+- **F12 while the customer picker is still finding waits for the customer.**
+  On a slow connection it opened Payment over the picker; the picker then
+  closed and left the cursor in the product search behind Payment, so the
+  cash typed next searched for a product and Enter added it to the bill.
+  While a picker is finding, it says so and holds the name still — on Receive
+  Stock, the invoice number typed next became part of the supplier's name.
+- Selling was already at its floor: each key is a decision.
+
 ## The rest of the counter by keyboard
 
 - **Esc closes what is open, and stays.** Recording a payment on a

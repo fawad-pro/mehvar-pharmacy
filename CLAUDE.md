@@ -773,6 +773,22 @@ exception visibility.
 - **A test that picks "the last link" depends on the shared database.**
   Choose by what the link leads to (`href`), not by its position or name.
 
+## Things the key count established
+
+- **Count keys in a test, not on paper.** `key-budget.spec.ts` does each
+  common task with exactly its keys. It found the worst bug of the pass on
+  its first run, which no walk had: a fast operator on a slow answer put a
+  product on the bill that nobody asked for.
+- **A key pressed during a wait must keep its meaning or do nothing.** F12
+  during the picker's wait opened Payment, and the picker's close then moved
+  focus behind it. F12 now waits for the customer; keys typed into a picker
+  that is finding change nothing (the field is read-only, and says
+  "Finding …"). Ignoring a key silently is a dead key; doing it later is
+  only right when the intent is unambiguous.
+- **A test that passes with a pause and fails without one has found
+  something.** The 300 ms waits in an instrumented run hid the race; the
+  budget test, which presses keys as fast as an operator, showed it.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day
