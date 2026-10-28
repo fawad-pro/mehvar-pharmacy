@@ -97,3 +97,34 @@ test('Returns: a receipt number and Enter open that sale, however slow the answe
   await expect(page.getByLabel(/Return quantity for Disprin/)).toBeFocused({ timeout: 15_000 });
   await expect(page.locator('main').getByText(second!, { exact: true })).toBeVisible();
 });
+
+test('Receipts: Enter opens the receipt typed, not the top of the list before it', async ({
+  page,
+}) => {
+  await openCounter(page);
+  const sell = async () => {
+    await search(page).fill('disprin');
+    await expect(page.getByRole('option').first()).toContainText('Disprin', { timeout: 30_000 });
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('F12');
+    await page.keyboard.press('Enter');
+    const lastSale = page.getByRole('status', { name: 'Last sale' });
+    await expect(lastSale).toContainText(/Saved — /);
+    return (await lastSale.textContent())?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
+  };
+  const first = await sell();
+  const second = await sell();
+  await expect(page.getByRole('status', { name: /waiting to sync/ })).toHaveCount(0, {
+    timeout: 30_000,
+  });
+
+  await page.keyboard.press('F2');
+  const find = page.getByLabel('Find a receipt');
+  await find.fill(first!);
+  // The list has caught up: it shows the first receipt alone.
+  await expect(page).toHaveURL(new RegExp(`q=${first!}`), { timeout: 30_000 });
+  // Then the other number, and Enter at once — before the list follows.
+  await find.fill(second!);
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(new RegExp(`/receipts/${second!}$`), { timeout: 30_000 });
+});

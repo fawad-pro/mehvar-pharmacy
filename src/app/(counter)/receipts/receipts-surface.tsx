@@ -70,6 +70,8 @@ export function ReceiptsSurface({
    * fired yet. See the effect below.
    */
   const leaving = useRef(false);
+  /** The term an Enter is waiting on, until the list answers it. */
+  const enterFor = useRef<string | null>(null);
 
   useEffect(() => {
     field.current?.focus();
@@ -112,6 +114,24 @@ export function ReceiptsSurface({
     router.push(`/receipts/${encodeURIComponent(receiptNumber)}`);
   }
 
+  /** The receipt whose number was typed, or the top result. */
+  function openFrom(found: readonly Row[], typed: string): void {
+    const exact = found.find((row) => row.receiptNumber.toLowerCase() === typed.toLowerCase());
+    const pick = exact ?? found[0];
+    if (pick) open(pick.receiptNumber);
+  }
+
+  // An Enter pressed before the list caught up with the typing acts on the
+  // list's answer to what was typed — never on the list still on screen,
+  // which is the answer to the term before (the Returns screen's rule).
+  useEffect(() => {
+    if (enterFor.current === null || enterFor.current !== search) return;
+    enterFor.current = null;
+    openFrom(rows, search);
+    // `openFrom` reads only its arguments and a stable router.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, rows]);
+
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
@@ -144,9 +164,19 @@ export function ReceiptsSurface({
         onKeyDown={(event) => {
           // Enter opens the top result — the slip-in-hand path, end to end,
           // without reaching for the mouse.
-          if (event.key === 'Enter' && rows[0]) {
-            open(rows[0].receiptNumber);
+          if (event.key !== 'Enter') return;
+          const typed = term.trim();
+          if (typed === search) {
+            openFrom(rows, typed);
+            return;
           }
+          // Not answered yet: ask now rather than after the pause, and open
+          // from the answer when it comes.
+          enterFor.current = typed;
+          const next = new URLSearchParams(params.toString());
+          if (typed === '') next.delete('q');
+          else next.set('q', typed);
+          router.replace(`/receipts${next.toString() ? `?${next}` : ''}`);
         }}
         placeholder="Receipt number or customer name"
         aria-label="Find a receipt"
