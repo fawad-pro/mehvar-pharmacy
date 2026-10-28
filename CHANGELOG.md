@@ -3,6 +3,32 @@
 All approved plan changes and implementation milestones will be recorded here.
 
 
+## Redesign batch 1: the foundation (PCN-016)
+
+Every screen now wears the new look before its own layout changes: navy text
+on a light blue-grey page, white cards lifted by a soft shadow, blue for the
+one primary action and links, and a 2 px blue focus ring on everything
+focusable. Green now means only "done" (settled, saved, recorded); amber
+words use the darker `amber-text` and secondary text one `ink-2`, both of
+which clear contrast where `ink/50`, `ink/40` and amber words did not.
+Control edges use `border` (3:1) instead of the row hairline.
+
+- Tokens from the design system in `globals.css`; the green palette, `paper`
+  and the `ink/` steps are gone, and `tests/design-tokens.test.ts` keeps them
+  gone.
+- Primitives in `src/components/ui/`: Button, Field, AmountField, Select,
+  Card, StatTile, Badge, Banner, Dialog, the key chip and TabBar.
+- The top bar carries the pharmacy's name (with a slot for its logo), the
+  screen's name, the sync badge, Settings and the user; no Mehvar mark.
+- The key bar is light: soft chips, the active key blue, the three bands
+  split by a hairline. Below 768 px it gives way to five tabs (Sale,
+  Receive, Customers, Day, More); More opens the other keys and Settings.
+- Every dialog is a bottom sheet below 768 px.
+- The receipt's bold "MEHVAR" is one small "Powered by Mehvar" line (its
+  switch comes with Settings, batch 10).
+- Receipt numbers on the Receipts list are 44 px wide at least: "A-1" was a
+  26 px target.
+
 ## The redesign is decided (PCN-016, PCN-017)
 
 Every screen was redrawn in Claude Design at laptop, tablet and phone width:

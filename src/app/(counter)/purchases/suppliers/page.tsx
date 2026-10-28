@@ -37,12 +37,12 @@ export default async function SuppliersPage({
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <Link href="/purchases" className="text-green-600 text-sm">
+      <Link href="/purchases" className="text-blue-600 text-sm">
         ← Purchases
       </Link>
       <header className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-green-900 text-2xl font-semibold">Suppliers</h1>
-        <span className="text-ink/50 text-sm">{rows.length.toLocaleString()} listed</span>
+        <h1 className="text-navy text-2xl font-semibold">Suppliers</h1>
+        <span className="text-ink-2 text-sm">{rows.length.toLocaleString()} listed</span>
       </header>
 
       <form className="flex flex-wrap items-center gap-2" action="/purchases/suppliers">
@@ -52,30 +52,30 @@ export default async function SuppliersPage({
           defaultValue={params.q ?? ''}
           placeholder="Search name or phone"
           aria-label="Search suppliers"
-          className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
+          className="border-border focus:border-blue-600 h-touch min-w-64 flex-1 rounded-control border px-3"
         />
         {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}
-        <button type="submit" className="border-line min-h-touch rounded border px-4">
+        <button type="submit" className="border-border min-h-touch rounded-control border px-4">
           Search
         </button>
         <Link
           href={toggleHref}
-          className="text-green-600 min-h-touch flex items-center px-2 text-sm"
+          className="text-blue-600 min-h-touch flex items-center px-2 text-sm"
         >
           {showRemoved ? 'Hide removed suppliers' : 'Show removed suppliers'}
         </Link>
       </form>
 
       {rows.length === 0 ? (
-        <p className="text-ink/50 p-8 text-center text-sm">
+        <p className="text-ink-2 p-8 text-center text-sm">
           {params.q
             ? 'Nothing matched that search.'
             : 'No suppliers yet. One is added when you pick it while receiving stock.'}
         </p>
       ) : (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Phone</th>
@@ -86,21 +86,18 @@ export default async function SuppliersPage({
               {rows.map((row) => (
                 <tr key={row.id} className="border-line border-t">
                   <td className="px-3 py-2">
-                    <Link
-                      href={`/purchases/suppliers/${row.id}`}
-                      className="text-green-900 font-medium"
-                    >
+                    <Link href={`/purchases/suppliers/${row.id}`} className="text-navy font-medium">
                       {row.name}
                     </Link>
                     {!row.isActive ? (
-                      <span className="text-ink/40 ml-2 text-xs">removed</span>
+                      <span className="text-ink-2 ml-2 text-xs">removed</span>
                     ) : null}
                   </td>
-                  <td className="text-ink/70 px-3 py-2">{row.phone ?? '—'}</td>
+                  <td className="text-ink-2 px-3 py-2">{row.phone ?? '—'}</td>
                   {/* Never a minus sign (PCN-011): the direction is a word. */}
                   <td className="numeral px-3 py-2 text-right">
                     {row.balancePaisa > 0 ? (
-                      <span className="text-amber font-medium">
+                      <span className="text-amber-text font-medium">
                         {formatPaisa(paisa(row.balancePaisa), { withSymbol: true })} owed
                       </span>
                     ) : row.balancePaisa < 0 ? (
@@ -108,7 +105,7 @@ export default async function SuppliersPage({
                         {formatPaisa(paisa(-row.balancePaisa), { withSymbol: true })} credit held
                       </span>
                     ) : (
-                      <span className="text-ink/40">Settled</span>
+                      <span className="text-ink-2">Settled</span>
                     )}
                   </td>
                 </tr>

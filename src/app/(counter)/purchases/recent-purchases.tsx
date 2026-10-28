@@ -55,14 +55,14 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
   useEffect(load, [load, reloadKey]);
 
   if (rows === null) {
-    return <p className="text-ink/50 text-sm">Loading…</p>;
+    return <p className="text-ink-2 text-sm">Loading…</p>;
   }
 
   return (
     <section aria-label="Received recently">
-      <h2 className="text-green-900 mb-2 font-medium">Received recently</h2>
+      <h2 className="text-navy mb-2 font-medium">Received recently</h2>
       {rows.length === 0 ? (
-        <p className="text-ink/50 text-sm">Nothing received yet.</p>
+        <p className="text-ink-2 text-sm">Nothing received yet.</p>
       ) : (
         <ul className="border-line divide-line divide-y rounded border text-sm">
           {rows.map((row) => (
@@ -72,17 +72,15 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
                   invoice is a record you can open now, like a receipt. */}
               <Link
                 href={`/purchases/${row.id}`}
-                className="text-green-700 inline-flex min-h-touch items-center font-medium hover:underline"
+                className="text-blue-600 inline-flex min-h-touch items-center font-medium hover:underline"
               >
                 {row.supplierName ?? 'No supplier'}
               </Link>
-              {row.invoiceRef ? (
-                <span className="text-ink/60">invoice {row.invoiceRef}</span>
-              ) : null}
-              <span className="text-ink/50 text-xs">
+              {row.invoiceRef ? <span className="text-ink-2">invoice {row.invoiceRef}</span> : null}
+              <span className="text-ink-2 text-xs">
                 {row.invoiceDate ?? new Date(row.createdAt).toLocaleDateString('en-PK')}
               </span>
-              <span className="text-ink/50 ml-auto text-xs">
+              <span className="text-ink-2 ml-auto text-xs">
                 {row.lineCount} line{row.lineCount === 1 ? '' : 's'}
               </span>
               <span className="numeral w-28 font-medium">

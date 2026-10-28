@@ -34,7 +34,7 @@ export function ReceiptActions({
   return (
     <Link
       href={`/returns?receipt=${encodeURIComponent(receiptNumber)}`}
-      className="border-line min-h-touch text-ink hover:bg-green-100/50 inline-flex items-center rounded border px-4 font-medium"
+      className="border-border min-h-touch text-navy hover:bg-mist inline-flex items-center rounded-control border px-4 font-medium"
     >
       Start a return
     </Link>

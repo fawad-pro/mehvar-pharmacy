@@ -112,12 +112,12 @@ export default tseslint.config(
         {
           selector: `Literal[value=/${HEX_COLOUR}/]`,
           message:
-            'Phase 10 §6: no raw hex. Use a design token (var(--green-600), the Tailwind theme colours) — semantic colour must carry meaning.',
+            'Phase 10 §6: no raw hex. Use a design token (var(--blue-600), the Tailwind theme colours) — semantic colour must carry meaning.',
         },
         {
           selector: `TemplateElement[value.raw=/${HEX_COLOUR}/]`,
           message:
-            'Phase 10 §6: no raw hex. Use a design token (var(--green-600), the Tailwind theme colours) — semantic colour must carry meaning.',
+            'Phase 10 §6: no raw hex. Use a design token (var(--blue-600), the Tailwind theme colours) — semantic colour must carry meaning.',
         },
       ],
     },

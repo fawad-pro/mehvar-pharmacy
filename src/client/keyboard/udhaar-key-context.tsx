@@ -11,7 +11,7 @@
  * `f8-context.tsx`, and every comment in it said "F8", right up until Udhaar
  * moved to F4 and the name became a lie nobody noticed because it still
  * compiled. Which physical key it is lives in exactly one place: the
- * registry's `dispatch: 'udhaar'` entry.
+ * registry's `dispatch:'udhaar'` entry.
  *
  * `AppShell` owns the global binding and the Settle Udhaar overlay it falls
  * back to, but has no reason to know about the Sale surface's cart. Rather

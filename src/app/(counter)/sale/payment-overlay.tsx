@@ -173,37 +173,35 @@ export function PaymentOverlay({
   return (
     // No onDismiss: Esc, deliberately pressed, is the only way out of this one.
     <OverlayBackdrop label="Payment">
-      <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
-        <h2 className="text-green-900 mb-4 text-lg font-semibold">Payment</h2>
+      <div className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5">
+        <h2 className="text-navy mb-4 text-lg font-semibold">Payment</h2>
 
         {/* The one figure to take, always the largest: "Collect" once a bill
             discount is given, so nobody reads the old bill as the price. */}
-        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">
+        <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">
           {discounted ? 'Collect' : 'Amount Due'}
         </p>
         <p
-          className="text-green-900 numeral text-total leading-none font-semibold"
+          className="text-navy numeral text-total leading-none font-semibold"
           aria-label={discounted ? 'Collect' : 'Amount due'}
         >
           {formatPaisa(totalPaisa)}
         </p>
         {discounted ? (
-          <p className="text-ink/60 numeral mt-1 text-sm" aria-label="Bill discount">
+          <p className="text-ink-2 numeral mt-1 text-sm" aria-label="Bill discount">
             Bill {formatPaisa(subtotalPaisa)} · Discount {formatPaisa(discountPaisa)}
             {approvedBy ? (
-              <span className="text-ink/50 block text-xs">Approved by {approvedBy.name}</span>
+              <span className="text-ink-2 block text-xs">Approved by {approvedBy.name}</span>
             ) : null}
           </p>
         ) : null}
 
-        {customerName ? (
-          <p className="text-ink/50 mt-1 text-sm">Billing to {customerName}</p>
-        ) : null}
+        {customerName ? <p className="text-ink-2 mt-1 text-sm">Billing to {customerName}</p> : null}
 
         {/* In view from the start, empty, saying what to type: the same words
             a line discount takes. A button to find first, and a box asking
             for the new total, is what a salesperson could not work out. */}
-        <label className="text-ink/60 mt-4 mb-1 block text-xs" htmlFor="bill-discount">
+        <label className="text-ink-2 mt-4 mb-1 block text-xs" htmlFor="bill-discount">
           Discount on the bill
         </label>
         <input
@@ -232,7 +230,7 @@ export function PaymentOverlay({
               onCancel();
             }
           }}
-          className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+          className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-lg"
         />
         {!parsed.ok ? (
           <p className="text-red mt-1 text-sm" role="alert">
@@ -243,12 +241,12 @@ export function PaymentOverlay({
         ) : null}
 
         {waitingForOwner ? (
-          <div className="border-line mt-2 rounded border p-3">
+          <div className="bg-surface shadow-card mt-2 rounded-card p-3">
             <p className="text-sm">
               Discount {formatPaisa(discountPaisa)} is over the shop&rsquo;s limit of {capPercent}%.
               The owner enters their PIN to approve it.
             </p>
-            <label className="text-ink/60 mt-2 mb-1 block text-xs" htmlFor="owner-pin">
+            <label className="text-ink-2 mt-2 mb-1 block text-xs" htmlFor="owner-pin">
               Owner&rsquo;s PIN
             </label>
             <input
@@ -281,13 +279,13 @@ export function PaymentOverlay({
                   clearDiscount();
                 }
               }}
-              className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-2xl tracking-[0.5em] outline-none"
+              className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-2xl tracking-[0.5em]"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
               <button
                 type="button"
                 onClick={clearDiscount}
-                className="text-ink/60 min-h-touch text-sm"
+                className="text-ink-2 min-h-touch text-sm"
               >
                 No discount — Esc
               </button>
@@ -295,7 +293,7 @@ export function PaymentOverlay({
                 type="button"
                 onClick={() => void submitPin()}
                 disabled={pinEntry.pin.length !== PIN_LENGTH || pinEntry.busy}
-                className="bg-green-600 text-paper min-h-touch rounded px-4 text-sm font-medium disabled:opacity-40"
+                className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-4 text-sm disabled:opacity-40"
               >
                 {pinEntry.busy ? 'Checking…' : 'Approve'}
               </button>
@@ -308,7 +306,7 @@ export function PaymentOverlay({
           </div>
         ) : null}
 
-        <label className="text-ink/60 mt-4 mb-1 block text-xs" htmlFor="tendered">
+        <label className="text-ink-2 mt-4 mb-1 block text-xs" htmlFor="tendered">
           Cash tendered
         </label>
         <input
@@ -342,7 +340,7 @@ export function PaymentOverlay({
               onCancel();
             }
           }}
-          className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-2xl outline-none"
+          className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-2xl"
         />
 
         {notice ? (
@@ -353,9 +351,9 @@ export function PaymentOverlay({
 
         {split.changePaisa > 0 ? (
           <div className="mt-3 text-center">
-            <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Change</p>
+            <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Change</p>
             {/* Phase 10 §4: change rendered enormous. */}
-            <p className="text-green-900 numeral text-change leading-none font-semibold">
+            <p className="text-navy numeral text-change leading-none font-semibold">
               {formatPaisa(split.changePaisa)}
             </p>
           </div>
@@ -367,8 +365,8 @@ export function PaymentOverlay({
             what to do about it (attach a customer, or ask for more cash). */}
         {short ? (
           <div className="mt-3 text-center">
-            <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Remaining</p>
-            <p className="text-amber numeral text-change leading-none font-semibold">
+            <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Remaining</p>
+            <p className="text-amber-text numeral text-change leading-none font-semibold">
               {formatPaisa(split.creditPaisa)}
             </p>
           </div>
@@ -378,14 +376,14 @@ export function PaymentOverlay({
             said nothing about udhaar: knowing to type what they pay now (0
             for all of it) had to be taught. Said here, where it is done. */}
         {customerName && !short && split.changePaisa === 0 ? (
-          <p className="text-ink/60 mt-3 text-sm">
+          <p className="text-ink-2 mt-3 text-sm">
             Paid in full. For udhaar, type what {customerName} pays now — 0 puts it all on udhaar.
           </p>
         ) : null}
 
         {short ? (
           customerName ? (
-            <p className="text-amber mt-3 text-sm">
+            <p className="text-amber-text mt-3 text-sm">
               {formatPaisa(split.creditPaisa)} goes on {customerName}’s udhaar.
             </p>
           ) : (
@@ -396,14 +394,14 @@ export function PaymentOverlay({
         ) : null}
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <button type="button" onClick={onCancel} className="text-ink/60 min-h-touch text-sm">
+          <button type="button" onClick={onCancel} className="text-ink-2 min-h-touch text-sm">
             Esc to cancel
           </button>
           <button
             type="button"
             onClick={commit}
             disabled={!canCommit || busy}
-            className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
           >
             {busy ? 'Saving…' : 'Commit — Enter'}
           </button>

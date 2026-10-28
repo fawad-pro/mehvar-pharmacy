@@ -167,7 +167,10 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           Receipt {receipt.receiptNumber} · Served by {receipt.salesmanName}
         </p>
         <p className="mt-1">{receipt.tenantFooterLine}</p>
-        <p className="mt-1 font-bold">MEHVAR</p>
+        {/* PCN-016: the receipt belongs to the pharmacy. Mehvar is one small
+            line at the very bottom, which the owner will be able to switch
+            off in Settings (batch 10). */}
+        <p className="mt-2 text-[10px]">Powered by Mehvar</p>
       </footer>
 
       {receipt.calibration ? <Calibration /> : null}

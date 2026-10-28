@@ -33,21 +33,21 @@ export default async function CustomersPage({
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-green-900 text-2xl font-semibold">Customers</h1>
-        <span className="text-ink/50 text-sm">{page.total.toLocaleString()} on the book</span>
+        <h1 className="text-navy text-2xl font-semibold">Customers</h1>
+        <span className="text-ink-2 text-sm">{page.total.toLocaleString()} on the book</span>
         {/* The owner's question on this screen is the same one Day & Reports
             answers with "Owed to you" — and the two now share `summariseBook`,
             which is what makes showing it in both places safe. They used to
             floor differently and label identically. */}
         {page.outstandingPaisa > 0 ? (
-          <span className="text-amber numeral ml-auto text-sm font-medium">
+          <span className="text-amber-text numeral ml-auto text-sm font-medium">
             {formatPaisa(paisa(page.outstandingPaisa), { withSymbol: true })} owed in total
           </span>
         ) : null}
         {/* Advances are never netted against the debt above, so they are stated
             beside it rather than folded into it — and only when there are any. */}
         {page.advancesPaisa > 0 ? (
-          <span className="text-ink/60 numeral text-sm">
+          <span className="text-ink-2 numeral text-sm">
             {formatPaisa(paisa(page.advancesPaisa), { withSymbol: true })} paid in advance
           </span>
         ) : null}
@@ -62,30 +62,30 @@ export default async function CustomersPage({
           aria-label="Search customers"
           // Arriving here is to look something up: the cursor starts in it.
           autoFocus
-          className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
+          className="border-border focus:border-blue-600 h-touch min-w-64 flex-1 rounded-control border px-3"
         />
         {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}
-        <button type="submit" className="border-line min-h-touch rounded border px-4">
+        <button type="submit" className="border-border min-h-touch rounded-control border px-4">
           Search
         </button>
         <Link
           href={removedToggleHref(params, !showRemoved)}
-          className="text-green-600 min-h-touch flex items-center px-2 text-sm"
+          className="text-blue-600 min-h-touch flex items-center px-2 text-sm"
         >
           {showRemoved ? 'Hide removed customers' : 'Show removed customers'}
         </Link>
       </form>
 
       {page.items.length === 0 ? (
-        <p className="text-ink/50 p-8 text-center text-sm">
+        <p className="text-ink-2 p-8 text-center text-sm">
           {params.q
             ? 'Nothing matched that search.'
             : 'No customers yet. A customer is added the first time you put a sale on udhaar.'}
         </p>
       ) : (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Phone</th>
@@ -98,15 +98,15 @@ export default async function CustomersPage({
                   <td className="px-3 py-2">
                     <Link
                       href={`/customers/${item.id}`}
-                      className="text-green-900 inline-flex min-h-touch items-center font-medium"
+                      className="text-navy inline-flex min-h-touch items-center font-medium"
                     >
                       {item.name}
                     </Link>
                     {!item.isActive ? (
-                      <span className="text-ink/40 ml-2 text-xs">removed</span>
+                      <span className="text-ink-2 ml-2 text-xs">removed</span>
                     ) : null}
                   </td>
-                  <td className="text-ink/70 px-3 py-2">{item.phone ?? '—'}</td>
+                  <td className="text-ink-2 px-3 py-2">{item.phone ?? '—'}</td>
                   {/* The same vocabulary as the customer page and the
                       settlement slip — never a minus sign on a balance. */}
                   <td className="px-3 py-2 text-right font-medium">
@@ -124,7 +124,7 @@ export default async function CustomersPage({
           <PageLink params={params} page={page.page - 1} disabled={page.page <= 1}>
             Previous
           </PageLink>
-          <span className="text-ink/50">
+          <span className="text-ink-2">
             Page {page.page} of {page.pageCount}
           </span>
           <PageLink params={params} page={page.page + 1} disabled={page.page >= page.pageCount}>
@@ -148,7 +148,7 @@ function PageLink({
   children: React.ReactNode;
 }) {
   if (disabled) {
-    return <span className="text-ink/30">{children}</span>;
+    return <span className="text-ink-2">{children}</span>;
   }
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
@@ -158,7 +158,7 @@ function PageLink({
   return (
     <Link
       href={`/customers?${query.toString()}`}
-      className="text-green-600 inline-flex min-h-touch min-w-touch items-center px-3"
+      className="text-blue-600 inline-flex min-h-touch min-w-touch items-center px-3"
     >
       {children}
     </Link>

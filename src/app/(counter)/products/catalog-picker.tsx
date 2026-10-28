@@ -173,10 +173,10 @@ export function CatalogPicker({
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <label htmlFor="catalog-search" className="text-ink block text-sm font-medium">
+        <label htmlFor="catalog-search" className="text-navy block text-sm font-medium">
           Which medicine?
         </label>
-        <p className="text-ink/60 mt-0.5 text-sm leading-snug">
+        <p className="text-ink-2 mt-0.5 text-sm leading-snug">
           Search Mehvar&rsquo;s catalogue by brand, salt or company — the pack size and MRP come
           with it.
         </p>
@@ -204,7 +204,7 @@ export function CatalogPicker({
           }}
           placeholder="Panadol, paracetamol, GSK…"
           autoComplete="off"
-          className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
+          className="border-border focus:border-blue-600 h-touch mt-1.5 w-full rounded-control border px-3"
         />
       </div>
 
@@ -213,9 +213,11 @@ export function CatalogPicker({
           matches" when the catalogue was never loaded sends someone to try
           another spelling forever. */}
       {catalogueMissing ? (
-        <div className="border-amber/50 bg-amber/5 rounded border p-3 text-sm" role="status">
-          <p className="text-amber font-medium">Mehvar&rsquo;s medicine catalogue is not loaded.</p>
-          <p className="text-ink/70 mt-1">
+        <div className="border-amber bg-amber-50 rounded border p-3 text-sm" role="status">
+          <p className="text-amber-text font-medium">
+            Mehvar&rsquo;s medicine catalogue is not loaded.
+          </p>
+          <p className="text-ink-2 mt-1">
             No search will find anything until it is. Run{' '}
             <code className="numeral">npm run catalog:seed</code> (or{' '}
             <code className="numeral">npm run db:setup</code>, which includes it). You can still
@@ -236,7 +238,7 @@ export function CatalogPicker({
       trimmed.length >= 2 &&
       !searching &&
       results.length === 0 ? (
-        <p className="text-ink/60 text-sm">
+        <p className="text-ink-2 text-sm">
           Nothing in the catalogue matches &ldquo;{trimmed}&rdquo;. That is normal for local
           products and general goods — enter it yourself below.
         </p>
@@ -251,15 +253,15 @@ export function CatalogPicker({
 
             if (row.alreadyStockedId) {
               return (
-                <li key={row.globalProductId} className="bg-green-100/30 px-3 py-2 text-sm">
-                  <span className="text-ink/70 font-medium">{row.name}</span>
-                  <span className="text-ink/50"> {detail}</span>
+                <li key={row.globalProductId} className="bg-mist px-3 py-2 text-sm">
+                  <span className="text-ink-2 font-medium">{row.name}</span>
+                  <span className="text-ink-2"> {detail}</span>
                   {/* Not offered as something to add. Adding it again is the
                       duplicate this whole subsystem exists to prevent, so the
                       row leads to the product they already have. */}
                   <Link
                     href={`/products/${row.alreadyStockedId}`}
-                    className="text-green-700 ml-2 underline"
+                    className="text-blue-600 ml-2 underline"
                   >
                     already stocked — open it
                   </Link>
@@ -276,15 +278,15 @@ export function CatalogPicker({
                     choose(row);
                   }}
                   className={`min-h-touch flex w-full flex-wrap items-baseline gap-x-2 px-3 py-2 text-left text-sm ${
-                    position === highlighted ? 'bg-green-100' : 'hover:bg-green-100/50'
+                    position === highlighted ? 'bg-blue-50' : 'hover:bg-mist'
                   }`}
                 >
-                  <span className="text-green-900 font-medium">{row.name}</span>
-                  <span className="text-ink/60">{detail}</span>
+                  <span className="text-navy font-medium">{row.name}</span>
+                  <span className="text-ink-2">{detail}</span>
                   {row.formulaText ? (
-                    <span className="text-ink/50 text-xs">{row.formulaText}</span>
+                    <span className="text-ink-2 text-xs">{row.formulaText}</span>
                   ) : null}
-                  <span className="text-ink/50 ml-auto text-xs">
+                  <span className="text-ink-2 ml-auto text-xs">
                     {row.packLevels.length > 1
                       ? row.packLevels
                           .slice(1)
@@ -305,7 +307,7 @@ export function CatalogPicker({
         </ul>
       ) : null}
 
-      <button type="button" onClick={onSkip} className="text-ink/60 self-start text-sm underline">
+      <button type="button" onClick={onSkip} className="text-ink-2 self-start text-sm underline">
         Not in the list — enter it myself
       </button>
     </div>

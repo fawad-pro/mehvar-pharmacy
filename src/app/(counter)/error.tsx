@@ -44,8 +44,8 @@ export default function CounterError({
 
   return (
     <section className="mx-auto flex max-w-lg flex-col items-start gap-4 p-8">
-      <h1 className="text-green-900 text-2xl font-semibold">This screen needs a reload</h1>
-      <p className="text-ink/70 leading-relaxed">
+      <h1 className="text-navy text-2xl font-semibold">This screen needs a reload</h1>
+      <p className="text-ink-2 leading-relaxed">
         Something on this screen stopped responding — most often because Mehvar was updated while
         this page was left open. Your data is safe. Reload to pick up the current version and carry
         on.
@@ -56,7 +56,7 @@ export default function CounterError({
           onClick={() => {
             window.location.reload();
           }}
-          className="bg-green-600 text-paper min-h-touch rounded px-6 font-medium"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-6"
         >
           Reload
         </button>
@@ -65,7 +65,7 @@ export default function CounterError({
           onClick={() => {
             reset();
           }}
-          className="text-ink/60 text-sm"
+          className="text-ink-2 text-sm"
         >
           Try again without reloading
         </button>

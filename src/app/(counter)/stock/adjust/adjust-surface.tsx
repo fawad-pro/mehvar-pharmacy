@@ -409,12 +409,12 @@ export function AdjustSurface({
 
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-4 p-4">
-      <h1 className="text-green-900 text-2xl font-semibold">
+      <h1 className="text-navy text-2xl font-semibold">
         {openingStock ? 'Opening stock' : 'Adjust stock'}
       </h1>
 
       {openingStock ? (
-        <p className="text-ink/60 text-sm">
+        <p className="text-ink-2 text-sm">
           Walk the shelves and enter what is there. Each entry becomes a batch with its own expiry
           and price.
         </p>
@@ -429,10 +429,10 @@ export function AdjustSurface({
               }}
               aria-pressed={direction === option}
               className={[
-                'min-h-touch rounded border px-4 text-sm',
+                'min-h-touch rounded-control border px-4 text-sm',
                 direction === option
-                  ? 'border-green-600 bg-green-100 text-green-900 font-medium'
-                  : 'border-line text-ink/60',
+                  ? 'border-blue-600 bg-blue-50 text-navy font-medium'
+                  : 'border-line text-ink-2',
               ].join(' ')}
             >
               {option === 'remove' ? 'Remove stock' : 'Add stock'}
@@ -459,7 +459,7 @@ export function AdjustSurface({
 
       {chosen ? (
         <div
-          className="border-line flex flex-col gap-3 rounded border p-3"
+          className="bg-surface shadow-card flex flex-col gap-3 rounded-card p-3"
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
@@ -474,12 +474,12 @@ export function AdjustSurface({
               // [PCN-012] Counted as the shelf holds it, largest first, in the
               // product's own words: "2 box, 3 strip, 4 tab".
               <fieldset className="flex flex-wrap items-end gap-2">
-                <legend className="text-ink/60 mb-1 text-xs">
+                <legend className="text-ink-2 mb-1 text-xs">
                   {openingStock ? 'On the shelf' : 'Units to add'}
                 </legend>
                 {chosen.units.map((unit, index) => (
                   <label key={unit.key} className="w-24">
-                    <span className="text-ink/60 block text-xs capitalize">{unit.name}</span>
+                    <span className="text-ink-2 block text-xs capitalize">{unit.name}</span>
                     <input
                       autoComplete="off"
                       ref={index === 0 ? qtyRef : undefined}
@@ -490,7 +490,7 @@ export function AdjustSurface({
                         const next = event.target.value;
                         setCounts((current) => ({ ...current, [unit.key]: next }));
                       }}
-                      className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+                      className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-lg"
                     />
                   </label>
                 ))}
@@ -511,12 +511,12 @@ export function AdjustSurface({
                             setRemoveUnitKey(unit.key);
                           }}
                           className={[
-                            'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                            'border-border h-touch min-w-11 border px-3 text-sm capitalize',
                             index === 0 ? 'rounded-l' : '-ml-px',
                             index === chosen.units.length - 1 ? 'rounded-r' : '',
                             pressed
-                              ? 'bg-green-600 text-paper border-green-600 font-medium'
-                              : 'bg-paper text-ink hover:bg-green-100',
+                              ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                              : 'bg-surface text-navy hover:bg-page',
                           ].join(' ')}
                         >
                           {unit.name}
@@ -526,7 +526,7 @@ export function AdjustSurface({
                   </div>
                 ) : null}
                 <div className="w-32">
-                  <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-qty">
+                  <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-qty">
                     {removeUnit ? `${removeUnit.name} to remove` : 'Units to remove'}
                   </label>
                   <input
@@ -538,14 +538,14 @@ export function AdjustSurface({
                     onChange={(event) => {
                       setQty(event.target.value);
                     }}
-                    className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+                    className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-lg"
                   />
                 </div>
               </div>
             )}
 
             <div className="min-w-48 flex-1">
-              <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-reason">
+              <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-reason">
                 Reason
               </label>
               <select
@@ -554,7 +554,7 @@ export function AdjustSurface({
                 onChange={(event) => {
                   setReason(event.target.value as AdjustmentReason);
                 }}
-                className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+                className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
               >
                 {effectiveReason === null ? (
                   <option value="" disabled>
@@ -570,7 +570,7 @@ export function AdjustSurface({
               {/* [PCN-013] Said before Save: this reason is not a loss, and it
                   is not quiet either. */}
               {effectiveReason === 'entered_by_mistake' ? (
-                <p className="text-ink/60 mt-1 text-xs">
+                <p className="text-ink-2 mt-1 text-xs">
                   For stock typed in that was never there. It is not counted as a loss, and it shows
                   on the day&rsquo;s list. Only stock you entered by hand can be removed this way.
                 </p>
@@ -580,11 +580,11 @@ export function AdjustSurface({
 
           {direction === 'remove' ? (
             <div>
-              <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-batch">
+              <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-batch">
                 From batch
               </label>
               {visibleBatches.length === 0 ? (
-                <p className="text-amber text-sm">
+                <p className="text-amber-text text-sm">
                   Nothing on hand for this product — there is no batch to take from.
                 </p>
               ) : (
@@ -595,7 +595,7 @@ export function AdjustSurface({
                     setBatchId(event.target.value);
                     setRemoveUnitKey(null);
                   }}
-                  className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+                  className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
                 >
                   {visibleBatches.map((batch) => (
                     <option key={batch.batchId} value={batch.batchId}>
@@ -609,7 +609,7 @@ export function AdjustSurface({
           ) : (
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-28">
-                <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-cost">
+                <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-cost">
                   Cost per {costUnit?.name ?? 'unit'}
                 </label>
                 <input
@@ -620,11 +620,11 @@ export function AdjustSurface({
                   onChange={(event) => {
                     setCost(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
                 />
               </div>
               <div className="w-28">
-                <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-price">
+                <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-price">
                   Sells for (per {costUnit?.name ?? 'unit'})
                 </label>
                 <input
@@ -635,11 +635,11 @@ export function AdjustSurface({
                   onChange={(event) => {
                     setPrice(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
                 />
               </div>
               <div className="w-44">
-                <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-expiry">
+                <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-expiry">
                   Expiry
                 </label>
                 <input
@@ -649,12 +649,12 @@ export function AdjustSurface({
                   onChange={(event) => {
                     setExpiry(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+                  className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
                 />
               </div>
               {/* What the count comes to, said before saving. */}
               {countedBase > 0 ? (
-                <p className="text-ink/60 w-full text-sm" role="status">
+                <p className="text-ink-2 w-full text-sm" role="status">
                   {amountOf(chosen, countedBase)} in all
                   {costTotalPaisa !== null
                     ? ` · costs ${formatPaisa(paisa(costTotalPaisa), { withSymbol: true })}`
@@ -665,7 +665,7 @@ export function AdjustSurface({
           )}
 
           <div>
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor="adjust-note">
+            <label className="text-ink-2 mb-1 block text-xs" htmlFor="adjust-note">
               Note (optional)
             </label>
             <input
@@ -675,7 +675,7 @@ export function AdjustSurface({
               onChange={(event) => {
                 setNote(event.target.value);
               }}
-              className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
             />
           </div>
 
@@ -686,7 +686,7 @@ export function AdjustSurface({
           ) : null}
 
           <div className="flex items-center justify-between">
-            <p className="text-ink/50 text-xs">
+            <p className="text-ink-2 text-xs">
               {/* T1 — say plainly that this is visible, rather than blocking it. */}
               Recorded against your name and shown in the owner’s day view.
             </p>
@@ -694,7 +694,7 @@ export function AdjustSurface({
               type="button"
               onClick={() => void commit()}
               disabled={busy || (direction === 'remove' && visibleBatches.length === 0)}
-              className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+              className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
             >
               {busy ? 'Saving…' : 'Save — Enter'}
             </button>
@@ -703,13 +703,13 @@ export function AdjustSurface({
       ) : null}
 
       {done ? (
-        <p className="text-green-900 text-sm" role="status">
+        <p className="text-green-700 text-sm" role="status">
           {done}
         </p>
       ) : null}
 
       {chosen && direction === 'add' ? (
-        <p className="text-ink/50 text-xs">
+        <p className="text-ink-2 text-xs">
           {formatPaisa(paisa(chosen.pricePaisa))} is the catalog price — change “sells for” if this
           batch differs.
         </p>

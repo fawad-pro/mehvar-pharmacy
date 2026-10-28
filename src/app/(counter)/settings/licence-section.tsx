@@ -80,13 +80,13 @@ export function LicenceSection() {
   }
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Licence</h2>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Licence</h2>
 
       {panel === null && loadFailed ? (
         <LoadFailed what="The licence" onRetry={() => void refresh()} />
       ) : panel === null ? (
-        <p className="text-ink/60 text-sm">Loading…</p>
+        <p className="text-ink-2 text-sm">Loading…</p>
       ) : (
         <>
           <Standing panel={panel} />
@@ -96,14 +96,14 @@ export function LicenceSection() {
               type="button"
               onClick={() => void moveHere()}
               disabled={busy}
-              className="bg-green-600 text-paper min-h-touch mb-3 inline-flex items-center rounded px-5 font-medium"
+              className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch mb-3 inline-flex items-center rounded-control px-5"
             >
               Move the licence to this computer
             </button>
           ) : null}
 
           <label className="mb-1 block text-sm">
-            <span className="text-ink/70 mb-1 block">
+            <span className="text-ink-2 mb-1 block">
               Paste a licence from Mehvar — the whole line, in one go.
             </span>
             <textarea
@@ -114,7 +114,7 @@ export function LicenceSection() {
               }}
               rows={3}
               spellCheck={false}
-              className="border-line w-full rounded border p-2 font-mono text-xs"
+              className="bg-surface shadow-card w-full rounded-card p-2 font-mono text-xs"
               placeholder="MEHVAR1.…"
             />
           </label>
@@ -123,19 +123,19 @@ export function LicenceSection() {
             type="button"
             onClick={() => void paste()}
             disabled={busy || token.trim() === ''}
-            className="bg-green-600 text-paper min-h-touch mt-2 inline-flex items-center rounded px-5 font-medium disabled:opacity-40"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch mt-2 inline-flex items-center rounded-control px-5 disabled:opacity-40"
           >
             Install licence
           </button>
 
           {message === null ? null : (
-            <p className="text-ink/70 mt-2 text-sm" role="status">
+            <p className="text-ink-2 mt-2 text-sm" role="status">
               {message}
             </p>
           )}
 
           {panel.installationId === null ? null : (
-            <p className="text-ink/40 mt-3 font-mono text-xs">
+            <p className="text-ink-2 mt-3 font-mono text-xs">
               This computer: {panel.installationId}
             </p>
           )}
@@ -152,16 +152,16 @@ function Standing({ panel }: { panel: LicencePanel }): React.ReactElement {
         <span className="font-medium">{headline(panel)}</span>
       </p>
       {panel.customerName === null ? null : (
-        <p className="text-ink/70 text-sm">Licensed to {panel.customerName}</p>
+        <p className="text-ink-2 text-sm">Licensed to {panel.customerName}</p>
       )}
       {panel.withheld.length === 0 ? null : (
         // Amber, never red (I7): this is the caution family, alongside
         // near-expiry and unsynced. An authorization state is not an alarm.
-        <p className="text-amber mt-1 text-sm">
+        <p className="text-amber-text mt-1 text-sm">
           Paused until activated: {panel.withheld.join(', ')}.
         </p>
       )}
-      <p className="text-ink/60 mt-1 text-sm">
+      <p className="text-ink-2 mt-1 text-sm">
         Settling udhaar, printing receipts and exporting your data always keep working.
       </p>
       {panel.clock === 'none' ? null : <ClockNotice panel={panel} />}
@@ -183,7 +183,7 @@ function ClockNotice({ panel }: { panel: LicencePanel }): React.ReactElement {
   const recorded = panel.businessNow.slice(0, 10);
 
   return (
-    <p className="text-amber mt-2 text-sm">
+    <p className="text-amber-text mt-2 text-sm">
       {panel.clock === 'system_ahead'
         ? `This computer's date reads ${system}, which is far ahead of everything else Mehvar has recorded. If that date is wrong, fix it in Windows and this will clear itself.`
         : `This computer's date reads ${system}, but Mehvar has previously recorded dates as late as ${recorded}. One of them is wrong — send a support bundle and we will fix it.`}

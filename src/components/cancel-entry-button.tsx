@@ -52,7 +52,7 @@ export function CancelEntryButton({
             autoFocus
             disabled={busy}
             onClick={() => void cancel()}
-            className="bg-red text-paper min-h-touch rounded px-3 text-sm font-medium"
+            className="bg-red text-surface min-h-touch rounded-control px-3 text-sm font-medium"
           >
             Yes, cancel it
           </button>
@@ -60,7 +60,7 @@ export function CancelEntryButton({
             type="button"
             disabled={busy}
             onClick={() => setConfirming(false)}
-            className="border-line min-h-touch rounded border px-3 text-sm"
+            className="border-border min-h-touch rounded-control border px-3 text-sm"
           >
             Keep it
           </button>
@@ -72,7 +72,7 @@ export function CancelEntryButton({
             setError(null);
             setConfirming(true);
           }}
-          className="text-green-700 min-h-touch px-1 text-sm underline-offset-2 hover:underline"
+          className="text-blue-600 min-h-touch px-1 text-sm underline-offset-2 hover:underline"
         >
           Cancel entry
         </button>

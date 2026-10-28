@@ -19,10 +19,10 @@ export function SurfacePlaceholder({
 }) {
   return (
     <section className="mx-auto flex max-w-xl flex-col gap-3 p-10">
-      <h1 className="text-green-900 text-2xl font-semibold">{title}</h1>
-      <p className="text-ink/60">{workflow}</p>
+      <h1 className="text-navy text-2xl font-semibold">{title}</h1>
+      <p className="text-ink-2">{workflow}</p>
       {children}
-      <p className="text-ink/40 border-line mt-2 border-t pt-3 text-sm">Arrives in {session}.</p>
+      <p className="text-ink-2 border-line mt-2 border-t pt-3 text-sm">Arrives in {session}.</p>
     </section>
   );
 }

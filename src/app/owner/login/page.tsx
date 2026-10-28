@@ -35,15 +35,15 @@ export default async function OwnerLoginPage({
   return (
     <main className="flex min-h-screen items-start justify-center p-6 sm:items-center">
       <form action={loginOwnerAction} className="w-full max-w-sm">
-        <p className="text-green-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
-        <h1 className="text-green-900 mt-1 text-2xl font-semibold">Check your shop</h1>
-        <p className="text-ink/70 mt-2 leading-relaxed">
+        <p className="text-blue-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
+        <h1 className="text-navy mt-1 text-2xl font-semibold">Check your shop</h1>
+        <p className="text-ink-2 mt-2 leading-relaxed">
           Today’s numbers, exceptions, and stock — from anywhere.
         </p>
 
         <div className="mt-5 flex flex-col gap-4">
           <div>
-            <label htmlFor="tenantSlug" className="text-ink block text-sm font-medium">
+            <label htmlFor="tenantSlug" className="text-navy block text-sm font-medium">
               Pharmacy code
             </label>
             <input
@@ -53,11 +53,11 @@ export default async function OwnerLoginPage({
               required
               autoFocus
               autoComplete="off"
-              className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 h-touch mt-1.5 w-full rounded-control border px-3"
             />
           </div>
           <div>
-            <label htmlFor="password" className="text-ink block text-sm font-medium">
+            <label htmlFor="password" className="text-navy block text-sm font-medium">
               Password
             </label>
             <input
@@ -66,7 +66,7 @@ export default async function OwnerLoginPage({
               type="password"
               required
               autoComplete="current-password"
-              className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 h-touch mt-1.5 w-full rounded-control border px-3"
             />
           </div>
         </div>
@@ -79,7 +79,7 @@ export default async function OwnerLoginPage({
 
         <button
           type="submit"
-          className="bg-green-600 text-paper min-h-touch mt-5 w-full rounded font-medium"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch mt-5 w-full rounded-control"
         >
           Sign in
         </button>

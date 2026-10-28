@@ -46,16 +46,16 @@ export default async function ProductDetailPage({
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-5 p-4">
       <header>
-        <Link href="/products" className="text-green-600 text-sm">
+        <Link href="/products" className="text-blue-600 text-sm">
           ← Products
         </Link>
-        <h1 className="text-green-900 mt-1 text-2xl font-semibold">
+        <h1 className="text-navy mt-1 text-2xl font-semibold">
           {product.name}
           {product.strength ? (
-            <span className="text-ink/60 font-normal"> {product.strength}</span>
+            <span className="text-ink-2 font-normal"> {product.strength}</span>
           ) : null}
         </h1>
-        <p className="text-ink/50 text-sm">
+        <p className="text-ink-2 text-sm">
           {product.stockBase === null
             ? 'No stock recorded yet'
             : `${describeQuantity(baseQty(product.stockBase), product.baseUnitName, product.packLevels)} on hand`}
@@ -63,8 +63,8 @@ export default async function ProductDetailPage({
       </header>
 
       {arrival.replaced !== undefined ? (
-        <div className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm" role="status" aria-label="Replaced">
-          <p className="text-green-900 font-medium">
+        <div className="bg-surface shadow-card rounded-card px-3 py-2 text-sm" role="status" aria-label="Replaced">
+          <p className="text-navy font-medium">
             Replaced.{' '}
             {arrival.replaced === '1' ? '1 batch' : `${arrival.replaced} batches`} moved here with
             their cost.
@@ -75,7 +75,7 @@ export default async function ProductDetailPage({
               <ul className="numeral">
                 {unlinked.map((code) => (
                   <li key={code.barcode}>
-                    {code.barcode} <span className="text-ink/60">(was on {code.unitLevelName})</span>
+                    {code.barcode} <span className="text-ink-2">(was on {code.unitLevelName})</span>
                   </li>
                 ))}
               </ul>
@@ -86,7 +86,7 @@ export default async function ProductDetailPage({
 
       {arrival.removed !== undefined && !product.isActive && unlinked.length > 0 ? (
         <div
-          className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm"
+          className="bg-surface shadow-card rounded-card px-3 py-2 text-sm"
           role="status"
           aria-label="Removed"
         >
@@ -94,7 +94,7 @@ export default async function ProductDetailPage({
           <ul className="numeral">
             {unlinked.map((code) => (
               <li key={code.barcode}>
-                {code.barcode} <span className="text-ink/60">({code.unitLevelName})</span>
+                {code.barcode} <span className="text-ink-2">({code.unitLevelName})</span>
               </li>
             ))}
           </ul>
@@ -103,19 +103,19 @@ export default async function ProductDetailPage({
 
       {/* [PCN-012] A replaced product is history: say where it went. */}
       {product.replacedByProductId ? (
-        <p className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm" role="note">
+        <p className="bg-surface shadow-card rounded-card px-3 py-2 text-sm" role="note">
           Replaced — this product is no longer sold.{' '}
           <Link
             href={`/products/${product.replacedByProductId}`}
-            className="text-green-700 hover:underline"
+            className="text-blue-600 hover:underline"
           >
             Open its replacement
           </Link>
         </p>
       ) : hasHistory ? (
-        <p className="text-ink/70 text-sm">
+        <p className="text-ink-2 text-sm">
           Pack sizes set up wrong, or stock under the wrong product?{' '}
-          <Link href={`/products/${product.id}/replace`} className="text-green-700 hover:underline">
+          <Link href={`/products/${product.id}/replace`} className="text-blue-600 hover:underline">
             Replace this product
           </Link>{' '}
           — the stock moves to a new product with the right pack.
@@ -131,24 +131,24 @@ export default async function ProductDetailPage({
           which is emphatically not the same test as "is this a duplicate"
           (see domain/catalog/identity.ts). */}
       {alternatives.length > 0 ? (
-        <div className="border-line rounded border p-3">
-          <h2 className="text-ink/60 mb-1 text-xs tracking-[0.14em] uppercase">
+        <div className="bg-surface shadow-card rounded-card p-3">
+          <h2 className="text-ink-2 mb-1 text-xs tracking-[0.14em] uppercase">
             Same medicine, other brands
           </h2>
           <ul className="flex flex-col gap-1 text-sm">
             {alternatives.map((row) => (
               <li key={row.id} className="flex flex-wrap items-baseline gap-x-2">
-                <Link href={`/products/${row.id}`} className="text-green-700 hover:underline">
+                <Link href={`/products/${row.id}`} className="text-blue-600 hover:underline">
                   {row.name}
                 </Link>
-                <span className="text-ink/50">
+                <span className="text-ink-2">
                   {[row.strength, row.manufacturer].filter(Boolean).join(' · ')}
                 </span>
                 {/* Stock is why this list is useful at all: an alternative
                     that is also out is not an answer. */}
-                <span className="numeral text-ink/60 ml-auto text-xs">
+                <span className="numeral text-ink-2 ml-auto text-xs">
                   {row.stockBase === null || row.stockBase <= 0 ? (
-                    <span className="text-amber">none on hand</span>
+                    <span className="text-amber-text">none on hand</span>
                   ) : (
                     `${row.stockBase} on hand`
                   )}

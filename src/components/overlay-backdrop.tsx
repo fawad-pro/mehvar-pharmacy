@@ -20,6 +20,9 @@
  *
  * Every overlay goes through here, the payment and settlement ones included,
  * so what a modal means is decided once.
+ *
+ * Below 768px every modal is a bottom sheet (PCN-016): the panel sits on the
+ * bottom edge, where a thumb reaches it, and squares its lower corners.
  */
 
 import { useRef } from 'react';
@@ -71,7 +74,7 @@ export function OverlayBackdrop({
         keepTabInside(event);
         if (event.key === 'Escape' && onEscape) onEscape();
       }}
-      className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="bg-scrim fixed inset-0 z-50 flex items-center justify-center p-4 max-md:items-end max-md:p-0"
       role="dialog"
       aria-modal="true"
       aria-label={label}

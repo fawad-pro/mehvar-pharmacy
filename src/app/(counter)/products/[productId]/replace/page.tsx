@@ -31,12 +31,12 @@ export default async function ReplaceProductPage({
   if (product.replacedByProductId) {
     return (
       <section className="mx-auto flex max-w-2xl flex-col gap-3 p-4">
-        <h1 className="text-green-900 text-2xl font-semibold">{product.name}</h1>
+        <h1 className="text-navy text-2xl font-semibold">{product.name}</h1>
         <p>
           This product has been replaced.{' '}
           <Link
             href={`/products/${product.replacedByProductId}`}
-            className="text-green-700 hover:underline"
+            className="text-blue-600 hover:underline"
           >
             Open its replacement
           </Link>
@@ -50,11 +50,11 @@ export default async function ReplaceProductPage({
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-5 p-4">
       <header>
-        <Link href={`/products/${product.id}`} className="text-green-600 text-sm">
+        <Link href={`/products/${product.id}`} className="text-blue-600 text-sm">
           ← {product.name}
         </Link>
-        <h1 className="text-green-900 mt-1 text-2xl font-semibold">Replace this product</h1>
-        <p className="text-ink/70 mt-1 text-sm leading-snug">
+        <h1 className="text-navy mt-1 text-2xl font-semibold">Replace this product</h1>
+        <p className="text-ink-2 mt-1 text-sm leading-snug">
           For a pack set up wrong, or stock entered under the wrong product. Mehvar moves the stock
           — to a new product with the right pack, or to one you already have — at the count you
           confirm, with its cost. Past sales stay on this product, which stops being sold.

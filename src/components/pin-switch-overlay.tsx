@@ -87,8 +87,8 @@ export function PinSwitchOverlay({
     <OverlayBackdrop label="Switch user" onDismiss={onClose}>
       {/* The card never grows past the screen: the list of names scrolls, so
           the PIN field and Switch stay in reach however many users a shop has. */}
-      <div className="bg-paper flex max-h-full w-full max-w-sm flex-col rounded-lg p-5 shadow-xl">
-        <h2 className="text-green-900 mb-4 text-lg font-semibold">Who is at the counter?</h2>
+      <div className="bg-surface flex max-h-full w-full max-w-sm flex-col rounded-lg p-5 shadow-xl">
+        <h2 className="text-navy mb-4 text-lg font-semibold">Who is at the counter?</h2>
 
         <div className="mb-4 flex min-h-0 flex-col gap-1 overflow-y-auto">
           {users.map((user) => (
@@ -100,17 +100,17 @@ export function PinSwitchOverlay({
                 pinField.current?.focus();
               }}
               className={[
-                'flex min-h-touch items-center justify-between rounded px-3 text-left',
-                user.id === selectedId ? 'bg-green-100 text-green-900' : 'hover:bg-green-100/50',
+                'flex min-h-touch items-center justify-between rounded-control px-3 text-left',
+                user.id === selectedId ? 'bg-blue-50 text-navy' : 'hover:bg-mist',
               ].join(' ')}
             >
               <span className="font-medium">{user.name}</span>
-              <span className="text-ink/50 text-xs capitalize">{user.role}</span>
+              <span className="text-ink-2 text-xs capitalize">{user.role}</span>
             </button>
           ))}
         </div>
 
-        <label className="text-ink/60 mb-1 block text-xs" htmlFor="pin">
+        <label className="text-ink-2 mb-1 block text-xs" htmlFor="pin">
           PIN
         </label>
         <input
@@ -141,7 +141,7 @@ export function PinSwitchOverlay({
               onClose();
             }
           }}
-          className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-2xl tracking-[0.5em] outline-none"
+          className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3 text-2xl tracking-[0.5em]"
         />
 
         {error ? (
@@ -151,14 +151,14 @@ export function PinSwitchOverlay({
         ) : null}
 
         <div className="mt-4 flex items-center justify-between">
-          <button type="button" onClick={onClose} className="text-ink/60 text-sm">
+          <button type="button" onClick={onClose} className="text-ink-2 text-sm">
             Esc to cancel
           </button>
           <button
             type="button"
             onClick={() => void submit()}
             disabled={pin.length !== PIN_LENGTH || busy}
-            className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
           >
             Switch
           </button>

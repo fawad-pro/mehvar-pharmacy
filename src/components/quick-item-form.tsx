@@ -107,34 +107,37 @@ export function QuickItemForm({
 
   return (
     <OverlayBackdrop label="Quick item" onDismiss={onCancel}>
-      <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl" onKeyDown={onKeyDown}>
-        <h2 className="text-green-900 mb-1 text-lg font-semibold">Add it now</h2>
-        <p className="text-ink/60 mb-4 text-sm">
+      <div
+        className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5"
+        onKeyDown={onKeyDown}
+      >
+        <h2 className="text-navy mb-1 text-lg font-semibold">Add it now</h2>
+        <p className="text-ink-2 mb-4 text-sm">
           Name and price is enough. The owner completes the rest later.
         </p>
 
         {barcode && owner ? (
           <div className="border-amber mb-3 rounded border px-3 py-2 text-sm" role="alert">
             <p className="font-medium">This barcode is already on {owner.name}.</p>
-            <p className="text-ink/60 mt-0.5 text-xs">It will not be added to a second product.</p>
+            <p className="text-ink-2 mt-0.5 text-xs">It will not be added to a second product.</p>
             {onSellOwner ? (
               <button
                 type="button"
                 onClick={onSellOwner}
-                className="text-green-600 mt-1 text-sm font-medium underline-offset-2 hover:underline"
+                className="text-blue-600 mt-1 text-sm font-medium underline-offset-2 hover:underline"
               >
                 Sell {owner.name} instead
               </button>
             ) : null}
           </div>
         ) : barcode ? (
-          <p className="text-ink/60 mb-3 text-xs">
-            Barcode <span className="numeral text-ink">{barcode}</span> — saved with this product,
+          <p className="text-ink-2 mb-3 text-xs">
+            Barcode <span className="numeral text-navy">{barcode}</span> — saved with this product,
             so the next scan adds it directly.
           </p>
         ) : null}
 
-        <label className="text-ink/60 mb-1 block text-xs" htmlFor="quick-name">
+        <label className="text-ink-2 mb-1 block text-xs" htmlFor="quick-name">
           Name
         </label>
         <input
@@ -146,12 +149,12 @@ export function QuickItemForm({
             setNotice(null);
           }}
           autoComplete="off"
-          className="border-line focus:border-green-600 h-touch mb-3 w-full rounded border px-3 text-lg outline-none"
+          className="border-border focus:border-blue-600 h-touch mb-3 w-full rounded-control border px-3 text-lg"
         />
 
         <div className="mb-4 flex gap-2">
           <div className="flex-1">
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor="quick-price">
+            <label className="text-ink-2 mb-1 block text-xs" htmlFor="quick-price">
               Price
             </label>
             <input
@@ -165,11 +168,11 @@ export function QuickItemForm({
                 setNotice(null);
               }}
               placeholder="0"
-              className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+              className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-lg"
             />
           </div>
           <div className="w-28">
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor="quick-unit">
+            <label className="text-ink-2 mb-1 block text-xs" htmlFor="quick-unit">
               Sold as
             </label>
             <input
@@ -180,7 +183,7 @@ export function QuickItemForm({
                 setNotice(null);
               }}
               autoComplete="off"
-              className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
             />
           </div>
         </div>
@@ -192,14 +195,14 @@ export function QuickItemForm({
         ) : null}
 
         <div className="flex items-center justify-between">
-          <button type="button" onClick={onCancel} className="text-ink/60 text-sm">
+          <button type="button" onClick={onCancel} className="text-ink-2 text-sm">
             Esc to cancel
           </button>
           <button
             type="button"
             onClick={submit}
             disabled={!ready}
-            className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
           >
             {barcode && owner ? 'Save without the barcode — Enter' : 'Add to sale — Enter'}
           </button>

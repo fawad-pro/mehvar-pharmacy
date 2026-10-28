@@ -133,7 +133,7 @@ export function CartTable({
 
   if (lines.length === 0) {
     return (
-      <div className="text-ink/40 flex h-full items-center justify-center p-8 text-sm">
+      <div className="text-ink-2 flex h-full items-center justify-center p-8 text-sm">
         Search above to start a sale.
       </div>
     );
@@ -218,7 +218,7 @@ export function CartTable({
 
   return (
     <table className="text-table w-full">
-      <thead className="bg-green-100/50 text-ink/60 sticky top-0 text-xs">
+      <thead className="bg-mist text-ink-2 sticky top-0 text-xs">
         <tr>
           <th className="px-3 py-2 text-left font-medium">Item</th>
           <th className="px-3 py-2 text-left font-medium">Quantity</th>
@@ -255,17 +255,15 @@ export function CartTable({
               onKeyDown={(event) => {
                 handleKey(event, line);
               }}
-              className={['border-line border-t outline-none', selected ? 'bg-green-100' : ''].join(
-                ' ',
-              )}
+              className={['border-line border-t', selected ? 'bg-blue-50' : ''].join(' ')}
             >
               <td className="px-3 py-1.5">
                 <span className="font-medium">{line.name}</span>
                 {isPriceOverridden(line) ? (
-                  <span className="text-amber ml-2 text-xs">price changed</span>
+                  <span className="text-amber-text ml-2 text-xs">price changed</span>
                 ) : null}
                 {fromExpired ? (
-                  <span className="text-amber ml-2 text-xs font-medium" role="alert">
+                  <span className="text-amber-text ml-2 text-xs font-medium" role="alert">
                     {expired !== null && stock !== null && stock - expired.qtyBase <= 0
                       ? 'only expired stock left'
                       : 'part from expired stock'}{' '}
@@ -273,7 +271,7 @@ export function CartTable({
                   </span>
                 ) : null}
                 {short ? (
-                  <span className="text-amber ml-2 text-xs">
+                  <span className="text-amber-text ml-2 text-xs">
                     {stock !== null && stock <= 0 ? 'not in stock' : 'more than in stock'}
                   </span>
                 ) : null}
@@ -322,7 +320,7 @@ export function CartTable({
                       }}
                       placeholder="e.g. 50 or 10%"
                       autoComplete="off"
-                      className="numeral border-line focus:border-green-600 w-full rounded border px-1.5 py-0.5 text-right text-sm outline-none"
+                      className="numeral border-border focus:border-blue-600 w-full rounded border px-1.5 py-0.5 text-right text-sm"
                     />
                     {/* Enter applies and leaving the field cancels; a tablet's
                       natural way to finish is to tap elsewhere, which threw
@@ -338,7 +336,7 @@ export function CartTable({
                       onClick={() => {
                         commitDiscount(line);
                       }}
-                      className="bg-green-600 text-paper min-h-touch min-w-touch rounded px-2 text-sm font-medium"
+                      className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch min-w-touch rounded-control px-2 text-sm"
                     >
                       Apply
                     </button>
@@ -366,7 +364,7 @@ export function CartTable({
                     }}
                     className={[
                       'min-h-touch w-full text-right',
-                      line.lineDiscountPaisa > 0 ? 'text-green-700' : 'text-ink/30',
+                      line.lineDiscountPaisa > 0 ? 'text-navy' : 'text-ink-2',
                     ].join(' ')}
                   >
                     {line.lineDiscountPaisa > 0
@@ -411,7 +409,7 @@ function QuantityControl({
     event.preventDefault();
   };
   const step =
-    'border-line text-ink h-11 w-11 shrink-0 rounded border text-lg leading-none hover:bg-green-100';
+    'border-border text-navy h-11 w-11 shrink-0 rounded-control border text-lg leading-none hover:bg-blue-50';
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -430,12 +428,12 @@ function QuantityControl({
                   if (!chosen) onUnit(unit.key);
                 }}
                 className={[
-                  'border-line h-11 min-w-11 border px-3 text-sm capitalize',
+                  'border-border h-11 min-w-11 border px-3 text-sm capitalize',
                   index === 0 ? 'rounded-l' : '-ml-px',
                   index === offered.length - 1 ? 'rounded-r' : '',
                   chosen
-                    ? 'bg-green-600 text-paper border-green-600 font-medium'
-                    : 'bg-paper text-ink hover:bg-green-100',
+                    ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                    : 'bg-surface text-navy hover:bg-page',
                 ].join(' ')}
               >
                 {unit.name}
@@ -464,7 +462,7 @@ function QuantityControl({
             "2 strip", never a bare "2". */}
         <span className="min-w-8 text-center">
           <span className="numeral">{line.unitCount}</span>
-          <span className={offered.length > 1 ? 'sr-only' : 'text-ink/60'}>
+          <span className={offered.length > 1 ? 'sr-only' : 'text-ink-2'}>
             {' '}
             {line.enteredUnitLevel}
           </span>
@@ -483,7 +481,7 @@ function QuantityControl({
         </button>
       </div>
       {selected ? (
-        <span className="text-ink/40 text-xs">
+        <span className="text-ink-2 text-xs">
           {offered.length > 1 ? '+/− · Tab unit · % disc · Del' : '+/− · % disc · Del'}
         </span>
       ) : null}

@@ -59,7 +59,7 @@ test('the receipt prints at the 80 mm roll’s printable width, in solid black',
     receipt.getByText('Test receipt — not a sale').locator('xpath=preceding-sibling::span[1]'),
   ).toHaveText('1');
   await expect(receipt.locator('footer')).toContainText(`Served by ${DEMO.owner}`);
-  await expect(receipt.locator('footer')).toContainText('MEHVAR');
+  await expect(receipt.locator('footer')).toContainText('Powered by Mehvar');
 
   // The page the print engine gets: 72 mm wide and one receipt tall. A static
   // `size: 72mm auto` was invalid CSS that Chrome dropped silently, so the slip

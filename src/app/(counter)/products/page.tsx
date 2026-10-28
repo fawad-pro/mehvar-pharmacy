@@ -45,11 +45,11 @@ export default async function ProductsPage({
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-green-900 text-2xl font-semibold">Products</h1>
-        <span className="text-ink/50 text-sm">{page.total.toLocaleString()} products you stock</span>
+        <h1 className="text-navy text-2xl font-semibold">Products</h1>
+        <span className="text-ink-2 text-sm">{page.total.toLocaleString()} products you stock</span>
         <Link
           href="/products/new"
-          className="bg-green-600 text-paper min-h-touch ml-auto flex items-center rounded px-4 font-medium"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch ml-auto flex items-center rounded-control px-4"
         >
           Add product
         </Link>
@@ -68,16 +68,16 @@ export default async function ProductsPage({
           // landed with nothing in focus (the scan guard's home).
           data-scan-target=""
           data-scan-home=""
-          className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
+          className="border-border focus:border-blue-600 h-touch min-w-64 flex-1 rounded-control border px-3"
         />
         {onlyQueue ? <input type="hidden" name="queue" value="1" /> : null}
         {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}
-        <button type="submit" className="border-line min-h-touch rounded border px-4">
+        <button type="submit" className="border-border min-h-touch rounded-control border px-4">
           Search
         </button>
         <Link
           href={removedToggleHref(params, !showRemoved)}
-          className="text-green-600 min-h-touch flex items-center px-2 text-sm"
+          className="text-blue-600 min-h-touch flex items-center px-2 text-sm"
         >
           {showRemoved ? 'Hide removed products' : 'Show removed products'}
         </Link>
@@ -88,7 +88,7 @@ export default async function ProductsPage({
       {queueCount > 0 ? (
         <Link
           href={onlyQueue ? '/products' : '/products?queue=1'}
-          className="border-amber/40 bg-amber/10 text-amber flex items-center gap-2 rounded border px-3 py-2 text-sm"
+          className="border-amber bg-amber-50 text-amber-text flex items-center gap-2 rounded border px-3 py-2 text-sm"
         >
           {onlyQueue
             ? `Showing ${queueCount} product${queueCount === 1 ? '' : 's'} that need completing — show all`
@@ -97,13 +97,13 @@ export default async function ProductsPage({
       ) : null}
 
       {page.items.length === 0 ? (
-        <p className="text-ink/50 p-8 text-center text-sm">
+        <p className="text-ink-2 p-8 text-center text-sm">
           {params.q ? 'Nothing matched that search.' : 'No products yet. Add your first one.'}
         </p>
       ) : (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Name</th>
                 <th className="px-3 py-2 font-medium">Salt</th>
@@ -117,30 +117,30 @@ export default async function ProductsPage({
               {page.items.map((item) => (
                 <tr key={item.id} className="border-line border-t">
                   <td className="px-3 py-2">
-                    <Link href={`/products/${item.id}`} className="text-green-900 font-medium">
+                    <Link href={`/products/${item.id}`} className="text-navy font-medium">
                       {item.name}
                       {item.strength ? (
-                        <span className="numeral text-ink/70 font-normal"> {item.strength}</span>
+                        <span className="numeral text-ink-2 font-normal"> {item.strength}</span>
                       ) : null}
                     </Link>
                     {item.needsCompletion ? (
-                      <span className="text-amber ml-2 text-xs">needs completing</span>
+                      <span className="text-amber-text ml-2 text-xs">needs completing</span>
                     ) : null}
                     {!item.isActive ? (
-                      <span className="text-ink/40 ml-2 text-xs">removed</span>
+                      <span className="text-ink-2 ml-2 text-xs">removed</span>
                     ) : null}
                     {/* Strength and form carried on their own line, always.
                         Two Panadols differing only in milligrams are the
                         commonest thing in a real catalogue, and a row where
                         that difference is buried in a subtitle is a row an
                         operator picks the wrong one from. */}
-                    <span className="text-ink/50 block text-xs">
+                    <span className="text-ink-2 block text-xs">
                       {[formatForm(item.form), item.manufacturer].filter(Boolean).join(' · ') ||
                         'No form or maker recorded'}
                     </span>
                   </td>
-                  <td className="text-ink/70 px-3 py-2">{item.formulaText ?? '—'}</td>
-                  <td className="text-ink/70 px-3 py-2">
+                  <td className="text-ink-2 px-3 py-2">{item.formulaText ?? '—'}</td>
+                  <td className="text-ink-2 px-3 py-2">
                     {[item.baseUnitName, formatPackLevels(item.packLevels)]
                       .filter(Boolean)
                       .join(', ')}
@@ -150,9 +150,9 @@ export default async function ProductsPage({
                       as "—", which is not the same as none left. */}
                   <td className="numeral px-3 py-2">
                     {item.stockBase === null ? (
-                      <span className="text-ink/30">—</span>
+                      <span className="text-ink-2">—</span>
                     ) : (
-                      <span className={item.stockBase <= 0 ? 'text-amber' : ''}>
+                      <span className={item.stockBase <= 0 ? 'text-amber-text' : ''}>
                         {describeQuantity(
                           baseQty(item.stockBase),
                           item.baseUnitName,
@@ -163,9 +163,9 @@ export default async function ProductsPage({
                   </td>
                   <td className="numeral px-3 py-2">
                     {formatPaisa(paisa(item.pricePaisa), { withSymbol: true })}
-                    <span className="text-ink/40 block text-xs">per {item.baseUnitName}</span>
+                    <span className="text-ink-2 block text-xs">per {item.baseUnitName}</span>
                   </td>
-                  <td className="numeral text-ink/60 px-3 py-2">{item.barcodeCount || '—'}</td>
+                  <td className="numeral text-ink-2 px-3 py-2">{item.barcodeCount || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -178,7 +178,7 @@ export default async function ProductsPage({
           <PageLink params={params} page={page.page - 1} disabled={page.page <= 1}>
             Previous
           </PageLink>
-          <span className="text-ink/50">
+          <span className="text-ink-2">
             Page {page.page} of {page.pageCount}
           </span>
           <PageLink params={params} page={page.page + 1} disabled={page.page >= page.pageCount}>
@@ -202,7 +202,7 @@ function PageLink({
   children: React.ReactNode;
 }) {
   if (disabled) {
-    return <span className="text-ink/30">{children}</span>;
+    return <span className="text-ink-2">{children}</span>;
   }
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
@@ -213,7 +213,7 @@ function PageLink({
   return (
     <Link
       href={`/products?${query.toString()}`}
-      className="text-green-600 inline-flex min-h-touch min-w-touch items-center px-3"
+      className="text-blue-600 inline-flex min-h-touch min-w-touch items-center px-3"
     >
       {children}
     </Link>

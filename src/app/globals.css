@@ -1,56 +1,146 @@
 @import 'tailwindcss';
 
 /* =============================================================================
-   Design tokens — Phase 10 §6, finalizing the Phase 4 §5 direction.
+   Design tokens — PCN-016, replacing Phase 10 §6's green palette.
+
+   The design system (https://claude.ai/artifact/953PukwddDp5xxwrHjg5yr) is the
+   source; its tokens.json names every value below and the contrast it clears.
 
    This file is the single legitimate home for raw colour values in the entire
    codebase; the token lint rule (eslint.config.mjs, Phase 10 §9) rejects hex
-   literals everywhere else.
+   literals everywhere else, and `tests/design-tokens.test.ts` keeps the old
+   green tokens from coming back.
 
-   Semantic colours appear ONLY with meaning (I7). The green family carries the
-   brand and never alarm; amber and red are reserved for caution and expiry so
-   the alarm colours keep meaning.
+   The brand is the logo's navy and blue; status has its own three colours,
+   each always with a word or a mark (I7). The brand never doubles as a status,
+   and a status never decorates.
    ========================================================================== */
 
 :root {
-  /* Palette — Phase 10 §6 */
-  --green-900: #0b3b2c; /* anchor: headers, key bar */
-  --green-600: #11704f; /* primary actions */
-  --green-100: #e4f1ea; /* selection / success tints */
-  --ink: #1b1f1d; /* text */
-  --paper: #fafaf7; /* surfaces */
-  --line: #e3e4df; /* rules */
-  --amber: #b7791f; /* caution: near-expiry, negative stock, unsynced */
-  --red: #b3372e; /* expiry / danger only */
+  /* Brand */
+  --navy: #012049; /* every heading, body text and figure */
+  --blue-600: #0068b8; /* the one primary action, the active key, focus ring, links */
+  --blue-700: #00528f; /* primary hover and pressed */
+  --blue-50: #e9f3fc; /* selection ground: interaction, never a status */
+
+  /* Surfaces */
+  --page: #f4f7fa; /* behind every card */
+  --surface: #ffffff; /* cards, tiles, tables, lists, fields, dialogs, key bar */
+  --mist: #eef2f7; /* quiet fill: key chips, neutral badges, table headers */
+  --ink-2: #4a5a70; /* secondary text: labels, meta lines, helper text */
+  --border: #7d8a9c; /* a control's resting edge (the 3:1 floor) */
+  --line: #e3e8ef; /* hairlines between rows only, never around a control */
+
+  /* Status — each with a word or a mark, never alone */
+  --green-700: #1e7a4f; /* done: synced, received, settled, day closed */
+  --green-50: #e7f4ec;
+  --amber: #b7791f; /* needs attention — marks only, never text */
+  --amber-text: #8a5a12; /* needs attention — words and figures */
+  --amber-50: #fdf4e3;
+  --red: #b3372e; /* refused: expired, cannot go through, failed load */
+  --red-50: #fbecea;
+
+  --scrim: rgb(1 32 73 / 0.4); /* dialog backdrop: navy at 40% */
+
+  /* Depth: white on page is lifted by shadow, never outlined. */
+  --shadow-card: 0 1px 2px rgb(1 32 73 / 0.04), 0 4px 16px rgb(1 32 73 / 0.06);
+  --shadow-card-hover: 0 2px 4px rgb(1 32 73 / 0.05), 0 8px 24px rgb(1 32 73 / 0.09);
+  --shadow-pop: 0 12px 32px -8px rgb(1 32 73 / 0.18);
+  --shadow-dialog: 0 24px 48px -12px rgb(1 32 73 / 0.22), 0 8px 16px -8px rgb(1 32 73 / 0.08);
+  /* The key bar and tab bar sit on the bottom edge: a hairline and a soft lift upward. */
+  --shadow-bar: 0 -1px 0 var(--line), 0 -4px 16px rgb(1 32 73 / 0.04);
+  /* The top bar: a hairline beneath. */
+  --shadow-top: 0 1px 0 var(--line);
+
+  /* The select's chevron, in navy. */
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23012049' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* Typography — numerals are the brand (Phase 4 §5) */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
 
-  /* Density — Phase 10 §6: compact where work happens, generous where decisions do */
-  --row-height: 36px; /* cart and table rows */
-  --touch-target: 44px; /* actionable controls */
+  /* Density — compact where work happens, generous where decisions do.
+     `--touch-target` is read by e2e/touch.spec.ts: keep the name and the 44px. */
+  --row-height: 36px; /* table rows from 1024px up */
+  --row-height-touch: 44px; /* table rows below 1024px, and the cart at every width */
+  --touch-target: 44px; /* anything actionable */
+  --label-height: 18px; /* a label is one line and never wraps */
+
+  /* Shape */
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-dialog: 20px;
+  --radius-pill: 999px;
 }
 
 @theme inline {
-  --color-green-900: var(--green-900);
-  --color-green-600: var(--green-600);
-  --color-green-100: var(--green-100);
-  --color-ink: var(--ink);
-  --color-paper: var(--paper);
+  --color-navy: var(--navy);
+  --color-blue-600: var(--blue-600);
+  --color-blue-700: var(--blue-700);
+  --color-blue-50: var(--blue-50);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-mist: var(--mist);
+  --color-ink-2: var(--ink-2);
+  --color-border: var(--border);
   --color-line: var(--line);
+  --color-green-700: var(--green-700);
+  --color-green-50: var(--green-50);
   --color-amber: var(--amber);
+  --color-amber-text: var(--amber-text);
+  --color-amber-50: var(--amber-50);
   --color-red: var(--red);
+  --color-red-50: var(--red-50);
+  --color-scrim: var(--scrim);
 
   --font-sans: var(--font-sans);
 
-  /* Scale — 13px table base / 15px controls / totals at display sizes */
+  /* Scale — the design system's type styles */
+  --text-caption: 12px;
+  --text-caption--line-height: 16px;
+  --text-kbd: 12px;
+  --text-kbd--line-height: 16px;
+  --text-kbd--font-weight: 600;
   --text-table: 13px;
+  --text-table--line-height: 20px;
+  --text-label: 13px;
+  --text-label--line-height: 18px;
+  --text-label--font-weight: 500;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 20px;
   --text-control: 15px;
+  --text-control--line-height: 22px;
+  --text-heading: 17px;
+  --text-heading--line-height: 24px;
+  --text-heading--font-weight: 600;
+  --text-field-lg: 18px;
+  --text-field-lg--line-height: 28px;
+  --text-title: 24px;
+  --text-title--line-height: 32px;
+  --text-title--font-weight: 600;
+  --text-stat: 24px;
+  --text-stat--line-height: 32px;
+  --text-stat--font-weight: 600;
   --text-total: 44px;
+  --text-total--line-height: 1;
   --text-change: 72px; /* payment overlay: change rendered enormous (Phase 10 §4) */
+  --text-change--line-height: 1;
+
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-dialog: var(--radius-dialog);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-card: var(--shadow-card);
+  --shadow-card-hover: var(--shadow-card-hover);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-dialog: var(--shadow-dialog);
+  --shadow-bar: var(--shadow-bar);
+  --shadow-top: var(--shadow-top);
 
   --spacing-row: var(--row-height);
+  --spacing-row-touch: var(--row-height-touch);
   --spacing-touch: var(--touch-target);
+  --spacing-label: var(--label-height);
 }
 
 @layer base {
@@ -62,11 +152,15 @@
   }
 
   body {
-    background-color: var(--paper);
-    color: var(--ink);
+    background-color: var(--page);
+    color: var(--navy);
     font-family: var(--font-sans);
     font-size: var(--text-control);
     -webkit-font-smoothing: antialiased;
+  }
+
+  a {
+    text-underline-offset: 2px;
   }
 
   /* I6 — glanceable numbers: money and quantity columns are right-aligned
@@ -74,6 +168,22 @@
   .numeral {
     font-variant-numeric: tabular-nums;
     text-align: right;
+  }
+
+  /* The focus ring (PCN-016): a solid 2px blue ring, 2px off the control, on
+     everything focusable. It replaces a 1px border change nobody could see.
+     Never remove it; inside a list or table it sits inset, so a row's ring is
+     not clipped by the card around it. */
+  :focus-visible {
+    outline: 2px solid var(--blue-600);
+    outline-offset: 2px;
+  }
+
+  tr:focus-visible,
+  li:focus-visible,
+  [role='option']:focus-visible,
+  [role='row']:focus-visible {
+    outline-offset: -2px;
   }
 
   /* Tailwind v4's preflight gives buttons `cursor: default`, so without this
@@ -84,8 +194,7 @@
      can be done, not a licence to leave the mouse guessing. A shopkeeper
      being shown the product for the first time uses the mouse, and something
      that does not answer the pointer is indistinguishable from something
-     broken. This is the whole affordance budget: no shadows, no outlines,
-     nothing that would add visual noise to a calm screen. */
+     broken. */
   button:not(:disabled),
   [role='button']:not([aria-disabled='true']),
   summary,

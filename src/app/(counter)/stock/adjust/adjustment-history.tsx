@@ -33,9 +33,9 @@ interface Row {
 export function AdjustmentHistory({ rows }: { rows: Row[] }) {
   return (
     <section className="mx-auto w-full max-w-3xl p-4 pt-0">
-      <h2 className="text-green-900 mb-2 font-medium">Recently adjusted</h2>
+      <h2 className="text-navy mb-2 font-medium">Recently adjusted</h2>
       {rows.length === 0 ? (
-        <p className="text-ink/50 text-sm">Nothing adjusted yet.</p>
+        <p className="text-ink-2 text-sm">Nothing adjusted yet.</p>
       ) : (
         <ul className="border-line divide-line divide-y rounded border text-sm">
           {rows.map((row) => (
@@ -44,13 +44,13 @@ export function AdjustmentHistory({ rows }: { rows: Row[] }) {
               {/* Amber for stock leaving, because that is the direction worth a
                   second look — a correction downward is the one that can hide a
                   loss (I7: a colour means one thing). */}
-              <span className={`numeral ${row.qtyBaseDelta < 0 ? 'text-amber' : 'text-green-900'}`}>
+              <span className={`numeral ${row.qtyBaseDelta < 0 ? 'text-amber-text' : 'text-navy'}`}>
                 {row.qtyBaseDelta > 0 ? '+' : '−'}
                 {row.amount}
               </span>
-              <span className="text-ink/60">{row.reason.replaceAll('_', ' ')}</span>
-              {row.note ? <span className="text-ink/50 text-xs">“{row.note}”</span> : null}
-              <span className="text-ink/40 ml-auto text-xs">
+              <span className="text-ink-2">{row.reason.replaceAll('_', ' ')}</span>
+              {row.note ? <span className="text-ink-2 text-xs">“{row.note}”</span> : null}
+              <span className="text-ink-2 ml-auto text-xs">
                 {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
               </span>
             </li>

@@ -53,13 +53,13 @@ export default async function CustomerDetailPage({
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <Link href="/customers" className="text-green-600 text-sm">
+      <Link href="/customers" className="text-blue-600 text-sm">
         ← Customers
       </Link>
 
       <header>
-        <h1 className="text-green-900 text-2xl font-semibold">{customer.name}</h1>
-        {customer.phone ? <p className="text-ink/50 text-sm">{customer.phone}</p> : null}
+        <h1 className="text-navy text-2xl font-semibold">{customer.name}</h1>
+        {customer.phone ? <p className="text-ink-2 text-sm">{customer.phone}</p> : null}
       </header>
 
       {/* [PCN-013] A removed customer's balance is still settled here: removal
@@ -76,7 +76,7 @@ export default async function CustomerDetailPage({
         restore={restoreCustomerAction.bind(null, customer.id)}
       />
 
-      <div className="border-line bg-green-100/50 flex flex-wrap items-end justify-between gap-4 rounded border p-4">
+      <div className="bg-surface shadow-card flex flex-wrap items-end justify-between gap-4 rounded-card p-4">
         {/* Never "-Rs 100". The direction is a word and the amount is positive
             — see domain/udhaar/position.ts. */}
         <BalanceFigure balancePaisa={balancePaisa} size="large" />
@@ -91,11 +91,11 @@ export default async function CustomerDetailPage({
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-ink/50 p-8 text-center text-sm">No transactions yet.</p>
+        <p className="text-ink-2 p-8 text-center text-sm">No transactions yet.</p>
       ) : (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">Receipt</th>
@@ -107,7 +107,7 @@ export default async function CustomerDetailPage({
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-line border-t">
-                  <td className="text-ink/70 px-3 py-2">
+                  <td className="text-ink-2 px-3 py-2">
                     {row.createdAt.toLocaleDateString('en-PK')}
                   </td>
                   {/* T4 again, one level deeper: the balance expands into these
@@ -118,7 +118,7 @@ export default async function CustomerDetailPage({
                   <td className="px-3 py-2">
                     <Link
                       href={`/receipts/${encodeURIComponent(row.receiptNumber)}`}
-                      className="numeral text-green-700 hover:underline"
+                      className="numeral text-blue-600 hover:underline"
                     >
                       {row.receiptNumber}
                     </Link>
@@ -129,7 +129,7 @@ export default async function CustomerDetailPage({
                       <span className="inline-flex flex-wrap items-center gap-x-2">
                         Payment
                         {row.reversed ? (
-                          <span className="text-ink/50 text-xs">— cancelled</span>
+                          <span className="text-ink-2 text-xs">— cancelled</span>
                         ) : null}
                         {session.userRole === 'owner' ? (
                           <CancelPayment
@@ -145,11 +145,11 @@ export default async function CustomerDetailPage({
                     {row.kind === 'payment_reversal' ? (
                       <>
                         Payment cancelled
-                        <span className="text-ink/50 ml-1 text-xs">
+                        <span className="text-ink-2 ml-1 text-xs">
                           receipt{' '}
                           <Link
                             href={`/receipts/${encodeURIComponent(row.againstReceiptNumber ?? '')}`}
-                            className="text-green-700 hover:underline"
+                            className="text-blue-600 hover:underline"
                           >
                             {row.againstReceiptNumber}
                           </Link>
@@ -159,11 +159,11 @@ export default async function CustomerDetailPage({
                     {row.kind === 'return' ? (
                       <>
                         Return
-                        <span className="text-ink/50 ml-1 text-xs">
+                        <span className="text-ink-2 ml-1 text-xs">
                           against{' '}
                           <Link
                             href={`/receipts/${encodeURIComponent(row.againstReceiptNumber ?? '')}`}
-                            className="text-green-700 hover:underline"
+                            className="text-blue-600 hover:underline"
                           >
                             {row.againstReceiptNumber}
                           </Link>
@@ -172,7 +172,7 @@ export default async function CustomerDetailPage({
                     ) : null}
                   </td>
                   <td
-                    className={`numeral px-3 py-2 ${row.amountPaisa > 0 ? 'text-amber' : 'text-green-900'}`}
+                    className={`numeral px-3 py-2 ${row.amountPaisa > 0 ? 'text-amber-text' : 'text-navy'}`}
                   >
                     {row.amountPaisa > 0 ? '+' : '−'}
                     {formatPaisa(paisa(Math.abs(row.amountPaisa)))}

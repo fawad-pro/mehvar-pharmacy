@@ -62,11 +62,11 @@ export function BarcodePanel({
   const levels = unitLevels(baseUnitName, packLevels);
 
   return (
-    <section className="border-line flex flex-col gap-3 rounded border p-4">
-      <h2 className="text-green-900 font-semibold">Barcodes</h2>
+    <section className="bg-surface shadow-card flex flex-col gap-3 rounded-card p-4">
+      <h2 className="text-navy font-semibold">Barcodes</h2>
 
       {barcodes.length === 0 ? (
-        <p className="text-ink/50 text-sm">
+        <p className="text-ink-2 text-sm">
           None yet. Scan a pack below — codes build up as you sell.
         </p>
       ) : (
@@ -74,7 +74,7 @@ export function BarcodePanel({
           {barcodes.map((code) => (
             <li key={code.id} className="flex items-center gap-3 text-sm">
               <span className="numeral font-medium">{code.barcode}</span>
-              <span className="text-ink/50 text-xs">per {code.unitLevelName}</span>
+              <span className="text-ink-2 text-xs">per {code.unitLevelName}</span>
               <button
                 type="button"
                 onClick={() => {
@@ -88,7 +88,7 @@ export function BarcodePanel({
                     },
                   );
                 }}
-                className="text-ink/50 hover:text-red ml-auto text-xs"
+                className="text-ink-2 hover:text-red ml-auto text-xs"
               >
                 Remove
               </button>
@@ -104,7 +104,7 @@ export function BarcodePanel({
 
       <form action={action} className="flex flex-wrap items-end gap-2">
         <div className="min-w-48 flex-1">
-          <label htmlFor="barcode" className="text-ink/60 block text-xs">
+          <label htmlFor="barcode" className="text-ink-2 block text-xs">
             Scan or type a code
           </label>
           <input
@@ -113,19 +113,19 @@ export function BarcodePanel({
             ref={field}
             data-scan-target=""
             autoComplete="off"
-            className="border-line focus:border-green-600 h-touch mt-1 w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch mt-1 w-full rounded-control border px-3"
           />
         </div>
 
         <div>
-          <label htmlFor="unitLevelName" className="text-ink/60 block text-xs">
+          <label htmlFor="unitLevelName" className="text-ink-2 block text-xs">
             This code is for one
           </label>
           <select
             id="unitLevelName"
             name="unitLevelName"
             defaultValue={levels[levels.length - 1]?.name ?? baseUnitName}
-            className="border-line focus:border-green-600 h-touch mt-1 rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch mt-1 rounded-control border px-3"
           >
             {levels.map((level) => (
               <option key={level.name} value={level.name}>
@@ -139,7 +139,7 @@ export function BarcodePanel({
         <button
           type="submit"
           disabled={pending}
-          className="border-line min-h-touch rounded border px-4 disabled:opacity-40"
+          className="border-border min-h-touch rounded-control border px-4 disabled:opacity-40"
         >
           Link
         </button>

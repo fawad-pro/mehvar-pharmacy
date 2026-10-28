@@ -55,7 +55,7 @@ export interface ReplaceBatchView {
 
 const WHOLE = /^\d+$/;
 const fieldClass =
-  'border-line focus:border-green-600 h-touch mt-1 w-full rounded border px-3 outline-none';
+  'border-border focus:border-blue-600 h-touch mt-1 w-full rounded-control border px-3';
 
 /** The old count in the new units: same-named units keep their count, the rest go loose. */
 function prefill(
@@ -240,7 +240,7 @@ export function ReplaceSurface({
               setError(null);
             }}
             className={`min-h-touch rounded border px-4 text-sm ${
-              mode === value ? 'border-green-600 bg-green-100/60 font-medium' : 'border-line'
+              mode === value ? 'border-blue-600 bg-mist font-medium' : 'border-line'
             }`}
           >
             {label}
@@ -250,17 +250,17 @@ export function ReplaceSurface({
 
       {moving ? (
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
+          <legend className="text-ink-2 mb-2 text-xs tracking-[0.14em] uppercase">
             Move the stock to
           </legend>
           {into ? (
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="font-medium">{into.name}</span>
-              <span className="text-ink/60">counted in {into.baseUnitName}</span>
+              <span className="text-ink-2">counted in {into.baseUnitName}</span>
               <button
                 type="button"
                 onClick={() => setInto(null)}
-                className="text-green-700 min-h-touch px-1 underline-offset-2 hover:underline"
+                className="text-blue-600 min-h-touch px-1 underline-offset-2 hover:underline"
               >
                 Choose another
               </button>
@@ -278,10 +278,10 @@ export function ReplaceSurface({
         </fieldset>
       ) : (
         <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
+          <legend className="text-ink-2 mb-2 text-xs tracking-[0.14em] uppercase">
             The right pack
           </legend>
-          <label className="text-ink/70 text-xs">
+          <label className="text-ink-2 text-xs">
             Name
             <input
               autoComplete="off"
@@ -290,7 +290,7 @@ export function ReplaceSurface({
               className={fieldClass}
             />
           </label>
-          <label className="text-ink/70 text-xs">
+          <label className="text-ink-2 text-xs">
             Base unit
             <input
               autoComplete="off"
@@ -299,7 +299,7 @@ export function ReplaceSurface({
               className={fieldClass}
             />
           </label>
-          <label className="text-ink/70 text-xs">
+          <label className="text-ink-2 text-xs">
             Pack levels
             <input
               autoComplete="off"
@@ -310,7 +310,7 @@ export function ReplaceSurface({
             />
           </label>
           {structure.map((unit, index) => (
-            <label key={unit.name} className="text-ink/70 text-xs">
+            <label key={unit.name} className="text-ink-2 text-xs">
               Price per {unit.name}
               <input
                 autoComplete="off"
@@ -333,13 +333,13 @@ export function ReplaceSurface({
 
       {moving && (!into || baseDiffers) ? null : (
         <fieldset className="flex flex-col gap-2">
-          <legend className="text-ink/60 mb-2 text-xs tracking-[0.14em] uppercase">
+          <legend className="text-ink-2 mb-2 text-xs tracking-[0.14em] uppercase">
             {moving && into
               ? `Count each batch in ${into.name}'s packs`
               : 'Count each batch in the new pack'}
           </legend>
           {batches.length === 0 ? (
-            <p className="text-ink/60 text-sm">No stock on hand — nothing to move.</p>
+            <p className="text-ink-2 text-sm">No stock on hand — nothing to move.</p>
           ) : null}
           {batches.map((batch) => {
             const counts = countsOf(batch);
@@ -349,14 +349,14 @@ export function ReplaceSurface({
                 key={batch.batchId}
                 role="group"
                 aria-label={`Batch ${batch.batchNumber ?? ''} ${batch.expiryDate ? `expiring ${batch.expiryDate}` : ''}`.trim()}
-                className="border-line flex flex-wrap items-end gap-3 rounded border p-3"
+                className="bg-surface shadow-card flex flex-wrap items-end gap-3 rounded-card p-3"
               >
                 <div className="min-w-40 text-sm">
                   <p className="font-medium">
                     {batch.batchNumber ? `Batch ${batch.batchNumber}` : 'Batch'}
                     {batch.expiryDate ? ` · exp ${batch.expiryDate}` : ''}
                   </p>
-                  <p className="text-ink/60 text-xs">
+                  <p className="text-ink-2 text-xs">
                     Recorded:{' '}
                     {describeQuantity(
                       baseQty(batch.qtyRemainingBase),
@@ -366,7 +366,7 @@ export function ReplaceSurface({
                   </p>
                 </div>
                 {largestFirst.map((unit) => (
-                  <label key={unit.name} className="text-ink/70 w-20 text-xs">
+                  <label key={unit.name} className="text-ink-2 w-20 text-xs">
                     {unit.name}
                     <input
                       autoComplete="off"
@@ -382,7 +382,7 @@ export function ReplaceSurface({
                     />
                   </label>
                 ))}
-                <p className="text-ink/60 ml-auto text-xs" aria-live="polite">
+                <p className="text-ink-2 ml-auto text-xs" aria-live="polite">
                   {total === null ? 'Whole numbers only' : `= ${total} ${structure[0]?.name ?? ''}`}
                 </p>
               </div>
@@ -392,14 +392,14 @@ export function ReplaceSurface({
       )}
 
       {unlinking.length > 0 && (!moving || into) ? (
-        <p className="text-amber text-sm">
+        <p className="text-amber-text text-sm">
           {unlinking.length === 1 ? 'One barcode is' : `${unlinking.length} barcodes are`} on a unit
           the new pack does not have ({unlinking.map((code) => code.unitLevelName).join(', ')}). It
           will be unlinked and listed, so you can link it again.
         </p>
       ) : null}
 
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Why
         <input
           autoComplete="off"
@@ -420,7 +420,7 @@ export function ReplaceSurface({
         <button
           type="submit"
           disabled={busy}
-          className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
         >
           {busy
             ? 'Moving…'
