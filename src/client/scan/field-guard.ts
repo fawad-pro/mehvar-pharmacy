@@ -69,22 +69,38 @@ function scanHome(): HTMLInputElement | null {
 
 /**
  * Puts a scan where it belongs and finishes it there: in a form, the form
- * submits, as Enter would; otherwise the field gets the scanner's Enter. A
- * tick later, so the field's own handlers see the code first.
+ * submits, as Enter would; otherwise the field gets the scanner's Enter.
+ *
+ * The field works out its results from what it holds, and it can be a frame
+ * or two behind the code just put in it (it also refreshes the catalogue as
+ * it takes focus). An Enter that arrived first found nothing to take — about
+ * one scan in twelve on Receive Stock. So the Enter waits two frames, and is
+ * given again while the code is still sitting there unused: a scan the field
+ * took has cleared it, so a used scan is never taken twice.
  */
 function deliver(field: HTMLInputElement, code: string): void {
   field.focus();
   restoreValue(field, code);
-  window.setTimeout(() => {
-    if (field.form) {
-      field.form.requestSubmit();
-      return;
-    }
+  if (field.form) {
+    const form = field.form;
+    requestAnimationFrame(() => requestAnimationFrame(() => form.requestSubmit()));
+    return;
+  }
+  let tries = 0;
+  const press = (): void => {
+    if (!field.isConnected || field.value !== code) return;
     field.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
     );
-  }, 0);
+    tries += 1;
+    if (tries < MAX_ENTER_TRIES) window.setTimeout(press, RETRY_ENTER_MS);
+  };
+  requestAnimationFrame(() => requestAnimationFrame(press));
 }
+
+/** How often, and how far apart, a delivered scan's Enter is given. */
+const MAX_ENTER_TRIES = 4;
+const RETRY_ENTER_MS = 120;
 
 function guardedField(target: EventTarget | null): TextField | null {
   if (target instanceof HTMLTextAreaElement) {
