@@ -2048,3 +2048,136 @@ Tests: `bill-discount.test.ts` (amounts, shares, replacing, refusals);
 `bill-discount.spec.ts` by keyboard, and a touch path in `touch.spec.ts`.
 Commit left enabled while the owner's PIN is pending fails the spec, and so
 does a total that does not follow the typed discount.
+
+## PCN-016 — the redesign: navy and blue, soft surfaces, and every screen redrawn
+
+Session: pilot improvements · Raised: 2026-10-28 · Status: decided
+
+**Plan sections in tension.** Phase 4 §5 and Phase 10 §6 set the visual
+direction: a green family as the brand ("green-900: anchor: headers, key
+bar"), paper surfaces, rules between everything, uppercase tracked labels.
+Phase 10 §2–§4 lay out the screens. I7: semantic colour only with meaning.
+
+**The gap.** The pilot owner found the product rigid and asked for a premium,
+calm, symmetric interface for laptop, tablet and phone. Three things in the
+current direction work against I7 and the owner's new identity:
+
+1. Green is both the brand and "done", so a green button and a green "Synced"
+   badge mean different things in one colour.
+2. The new Mehvar logo is navy and sky blue, with a red heart; red is the
+   product's "refused" colour.
+3. Several current tokens fail contrast: amber words (3.48:1), `ink/50` and
+   `ink/40` text, and a focus cue that is a 1 px border change.
+
+**Decision.** 2026-10-28, the owner, after a design pass in Claude Design.
+
+- **The design system** (https://claude.ai/artifact/953PukwddDp5xxwrHjg5yr)
+  replaces Phase 10 §6's tokens. Brand: navy `#012049` for text, blue
+  `#0068b8` for the one primary action, the active key and the focus ring.
+  Status keeps its own three colours, each with a word or mark: green done,
+  amber attention (`amber-text` for words, `amber` for marks), red refused.
+  The brand never doubles as a status. Surfaces: a `#f4f7fa` page, white cards
+  lifted by a soft shadow, hairlines only between rows. Corners 10/16/20 px.
+  Labels are sentence case, 13 px, one line, 14 characters at most; a figure's
+  time scope goes in its meta line. A 2 px focus ring on everything.
+- **The screens** are the canvas https://claude.ai/artifact/BCxabuTecHxqCBjyutwCUw,
+  one page per area, at laptop, tablet and phone. The phone replaces the key
+  bar with a five-tab bar and shows no key hints. Dialogs become bottom sheets
+  on phone.
+- **Whose name is on screen.** The top bar shows the pharmacy's name, never
+  Mehvar's logo. Mehvar's blue mark appears as the favicon and app icon, on
+  login and splash, and in Settings → About. The full-colour logo is for the
+  installer and marketing only.
+- **The receipt** prints the pharmacy's header and no logo. Its bold "MEHVAR"
+  footer becomes one small "Powered by Mehvar" line that the owner can switch
+  off in Settings (on by default; whether switching it off depends on a plan
+  is for PCN-004's licensing).
+- **Rules the design system had wrong, amended here:** at most one primary
+  action per screen, and a list or a set of independently saved groups may
+  have none (the suppliers list, Settings). "Start a return" sits beside the
+  receipt's title, not at the end, so the return path keeps its key count. On
+  phone, an action whose field must stay beside it (Count the drawer) may sit
+  in its card rather than the fixed action bar. The Sale cart's rows are 44 px
+  at every width; read-only tables keep 36 px.
+
+**What the redesign adds that the app does not do today** (each decided: yes,
+unless marked):
+
+- Sale: one-line cart rows (no batch, routine expiry or form); badges only
+  for attention, and the name and strength never cut off; the selected row
+  carries its unit toggle, steppers and discount; Change becomes the largest
+  figure once change is owed (Phase 10 §4 kept).
+- Dialogs: "After this: Owes Rs 700.00" before settling; an optional phone
+  number behind "More details" when adding a customer; a PIN field naming the
+  person; a lockout as a refused banner; the picker gets an "Attach" button.
+- Receive Stock: the supplier's balance in the picker; an "Expires soon"
+  badge on short-dated lines; batch, MRP and Sells for on screen (two rows of
+  fields); Sells for back in the lines table; supplier totals as links.
+- Invoices and suppliers: a correction shows old beside new (line, invoice
+  total, owed to the supplier, stock on the shelf); a refused correction
+  names its numbers; removing a supplier says why before Remove is pressed;
+  totals on the suppliers list; an account summary and a "Balance now" row
+  that must equal the balance at the top (tested, Day 8). Pay and Correct
+  become dialogs.
+- Receipts and returns: "Off udhaar" pre-chosen when the sale went on
+  udhaar, with Before → Now; the refund is the largest figure; "Already back"
+  column; refunds-today tile; a no-match message that says what to do;
+  "Returned" names amount, method, slip and shelf; unit and restock choices
+  as dropdowns; the refund slip uses Before / Now like the settlement slip.
+  **"Return without a receipt" stays** as a quiet link on Receipts that says
+  where it goes: removing it would leave a customer with goods and no slip
+  nowhere to go (Returns has no function key).
+- Stock and Adjust: count badges, "in 15 days", an "Expired" badge, "wants
+  5 box" on low stock, history in words using `REASON_LABELS`, "Pick a
+  reason." beside the field, a summary card ("takes off 2 strip, from batch
+  F0933, 2 box left"). **Added to close a W12 gap:** each expiring batch gets
+  an "Adjust" link that opens Adjust with that product and batch chosen.
+- Day: tiles with short labels and the scope in the meta line; "Expected
+  cash" flagged amber with no opening float; the count card states the
+  expected figure; exception amounts in words ("Rs 50.00 off"); Cancel entry
+  as a dialog; Overall and past days explain why no drawer count. Count the
+  drawer is the one primary; the cash form's Save is secondary. Enter in
+  "Counted cash" still does nothing (recording an over/short is an
+  append-only row; it stays a deliberate press).
+- Settings and sign-in: one group at a time; an About group (version from
+  `package.json`); the "Powered by Mehvar" switch (a new tenant setting); a
+  switch component in words (On/Off); Reset PIN as a dialog, replacing
+  `window.prompt`, which showed the PIN in the clear; the owner's view gets a
+  "Read only" badge, "Owes …" wording and the exceptions banner its plan
+  always gave it (W11). **Deferred:** the "last backup" status row (the
+  backup has no screen and the app cannot see its folder; Settings offers
+  the export only) and a splash screen beyond the PWA manifest.
+- Fixes the redesign exposed, made on the way: Stock's literal "F8" and a
+  wrong "(F3)" hint (both through `keyFor`); raw reason codes and ISO dates;
+  base units in purchase-correction history ("quantity −20"); minus and plus
+  signs on money and stock in lists.
+
+Tests: the key-budget, touch, scanner, slow-answer and keyboard-path specs
+stay green screen by screen; specs that find elements by an old label are
+updated to the new label, never loosened (Day 13). The token lint keeps raw
+colours in `globals.css`.
+
+**Applied.** In batches; see `docs/redesign/PRIMER.md`.
+
+## PCN-017 — expiry is entered as month and year
+
+Session: pilot improvements · Raised: 2026-10-28 · Status: decided
+
+**Plan sections in tension.** D1 (FEFO), PCN-008 (a batch is expired on the
+day it lapses), W7 (receiving), W12 (near-expiry).
+
+**The gap.** Receive Stock, opening stock and found stock ask for a full date
+(`type="date"`), but packs print only a month and year ("EXP 03/2028").
+Salespeople invent the day, some the 1st and some the last, so one pack is
+stored two ways, and FEFO order, the day stock counts as expired, and the
+near-expiry horizons all depend on which.
+
+**Decision.** 2026-10-28, the owner: expiry is typed as month and year
+(`MM/YY` or `MM/YYYY`) and stored as the last day of that month, "good
+through the end of the month". This is already how a scanned GS1 code with
+day `00` is read (`domain/catalog/barcode.ts`), so typed and scanned packs
+agree. It is shown as `MM/YYYY` everywhere. Rows already stored keep their
+dates; nothing is rewritten (ADR-1). One parser in `src/lib` turns the text
+into the date and is the only place that does.
+
+**Applied.** With the Receive Stock and Adjust screens of PCN-016.

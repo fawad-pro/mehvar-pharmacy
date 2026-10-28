@@ -30,6 +30,13 @@ Option E (local-first with optional cloud). Read it in full — and check PCN-00
 status — before touching anything installer-, update-, licensing- or
 Hospital-integration-adjacent. Nothing in it is decided.
 
+## Redesign in progress
+
+`docs/redesign/PRIMER.md` — the navy-and-blue redesign of every screen
+(PCN-016) and month-and-year expiry (PCN-017). Read it before touching any
+screen's layout or `globals.css`; it names the design system, the canvas,
+the build order and what each batch must pass.
+
 ## Identifier system — cite these by number
 
 - **P1–P9** product principles · **I1–I7** interaction · **T1–T5** trust (Phase 4)

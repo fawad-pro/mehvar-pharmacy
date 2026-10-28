@@ -2,6 +2,14 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+
+## The redesign is decided (PCN-016, PCN-017)
+
+Every screen was redrawn in Claude Design at laptop, tablet and phone width:
+navy and blue as the brand, green, amber and red only for done, attention
+and refused, white cards on a light page, and the pharmacy's name in the top
+bar. Expiry will be typed as month and year. Nothing in the app has changed
+yet; `docs/redesign/PRIMER.md` is the build plan.
 ## The E2E suite refuses a working database
 
 Run against a working pharmacy, the suite left Rs 999,999 in the day's
