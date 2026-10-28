@@ -49,6 +49,8 @@ export function CustomerPicker({
   });
   /** The term an Enter is waiting on, until its answer arrives. */
   const enterFor = useRef<string | null>(null);
+  /** Shown while an Enter waits, so the wait is visible, not a dead key. */
+  const [finding, setFinding] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +99,7 @@ export function CustomerPicker({
   const answerArrived = useEffectEvent((answeredTerm: string, found: CustomerHit[]) => {
     if (enterFor.current !== answeredTerm) return;
     enterFor.current = null;
+    setFinding(null);
     choose(found[0], answeredTerm);
   });
 
@@ -174,11 +177,13 @@ export function CustomerPicker({
     }
     if (event.key === 'Enter') {
       event.preventDefault();
+      if (finding !== null) return;
       const trimmed = term.trim();
       if (trimmed === '') return;
       if (answered.term !== trimmed) {
         // Not answered yet: act the moment it is, on that answer.
         enterFor.current = trimmed;
+        setFinding(trimmed);
         return;
       }
       choose(visibleHits[active], trimmed);
@@ -196,11 +201,21 @@ export function CustomerPicker({
           onChange={(event) => {
             setTerm(event.target.value);
           }}
+          // Once Enter is given the question is settled: keys typed while it
+          // is being answered (the cash, by a quick operator) must not turn
+          // the name into another customer's. Esc still cancels.
+          readOnly={finding !== null}
           onKeyDown={onKeyDown}
           autoComplete="off"
           placeholder="Name or phone…"
           className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
         />
+
+        {finding ? (
+          <p className="text-ink/60 mt-2 text-sm" role="status">
+            Finding &ldquo;{finding}&rdquo;…
+          </p>
+        ) : null}
 
         <ul className="mt-3 flex max-h-64 flex-col gap-1 overflow-auto" role="listbox">
           {visibleHits.map((hit, index) => (

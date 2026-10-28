@@ -128,3 +128,73 @@ test('Receipts: Enter opens the receipt typed, not the top of the list before it
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(new RegExp(`/receipts/${second!}$`), { timeout: 30_000 });
 });
+
+test('F12 while the customer picker is still finding: nothing lands on the bill', async ({
+  page,
+}) => {
+  const name = `Waiting Customer ${Math.random()
+    .toString(36)
+    .replace(/[^a-z]/g, '')
+    .slice(0, 8)}`;
+  await openCounter(page);
+  await search(page).fill('disprin');
+  await expect(page.getByRole('option').first()).toContainText('Disprin', { timeout: 30_000 });
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('table')).toContainText('Disprin');
+
+  await slowServerActions(page, 1_500);
+  await page.keyboard.press('F4');
+  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  await expect(picker.getByPlaceholder('Name or phone…')).toBeFocused();
+  await page.keyboard.type(name, { delay: 100 });
+  await page.keyboard.press('Enter');
+  // The wait is said, not silent.
+  await expect(picker.getByRole('status')).toContainText(`Finding “${name}”`);
+  // A quick operator goes on as if the customer were attached: Payment, the
+  // cash, Enter. Payment used to open over the picker; when the picker closed
+  // it put focus behind Payment, so "0" searched for a product and Enter
+  // added it to the bill. Now F12 waits for the customer, and the keys typed
+  // into a picker that is finding change nothing.
+  await page.keyboard.press('F12');
+  await page.keyboard.type('0', { delay: 100 });
+  await page.keyboard.press('Enter');
+
+  // The F12 waited for the customer, then opened Payment, with the full
+  // amount still tendered: the "0" and Enter typed while the picker was
+  // finding changed nothing. No other product is on the bill.
+  await expect(picker).toBeHidden({ timeout: 15_000 });
+  const payment = page.getByRole('dialog', { name: 'Payment' });
+  await expect(payment).toBeVisible();
+  await expect(payment).toContainText(`Billing to ${name}`);
+  await expect(payment.getByLabel('Cash tendered')).toHaveValue('25.00');
+  const lines = page.getByRole('table').getByRole('row');
+  await expect(lines).toHaveCount(2); // the header and Disprin
+  await expect(page.getByRole('status', { name: 'Last sale' })).toHaveCount(0);
+
+  // Now the cash, as intended.
+  await payment.getByLabel('Cash tendered').fill('0');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('status', { name: 'Last sale' })).toContainText(
+    `Rs 25.00 on ${name}’s udhaar`,
+  );
+});
+
+test('the supplier picker holds the name while it finds it', async ({ page }) => {
+  const name = `Holding Distributor ${Math.random()
+    .toString(36)
+    .replace(/[^a-z]/g, '')
+    .slice(0, 8)}`;
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+  await page.getByRole('button', { name: 'Supplier' }).click({ timeout: 30_000 });
+  const picker = page.getByRole('dialog', { name: 'Supplier' });
+  await slowServerActions(page, 1_500);
+  await page.keyboard.type(name, { delay: 100 });
+  await page.keyboard.press('Enter');
+  await expect(picker.getByRole('status')).toContainText(`Finding “${name}”`);
+  // The invoice number, typed on before the picker has closed.
+  await page.keyboard.type('INV-77', { delay: 100 });
+  await expect(picker).toBeHidden({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Supplier' })).toHaveText(name);
+});

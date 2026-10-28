@@ -39,6 +39,8 @@ export function SupplierPicker({
   });
   /** The term an Enter is waiting on, until its answer arrives. */
   const enterFor = useRef<string | null>(null);
+  /** Shown while an Enter waits; the field holds still meanwhile. */
+  const [finding, setFinding] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +68,9 @@ export function SupplierPicker({
           .catch(() => {
             if (!cancelled) {
               setError('Needs internet — selling keeps working.');
+              // No answer is coming: the field is the operator's again.
+              enterFor.current = null;
+              setFinding(null);
             }
           });
       },
@@ -82,6 +87,7 @@ export function SupplierPicker({
   const answerArrived = useEffectEvent((answeredTerm: string, found: SupplierHit[]) => {
     if (enterFor.current !== answeredTerm) return;
     enterFor.current = null;
+    setFinding(null);
     choose(found[0], answeredTerm);
   });
 
@@ -137,19 +143,30 @@ export function SupplierPicker({
             }
             if (event.key === 'Enter') {
               event.preventDefault();
+              if (finding !== null) return;
               const trimmed = term.trim();
               if (answered.term !== trimmed) {
                 // Not answered yet: act the moment it is, on that answer.
                 enterFor.current = trimmed;
+                setFinding(trimmed);
                 return;
               }
               choose(hits[active], trimmed);
             }
           }}
+          // The customer picker's rule: the invoice number typed next must
+          // not become part of the supplier's name.
+          readOnly={finding !== null}
           autoComplete="off"
           placeholder="Name or phone…"
           className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
         />
+
+        {finding ? (
+          <p className="text-ink/60 mt-2 text-sm" role="status">
+            Finding &ldquo;{finding}&rdquo;…
+          </p>
+        ) : null}
 
         <ul className="mt-3 flex max-h-64 flex-col gap-1 overflow-auto" role="listbox">
           {hits.map((hit, index) => (

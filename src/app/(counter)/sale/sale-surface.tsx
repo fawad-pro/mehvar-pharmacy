@@ -98,6 +98,8 @@ export function SaleSurface() {
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
   const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
+  /** F12 pressed while the customer was still being found: pay once attached. */
+  const payAfterPick = useRef(false);
   /** The last scanned pack, when its own 2D code says it has expired. */
   const [expiredPack, setExpiredPack] = useState<{ name: string; expiry: string } | null>(null);
   /**
@@ -490,6 +492,17 @@ export function SaleSurface() {
     function onKey(event: KeyboardEvent): void {
       if (event.key === 'F12') {
         event.preventDefault();
+        // Not over another dialog. F12 pressed while the customer picker was
+        // still looking a name up opened Payment on top of it; the picker
+        // then closed and put focus back in the product search, behind
+        // Payment, so the cash typed next searched for a product and Enter
+        // added it to the bill. Over the picker it means "pay once the
+        // customer is attached", so it waits for that; over anything else
+        // it does nothing.
+        if (document.querySelector('[aria-modal="true"]')) {
+          if (pickingCustomer) payAfterPick.current = true;
+          return;
+        }
         openPayment();
       }
     }
@@ -497,7 +510,7 @@ export function SaleSurface() {
     return () => {
       document.removeEventListener('keydown', onKey);
     };
-  }, [openPayment]);
+  }, [openPayment, pickingCustomer]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -759,9 +772,15 @@ export function SaleSurface() {
           onPick={(hit) => {
             setCustomer(hit);
             setPickingCustomer(false);
+            if (payAfterPick.current) {
+              payAfterPick.current = false;
+              setPaying(true);
+              return;
+            }
             focusSearch();
           }}
           onCancel={() => {
+            payAfterPick.current = false;
             setPickingCustomer(false);
             focusSearch();
           }}
