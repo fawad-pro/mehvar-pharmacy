@@ -724,6 +724,24 @@ exception visibility.
   had their own copies of its markup, so the focus trap would have missed
   the two that matter most.
 
+## Things the touch pass established
+
+- **An action with only a key does not exist on a tablet.** Udhaar and
+  Switch user were inert text in the key bar, on purpose ("rather than
+  pretending to lead somewhere"); on a device with no F-keys that made an
+  udhaar sale impossible. A routeless key is a button running the same
+  handler. `touch.spec.ts` runs as a tablet with no `keyboard.press` at all.
+- **Measure tap targets; do not eyeball them.** The spec reads
+  `--touch-target` and fails on any smaller control on the counter screens.
+  My own first audit filtered its output and hid the recent-purchases rows;
+  the test, which filters nothing, found them.
+- **Leaving a field cancels, so a touch path needs a visible commit.** Its
+  button must not take focus on press (`onMouseDown` preventDefault), or the
+  field's blur cancels before the tap lands.
+- **Prettier over a folder reformats files you did not touch.** Several are
+  not Prettier-clean on main. Format the files you changed, and check a file
+  was clean before letting Prettier rewrite it.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

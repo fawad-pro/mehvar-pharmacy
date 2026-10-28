@@ -2,6 +2,20 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## The counter works by touch
+
+- **Udhaar and Switch user can be tapped.** On the key bar they were plain
+  text, so on a tablet an udhaar sale, a settlement and a user switch could
+  not be done at all. With items in the cart, "Attach a customer for udhaar"
+  is a button too.
+- **A line discount has an Apply button.** Tapping away from the field
+  cancels it, as leaving it by key does, and nothing on screen applied it.
+- **Every control on the counter screens is at least 44 px**, the design's
+  touch size: Print receipt, View sale, Settings, the user button, supplier
+  Pay, receipt and customer rows, page links.
+- **"View sale" opens the sale's receipt page.** It opened Returns. A sale
+  not yet sent from an offline counter says so there, instead of "removed".
+
 ## Selling hardening, part 3: udhaar and returns
 
 - **"Saved" says where the money went.** An udhaar sale's confirmation now
