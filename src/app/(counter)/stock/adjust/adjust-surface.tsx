@@ -99,7 +99,14 @@ export function AdjustSurface({
   const [qty, setQty] = useState('');
   /** [PCN-012] Counts per unit when stock arrives, keyed by unit key. */
   const [counts, setCounts] = useState<Record<string, string>>({});
-  const [reason, setReason] = useState<AdjustmentReason>(openingStock ? 'opening_stock' : 'damage');
+  /**
+   * No reason until the operator picks one. A default is a reason nobody
+   * chose: "Damaged" pre-selected recorded every miscount as a loss. Opening
+   * stock is the exception — the page itself is the reason.
+   */
+  const [reason, setReason] = useState<AdjustmentReason | null>(
+    openingStock ? 'opening_stock' : null,
+  );
   const [note, setNote] = useState('');
   const [cost, setCost] = useState('');
   const [price, setPrice] = useState('');
@@ -267,9 +274,10 @@ export function AdjustSurface({
         (candidate !== 'entered_by_mistake' ||
           (isOwner && batches.some((batch) => batch.enteredByHand))),
   );
-  const effectiveReason: AdjustmentReason = availableReasons.includes(reason)
-    ? reason
-    : (availableReasons[0] ?? 'count_correction');
+  // A reason the new direction does not allow is no reason, never a
+  // different one chosen for the operator.
+  const effectiveReason: AdjustmentReason | null =
+    reason !== null && availableReasons.includes(reason) ? reason : null;
 
   // Likewise: stock being added creates its own batch, so there is nothing to
   // pick from and a stale list from a previous product must not show. Stock
@@ -336,6 +344,12 @@ export function AdjustSurface({
       return;
     }
 
+    if (effectiveReason === null) {
+      setError('Pick a reason.');
+      document.getElementById('adjust-reason')?.focus();
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
@@ -385,6 +399,10 @@ export function AdjustSurface({
     setQty('');
     setCounts({});
     setNote('');
+    // The next adjustment is a different event; it gets its own reason.
+    if (!openingStock) {
+      setReason(null);
+    }
     refresh();
     searchRef.current?.focus();
   }
@@ -532,12 +550,17 @@ export function AdjustSurface({
               </label>
               <select
                 id="adjust-reason"
-                value={effectiveReason}
+                value={effectiveReason ?? ''}
                 onChange={(event) => {
                   setReason(event.target.value as AdjustmentReason);
                 }}
                 className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
               >
+                {effectiveReason === null ? (
+                  <option value="" disabled>
+                    Pick a reason…
+                  </option>
+                ) : null}
                 {availableReasons.map((candidate) => (
                   <option key={candidate} value={candidate}>
                     {REASON_LABELS[candidate]}

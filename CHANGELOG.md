@@ -2,6 +2,14 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## Adjust stock asks for the reason
+
+The reason started on "Damaged", so a count that came up short saved as a
+loss unless someone changed it. It now starts blank, and Save says "Pick a
+reason." and puts the cursor on it (arrow keys pick, Enter saves). Each
+adjustment starts blank again; opening stock keeps its own reason. A reason
+the other direction does not allow becomes blank, never a different one.
+
 ## The five common tasks, measured
 
 Each task was walked with every key logged; `e2e/key-budget.spec.ts` now

@@ -342,6 +342,48 @@ test('W8: removing stock must name the batch it leaves from', async ({ page }) =
   await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
 });
 
+test('W8: no reason is chosen for the operator, and the keyboard picks one', async ({ page }) => {
+  await openCounter(page);
+  await page.keyboard.press('F8');
+  await expect(page).toHaveURL(/\/stock\/adjust$/);
+
+  const product = await stockedProduct(page);
+  await search(page).fill(product.name);
+  await expect(
+    page.getByRole('option', { name: new RegExp(escapeRegExp(product.name)) }).first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#adjust-qty')).toBeFocused();
+  // "Damaged" was pre-selected, so every miscount saved as a loss.
+  const reason = page.getByLabel('Reason');
+  await expect(reason).toHaveValue('');
+
+  // One of the smallest unit: always at most what the batch holds.
+  const removeIn = page.getByRole('group', { name: 'Remove in' });
+  if (await removeIn.isVisible()) {
+    await removeIn.getByRole('button').last().click();
+    await page.locator('#adjust-qty').focus();
+  }
+  await page.keyboard.type('1');
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('alert').filter({ hasText: 'Pick a reason.' })).toBeVisible();
+  await expect(page.getByText('Saved.', { exact: false })).toHaveCount(0);
+  await expect(reason).toBeFocused();
+
+  await page.keyboard.press('ArrowDown');
+  await expect(reason).toHaveValue('count_correction');
+  await page.keyboard.press('Enter');
+  await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
+
+  // The next adjustment gets its own reason, not the last one's.
+  await search(page).fill(product.name);
+  await expect(
+    page.getByRole('option', { name: new RegExp(escapeRegExp(product.name)) }).first(),
+  ).toBeVisible({ timeout: 30_000 });
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Reason')).toHaveValue('');
+});
+
 test('W12: the stock screen lists what is expiring, across horizons', async ({ page }) => {
   await openCounter(page);
 
