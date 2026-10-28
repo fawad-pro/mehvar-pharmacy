@@ -301,31 +301,58 @@ export function CartTable({
               </td>
               <td className="numeral px-3 py-1.5 text-right">
                 {editingDiscount?.lineId === line.lineId ? (
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    aria-label={`Discount for ${line.name}`}
-                    autoFocus
-                    value={editingDiscount.text}
-                    onFocus={(event) => {
-                      event.currentTarget.select();
-                    }}
-                    onChange={(event) => {
-                      setEditingDiscount({ lineId: line.lineId, text: event.target.value });
-                    }}
-                    onKeyDown={(event) => {
-                      discountKeyDown(event, line);
-                    }}
-                    onBlur={() => {
-                      cancelDiscount(line);
-                    }}
-                    placeholder="e.g. 50 or 10%"
-                    autoComplete="off"
-                    className="numeral border-line focus:border-green-600 w-full rounded border px-1.5 py-0.5 text-right text-sm outline-none"
-                  />
+                  <span className="flex items-center gap-1">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      aria-label={`Discount for ${line.name}`}
+                      autoFocus
+                      value={editingDiscount.text}
+                      onFocus={(event) => {
+                        event.currentTarget.select();
+                      }}
+                      onChange={(event) => {
+                        setEditingDiscount({ lineId: line.lineId, text: event.target.value });
+                      }}
+                      onKeyDown={(event) => {
+                        discountKeyDown(event, line);
+                      }}
+                      onBlur={() => {
+                        cancelDiscount(line);
+                      }}
+                      placeholder="e.g. 50 or 10%"
+                      autoComplete="off"
+                      className="numeral border-line focus:border-green-600 w-full rounded border px-1.5 py-0.5 text-right text-sm outline-none"
+                    />
+                    {/* Enter applies and leaving the field cancels; a tablet's
+                      natural way to finish is to tap elsewhere, which threw
+                      the discount away with nothing on screen to apply it.
+                      Pressing here must not blur the field first, or the
+                      blur's cancel would beat the tap. */}
+                    <button
+                      type="button"
+                      aria-label={`Apply discount on ${line.name}`}
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                      }}
+                      onClick={() => {
+                        commitDiscount(line);
+                      }}
+                      className="bg-green-600 text-paper min-h-touch min-w-touch rounded px-2 text-sm font-medium"
+                    >
+                      Apply
+                    </button>
+                  </span>
                 ) : (
                   <button
                     type="button"
+                    // Named for what it does: its text is the figure, or "—",
+                    // which is all a screen reader had to say about it.
+                    aria-label={
+                      line.lineDiscountPaisa > 0
+                        ? `Change discount on ${line.name}`
+                        : `Add a discount on ${line.name}`
+                    }
                     onMouseDown={(event) => {
                       // Clicking this cell must not first move focus to the
                       // button — that fires a focus event on the row before
@@ -338,7 +365,7 @@ export function CartTable({
                       openDiscountEditor(line);
                     }}
                     className={[
-                      'w-full text-right',
+                      'min-h-touch w-full text-right',
                       line.lineDiscountPaisa > 0 ? 'text-green-700' : 'text-ink/30',
                     ].join(' ')}
                   >

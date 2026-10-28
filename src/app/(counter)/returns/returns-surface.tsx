@@ -365,7 +365,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                     <button
                       type="button"
                       onClick={() => void selectSale(found)}
-                      className="hover:bg-green-100/50 flex w-full items-center justify-between px-3 py-2 text-left"
+                      className="hover:bg-green-100/50 flex min-h-touch w-full items-center justify-between px-3 text-left"
                     >
                       <span>
                         <span className="font-medium">{found.receiptNumber}</span>
@@ -395,7 +395,11 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                 <p className="text-ink/60 text-sm">{sale.customerName}</p>
               ) : null}
             </div>
-            <button type="button" onClick={backToSearch} className="text-ink/60 text-sm">
+            <button
+              type="button"
+              onClick={backToSearch}
+              className="text-ink/60 min-h-touch px-2 text-sm"
+            >
               ← Find a different sale
             </button>
           </div>

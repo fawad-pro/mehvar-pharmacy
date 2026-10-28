@@ -205,7 +205,10 @@ function PageLink({
   query.set('page', String(page));
 
   return (
-    <Link href={`/products?${query.toString()}`} className="text-green-600">
+    <Link
+      href={`/products?${query.toString()}`}
+      className="text-green-600 inline-flex min-h-touch min-w-touch items-center px-3"
+    >
       {children}
     </Link>
   );

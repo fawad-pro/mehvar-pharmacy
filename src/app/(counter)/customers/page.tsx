@@ -94,7 +94,10 @@ export default async function CustomersPage({
               {page.items.map((item) => (
                 <tr key={item.id} className="border-line border-t">
                   <td className="px-3 py-2">
-                    <Link href={`/customers/${item.id}`} className="text-green-900 font-medium">
+                    <Link
+                      href={`/customers/${item.id}`}
+                      className="text-green-900 inline-flex min-h-touch items-center font-medium"
+                    >
                       {item.name}
                     </Link>
                     {!item.isActive ? (
@@ -151,7 +154,10 @@ function PageLink({
   query.set('page', String(page));
 
   return (
-    <Link href={`/customers?${query.toString()}`} className="text-green-600">
+    <Link
+      href={`/customers?${query.toString()}`}
+      className="text-green-600 inline-flex min-h-touch min-w-touch items-center px-3"
+    >
       {children}
     </Link>
   );

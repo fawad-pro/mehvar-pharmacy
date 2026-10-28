@@ -142,7 +142,7 @@ function SupplierName({ id, name }: { id: string; name: string }) {
   return (
     <Link
       href={`/purchases/suppliers/${id}`}
-      className="text-green-700 font-medium underline-offset-2 hover:underline"
+      className="text-green-700 inline-flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
     >
       {name}
     </Link>
@@ -217,7 +217,7 @@ export function SupplierCreditRow({
             setAmount(paying ? '' : (row.balancePaisa / 100).toString());
             setError(null);
           }}
-          className="text-green-600 text-xs font-medium underline-offset-2 hover:underline"
+          className="text-green-600 min-h-touch min-w-touch px-3 text-xs font-medium underline-offset-2 hover:underline"
         >
           {paying ? 'Cancel' : 'Pay'}
         </button>

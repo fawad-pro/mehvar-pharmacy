@@ -621,8 +621,23 @@ export function SaleSurface() {
                 remove
               </button>
             </div>
+          ) : lines.length > 0 ? (
+            // A button, not only a hint: a tablet has no udhaar key.
+            <button
+              type="button"
+              onClick={() => {
+                setPickingCustomer(true);
+              }}
+              className="border-line text-green-700 hover:bg-green-100/50 min-h-touch rounded border px-3 text-left text-sm"
+            >
+              Attach a customer for udhaar — {keyFor('udhaar')}
+            </button>
           ) : (
-            <p className="text-ink/40 text-xs">{keyFor('udhaar')} — attach a customer for udhaar</p>
+            // With nothing to bill the key settles instead (defect C5), and
+            // the hint says so; Udhaar on the key bar is the tap for it.
+            <p className="text-ink/40 text-xs">
+              {keyFor('udhaar')} — settle a customer&rsquo;s udhaar
+            </p>
           )}
 
           {/* A counter cannot number a receipt until it has heard from the
@@ -685,19 +700,23 @@ export function SaleSurface() {
                   it?" and "can I have a receipt?" — answered where they are
                   asked. Reprinting is from the same local receipt the commit
                   built, so it needs nothing from the network either. */}
-              <p className="mt-2 flex gap-4 text-xs">
+              <p className="mt-1 flex gap-4 text-xs">
                 <button
                   type="button"
                   onClick={() => {
                     print(lastSale.receipt);
                   }}
-                  className="text-green-600 font-medium underline-offset-2 hover:underline"
+                  className="text-green-600 min-h-touch font-medium underline-offset-2 hover:underline"
                 >
                   Print receipt
                 </button>
+                {/* The sale's own page, where it is reviewed. It led to
+                    Returns, a screen that changes things, from before the
+                    receipt page existed (Day 9: a place to do, a separate
+                    place to review). */}
                 <a
-                  href="/returns"
-                  className="text-green-600 font-medium underline-offset-2 hover:underline"
+                  href={`/receipts/${encodeURIComponent(lastSale.receiptNumber)}`}
+                  className="text-green-600 flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
                 >
                   View sale
                 </a>

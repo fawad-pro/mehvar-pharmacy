@@ -286,8 +286,8 @@ test('the Discount column is clickable, no keyboard shortcut required', async ({
   await expect(total(page)).toHaveText('25.00');
 
   // A first-time salesman who has never learned '%' can still find the
-  // control: the empty cell itself is a button.
-  await cart(page).getByRole('button', { name: '—' }).click();
+  // control: the empty cell itself is a button, named for what it does.
+  await cart(page).getByRole('button', { name: 'Add a discount on Disprin' }).click();
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Enter');
 
@@ -297,7 +297,7 @@ test('the Discount column is clickable, no keyboard shortcut required', async ({
   // Re-opening by clicking the now-filled cell offers the current value
   // pre-selected (auto-select on focus), so typing over it replaces rather
   // than appending — no manual clearing needed.
-  await cart(page).getByRole('button', { name: '−2.50' }).click();
+  await cart(page).getByRole('button', { name: 'Change discount on Disprin' }).click();
   const field = page.getByLabel('Discount for Disprin');
   await expect(field).toHaveValue('2.5');
   await field.pressSequentially('5');

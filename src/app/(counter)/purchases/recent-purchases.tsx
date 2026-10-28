@@ -66,13 +66,13 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
       ) : (
         <ul className="border-line divide-line divide-y rounded border text-sm">
           {rows.map((row) => (
-            <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
+            <li key={row.id} className="flex flex-wrap items-center gap-x-3 px-3">
               {/* Was a dead end: a supplier, a date and a total with nothing
                   behind them, so "what actually came in?" had no answer. The
                   invoice is a record you can open now, like a receipt. */}
               <Link
                 href={`/purchases/${row.id}`}
-                className="text-green-700 font-medium hover:underline"
+                className="text-green-700 inline-flex min-h-touch items-center font-medium hover:underline"
               >
                 {row.supplierName ?? 'No supplier'}
               </Link>

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
 import { findReceipt } from '@/db/receipt-queries';
@@ -38,9 +38,12 @@ export default async function ReceiptDetailPage({
   }
 
   const { receiptNumber } = await params;
-  const receipt = await findReceipt(scopeFor(session), decodeURIComponent(receiptNumber));
+  const wanted = decodeURIComponent(receiptNumber);
+  const receipt = await findReceipt(scopeFor(session), wanted);
   if (!receipt) {
-    notFound();
+    // Not "removed": the usual reason is a sale this counter has not sent
+    // yet, reached from "View sale" a moment after it was made offline.
+    return <NotYetHere receiptNumber={wanted} />;
   }
 
   const heading =
@@ -349,5 +352,24 @@ function Line({
         {formatPaisa(paisa(Math.abs(amountPaisa)), { withSymbol: true })}
       </span>
     </div>
+  );
+}
+
+function NotYetHere({ receiptNumber }: { receiptNumber: string }) {
+  return (
+    <section className="mx-auto flex max-w-lg flex-col items-start gap-4 p-8">
+      <h1 className="text-green-900 text-2xl font-semibold">Receipt {receiptNumber}</h1>
+      <p className="text-ink/70 leading-relaxed">
+        This receipt is not on the shop&rsquo;s computer yet. A sale made while this counter was
+        offline appears here once the counter has sent it — the top bar says when anything is still
+        waiting. Otherwise, check the number.
+      </p>
+      <Link
+        href="/receipts"
+        className="bg-green-600 text-paper min-h-touch flex items-center rounded px-6 font-medium"
+      >
+        All receipts
+      </Link>
+    </section>
   );
 }

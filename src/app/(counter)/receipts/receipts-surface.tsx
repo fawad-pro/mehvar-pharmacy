@@ -185,7 +185,7 @@ export function ReceiptsSurface({
                           // Cancels the pending search sync — see the effect.
                           leaving.current = true;
                         }}
-                        className="numeral text-green-700 font-medium hover:underline"
+                        className="numeral text-green-700 inline-flex min-h-touch items-center font-medium hover:underline"
                       >
                         {row.receiptNumber}
                       </Link>

@@ -95,10 +95,10 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(receipt(page)).toContainText('20.00');
 
   // Attaching a customer does not persist across sales (T1 — each sale states
-  // its own attribution); the next one starts unattached. The rail offers
-  // attaching only when nobody is attached; the last sale's own line still
-  // names who it went to, which is the point of it.
-  await expect(page.locator('aside').getByText(/attach a customer for udhaar/)).toBeVisible();
+  // its own attribution); the next one starts unattached: no customer block,
+  // whose control is "remove". The last sale's own line still names who it
+  // went to, which is the point of it.
+  await expect(page.locator('aside').getByRole('button', { name: 'remove' })).toHaveCount(0);
 });
 
 test('the payment overlay computes Remaining the instant tendered falls short — no separate calculator', async ({
