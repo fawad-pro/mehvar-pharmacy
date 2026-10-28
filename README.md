@@ -104,6 +104,13 @@ licence:issue -- --slug <slug> --name "<Name>"` mints a perpetual token;
 npm run e2e:reset              # db:reset + db:setup + playwright test
 ```
 
+It refuses to run unless `.env` points at a test database — one whose name
+ends in `_test` or `_ci`, such as `mehvar_test` — because it writes real sales
+and cash entries. Keep a second `.env` for testing, or change the database name
+in both `DATABASE_URL` and `DATABASE_ADMIN_URL`, then `npm run db:setup` once.
+It also starts its own server and stops if one is already running on the port:
+a running dev server may be connected to your working database.
+
 It needs a browser. Playwright downloads one on `npx playwright install`; where
 that download is blocked but a Chromium is already present, point at it instead:
 

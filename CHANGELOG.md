@@ -2,6 +2,14 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## The E2E suite refuses a working database
+
+Run against a working pharmacy, the suite left Rs 999,999 in the day's
+expected cash (its drawer-count spec, which now cancels its own entries).
+`playwright.config.ts` and `e2e:reset` now refuse any database not named for
+tests (`_test`, `_ci`), before anything is reset, and the suite no longer
+reuses a running dev server, which may be connected to any database.
+
 ## A bill discount is given like an item discount (PCN-015)
 
 Payment always shows a "Discount on the bill" field, empty, saying

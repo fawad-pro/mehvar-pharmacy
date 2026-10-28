@@ -1,4 +1,16 @@
+import 'dotenv/config';
+
 import { defineConfig, devices } from '@playwright/test';
+
+import { refusalFor } from './e2e/support/database-guard';
+
+// The suite writes real sales and cash entries into the database `.env`
+// names; it ran once against a working pharmacy and left Rs 999,999 in the
+// day's expected cash. Only a database named for tests is accepted.
+const refusal = refusalFor(process.env);
+if (refusal !== null) {
+  throw new Error(refusal);
+}
 
 /**
  * End-to-end — Phase 11 §3.5: "One E2E path: W1 verbatim by keyboard —
@@ -70,7 +82,10 @@ export default defineConfig({
         webServer: {
           command: 'npm run dev',
           url: BASE_URL,
-          reuseExistingServer: !process.env.CI,
+          // Never an already-running server: it may be connected to any
+          // database, whatever .env says now. A dev server on the port makes
+          // the suite stop and say so.
+          reuseExistingServer: false,
           timeout: 120_000,
         },
       }),
