@@ -111,10 +111,9 @@ export function SettleUdhaarOverlay({
       return;
     }
 
-    setBusy(false);
-    setStep({ name: 'done', customer, receiptNumber, statement });
-
-    print({
+    // Printed before "Done" shows: the page takes no keys while printing,
+    // and Done is when the next key is pressed (the Sale screen's rule).
+    await print({
       receiptNumber,
       dateTime: new Date(),
       salesmanName: receiptContext.salesmanName,
@@ -123,6 +122,8 @@ export function SettleUdhaarOverlay({
       customerName: customer.name,
       miniStatement: statement,
     });
+    setBusy(false);
+    setStep({ name: 'done', customer, receiptNumber, statement });
   }
 
   return (
@@ -136,7 +137,7 @@ export function SettleUdhaarOverlay({
           onCancel={onClose}
         />
       ) : (
-        <OverlayBackdrop label="Settle udhaar">
+        <OverlayBackdrop label="Settle udhaar" onEscape={onClose}>
           <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
             <h2 className="text-green-900 mb-1 text-lg font-semibold">Settle udhaar</h2>
             <p className="text-ink/60 mb-4 text-sm">{step.customer.name}</p>
@@ -262,6 +263,9 @@ export function SettleUdhaarOverlay({
                 <div className="mt-4 flex justify-end">
                   <button
                     type="button"
+                    // Focus moves here when the payment is recorded, so Esc
+                    // and Enter reach the dialog rather than the page.
+                    autoFocus
                     onClick={onClose}
                     className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium"
                   >

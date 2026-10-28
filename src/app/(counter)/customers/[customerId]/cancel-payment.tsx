@@ -56,7 +56,8 @@ export function CancelPayment({
               receiptContext.skipReceiptNumber(receiptNumber);
               return outcome;
             }
-            print({
+            // Awaited, so "cancelled" shows once the page takes keys again.
+            await print({
               receiptNumber,
               dateTime: new Date(),
               salesmanName: receiptContext.salesmanName,

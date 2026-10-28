@@ -10,7 +10,7 @@
  * been answered is skipped.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { SettleUdhaarOverlay } from '@/components/settle-udhaar-overlay';
@@ -28,10 +28,12 @@ export function SettleButton({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
 
   return (
     <>
       <button
+        ref={button}
         type="button"
         onClick={() => {
           setOpen(true);
@@ -46,6 +48,8 @@ export function SettleButton({
           initialCustomer={{ id: customerId, name, phone, balancePaisa }}
           onClose={() => {
             setOpen(false);
+            // Back where the keyboard was, not to the page.
+            requestAnimationFrame(() => button.current?.focus());
             // The ledger and the balance above it are server-rendered, and a
             // settlement just changed both.
             router.refresh();

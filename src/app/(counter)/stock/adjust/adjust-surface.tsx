@@ -109,6 +109,8 @@ export function AdjustSurface({
   const [done, setDone] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
+  /** Set when a product is chosen; the effect below focuses its quantity. */
+  const focusQty = useRef(false);
 
   // Batches only matter when stock is leaving.
   useEffect(() => {
@@ -135,6 +137,12 @@ export function AdjustSurface({
     };
   }, [chosen, direction]);
 
+  useEffect(() => {
+    if (!focusQty.current) return;
+    focusQty.current = false;
+    qtyRef.current?.focus();
+  }, [chosen]);
+
   /**
    * A product chosen: counted in its own units, costed per its largest unit,
    * that cost pre-filled from the last purchase when there was one (PCN-012
@@ -149,7 +157,10 @@ export function AdjustSurface({
     setCost('');
     setError(null);
     setDone(null);
-    qtyRef.current?.focus();
+    // Focused once the quantity is drawn: focusing here, before the first
+    // product's fields existed, did nothing, and the count typed next went
+    // to the unit buttons.
+    focusQty.current = true;
     void lastPurchaseCostAction(product.productId)
       .then((last) => {
         if (!last || !costUnit) return;

@@ -62,6 +62,8 @@ export default async function ProductsPage({
           defaultValue={params.q ?? ''}
           placeholder="Search name, salt or maker — or scan"
           aria-label="Search the catalog"
+          // Arriving here is to look something up: the cursor starts in it.
+          autoFocus
           // A scan finds its product here (by barcode), including one that
           // landed with nothing in focus (the scan guard's home).
           data-scan-target=""

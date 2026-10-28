@@ -60,6 +60,8 @@ export default async function CustomersPage({
           defaultValue={params.q ?? ''}
           placeholder="Search name or phone"
           aria-label="Search customers"
+          // Arriving here is to look something up: the cursor starts in it.
+          autoFocus
           className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
         />
         {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}

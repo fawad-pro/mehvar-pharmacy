@@ -275,9 +275,9 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       return;
     }
 
-    setDone(`Returned — ${formatPaisa(paisa(outcome.totalRefundPaisa))}`);
-
-    print({
+    // Printed before "Returned" shows: the page takes no keys while
+    // printing, and the confirmation is when the next key is pressed.
+    await print({
       receiptNumber,
       dateTime: new Date(),
       salesmanName: receiptContext.salesmanName,
@@ -307,6 +307,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
           }
         : {}),
     });
+    setDone(`Returned — ${formatPaisa(paisa(outcome.totalRefundPaisa))}`);
   }
 
   return (

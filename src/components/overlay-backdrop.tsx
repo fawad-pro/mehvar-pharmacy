@@ -50,17 +50,27 @@ function keepTabInside(event: React.KeyboardEvent<HTMLDivElement>): void {
 export function OverlayBackdrop({
   label,
   onDismiss,
+  onEscape,
   children,
 }: {
   label: string;
   onDismiss?: (() => void) | undefined;
+  /**
+   * Esc from anywhere inside. A dialog owned by a screen rather than the
+   * shell has no one else to close it: Esc used to "work" only by sending
+   * the screen home to Sale.
+   */
+  onEscape?: (() => void) | undefined;
   children: React.ReactNode;
 }) {
   const pressedOnBackdrop = useRef(false);
 
   return (
     <div
-      onKeyDown={keepTabInside}
+      onKeyDown={(event) => {
+        keepTabInside(event);
+        if (event.key === 'Escape' && onEscape) onEscape();
+      }}
       className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
