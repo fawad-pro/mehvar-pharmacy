@@ -312,3 +312,79 @@ test('on Receive Stock, a barcode run into a price is refused, never a crash', a
   await expect(page.getByRole('table')).toHaveCount(0);
   expect(crashes).toEqual([]);
 });
+
+/**
+ * A scan that lands on no field — the page, or a button just pressed (always,
+ * on a tablet) — is not lost, and its Enter presses nothing where it landed.
+ * It goes to the screen's own scan field (`data-scan-home`), or is put back
+ * with the notice when the screen has none or a dialog is open.
+ */
+const PANADOL_STRIP = '8964000101018';
+
+async function scanWherever(page: Page, code: string): Promise<void> {
+  await page.keyboard.type(code, { delay: 0 });
+  await page.keyboard.press('Enter');
+}
+
+const guardNotice = (page: Page) =>
+  page.getByRole('alert').filter({ hasText: 'That was a barcode' });
+
+test('Sale: a scan with focus off the search still adds the item', async ({ page }) => {
+  await openCounter(page);
+  await page.locator('aside').click({ position: { x: 5, y: 5 } });
+  await expect(search(page)).not.toBeFocused();
+  await scanWherever(page, PANADOL_STRIP);
+  await expect(cart(page)).toContainText('Panadol');
+  await expect(cart(page)).toContainText('1 strip');
+});
+
+test('Sale: a scan while paying commits nothing, whatever button has focus', async ({ page }) => {
+  await openCounter(page);
+  await scan(page, PANADOL_STRIP);
+  await expect(cart(page)).toContainText('Panadol');
+  await page.keyboard.press('F12');
+  const payment = page.getByRole('dialog', { name: 'Payment' });
+  await payment.getByRole('button', { name: /^Commit/ }).focus();
+  await scanWherever(page, PANADOL_STRIP);
+  await expect(guardNotice(page)).toBeVisible();
+  await expect(payment).toBeVisible();
+  await expect(page.getByText(/Saved — /)).toHaveCount(0);
+  await page.keyboard.press('Escape');
+});
+
+test('Receive Stock: a scan on arrival starts a line, not the supplier picker', async ({
+  page,
+}) => {
+  await openCounter(page);
+  await page.keyboard.press('F7');
+  await expect(page).toHaveURL(/\/purchases$/);
+  // A new invoice starts at the supplier — which is where a scan lands.
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.includes('purchase')) localStorage.removeItem(key);
+    }
+  });
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Supplier' })).toBeFocused({ timeout: 30_000 });
+  await scanWherever(page, PANADOL_STRIP);
+  await expect(page.getByLabel(/^Qty/)).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Supplier' })).toHaveCount(0);
+});
+
+test('Products: a scan finds the product it belongs to', async ({ page }) => {
+  await openCounter(page);
+  await page.keyboard.press('F5');
+  await expect(page).toHaveURL(/\/products$/);
+  await scanWherever(page, PANADOL_STRIP);
+  await expect(page).toHaveURL(new RegExp(`q=${PANADOL_STRIP}`), { timeout: 30_000 });
+  await expect(page.getByRole('link', { name: /Panadol/ }).first()).toBeVisible();
+});
+
+test('Stock: a screen with no scan field says so, and nothing else happens', async ({ page }) => {
+  await openCounter(page);
+  await page.keyboard.press('F6');
+  await expect(page).toHaveURL(/\/stock$/);
+  await scanWherever(page, PANADOL_STRIP);
+  await expect(guardNotice(page)).toBeVisible();
+  await expect(page).toHaveURL(/\/stock$/);
+});

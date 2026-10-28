@@ -15,7 +15,7 @@ import 'server-only';
 
 import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
-import { barcodeKeys } from '@/domain/catalog/barcode';
+import { barcodeKeys, looksLikeScannedCode } from '@/domain/catalog/barcode';
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
 import type { CatalogSuggestion } from '@/domain/catalog/product';
 import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
@@ -291,11 +291,25 @@ export async function listProducts(
   const term = query.search?.trim();
   if (term) {
     const pattern = `%${term.replace(/[%_]/g, (match) => `\\${match}`)}%`;
+    // A scanned code finds its product here too: a scan on this screen is
+    // "which product is this pack?". Looked up first, as plain ids, so the
+    // list query below stays one table with no subquery.
+    const scannedIds = looksLikeScannedCode(term)
+      ? (
+          await scope.db
+            .select({ productId: productBarcodes.productId })
+            .from(productBarcodes)
+            .where(
+              scope.scopeOf(productBarcodes, inArray(productBarcodes.barcode, barcodeKeys(term))),
+            )
+        ).map((row) => row.productId)
+      : [];
     filters.push(
       or(
         ilike(products.name, pattern),
         ilike(products.formulaText, pattern),
         ilike(products.manufacturer, pattern),
+        ...(scannedIds.length > 0 ? [inArray(products.id, scannedIds)] : []),
       ),
     );
   }

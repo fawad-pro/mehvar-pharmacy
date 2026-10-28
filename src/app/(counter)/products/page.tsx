@@ -60,8 +60,12 @@ export default async function ProductsPage({
           autoComplete="off"
           name="q"
           defaultValue={params.q ?? ''}
-          placeholder="Search name, salt or maker"
+          placeholder="Search name, salt or maker — or scan"
           aria-label="Search the catalog"
+          // A scan finds its product here (by barcode), including one that
+          // landed with nothing in focus (the scan guard's home).
+          data-scan-target=""
+          data-scan-home=""
           className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
         />
         {onlyQueue ? <input type="hidden" name="queue" value="1" /> : null}

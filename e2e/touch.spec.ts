@@ -5,8 +5,9 @@ import { openCounter, search } from './support/counter';
 /**
  * The counter on a tablet: every workflow by touch alone.
  *
- * No `keyboard.press` anywhere below. A tablet has no function keys, no Tab
- * and no Enter beyond the on-screen keyboard's, so each step is a tap, and
+ * No `keyboard.press` anywhere below, except for a scanner, which is a
+ * keyboard. A tablet has no function keys, no Tab and no Enter beyond the
+ * on-screen keyboard's, so each step is a tap, and
  * text goes in the way an on-screen keyboard puts it (`fill`). A workflow
  * that needs a key fails here at the step with nothing to tap: the udhaar
  * key and Switch user were inert text in the key bar, so an udhaar sale and
@@ -217,4 +218,19 @@ test('a return by touch, from the sale just made', async ({ page }) => {
   expect(await undersized(page), 'Returns, with a sale open').toEqual([]);
   await tap(page.getByRole('button', { name: /^Confirm return/ }));
   await expect(page.getByRole('status')).toContainText('Returned');
+});
+
+test('a Bluetooth scanner after a tap: the scan adds its product', async ({ page }) => {
+  await openCounter(page);
+  await addByTouch(page, 'disprin', 'Disprin');
+  const row = page.getByRole('row').filter({ hasText: 'Disprin' });
+  await tap(row.getByRole('button', { name: /^One strip more/ }));
+  await expect(row).toContainText('2 strip');
+  // Focus is wherever the tap left it, never the search box. The scanner
+  // types Panadol's strip code and Enter, as a keyboard does.
+  await page.keyboard.type('8964000101018', { delay: 0 });
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('row').filter({ hasText: 'Panadol' })).toHaveCount(1);
+  // And the tapped line is as it was.
+  await expect(row).toContainText('2 strip');
 });

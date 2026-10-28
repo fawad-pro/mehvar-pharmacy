@@ -275,8 +275,10 @@ export function ProductSearch({
         autoComplete="off"
         spellCheck={false}
         placeholder="Search or scan…"
-        // Scans belong here; the counter's scan guard leaves this field alone.
+        // Scans belong here; the counter's scan guard leaves this field alone,
+        // and sends here a scan that landed on no field (`data-scan-home`).
         data-scan-target=""
+        data-scan-home=""
         aria-autocomplete="list"
         aria-controls="product-search-results"
         aria-expanded={visibleHits.length > 0 || codeOptions.length > 0}
