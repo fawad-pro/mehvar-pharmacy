@@ -40,6 +40,7 @@ export function ProductSearch({
   autoFocus = true,
   inputRef,
   onEnterCart,
+  onEnterEmpty,
   onQuickAdd,
   onLinkCode,
 }: {
@@ -50,6 +51,8 @@ export function ProductSearch({
   inputRef?: React.RefObject<HTMLInputElement | null>;
   /** ArrowUp on an empty query moves into the cart (Phase 10 §4). */
   onEnterCart?: () => void;
+  /** Enter with nothing typed: the screen's next step (Receive Stock: Paid now). */
+  onEnterEmpty?: () => void;
   /**
    * W6 — Enter on a search that found nothing opens the quick item. Resolves
    * true once the item actually landed in the cart, which is when the box
@@ -219,6 +222,10 @@ export function ProductSearch({
       setActive((current) => Math.max(current - 1, 0));
     } else if (event.key === 'Enter') {
       event.preventDefault();
+      if (query.trim() === '' && onEnterEmpty) {
+        onEnterEmpty();
+        return;
+      }
       if (unknownCode) {
         // Only an option the operator moved onto. The Enter a scanner sends
         // with an unknown code does nothing but leave the prompt showing.

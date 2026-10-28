@@ -559,7 +559,16 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
       {/* The line being entered. */}
       <div className="border-line rounded border p-3">
-        <ProductSearch onSelect={onSelectProduct} inputRef={searchRef} autoFocus={false} />
+        <ProductSearch
+          onSelect={onSelectProduct}
+          inputRef={searchRef}
+          autoFocus={false}
+          // The lines are in: Enter on an empty search goes to Paid now. Tab
+          // went there by way of the last line's Remove button.
+          onEnterEmpty={() => {
+            if (draft.lines.length > 0) document.getElementById('cash-paid')?.focus();
+          }}
+        />
 
         {pending ? (
           <div
@@ -734,6 +743,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
         ) : (
           <p className="text-ink/40 mt-2 text-xs">
             Search or scan the product to start a line. Esc returns here from any field.
+            {draft.lines.length > 0
+              ? ' Lines all in? Enter on an empty search goes to Paid now.'
+              : ''}
           </p>
         )}
       </div>

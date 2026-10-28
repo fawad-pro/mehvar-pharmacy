@@ -357,6 +357,15 @@ export function PaymentOverlay({
           </div>
         ) : null}
 
+        {/* With a customer attached and the whole bill tendered, the screen
+            said nothing about udhaar: knowing to type what they pay now (0
+            for all of it) had to be taught. Said here, where it is done. */}
+        {customerName && !short && split.changePaisa === 0 ? (
+          <p className="text-ink/60 mt-3 text-sm">
+            Paid in full. For udhaar, type what {customerName} pays now — 0 puts it all on udhaar.
+          </p>
+        ) : null}
+
         {short ? (
           customerName ? (
             <p className="text-amber mt-3 text-sm">
