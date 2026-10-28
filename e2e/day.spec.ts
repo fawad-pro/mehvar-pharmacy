@@ -150,19 +150,63 @@ test('W10: the three numbers, a cash movement, and the drawer count', async ({ p
     page.getByText(/Nothing needs a look today\.|thing(s)? need(s)? a look/),
   ).toBeVisible();
 
-  // Record a cash movement — an owner withdrawal.
+  const expected = page
+    .getByText('Cash expected in drawer')
+    .locator('xpath=..')
+    .locator('p.numeral');
+  await expect(expected).toContainText('Rs', { timeout: 30_000 });
+  const before = (await expected.textContent()) ?? '';
+
+  // Record a cash movement — an owner withdrawal. A distinctive amount, so
+  // this run's row is the one found and cancelled below.
+  const withdrawn = 400 + (Date.now() % 100);
   await page.getByLabel('Reason').selectOption('owner_withdrawal');
-  await page.getByLabel('Amount').fill('500');
+  await page.getByLabel('Amount').fill(String(withdrawn));
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page.getByText('Saved.')).toBeVisible();
 
   // The drawer-count ritual: counting something other than expected produces
   // a difference, and recording it closes the ritual (D5 — nothing locks).
-  await page.getByLabel(/actually in the drawer/).fill('999999');
-  await expect(page.getByText(/Over by|Short by/)).toBeVisible();
+  // A small, believable difference: this spec counted Rs 999,999 once, and
+  // on a developer's database that became the day's expected cash for good.
+  await expect(expected).not.toHaveText(before, { timeout: 30_000 });
+  const expectedText = (await expected.textContent()) ?? '';
+  const expectedPaisa = Math.round(Number(expectedText.replace(/[^0-9.-]/g, '')) * 100);
+  expect(Number.isSafeInteger(expectedPaisa), expectedText).toBe(true);
+  const overPaisa = 700 + (Date.now() % 97);
+  await page
+    .getByLabel(/actually in the drawer/)
+    .fill(((expectedPaisa + overPaisa) / 100).toFixed(2));
+  await expect(page.getByText(`Over by ${rupees(overPaisa)}`)).toBeVisible();
   await page.getByRole('button', { name: 'Record over/short' }).click();
   await expect(page.getByText(/Recorded/)).toBeVisible();
+
+  // Leave the drawer as it was found (CLAUDE.md: a spec that leaves balance
+  // state behind must clear it): both entries cancelled, as PCN-013 allows.
+  await cancelCashEntry(page, `-${rupees(withdrawn * 100)}`, 'Owner withdrawal');
+  await cancelCashEntry(page, `+${rupees(overPaisa)}`, 'Over/short at count');
+  await expect(expected).toHaveText(before, { timeout: 30_000 });
 });
+
+/** As the screen writes an amount: 1,234.50. */
+function rupees(amountPaisa: number): string {
+  return (amountPaisa / 100).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+async function cancelCashEntry(page: Page, amount: string, reason: string): Promise<void> {
+  const entry = page
+    .getByRole('listitem')
+    .filter({ hasText: amount })
+    .filter({ hasText: reason })
+    .filter({ hasNotText: 'Cancelled:' });
+  await expect(entry).toHaveCount(1, { timeout: 30_000 });
+  await entry.getByRole('button', { name: 'Cancel entry' }).click();
+  await page.getByRole('button', { name: 'Yes, cancel it' }).click();
+  await expect(entry).toContainText('— cancelled', { timeout: 30_000 });
+}
 
 /**
  * The Overall tab sums every rupee since installation, so an "expected cash in
