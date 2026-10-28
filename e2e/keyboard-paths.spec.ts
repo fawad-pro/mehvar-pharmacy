@@ -46,9 +46,9 @@ test('a payment recorded on the customer page: Esc closes it and stays there', a
   await expect(page.getByRole('option').first()).toContainText('Panadol', { timeout: 30_000 });
   await page.keyboard.press('Enter');
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
-  await picker.getByRole('button', { name: `+ Add “${name}” as a new customer` }).click();
+  await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
   await page.keyboard.press('F12');
   await page.getByRole('dialog', { name: 'Payment' }).getByLabel('Cash tendered').fill('0');
   await page.keyboard.press('Enter');

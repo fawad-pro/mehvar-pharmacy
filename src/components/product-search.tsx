@@ -37,6 +37,8 @@ type CodeOption = 'link' | 'add';
 
 export function ProductSearch({
   onSelect,
+  label,
+  hint,
   autoFocus = true,
   inputRef,
   onEnterCart,
@@ -46,6 +48,14 @@ export function ProductSearch({
 }: {
   /** Receives the chosen hit and the raw query, so quantity grammar survives. */
   onSelect: (hit: SearchHit, rawQuery: string) => void;
+  /**
+   * A visible label, and with it the large field (PCN-016's Sale). Without
+   * one the field keeps its screen-reader name, "Search products", until its
+   * own screen is redrawn.
+   */
+  label?: string;
+  /** The keys, said beside a visible label from tablet up. */
+  hint?: React.ReactNode;
   autoFocus?: boolean;
   /** Lets the sale surface return focus here after a commit (Phase 7 rule 1). */
   inputRef?: React.RefObject<HTMLInputElement | null>;
@@ -262,9 +272,20 @@ export function ProductSearch({
 
   return (
     <div className="relative">
-      <label className="sr-only" htmlFor="product-search">
-        Search products
-      </label>
+      {label ? (
+        <span className="mb-1.5 flex items-center justify-between gap-3">
+          <label htmlFor="product-search" className="text-label text-ink-2">
+            {label}
+          </label>
+          {hint ? (
+            <span className="text-caption text-ink-2 truncate max-md:hidden">{hint}</span>
+          ) : null}
+        </span>
+      ) : (
+        <label className="sr-only" htmlFor="product-search">
+          Search products
+        </label>
+      )}
       <input
         id="product-search"
         ref={field}
@@ -281,7 +302,7 @@ export function ProductSearch({
         onKeyDown={onKeyDown}
         autoComplete="off"
         spellCheck={false}
-        placeholder="Search or scan…"
+        placeholder={label ? 'Type a name or scan a barcode' : 'Search or scan…'}
         // Scans belong here; the counter's scan guard leaves this field alone,
         // and sends here a scan that landed on no field (`data-scan-home`).
         data-scan-target=""
@@ -290,7 +311,10 @@ export function ProductSearch({
         aria-controls="product-search-results"
         aria-expanded={visibleHits.length > 0 || codeOptions.length > 0}
         role="combobox"
-        className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3 text-lg"
+        className={[
+          'border-border bg-surface placeholder:text-ink-2 w-full rounded-control border focus:border-blue-600',
+          label ? 'text-field-lg h-[52px] px-4' : 'h-touch px-3 text-lg',
+        ].join(' ')}
       />
 
       {parsed.hasExplicitCount ? (

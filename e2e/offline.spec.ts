@@ -85,12 +85,12 @@ test('a disruption mid-cart does not disturb the cart', async ({ page, context }
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText('Brufen');
   // Rs 3.50 × 10 + Rs 9.00 × 10 = Rs 125.00
-  await expect(total(page)).toHaveText('125.00');
+  await expect(total(page)).toHaveText('Rs 125.00');
 
   // Editing still works: it never touched the network to begin with.
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('+');
-  await expect(total(page)).toHaveText('215.00');
+  await expect(total(page)).toHaveText('Rs 215.00');
 
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter');
@@ -115,7 +115,7 @@ test('W2 offline: a new customer and an udhaar sale both queue, and land in orde
   // working by naming W2.
   const name = `Offline Customer ${Date.now()}`;
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
   await expect(picker).toBeHidden();
@@ -175,7 +175,7 @@ test('W6 offline: an unknown product becomes a real line without leaving the sal
 
   // A real line, not an anonymous one (D3), and the sale continues.
   await expect(cart(page)).toContainText(name);
-  await expect(total(page)).toHaveText('250.00');
+  await expect(total(page)).toHaveText('Rs 250.00');
   await expect(search(page)).toBeFocused();
 
   await page.keyboard.press('F12');

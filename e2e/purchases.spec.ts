@@ -178,7 +178,7 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   await search(page).fill(`${boxes}*${SHORTFALL_PRODUCT.toLowerCase()}`);
   await expect(page.getByRole('option').first()).toContainText(SHORTFALL_PRODUCT);
   await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText(/more than in stock|not in stock/);
+  await expect(cart(page)).toContainText(/More than in stock|Not in stock/);
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Sold more than the system had');

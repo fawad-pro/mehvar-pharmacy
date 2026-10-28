@@ -126,7 +126,7 @@ export function AppShell({
               and never over the cart. */}
           <LicenceBanner notice={licence} isOwner={userRole === 'owner'} />
 
-          <UdhaarKeyProvider register={register}>
+          <UdhaarKeyProvider register={register} press={handlers.onUdhaar}>
             <main className="min-h-0 flex-1 overflow-auto">{children}</main>
           </UdhaarKeyProvider>
 

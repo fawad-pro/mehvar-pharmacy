@@ -76,3 +76,39 @@ export function BalanceInline({ balancePaisa }: { balancePaisa: number }) {
     </span>
   );
 }
+
+/**
+ * The position as one phrase, words first — "Owes Rs 1,200.00",
+ * "Advance Rs 300.00", "Settled up" (PCN-016's dialogs and the Sale rail).
+ * Never a minus sign: the word carries the direction.
+ */
+export function positionPhrase(balancePaisa: number): string {
+  const position = positionOf(balancePaisa);
+  const amount = formatPaisa(paisa(position.amountPaisa), { withSymbol: true });
+  switch (position.kind) {
+    case 'owes':
+      return `Owes ${amount}`;
+    case 'in_credit':
+      return `Advance ${amount}`;
+    case 'settled':
+      return 'Settled up';
+  }
+}
+
+/** `positionPhrase` in its colour: owing is attention, settled is done, an advance is plain. */
+export function PositionInline({
+  balancePaisa,
+  className = '',
+}: {
+  balancePaisa: number;
+  className?: string;
+}) {
+  const kind = positionOf(balancePaisa).kind;
+  const tone =
+    kind === 'owes' ? 'text-amber-text' : kind === 'settled' ? 'text-green-700' : 'text-navy';
+  return (
+    <span className={`numeral font-semibold whitespace-nowrap ${tone} ${className}`}>
+      {positionPhrase(balancePaisa)}
+    </span>
+  );
+}

@@ -18,7 +18,7 @@ import { openCounter as setUpCounter } from './support/counter';
 test('three characters return ranked results, by keyboard alone', async ({ page }) => {
   await setUpCounter(page);
 
-  const search = page.getByRole('combobox', { name: 'Search products' });
+  const search = page.getByRole('combobox', { name: 'Search or scan' });
   await expect(search).toBeFocused();
 
   await search.fill('pan');
@@ -37,7 +37,7 @@ test('three characters return ranked results, by keyboard alone', async ({ page 
 test('a misspelling still finds the product (Phase 10 §5)', async ({ page }) => {
   await setUpCounter(page);
 
-  const search = page.getByRole('combobox', { name: 'Search products' });
+  const search = page.getByRole('combobox', { name: 'Search or scan' });
   await search.fill('pandol');
   await expect(
     page.getByRole('listbox', { name: 'Search results' }).getByRole('option').first(),
@@ -47,7 +47,7 @@ test('a misspelling still finds the product (Phase 10 §5)', async ({ page }) =>
 test('a salt finds the brands that carry it, labelled as substitutes', async ({ page }) => {
   await setUpCounter(page);
 
-  const search = page.getByRole('combobox', { name: 'Search products' });
+  const search = page.getByRole('combobox', { name: 'Search or scan' });
   await search.fill('ibuprofen');
 
   const first = page.getByRole('listbox', { name: 'Search results' }).getByRole('option').first();
@@ -58,7 +58,7 @@ test('a salt finds the brands that carry it, labelled as substitutes', async ({ 
 test('a scanned barcode resolves straight to one product', async ({ page }) => {
   await setUpCounter(page);
 
-  const search = page.getByRole('combobox', { name: 'Search products' });
+  const search = page.getByRole('combobox', { name: 'Search or scan' });
   // A scanner types the digits and presses Enter.
   await search.fill('8964000101018');
   await page.keyboard.press('Enter');
@@ -76,7 +76,7 @@ test('the index is cached, so a reload does not re-download the catalog', async 
   await page.reload();
   await incremental;
 
-  const search = page.getByRole('combobox', { name: 'Search products' });
+  const search = page.getByRole('combobox', { name: 'Search or scan' });
   await search.fill('pan');
   await expect(
     page.getByRole('listbox', { name: 'Search results' }).getByRole('option').first(),

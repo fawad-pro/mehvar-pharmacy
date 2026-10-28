@@ -38,22 +38,22 @@ test('a box priced by the owner sells at exactly that price (PCN-012)', async ({
   await page.keyboard.press('Enter');
   // A new line starts at the smallest pack (I3), at that pack's own price.
   await expect(cart(page)).toContainText('1 box');
-  await expect(total(page)).toHaveText('250.00');
+  await expect(total(page)).toHaveText('Rs 250.00');
 
   const line = cart(page).getByRole('row').filter({ hasText: name });
   await line.focus();
   await page.keyboard.press('+');
   await expect(cart(page)).toContainText('2 box');
-  await expect(total(page)).toHaveText('500.00');
+  await expect(total(page)).toHaveText('Rs 500.00');
 
   // Tab keeps the count and moves to the next unit at ITS price: two capsules
   // at the suggested Rs 17.86 — then back to two boxes at Rs 250 each.
   await page.keyboard.press('Tab');
   await expect(cart(page)).toContainText('2 cap');
-  await expect(total(page)).toHaveText('35.72');
+  await expect(total(page)).toHaveText('Rs 35.72');
   await page.keyboard.press('Tab');
   await expect(cart(page)).toContainText('2 box');
-  await expect(total(page)).toHaveText('500.00');
+  await expect(total(page)).toHaveText('Rs 500.00');
 
   await page.keyboard.press('F12');
   await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();

@@ -63,8 +63,8 @@ test('expired stock is warned about before payment and listed for the owner', as
   await search(page).fill(`${strips}*${PRODUCT.toLowerCase()}`);
   await expect(page.getByRole('option').first()).toContainText(PRODUCT);
   await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText(/expired stock/);
-  await expect(cart(page)).toContainText(/expired \d{4}-\d{2}-\d{2}/);
+  await expect(cart(page)).toContainText(/Expired|Part expired/);
+  await expect(cart(page)).toContainText(/expired \d{2}\/\d{4}/i);
 
   // Warned, never blocked (P2).
   await page.keyboard.press('F12');

@@ -75,15 +75,15 @@ test('every unit on the line; buttons and keys change it; the next sale starts w
     'true',
   );
   await expect(cart(page)).toContainText('1 strip');
-  await expect(total(page)).toHaveText('40.00');
+  await expect(total(page)).toHaveText('Rs 40.00');
 
   // By pointer: box, then + and −, each at the box's own price.
   await units.getByRole('button', { name: 'box' }).click();
   await expect(cart(page)).toContainText('1 box');
-  await expect(total(page)).toHaveText('400.00');
+  await expect(total(page)).toHaveText('Rs 400.00');
   await cart(page).getByRole('button', { name: 'One box more' }).click();
   await expect(cart(page)).toContainText('2 box');
-  await expect(total(page)).toHaveText('800.00');
+  await expect(total(page)).toHaveText('Rs 800.00');
   await cart(page).getByRole('button', { name: 'One box less' }).click();
   await expect(cart(page)).toContainText('1 box');
 
@@ -91,14 +91,14 @@ test('every unit on the line; buttons and keys change it; the next sale starts w
   await cart(page).getByRole('row').filter({ hasText: name }).focus();
   await page.keyboard.press('Tab');
   await expect(cart(page)).toContainText('1 tab');
-  await expect(total(page)).toHaveText('4.00');
+  await expect(total(page)).toHaveText('Rs 4.00');
   await page.keyboard.press('Tab');
   await expect(cart(page)).toContainText('1 strip');
   await page.keyboard.press('Tab');
   await expect(cart(page)).toContainText('1 box');
   await page.keyboard.press('+');
   await expect(cart(page)).toContainText('2 box');
-  await expect(total(page)).toHaveText('800.00');
+  await expect(total(page)).toHaveText('Rs 800.00');
 
   await payAndSettle(page);
   await expect(lastSale(page)).toContainText('800.00');
@@ -121,13 +121,13 @@ test('every unit on the line; buttons and keys change it; the next sale starts w
   await expect(search(page)).toBeVisible({ timeout: 30_000 });
   await addToCart(page, name);
   await expect(units.getByRole('button', { name: 'box' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(total(page)).toHaveText('400.00');
+  await expect(total(page)).toHaveText('Rs 400.00');
 
   // − on a single box removes the line, as − does from the keyboard.
   await cart(page)
     .getByRole('button', { name: `Remove ${name}` })
     .click();
-  await expect(page.getByText('Search above to start a sale.')).toBeVisible();
+  await expect(page.getByText('Scan a barcode or type a name — Enter puts it on the bill.')).toBeVisible();
 });
 
 test('a shop that starts sales loose starts a never-sold product in tablets', async ({ page }) => {
@@ -142,5 +142,5 @@ test('a shop that starts sales loose starts a never-sold product in tablets', as
   const units = cart(page).getByRole('group', { name: `Unit for ${name}` });
   await expect(units.getByRole('button', { name: 'tab' })).toHaveAttribute('aria-pressed', 'true');
   await expect(cart(page)).toContainText('1 tab');
-  await expect(total(page)).toHaveText('4.00');
+  await expect(total(page)).toHaveText('Rs 4.00');
 });

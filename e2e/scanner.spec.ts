@@ -150,7 +150,7 @@ test('a new product added from an unknown scan keeps the code', async ({ page })
   await expect(page.getByRole('dialog')).toHaveCount(0);
   // One line, now two of it: 2 × Rs 120.
   await expect(cart(page).getByRole('row').filter({ hasText: name })).toHaveCount(1);
-  await expect(total(page)).toHaveText('240.00');
+  await expect(total(page)).toHaveText('Rs 240.00');
 
   // And the server has it, through sync: the catalog every counter loads
   // carries the code on the new product.
@@ -203,7 +203,7 @@ test('an expired pack is added, and said to be expired', async ({ page }) => {
   await scan(page, `010${gtin}17200131` + '10OLD1');
   await expect(cart(page)).toContainText(product.name);
   await expect(page.getByRole('status', { name: 'Expired pack' })).toContainText(
-    'expired on 31 Jan 2020',
+    'expired 01/2020',
   );
 
   // A pack in date says nothing.
