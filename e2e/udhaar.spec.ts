@@ -98,7 +98,9 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   // its own attribution); the next one starts unattached: no customer block,
   // whose control is "remove". The last sale's own line still names who it
   // went to, which is the point of it.
-  await expect(page.locator('aside').getByRole('button', { name: 'Remove customer from this sale' })).toHaveCount(0);
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'Remove customer from this sale' }),
+  ).toHaveCount(0);
 });
 
 test('the payment overlay computes Remaining the instant tendered falls short — no separate calculator', async ({

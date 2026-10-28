@@ -83,7 +83,9 @@ test('editing a line in place, by keyboard (Phase 10 §4)', async ({ page }) => 
   await page.keyboard.press('-');
   await expect(cart(page)).toContainText('1 box');
   await page.keyboard.press('-');
-  await expect(page.getByText('Scan a barcode or type a name — Enter puts it on the bill.')).toBeVisible();
+  await expect(
+    page.getByText('Scan a barcode or type a name — Enter puts it on the bill.'),
+  ).toBeVisible();
   await expect(search(page)).toBeFocused();
 });
 

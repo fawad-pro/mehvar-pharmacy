@@ -202,9 +202,7 @@ test('an expired pack is added, and said to be expired', async ({ page }) => {
   // (17) 200131: this pack expired on 31 Jan 2020.
   await scan(page, `010${gtin}17200131` + '10OLD1');
   await expect(cart(page)).toContainText(product.name);
-  await expect(page.getByRole('status', { name: 'Expired pack' })).toContainText(
-    'expired 01/2020',
-  );
+  await expect(page.getByRole('status', { name: 'Expired pack' })).toContainText('expired 01/2020');
 
   // A pack in date says nothing.
   await scan(page, packCode(gtin, 'FRESH1'));
