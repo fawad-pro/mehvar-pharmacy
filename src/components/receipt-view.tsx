@@ -59,6 +59,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
           RETURN — against receipt {receipt.refund.againstReceiptNumber}
         </p>
       ) : null}
+      {receipt.cancellation ? (
+        <p className="text-center font-bold">
+          PAYMENT CANCELLED — receipt {receipt.cancellation.againstReceiptNumber}
+        </p>
+      ) : null}
       {receipt.customerName ? <p>Customer: {receipt.customerName}</p> : null}
 
       {receipt.lines && receipt.lines.length > 0 ? (
@@ -85,7 +90,14 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
             <Row label="Subtotal" amountPaisa={receipt.subtotalPaisa} />
           ) : null}
           {receipt.discountPaisa ? (
-            <Row label="Discount" amountPaisa={-receipt.discountPaisa} />
+            <Row
+              label={receipt.billDiscountPaisa ? 'Item Discount' : 'Discount'}
+              amountPaisa={-receipt.discountPaisa}
+            />
+          ) : null}
+          {/* [PCN-014] Its own row, after the item discounts it comes after. */}
+          {receipt.billDiscountPaisa ? (
+            <Row label="Bill Discount" amountPaisa={-receipt.billDiscountPaisa} />
           ) : null}
           {receipt.totalPaisa !== undefined ? (
             refund ? (
@@ -132,9 +144,11 @@ export function ReceiptView({ receipt }: { receipt: ReceiptData }) {
             label={
               refund
                 ? 'Returned'
-                : receipt.miniStatement.amountPaisa >= 0
-                  ? 'Udhaar (this sale)'
-                  : 'Paid'
+                : receipt.cancellation
+                  ? 'Payment cancelled'
+                  : receipt.miniStatement.amountPaisa >= 0
+                    ? 'Udhaar (this sale)'
+                    : 'Paid'
             }
             amountPaisa={Math.abs(receipt.miniStatement.amountPaisa)}
           />

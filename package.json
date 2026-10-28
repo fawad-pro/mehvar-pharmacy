@@ -17,8 +17,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "playwright test",
-    "e2e:reset": "npm run db:reset && npm run db:setup && playwright test",
+    "e2e": "npm run e2e:check-db && playwright test",
+    "e2e:reset": "npm run e2e:check-db && npm run db:reset && npm run db:setup && playwright test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --conditions=react-server scripts/db/migrate.ts",
     "db:grants": "tsx --conditions=react-server scripts/db/grants.ts",
@@ -45,7 +45,8 @@
     "licence:inspect": "tsx scripts/licence/inspect.ts",
     "licence:revoke": "tsx scripts/licence/revoke.ts",
     "db:setup": "npm run db:migrate && npm run db:grants && npm run db:seed && npm run catalog:seed",
-    "catalog:seed": "npm run catalog:build -- --out dist/catalog/mehvar-catalog.json && npm run catalog:import -- dist/catalog/mehvar-catalog.json --origin dev-setup --trusted-local"
+    "catalog:seed": "npm run catalog:build -- --out dist/catalog/mehvar-catalog.json && npm run catalog:import -- dist/catalog/mehvar-catalog.json --origin dev-setup --trusted-local",
+    "e2e:check-db": "tsx scripts/e2e/check-database.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.0.2",

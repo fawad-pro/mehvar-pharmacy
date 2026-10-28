@@ -28,7 +28,9 @@
 import 'server-only';
 
 import { desc, eq, ilike, inArray, or, sum } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
+import { returnableLinesForSale } from './returns-queries';
 import type { TenantScope } from './scoped';
 import {
   customers,
@@ -41,7 +43,7 @@ import {
   users,
 } from './schema';
 
-import { storedLineGrossPaisa } from '@/domain/sales/sale-command';
+import { refundForLine } from '@/domain/sales/return-command';
 import type { Uuid } from '@/lib/uuid';
 
 /**
@@ -50,7 +52,8 @@ import type { Uuid } from '@/lib/uuid';
  * Declared here and redeclared by the client components that render it, per
  * the Day 7 rule — a client component never names this module.
  */
-export type ReceiptKind = 'sale' | 'settlement' | 'return';
+/** [PCN-013] `payment_cancelled`: the receipt for cancelling a payment typed wrong. */
+export type ReceiptKind = 'sale' | 'settlement' | 'payment_cancelled' | 'return';
 
 export interface ReceiptListRow {
   readonly receiptNumber: string;
@@ -156,6 +159,7 @@ export async function listReceipts(
       salesmanName: users.name,
       amountPaisa: payments.amountPaisa,
       createdAt: payments.createdAt,
+      reversesId: payments.reversesId,
     })
     .from(payments)
     .leftJoin(customers, eq(payments.customerId, customers.id))
@@ -213,11 +217,12 @@ export async function listReceipts(
     })),
     ...paymentRows.map((row) => ({
       receiptNumber: row.receiptNumber,
-      kind: 'settlement' as const,
+      kind: row.reversesId === null ? ('settlement' as const) : ('payment_cancelled' as const),
       id: row.id,
       customerName: row.customerName,
       salesmanName: row.salesmanName ?? 'Unknown',
-      amountPaisa: row.amountPaisa,
+      // A cancellation is stored negative; the kind says which way it went.
+      amountPaisa: Math.abs(row.amountPaisa),
       createdAt: row.createdAt,
       onCredit: false,
       hasReturns: false,
@@ -260,6 +265,8 @@ export interface ReceiptDetailLine {
   readonly unitPricePaisaEntered: number | null;
   readonly lineAmountPaisa: number | null;
   readonly lineDiscountPaisa: number;
+  /** [PCN-014] This line's share of the bill discount (0 on a return's lines). */
+  readonly invoiceDiscountSharePaisa: number;
   readonly priceOverridden: boolean;
   /** How much of this line has since come back — the "what happened after". */
   readonly returnedBase: number;
@@ -287,6 +294,8 @@ export interface ReceiptDetail {
   /** Sale only. */
   readonly lines?: readonly ReceiptDetailLine[];
   readonly invoiceDiscountPaisa?: number;
+  /** [PCN-014] The owner who approved a bill discount over the limit, if one did. */
+  readonly invoiceDiscountApprovedByName?: string | null;
   readonly totalPaisa?: number;
   readonly cashPaisa?: number;
   readonly creditPaisa?: number;
@@ -294,8 +303,12 @@ export interface ReceiptDetail {
   /** Returns made against this sale, if any. */
   readonly returns?: readonly ReceiptReturnSummary[];
 
-  /** Settlement only. */
+  /** Settlement or cancellation only; always positive. */
   readonly amountPaisa?: number;
+  /** [PCN-013] A settlement: the receipt that cancelled it, if one did. */
+  readonly cancelledByReceiptNumber?: string;
+  /** [PCN-013] A cancellation: the settlement it cancels. */
+  readonly cancelsReceiptNumber?: string;
 
   /** Return only. */
   readonly againstReceiptNumber?: string;
@@ -319,6 +332,7 @@ export async function findReceipt(
 ): Promise<ReceiptDetail | null> {
   const trimmed = receiptNumber.trim();
   if (trimmed === '') return null;
+  const approver = alias(users, 'approver');
 
   const [sale] = await scope.db
     .select({
@@ -330,6 +344,7 @@ export async function findReceipt(
       customerName: customers.name,
       origin: sales.origin,
       invoiceDiscountPaisa: sales.invoiceDiscountPaisa,
+      invoiceDiscountApprovedByName: approver.name,
       totalPaisa: sales.totalPaisa,
       cashPaisa: sales.cashPaisa,
       creditPaisa: sales.creditPaisa,
@@ -338,6 +353,7 @@ export async function findReceipt(
     .from(sales)
     .leftJoin(customers, eq(sales.customerId, customers.id))
     .leftJoin(users, eq(sales.createdBy, users.id))
+    .leftJoin(approver, eq(sales.invoiceDiscountApprovedBy, approver.id))
     .where(scope.scopeOf(sales, eq(sales.receiptNumber, trimmed)))
     .limit(1);
 
@@ -357,6 +373,7 @@ export async function findReceipt(
         unitPricePaisaEntered: saleLines.unitPricePaisaEntered,
         lineAmountPaisa: saleLines.lineAmountPaisa,
         lineDiscountPaisa: saleLines.lineDiscountPaisa,
+        invoiceDiscountSharePaisa: saleLines.invoiceDiscountSharePaisa,
         priceOverridden: saleLines.priceOverridden,
       })
       .from(saleLines)
@@ -417,6 +434,7 @@ export async function findReceipt(
         returnedBase: returnedByLine.get(row.lineId) ?? 0,
       })),
       invoiceDiscountPaisa: sale.invoiceDiscountPaisa,
+      invoiceDiscountApprovedByName: sale.invoiceDiscountApprovedByName,
       totalPaisa: sale.totalPaisa,
       cashPaisa: sale.cashPaisa,
       creditPaisa: sale.creditPaisa,
@@ -435,6 +453,7 @@ export async function findReceipt(
       customerName: customers.name,
       origin: payments.origin,
       amountPaisa: payments.amountPaisa,
+      reversesId: payments.reversesId,
     })
     .from(payments)
     .leftJoin(customers, eq(payments.customerId, customers.id))
@@ -443,8 +462,21 @@ export async function findReceipt(
     .limit(1);
 
   if (payment) {
+    // [PCN-013] Each half of a cancellation names the other.
+    const [other] = await scope.db
+      .select({ receiptNumber: payments.receiptNumber })
+      .from(payments)
+      .where(
+        scope.scopeOf(
+          payments,
+          payment.reversesId === null
+            ? eq(payments.reversesId, payment.id)
+            : eq(payments.id, payment.reversesId),
+        ),
+      )
+      .limit(1);
     return {
-      kind: 'settlement',
+      kind: payment.reversesId === null ? 'settlement' : 'payment_cancelled',
       id: payment.id,
       receiptNumber: payment.receiptNumber,
       createdAt: payment.createdAt,
@@ -452,7 +484,12 @@ export async function findReceipt(
       customerId: payment.customerId,
       customerName: payment.customerName,
       origin: payment.origin,
-      amountPaisa: payment.amountPaisa,
+      amountPaisa: Math.abs(payment.amountPaisa),
+      ...(other
+        ? payment.reversesId === null
+          ? { cancelledByReceiptNumber: other.receiptNumber }
+          : { cancelsReceiptNumber: other.receiptNumber }
+        : {}),
     };
   }
 
@@ -481,6 +518,7 @@ export async function findReceipt(
     const lineRows = await scope.db
       .select({
         lineId: saleReturnLines.id,
+        saleLineId: saleReturnLines.saleLineId,
         productId: saleLines.productId,
         productName: products.name,
         qtyBase: saleReturnLines.qtyBase,
@@ -488,8 +526,6 @@ export async function findReceipt(
         packLevels: products.packLevels,
         enteredUnitLevel: saleLines.enteredUnitLevel,
         unitPricePaisa: saleLines.unitPricePaisa,
-        originalQtyBase: saleLines.qtyBase,
-        originalLineAmountPaisa: saleLines.lineAmountPaisa,
         lineDiscountPaisa: saleLines.lineDiscountPaisa,
         priceOverridden: saleLines.priceOverridden,
       })
@@ -497,6 +533,34 @@ export async function findReceipt(
       .innerJoin(saleLines, eq(saleReturnLines.saleLineId, saleLines.id))
       .innerJoin(products, eq(saleLines.productId, products.id))
       .where(scope.scopeOf(saleReturnLines, eq(saleReturnLines.saleReturnId, saleReturn.id)));
+
+    // The sold lines as a refund reads them (their bill-discount shares
+    // included), and what returns made BEFORE this one had already taken.
+    const soldBy = new Map(
+      (await returnableLinesForSale(scope, saleReturn.againstSaleId as Uuid)).map((line) => [
+        line.saleLineId,
+        line,
+      ]),
+    );
+    const earlier = await scope.db
+      .select({
+        saleLineId: saleReturnLines.saleLineId,
+        qtyBase: saleReturnLines.qtyBase,
+        returnId: saleReturns.id,
+        at: saleReturns.createdAt,
+      })
+      .from(saleReturnLines)
+      .innerJoin(saleReturns, eq(saleReturnLines.saleReturnId, saleReturns.id))
+      .where(scope.scopeOf(saleReturnLines, eq(saleReturns.saleId, saleReturn.againstSaleId)));
+    const returnedBefore = new Map<string, number>();
+    for (const row of earlier) {
+      const before =
+        row.at.getTime() < saleReturn.createdAt.getTime() ||
+        (row.at.getTime() === saleReturn.createdAt.getTime() && row.returnId < saleReturn.id);
+      if (before) {
+        returnedBefore.set(row.saleLineId, (returnedBefore.get(row.saleLineId) ?? 0) + row.qtyBase);
+      }
+    }
 
     return {
       kind: 'return',
@@ -509,27 +573,26 @@ export async function findReceipt(
       origin: 'online',
       // A return's own lines are what came back; nothing comes back from a
       // return, so the column is structurally zero rather than queried.
-      lines: lineRows.map(({ originalQtyBase, originalLineAmountPaisa, ...row }) => ({
-        ...row,
-        returnedBase: 0,
-        unitName: null,
-        unitCount: null,
-        unitPricePaisaEntered: null,
-        // [PCN-012] The returned share of what the original line charged,
-        // rounded down — the same share `refundForLine` refunds.
-        lineAmountPaisa:
-          originalQtyBase > 0
-            ? Math.floor(
-                (storedLineGrossPaisa({
-                  lineAmountPaisa: originalLineAmountPaisa,
-                  unitPricePaisa: row.unitPricePaisa,
-                  qtyBase: originalQtyBase,
-                }) *
-                  row.qtyBase) /
-                  originalQtyBase,
+      lines: lineRows.map(({ saleLineId, ...row }) => {
+        const sold = soldBy.get(saleLineId);
+        return {
+          ...row,
+          returnedBase: 0,
+          invoiceDiscountSharePaisa: 0,
+          unitName: null,
+          unitCount: null,
+          unitPricePaisaEntered: null,
+          // [PCN-014] What this return refunded for the line — the same
+          // cumulative share `commitReturn` paid, counted from what earlier
+          // returns had already taken, so the lines add up to the refund.
+          lineAmountPaisa: sold
+            ? refundForLine(
+                { ...sold, alreadyReturnedBase: returnedBefore.get(saleLineId) ?? 0 },
+                row.qtyBase,
               )
             : 0,
-      })),
+        };
+      }),
       againstReceiptNumber: saleReturn.againstReceiptNumber,
       againstSaleId: saleReturn.againstSaleId,
       cashOutPaisa: saleReturn.cashOutPaisa,

@@ -34,14 +34,33 @@ export function useGlobalKeys(handlers: GlobalKeyHandlers = {}): void {
   const router = useRouter();
 
   useEffect(() => {
+    /**
+     * Whether a dialog was open when Esc went down — read before any
+     * dialog's own handler closes it. Esc then means "close the dialog" and
+     * nothing else: a dialog the shell does not own (Record a payment, on a
+     * customer's page) closed itself, and the same Esc then went home to
+     * Sale, away from the ledger the payment had just changed.
+     */
+    let dialogOpenAtEscape = false;
+    function beforeDialogs(event: KeyboardEvent): void {
+      if (event.key === BACK_KEY) {
+        dialogOpenAtEscape = document.querySelector('[aria-modal="true"]') !== null;
+      }
+    }
+
     function handle(event: KeyboardEvent): void {
       if (event.altKey || event.ctrlKey || event.metaKey) {
         return;
       }
 
       if (event.key === BACK_KEY) {
+        // A field that took Esc for itself (closing an inline form) says so
+        // with preventDefault. Not stopPropagation: React listens on the
+        // document too, beside this listener, so stopping propagation stops
+        // nothing here.
+        if (event.defaultPrevented) return;
         const closed = handlers.onEscape?.() ?? false;
-        if (!closed && window.location.pathname !== HOME_ROUTE) {
+        if (!closed && !dialogOpenAtEscape && window.location.pathname !== HOME_ROUTE) {
           markNavigationIntent();
           router.push(HOME_ROUTE);
         }
@@ -71,8 +90,10 @@ export function useGlobalKeys(handlers: GlobalKeyHandlers = {}): void {
       }
     }
 
+    document.addEventListener('keydown', beforeDialogs, { capture: true });
     document.addEventListener('keydown', handle);
     return () => {
+      document.removeEventListener('keydown', beforeDialogs, { capture: true });
       document.removeEventListener('keydown', handle);
     };
   }, [router, handlers]);

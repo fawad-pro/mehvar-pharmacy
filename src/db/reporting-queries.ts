@@ -13,9 +13,12 @@
 
 import 'server-only';
 
-import { desc, eq, gte, isNotNull, lt, ne, sql, sum } from 'drizzle-orm';
+import { desc, eq, gt, gte, inArray, isNotNull, isNull, lt, ne, sql, sum } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 
+import { billDiscountNeedsApproval } from '@/domain/sales/cart';
 import { summariseBook } from '@/domain/udhaar/position';
+import { paisa } from '@/lib/branded';
 import { DEFAULT_TIME_ZONE } from '@/lib/business-day';
 import type { PackLevel } from '@/lib/quantity';
 
@@ -25,6 +28,7 @@ import {
   adjustments,
   batches,
   cashMovements,
+  customers,
   payments,
   products,
   purchaseCorrections,
@@ -33,6 +37,7 @@ import {
   saleLines,
   saleReturns,
   sales,
+  supplierPayments,
   supplierReturns,
   suppliers,
   users,
@@ -211,6 +216,8 @@ export interface OverrideRow {
   readonly unitPricePaisa: number;
   readonly lineDiscountPaisa: number;
   readonly priceOverridden: boolean;
+  /** [PCN-014] Who sold it — T1: attributed, not just visible. */
+  readonly byName: string;
   readonly createdAt: Date;
 }
 
@@ -229,11 +236,13 @@ export async function overridesAndDiscountsInRange(
       unitPricePaisa: saleLines.unitPricePaisa,
       lineDiscountPaisa: saleLines.lineDiscountPaisa,
       priceOverridden: saleLines.priceOverridden,
+      byName: users.name,
       createdAt: saleLines.createdAt,
     })
     .from(saleLines)
     .innerJoin(sales, eq(saleLines.saleId, sales.id))
     .innerJoin(products, eq(saleLines.productId, products.id))
+    .innerJoin(users, eq(sales.createdBy, users.id))
     .where(
       scope.scopeOf(
         saleLines,
@@ -243,6 +252,94 @@ export async function overridesAndDiscountsInRange(
       ),
     )
     .orderBy(desc(saleLines.createdAt));
+}
+
+/**
+ * [PCN-014] Bills charged less than they came to — T1: a discount on a whole
+ * bill is the largest discount the counter can give, and the owner sees every
+ * one, who gave it, who approved it, and the bill before and after.
+ *
+ * `unapprovedOverLimit` is measured against the limit set now (the limit a
+ * sale was given under is not stored): a bill discount over it with no owner
+ * approval is the case the counter is meant to make impossible, so it can
+ * only mean the limit was raised since, or a record arrived without one.
+ */
+export interface BillDiscountRow {
+  readonly saleId: string;
+  readonly receiptNumber: string;
+  readonly byName: string;
+  readonly approvedByName: string | null;
+  /** The bill after item discounts — what the bill discount came off. */
+  readonly billPaisa: number;
+  readonly discountPaisa: number;
+  readonly totalPaisa: number;
+  readonly unapprovedOverLimit: boolean;
+  readonly createdAt: Date;
+}
+
+export async function billDiscountsInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+  capPercent: number,
+): Promise<BillDiscountRow[]> {
+  const approver = alias(users, 'approver');
+  const rows = await scope.db
+    .select({
+      saleId: sales.id,
+      receiptNumber: sales.receiptNumber,
+      byName: users.name,
+      approvedByName: approver.name,
+      billPaisa: sales.subtotalPaisa,
+      discountPaisa: sales.invoiceDiscountPaisa,
+      totalPaisa: sales.totalPaisa,
+      createdAt: sales.createdAt,
+    })
+    .from(sales)
+    .innerJoin(users, eq(sales.createdBy, users.id))
+    .leftJoin(approver, eq(sales.invoiceDiscountApprovedBy, approver.id))
+    .where(
+      scope.scopeOf(
+        sales,
+        gt(sales.invoiceDiscountPaisa, 0),
+        gte(sales.createdAt, from),
+        lt(sales.createdAt, to),
+      ),
+    )
+    .orderBy(desc(sales.createdAt));
+  if (rows.length === 0) return [];
+
+  // Each bill's figure before any discount, and its item discounts: one
+  // grouped aggregate over the lines (never a correlated subquery, Day 3).
+  const lineTotals = await scope.db
+    .select({
+      saleId: saleLines.saleId,
+      gross: sql<string>`sum(coalesce(${saleLines.lineAmountPaisa}, ${saleLines.unitPricePaisa} * ${saleLines.qtyBase}))`,
+      itemDiscount: sum(saleLines.lineDiscountPaisa).as('itemDiscount'),
+    })
+    .from(saleLines)
+    .where(
+      scope.scopeOf(
+        saleLines,
+        inArray(
+          saleLines.saleId,
+          rows.map((row) => row.saleId),
+        ),
+      ),
+    )
+    .groupBy(saleLines.saleId);
+  const bySale = new Map(lineTotals.map((row) => [row.saleId, row]));
+
+  return rows.map((row) => {
+    const lines = bySale.get(row.saleId);
+    const needed = billDiscountNeedsApproval({
+      grossPaisa: paisa(Number(lines?.gross ?? 0)),
+      itemDiscountPaisa: paisa(Number(lines?.itemDiscount ?? 0)),
+      billDiscountPaisa: paisa(row.discountPaisa),
+      capPercent,
+    });
+    return { ...row, unapprovedOverLimit: needed && row.approvedByName === null };
+  });
 }
 
 export interface ReturnExceptionRow {
@@ -522,18 +619,41 @@ export async function adjustmentsInRange(
  * every expected-cash figure, and the one input nothing else would ask for.
  */
 export async function hasOpeningFloat(scope: TenantScope, from: Date, to: Date): Promise<boolean> {
-  const [row] = await scope.db
-    .select({ count: sql<string>`count(*)` })
+  // [PCN-013] A float that was cancelled was never put in the drawer, and its
+  // cancellation is itself an `opening_float` row, so a count would say yes
+  // twice over. The floats, then which of them were cancelled: two plain
+  // queries, never a correlated subquery (CLAUDE.md, Day 3).
+  const floats = await scope.db
+    .select({ id: cashMovements.id })
     .from(cashMovements)
     .where(
       scope.scopeOf(
         cashMovements,
         eq(cashMovements.reason, 'opening_float'),
+        isNull(cashMovements.reversesId),
         gte(cashMovements.createdAt, from),
         lt(cashMovements.createdAt, to),
       ),
     );
-  return Number(row?.count ?? 0) > 0;
+  if (floats.length === 0) return false;
+  const cancelled = await reversedCashMovementIds(
+    scope,
+    floats.map((row) => row.id),
+  );
+  return floats.some((row) => !cancelled.has(row.id));
+}
+
+/** [PCN-013] Which of these cash movements a later row cancelled. */
+async function reversedCashMovementIds(
+  scope: TenantScope,
+  ids: readonly string[],
+): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await scope.db
+    .select({ reversesId: cashMovements.reversesId })
+    .from(cashMovements)
+    .where(scope.scopeOf(cashMovements, inArray(cashMovements.reversesId, [...ids])));
+  return new Set(rows.map((row) => row.reversesId).filter((id): id is string => id !== null));
 }
 
 export interface CashMovementExceptionRow {
@@ -544,6 +664,10 @@ export interface CashMovementExceptionRow {
   readonly note: string | null;
   readonly byName: string;
   readonly createdAt: Date;
+  /** [PCN-013] Set when this row cancels another. */
+  readonly reversesId: string | null;
+  /** [PCN-013] Cancelled by a later row (which may fall in another range). */
+  readonly reversed: boolean;
 }
 
 export async function cashMovementsExceptionInRange(
@@ -551,7 +675,7 @@ export async function cashMovementsExceptionInRange(
   from: Date,
   to: Date,
 ): Promise<CashMovementExceptionRow[]> {
-  return scope.db
+  const rows = await scope.db
     .select({
       id: cashMovements.id,
       direction: cashMovements.direction,
@@ -560,6 +684,7 @@ export async function cashMovementsExceptionInRange(
       note: cashMovements.note,
       byName: users.name,
       createdAt: cashMovements.createdAt,
+      reversesId: cashMovements.reversesId,
     })
     .from(cashMovements)
     .innerJoin(users, eq(cashMovements.createdBy, users.id))
@@ -571,6 +696,88 @@ export async function cashMovementsExceptionInRange(
       ),
     )
     .orderBy(desc(cashMovements.createdAt));
+  const reversed = await reversedCashMovementIds(
+    scope,
+    rows.filter((row) => row.reversesId === null).map((row) => row.id),
+  );
+  return rows.map((row) => ({ ...row, reversed: reversed.has(row.id) }));
+}
+
+/**
+ * [PCN-013] Payments cancelled in the range — udhaar and supplier alike.
+ *
+ * T1: putting money back onto a customer's debt, or onto what the shop owes a
+ * distributor, is exactly the kind of act the owner must see. A cancelled cash
+ * movement is already in the cash movements list, beside the entry it cancels.
+ */
+export interface PaymentReversalExceptionRow {
+  readonly id: string;
+  readonly kind: 'udhaar' | 'supplier';
+  readonly name: string;
+  /** The amount cancelled, positive. */
+  readonly amountPaisa: number;
+  /** The cancellation's own receipt, for an udhaar payment. */
+  readonly receiptNumber: string | null;
+  readonly byName: string;
+  readonly createdAt: Date;
+}
+
+export async function paymentReversalsInRange(
+  scope: TenantScope,
+  from: Date,
+  to: Date,
+): Promise<PaymentReversalExceptionRow[]> {
+  const [udhaar, supplier] = await Promise.all([
+    scope.db
+      .select({
+        id: payments.id,
+        name: customers.name,
+        amountPaisa: payments.amountPaisa,
+        receiptNumber: payments.receiptNumber,
+        byName: users.name,
+        createdAt: payments.createdAt,
+      })
+      .from(payments)
+      .innerJoin(customers, eq(payments.customerId, customers.id))
+      .innerJoin(users, eq(payments.createdBy, users.id))
+      .where(
+        scope.scopeOf(
+          payments,
+          isNotNull(payments.reversesId),
+          gte(payments.createdAt, from),
+          lt(payments.createdAt, to),
+        ),
+      ),
+    scope.db
+      .select({
+        id: supplierPayments.id,
+        name: suppliers.name,
+        amountPaisa: supplierPayments.amountPaisa,
+        byName: users.name,
+        createdAt: supplierPayments.createdAt,
+      })
+      .from(supplierPayments)
+      .innerJoin(suppliers, eq(supplierPayments.supplierId, suppliers.id))
+      .innerJoin(users, eq(supplierPayments.createdBy, users.id))
+      .where(
+        scope.scopeOf(
+          supplierPayments,
+          isNotNull(supplierPayments.reversesId),
+          gte(supplierPayments.createdAt, from),
+          lt(supplierPayments.createdAt, to),
+        ),
+      ),
+  ]);
+  const rows: PaymentReversalExceptionRow[] = [
+    ...udhaar.map((row) => ({ ...row, kind: 'udhaar' as const, amountPaisa: -row.amountPaisa })),
+    ...supplier.map((row) => ({
+      ...row,
+      kind: 'supplier' as const,
+      amountPaisa: -row.amountPaisa,
+      receiptNumber: null,
+    })),
+  ];
+  return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 export interface LateSyncedRow {
@@ -645,6 +852,9 @@ export interface ReportFigures {
   readonly returnedPaisa: number;
   /** [PCN-012, D2] Stock written off or counted short in the range, at cost. */
   readonly writtenOffPaisa: number;
+  /** [PCN-014] Discounts given in the range: off items, and off whole bills. */
+  readonly itemDiscountPaisa: number;
+  readonly billDiscountPaisa: number;
 }
 
 /**
@@ -677,12 +887,19 @@ export async function reportFigures(
   to: Date,
 ): Promise<ReportFigures> {
   const [salesRow] = await scope.db
-    .select({ total: sum(sales.totalPaisa).as('total'), count: sql<string>`count(*)` })
+    .select({
+      total: sum(sales.totalPaisa).as('total'),
+      count: sql<string>`count(*)`,
+      billDiscount: sum(sales.invoiceDiscountPaisa).as('billDiscount'),
+    })
     .from(sales)
     .where(scope.scopeOf(sales, gte(sales.createdAt, from), lt(sales.createdAt, to)));
 
   const [unitsRow] = await scope.db
-    .select({ total: sum(saleLines.qtyBase).as('total') })
+    .select({
+      total: sum(saleLines.qtyBase).as('total'),
+      itemDiscount: sum(saleLines.lineDiscountPaisa).as('itemDiscount'),
+    })
     .from(saleLines)
     .where(scope.scopeOf(saleLines, gte(saleLines.createdAt, from), lt(saleLines.createdAt, to)));
 
@@ -729,5 +946,7 @@ export async function reportFigures(
     returnCount: Number(returnsRow?.count ?? 0),
     returnedPaisa,
     writtenOffPaisa,
+    itemDiscountPaisa: Number(unitsRow?.itemDiscount ?? 0),
+    billDiscountPaisa: Number(salesRow?.billDiscount ?? 0),
   };
 }

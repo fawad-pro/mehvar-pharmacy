@@ -1658,3 +1658,393 @@ shown beside it on the return form, the invoice page, the supplier account
 and the Day screen, with any difference ("12.00 below stock cost") said in
 words. This replaces the final pass's per-pack invoice price for the unit
 bought, which departed from PCN-009.
+
+## PCN-013 — a mistake typed into money or stock has no fix that tells the truth
+
+Session: pilot improvements · Raised: 2026-10-27 · Status: decided
+
+**Plan sections in tension.** T2 promises that every correction is a
+compensating entry, visible and attributable. ADR-1 forbids editing an event
+row. Phase 9 §1 makes reference entities soft-archived and editable on
+identity fields only. The pilot owner asked for a way to delete a product
+entered by mistake, which led to an audit of every place a typing mistake can
+land.
+
+**The contradiction or gap.** The audit (2026-10-27), entity by entity:
+
+| Typed wrong | Fix today |
+|---|---|
+| A sale | Return (W4) |
+| A purchase line | Correction / supplier return (PCN-009) |
+| A product's pack | Replace this product (PCN-012) |
+| A barcode | Unlink |
+| A staff account | Switch off |
+| A product entered by mistake | **Remove / Restore, built alongside this note** (soft archive; refused while it holds stock or a shortfall; its barcodes are unlinked so the right product can take them) |
+| A customer (name, phone, duplicate) | **None.** No edit, no removal. |
+| A supplier | **None.** No edit, no removal. |
+| An udhaar payment (Rs 5,000 for Rs 500) | **None.** The customer's balance stays wrong forever. |
+| A supplier payment | **None.** What is owed stays wrong forever. |
+| A cash movement (expense, withdrawal, float) | **None.** Expected cash stays wrong forever. |
+| Opening stock or a count typed too high | **Only "Count correction", which reports the excess as stock lost.** A typing mistake becomes a fake loss in the owner's margin and write-off figures. |
+| Stock on the wrong product, when the right product already exists | **Only Replace, which creates a new product.** The shop ends up with two. |
+| A purchase recorded against the wrong supplier | **None.** One distributor is owed too much, another too little. |
+
+The last seven rows are money and stock figures that cannot be made true
+again without a database edit — exactly what ADR-1 forbids and T2 promises
+will never be needed.
+
+**Options.**
+
+1. *Reference entities (customers, suppliers).* Edit name and phone, and
+   Remove / Restore, as products now have. Removal is refused while the
+   balance is not zero, for the same reason a product with stock cannot go.
+   No plan change: Phase 9 §1 already permits this. Listed here so the set is
+   decided together.
+
+2. *Reversing a payment, a supplier payment or a cash movement.*
+   - **A. A compensating row in the same table** (recommended). Add a nullable
+     `reverses_id` (unique, so one reversal per row) and let the amount be
+     negative only on a reversal row (`amount = −original`; cash movements
+     instead take the opposite direction). Every existing reader sums these
+     tables, so balances, ledgers, expected cash and the export are right
+     without touching any of them. The ledger shows both rows, the original
+     marked "reversed". A reversed udhaar payment gets its own receipt number
+     and prints a "Payment cancelled" slip, since the customer was handed a
+     slip for the original. Reversing the payment taken as part of a sale is
+     refused: that is a return.
+   - **B. One new `reversals` table** naming the target. Rejected: all 18
+     places that read these tables would have to learn to exclude reversed
+     rows, and missing one is the Day 8 bug (a figure and its expansion
+     disagreeing) waiting to happen.
+   - Either way: owner only, online only (not an outbox record kind, so
+     ADR-3's union does not grow), and shown on the exception list (T1).
+
+3. *Stock typed too high.*
+   - **A. A new adjustment reason, "Entered by mistake"** (recommended).
+     Negative only; outside the write-off and loss figures (it is stock that
+     never existed, not stock that was lost); owner only, because a reason
+     that hides a loss is the obvious way to hide theft; always on the
+     exception list, so the owner sees every use.
+   - B. Keep "Count correction". Rejected: the margin report lies.
+
+4. *Stock on the wrong product.* Extend Replace with "Move to a product I
+   already have": the same transfer (`product_replaced`, cost moved exactly,
+   PCN-012), into an existing product, counted in that product's units.
+   Allowed only when both products count the same base unit, so no quantity
+   is silently reinterpreted. Then the wrong product can be removed.
+
+5. *A purchase recorded against the wrong supplier.* "Move to another
+   supplier" on the purchase: a compensating pair (owed by A reduced, owed by
+   B increased), with stock and cost untouched. Proposed only — it needs the
+   supplier ledger design checked against PCN-007 and PCN-009 before a
+   recommendation is firm.
+
+**Recommendation.** 1, 2A, 3A and 4, built in that order, each with its tests
+(the crown suite gains payment and cash reversals as event kinds, and every
+balance is still checked against its expansion). 5 is decided after a short
+design check.
+
+**Decision.** 2026-10-27, the owner: options 1, 2A, 3A and 4, as
+recommended. Option 5 waits for its design check.
+
+**Applied.** 2026-10-27 on `claude/inspiring-brahmagupta-cf9nfj`. Product
+Remove / Restore (the table's product row) was built first, at the owner's
+request; it needed no plan change.
+
+1. Customers and suppliers: Edit name and phone (anyone who may create one),
+   Remove / Restore (owner only), refused while the balance is not zero either
+   way. Lists never hide a removed record that has a balance, because an
+   udhaar sale captured offline can still arrive after removal. A Suppliers
+   page lists every supplier, so a settled one can be reached at all.
+2. Reversals, as 2A: `reverses_id` on `payments`, `supplier_payments` and
+   `cash_movements` (migration 0015), unique per tenant, with the payment
+   CHECKs restated so that only a reversal may be negative. Writers:
+   `commitPaymentReversal`, `commitSupplierPaymentReversal`,
+   `commitCashReversal`, all idempotent on client id, owner only, online
+   only. The ledgers show both halves; a cancelled udhaar payment prints a
+   "PAYMENT CANCELLED" slip with its own receipt number, and Receipts names
+   each half; cash cancellations sit beside their original on the Day screen;
+   cancelled payments are an exception group. One reader needed more than a
+   sum: `hasOpeningFloat` no longer counts a cancelled float.
+3. "Entered by mistake" (`entered_by_mistake`, migration 0016): negative
+   only, owner only, and only on stock typed in by hand (opening stock or a
+   count). Stock that came on an invoice is refused and pointed at the
+   purchase correction, so money paid to a supplier never vanishes from the
+   reports. Its cost is a movement of its own (`mistake`), neither cost of
+   goods nor a write-off. It is on the exception list like any adjustment.
+4. Replace into an existing product (`replaceIntoProduct`): same base unit
+   required, counts confirmed in the receiving product's packs, cost moved
+   exactly as a replacement's, and the receiving product's shortfalls answered
+   by the arriving stock (D2).
+
+The crown suite gained every new event kind (payment, supplier payment and
+cash cancellations; entered by mistake, including its refusal; moving into an
+existing product) and an expected-cash invariant. Customer, supplier and cash
+figures are now recomputed independently from the entries that still stand,
+so a cancellation that did not exactly offset its entry fails the suite —
+each writer was broken on purpose and seen to fail it.
+
+Not addressed: option 5 (a purchase against the wrong supplier) awaits its
+design check. A reversal is not an outbox record, so it needs a connection to
+the shop's computer.
+
+## PCN-014 — a bill-level discount the counter can give, and the accounts can carry
+
+Session: pilot improvements · Raised: 2026-10-27 · Status: decided
+
+**Plan sections in tension.** Phase 5 §2 gives each sale line "discount (line
+or invoice level)" and invariant 4 states "Sale total = Σ line totals −
+invoice discount". Phase 9 carries `sales.invoice_discount_paisa`, with a
+CHECK that `total = subtotal − invoice_discount`. I1 lists discount among the
+things a sale completes by keyboard; T1 says every discount is visible in the
+owner's daily view. Phase 10's right rail shows "TOTAL … then discount".
+
+**The contradiction or gap.** The plan allows a bill discount, but the product
+does not support one, and if it were simply switched back on the books would
+go wrong:
+
+1. **No way to give one.** The counter's bill-discount field was removed on
+   2026-09-22 (`9dc7906`) in favour of per-line discounts. The column, the
+   CHECK and `SaleCommand.invoiceDiscountPaisa` remain, so every sale since
+   carries 0. The pilot owner wants it: a bill of Rs 2,080 is charged Rs 2,000,
+   and the Rs 80 is a discount. Line discounts stay.
+2. **Refunds ignore it.** `refundForLine` refunds each line's own net amount
+   and never learns about the bill discount. Return everything from a
+   Rs 2,000 bill that was Rs 2,080 before its discount and Rs 2,080 is
+   refunded: Rs 80 leaves the drawer that never came in, expected cash is
+   wrong by that much, and revenue drops by more than the sale earned. The
+   crown suite already generates bill discounts on one cash sale in five and
+   returns against them, but nothing asserts that a sale's refunds stay within
+   what it collected, so it has never failed.
+3. **Partial refunds round each return separately.** A return refunds
+   `⌊charged × returned ÷ sold⌋`. Returned one tablet at a time, a Rs 10.00 line
+   of 3 refunds 3.33 + 3.33 + 3.33 = Rs 9.99, a paisa short of what was paid.
+   This matters little today, but every return will include a share of a bill
+   discount once this note is built, so the paisa errors stop being rare.
+4. **A bill discount is invisible to the owner.** `overridesAndDiscountsInRange`
+   lists line discounts and price overrides only (T1). The receipt and the
+   receipt page fold every discount into one "Discount" figure, so days later
+   nobody can tell an item discount from a bill discount, or how a bill
+   discount fell on each item.
+5. **Nothing bounds it.** A salesperson could take a bill to zero, and nobody
+   would see it.
+
+**How it works** (the owner's direction of 2026-10-27, stated as rules):
+
+- **Order.** Item discounts come off first; the bill discount comes off what is
+  left. `subtotal` stays Σ line totals, already net of item discounts, as
+  Phase 9 has it; `total = subtotal − invoice_discount`.
+- **Entry.** The salesperson types the **amount to collect** ("2000"); Mehvar
+  works out the discount (`subtotal − amount`). The field holds a final
+  figure, not something to take off, so typing it twice is still Rs 2,000 and
+  a discount cannot be added twice by accident. There is one bill discount per
+  sale; entering again replaces it. An amount above the subtotal is refused; an
+  amount equal to it clears the discount.
+  _Superseded by PCN-015 (2026-10-28): the salesperson types what comes off,
+  as for an item discount._
+- **Cap.** A setting the owner controls in Settings, **10% by default**, of the
+  bill after item discounts. Within the cap the sale goes through. Above it,
+  the owner's PIN is required at the counter, and the sale records who approved
+  it (`invoice_discount_approved_by`).
+- **The amount to pay is unmistakable.** On the payment screen **"Collect
+  Rs 2,000"** is the largest figure, with "Bill Rs 2,080 · Discount Rs 80"
+  beneath. The receipt prints Subtotal / Item discounts / Bill discount /
+  **TOTAL**, each only when it applies.
+- **Each line's share.** The bill discount is shared across the lines in
+  proportion to their totals after item discounts, by largest remainder, so
+  the shares add up to exactly the discount. Each share is stored on its
+  `sale_lines` row when the sale is committed (`invoice_discount_share_paisa`,
+  new). A row's figures never change after it is written (ADR-1), and storing
+  the share means a later change to the rule cannot change past refunds. Every
+  line therefore has a **paid** amount: its total after the item discount,
+  minus its share.
+
+  | Item | Price | Item discount | Line total | Share of bill discount | Paid |
+  |---|---|---|---|---|---|
+  | Panadol | 500.00 | −50.00 | 450.00 | −17.31 | 432.69 |
+  | Augmentin | 1,630.00 | — | 1,630.00 | −62.69 | 1,567.31 |
+  | **Bill** | 2,130.00 | −50.00 | **2,080.00** | **−80.00** | **2,000.00** |
+
+  (Shares are worked in paisa, so they are exact to the paisa, not rounded
+  to rupees.)
+
+- **Refunds** are worked out cumulatively from what each line paid, the same
+  way stock is costed (Session 2): returning `n` of `q` units
+  refunds `R(after) − R(before)`, where `R(k) = ⌊paid × k ÷ q⌋`. Every
+  partial return rounds against the customer, never in their favour, and a
+  line returned whole refunds exactly what it paid. So a full return of the
+  bill above refunds exactly Rs 2,000.
+- **Revenue and margin** need no new rule: revenue already sums
+  `sales.total_paisa` (after the discount) less refunds, and cost is
+  unchanged, so profit falls by the full discount. Once refunds are fixed, a
+  returned item takes out what was actually paid for it.
+- **Udhaar.** The discount comes off before the cash/udhaar split, so the
+  customer owes the discounted total.
+- **Visible to the owner (T1).** Every bill discount joins "Discounts and price
+  changes" on the Day screen, with who gave it, who approved it if it was over
+  the cap, and the bill before and after. The Day screen states the day's
+  total discount. The receipt page shows each line's price, item discount,
+  share of the bill discount and amount paid, so a bill can be checked days
+  later.
+- **Offline (ADR-3, ADR-5).** `SaleCommand` already carries the discount; the
+  share is computed by one pure function in `domain/sales`, which the counter
+  uses for the receipt and `commitSale` for the stored rows, so both agree. A
+  discount within the cap works offline. The owner PIN is checked by the
+  server, so a discount over the cap needs a connection; offline, the counter
+  says so and the sale goes through at the full amount or within the cap
+  (P2). Sync never refuses a sale over the cap: its receipt is already
+  printed. It is recorded, and the exception list flags it if it arrives
+  without an approval.
+- **History.** Sales made before 2026-09-22 may carry a bill discount (the
+  field existed then). The migration fills their shares with the same rule,
+  and a test pins the SQL and the TypeScript to the same answer.
+
+**Options.**
+
+- **A. As above** (recommended): store each line's share, refund cumulatively
+  from what each line paid, set the cap in Settings, and require the owner's
+  PIN above it.
+- B. Work shares out when a return is made, with nothing stored. Rejected:
+  every past refund would depend on the code that runs today, and the receipt
+  page and the export would each need the same rule repeated.
+- C. Treat the bill discount as a separate kind of record. Rejected: Phase 5
+  and Phase 9 already make it part of the sale, and every report already uses
+  the total after the discount.
+
+**Recommendation.** A, built as: the refund fix and its tests first (they are
+wrong today in histories the crown suite already generates), then the share
+column and its backfill, then the counter field, cap, approval, payment
+screen and receipt, then the Day screen and receipt page.
+
+Tests: a sale's refunds never exceed its total; a full return refunds exactly
+the total; shares sum exactly to the discount; refunds in one go and in parts
+end at the same amount. Each is watched fail on today's code before it counts.
+The crown suite adds bill discounts to udhaar sales, and the "actually
+exercised" check gains a counter for returns against discounted sales.
+
+**Decisions put to the owner.**
+
+1. **What the cap measures.** Recommended: **all discounts on the bill
+   together** (item discounts plus the bill discount) as a share of the bill
+   before any discount. Otherwise a 20% item discount plus a 10% bill discount
+   passes a "10%" cap. The alternative is to cap only the bill discount.
+2. **When the cap is 0.** Recommended: no bill discounts without the owner's
+   PIN, rather than none at all.
+3. **Rounding to the note.** Offer "round down to the nearest Rs 10 / 50 /
+   100" as a one-key shortcut beside "amount to collect"? Recommended: not
+   now. Typing the amount is one field, and a shortcut is a second way to do
+   the same thing.
+
+**Not covered.** A discount given while settling udhaar (a customer paying
+Rs 1,950 against Rs 2,000 owed) writes off part of a debt, not part of a sale.
+It is a separate question, left to its own note.
+
+**Decision.** 2026-10-27, the owner: **A**, with every recommendation above —
+the cap measures all discounts on the bill together (item and bill) against
+the bill before any discount, 10% by default and set by the owner in
+Settings; a cap of 0 means every bill discount needs the owner's PIN; no
+rounding shortcut for now.
+
+**Applied.** In steps, on `claude/inspiring-brahmagupta-cf9nfj`.
+
+- *Step 1, refunds (2026-10-27).* `invoiceDiscountShares` (`domain/sales/
+  sale-command.ts`) is the one rule for how a bill discount falls on a sale's
+  lines; until step 2 stores the shares, `returnableLinesForSale` computes
+  them from the sale. `refundForLine` is cumulative from what the line paid
+  (`linePaidPaisa`), and a return may not name the same line twice. The return
+  receipt page now shows each line's refund by the same rule: it had shown the
+  line's charge before its item discount, so its lines did not add up to the
+  refund. All five integration tests failed on the previous code (a full
+  return of the note's bill refunded Rs 2,080). The crown suite now gives udhaar
+  sales bill discounts too, sometimes returns a sale whole, and asserts
+  that a sale's refunds never exceed its total and that a sale returned whole
+  refunds exactly it; with the share ignored it fails. It runs 16 histories
+  instead of 4, because the guard that checks each rare event was actually
+  generated failed on some seeds with fewer; it now passes on 25 seeds.
+- *Step 2, stored shares (2026-10-27).* `sale_lines.invoice_discount_share_paisa`
+  (migration 0017, not null, default 0, never negative) is written by
+  `commitSale` from the values the rows store, and returns read it. The
+  migration backfills sales written before it with the same rule in SQL;
+  `invoice-discount-backfill.integration.test.ts` runs that very statement on
+  sales with tied and awkward remainders and requires the TypeScript's answer.
+  The backfill writes an event row's new column once, as a schema change, not
+  as a correction (ADR-1): the app role still cannot update it. The crown
+  suite checks every stored share against the rule and that a sale's shares
+  sum to its discount.
+- *Step 3, the counter (2026-10-27).* On the payment screen `%` — the key a
+  line discount already uses — or "Bill discount" opens "Amount to collect";
+  Enter applies it (`billDiscountFromCollect`: a final figure, refused above
+  the bill, junk never read as Rs 0). F12, Enter still sells at the full
+  amount. Once a discount is given the screen's largest figure reads
+  "Collect", with "Bill … · Discount …" beneath. `billDiscountNeedsApproval`
+  measures all discounts together against the bill before any discount; over
+  the limit the owner's PIN is asked for there (`approveAsOwner`: owners only,
+  the PIN switch's lockout), and the sale records the approver
+  (`sales.invoice_discount_approved_by`, migration 0018), kept only if it names
+  one of the shop's owners — never refused, since the receipt has printed.
+  Offline, approval is unavailable and the counter says so. The limit is set
+  under Settings → Selling (`billDiscountCapPercent`, 10 when absent). The
+  receipt prints Item Discount and Bill Discount as rows of their own. Item
+  discounts alone are not gated, as before.
+- *Step 4, what the owner sees (2026-10-27).* The Day screen's "Discounts
+  and overrides" lists each bill discount: receipt, bill → total, the
+  discount, who gave it and who approved it (`billDiscountsInRange`). A sale
+  over the shop's limit with no approver is marked in red; the counter cannot
+  produce one, so it means something to look into. Next to Margin, the range's
+  discounts are stated, split into items and bills (`reportFigures`). Line
+  discounts and price changes now name who gave them too. The receipt page
+  shows the bill discount on its own row with its approver, and each line its
+  share and what it paid. The cap's help text moved out of its label, so
+  "Owner's PIN" and "PIN" stay distinct labels to a screen reader. The
+  integration tests failed with the flag and the total mutated.
+
+## PCN-015 — a bill discount is entered the way an item discount is
+
+Session: pilot improvements · Raised: 2026-10-28 · Status: decided
+
+**Plan sections in tension.** PCN-014's entry rule: "The salesperson types
+the **amount to collect** ("2000"); Mehvar works out the discount." I1 (a
+discount completes by keyboard) and the touch pass (every action has
+something to tap, and a field needs a visible commit).
+
+**The gap.** The owner could not work out how to give a bill discount the
+first time. Seen on the pilot counter:
+
+1. It asked for the opposite of an item discount. An item takes what comes
+   off ("50" or "10%"); the bill took the new total, in a box that opened
+   already holding the bill (705.00), so nothing said a new figure was wanted.
+2. It had to be found first, behind a button labelled "Bill discount — %",
+   where the "%" read as "percent only" rather than as the key that opens it.
+3. Only Enter applied it, and Commit was disabled while the box was open, so
+   a tablet could leave only by the on-screen keyboard's Enter.
+4. The same figure showed three times (amount due, amount to collect, cash
+   tendered).
+
+**Decision.** 2026-10-28, the owner: enter it exactly as an item discount.
+
+- The payment screen always shows **Discount on the bill**, empty, with
+  "e.g. 50 or 10%" in it. `%` from Cash tendered goes to it. There is no
+  button to find and no box asking for the total.
+- It takes what comes off, an amount or a share of the bill after item
+  discounts (`billDiscountFromInput`, replacing `billDiscountFromCollect`).
+  Blank is no discount. Unlike a line discount, junk and more than the bill
+  are refused, not clamped: this field sets what the drawer should hold.
+- It applies as it is typed: the largest figure becomes "Collect", and Cash
+  tendered follows it until the cashier types one. There is no Apply step, so
+  the screen never shows one price while Commit would charge another. (The
+  recommendation put to the owner had an Apply button; applying as typed
+  removes the state it would have needed, and with it the touch gap.)
+- One bill discount per sale: typing replaces it, so it is never given twice
+  — PCN-014's reason for a final figure, kept by replacing rather than adding.
+- Over the limit, the owner's PIN is asked for beneath the field, with
+  **Approve** and **No discount** to tap, and Commit waits for it. An approval
+  holds only for the amount approved; changing the discount asks again.
+  Esc in the PIN clears the discount, as before.
+
+Unchanged: the cap and what it measures, approval, shares, refunds, the
+receipt, the Day screen. F12, Enter still sells at the full amount.
+
+Tests: `bill-discount.test.ts` (amounts, shares, replacing, refusals);
+`bill-discount.spec.ts` by keyboard, and a touch path in `touch.spec.ts`.
+Commit left enabled while the owner's PIN is pending fails the spec, and so
+does a total that does not follow the typed discount.

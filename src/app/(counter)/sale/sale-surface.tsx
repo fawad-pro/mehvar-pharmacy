@@ -42,6 +42,7 @@ import { defaultSaleUnit, unitsOf } from '@/domain/catalog/units';
 import {
   addToCart,
   cartTotals,
+  DEFAULT_BILL_DISCOUNT_CAP_PERCENT,
   grossSubtotalPaisa,
   isPriceOverridden,
   lineTotal,
@@ -58,7 +59,7 @@ import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
-import { PaymentOverlay, type PaymentSplit } from './payment-overlay';
+import { PaymentOverlay, type BillDiscount, type PaymentSplit } from './payment-overlay';
 
 interface Committed {
   receiptNumber: string;
@@ -97,6 +98,8 @@ export function SaleSurface() {
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
   const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
+  /** F12 pressed while the customer was still being found: pay once attached. */
+  const payAfterPick = useRef(false);
   /** The last scanned pack, when its own 2D code says it has expired. */
   const [expiredPack, setExpiredPack] = useState<{ name: string; expiry: string } | null>(null);
   /**
@@ -128,9 +131,9 @@ export function SaleSurface() {
       : null,
   );
 
-  // Discounts are per-line (`CartLine.lineDiscountPaisa`), so `cartTotals`
-  // needs no invoice-level discount argument — the subtotal it computes is
-  // already net of every line's own discount (`lineTotal` subtracts it).
+  // The cart's figures before payment: the subtotal is already net of every
+  // line's own discount (`lineTotal` subtracts it). [PCN-014] A bill discount
+  // is given on the payment screen, which owns it until the sale commits.
   const totals = useMemo(() => cartTotals(lines), [lines]);
 
   const stockByProduct = useMemo(() => {
@@ -225,13 +228,14 @@ export function SaleSurface() {
    * re-derivable from records at any time (Phase 5 invariant 3).
    */
   const commitWithSplit = useCallback(
-    async (split: PaymentSplit) => {
+    async (split: PaymentSplit, bill: BillDiscount) => {
       if (lines.length === 0 || busy || !receiptContext) {
         return;
       }
 
       const soldLines = lines;
-      const soldTotals = totals;
+      // [PCN-014] The bill discount given on the payment screen.
+      const soldTotals = cartTotals(lines, bill.discountPaisa);
       const soldCustomer = customer;
       const receiptNumber = receiptContext.nextReceiptNumber();
 
@@ -258,6 +262,7 @@ export function SaleSurface() {
           priceOverridden: isPriceOverridden(line),
         })),
         invoiceDiscountPaisa: soldTotals.invoiceDiscountPaisa,
+        invoiceDiscountApprovedBy: (bill.approvedBy?.id as Uuid | undefined) ?? null,
         cashPaisa: split.cashPaisa,
         creditPaisa: split.creditPaisa,
         changePaisa: split.changePaisa,
@@ -328,10 +333,12 @@ export function SaleSurface() {
         // discount — never `soldTotals.subtotalPaisa`, which sums `lineTotal`
         // (already net) and made Subtotal read identical to TOTAL whenever a
         // line was discounted. Discount is every line's own discount summed
-        // into the one row the receipt shows (no invoice-level discount UI
-        // exists any more, so `soldTotals.invoiceDiscountPaisa` is always 0).
+        // into one row; [PCN-014] the bill discount has a row of its own.
         subtotalPaisa: grossSubtotalPaisa(soldLines),
         discountPaisa: totalLineDiscountPaisa(soldLines),
+        ...(soldTotals.invoiceDiscountPaisa > 0
+          ? { billDiscountPaisa: soldTotals.invoiceDiscountPaisa }
+          : {}),
         totalPaisa: soldTotals.totalPaisa,
         cashPaisa: split.cashPaisa,
         tenderedPaisa: split.tenderedPaisa,
@@ -343,7 +350,25 @@ export function SaleSurface() {
           : {}),
       };
 
-      setLines([]);
+      // The sale is already committed and the receipt already built; whether
+      // paper comes out is a shop's preference, not a step in the workflow.
+      // A shop that prints on request rather than by default still has the
+      // receipt one key away, from local state, exactly as before.
+      //
+      // Printed BEFORE the screen says "Saved": while the browser prints, the
+      // page takes no keys, and "Saved" is when the operator presses the next
+      // one. Until then the payment screen stays up, busy.
+      if (receiptContext.autoPrintReceipt) {
+        await print(receiptData);
+      } else {
+        clearPrinted();
+      }
+
+      // Exactly the lines this sale sold, not whatever the cart holds now:
+      // the print above is awaited, and a line added meanwhile is the next
+      // sale's, which a blanket clear threw away.
+      const sold = new Set(soldLines.map((line) => line.lineId));
+      setLines((current) => current.filter((line) => !sold.has(line.lineId)));
       setExpiredPack(null);
       setCustomer(null);
       setPaying(false);
@@ -353,16 +378,6 @@ export function SaleSurface() {
         pendingUnits,
         receipt: receiptData,
       });
-
-      // The sale is already committed and the receipt already built; whether
-      // paper comes out is a shop's preference, not a step in the workflow.
-      // A shop that prints on request rather than by default still has the
-      // receipt one key away, from local state, exactly as before.
-      if (receiptContext.autoPrintReceipt) {
-        print(receiptData);
-      } else {
-        clearPrinted();
-      }
 
       // Stock moved, so the index's advisory snapshot is stale. Harmless to ask
       // for while offline: the refresh fails and the cached catalog stands.
@@ -374,7 +389,6 @@ export function SaleSurface() {
       lines,
       busy,
       receiptContext,
-      totals,
       customer,
       index,
       capture,
@@ -478,6 +492,17 @@ export function SaleSurface() {
     function onKey(event: KeyboardEvent): void {
       if (event.key === 'F12') {
         event.preventDefault();
+        // Not over another dialog. F12 pressed while the customer picker was
+        // still looking a name up opened Payment on top of it; the picker
+        // then closed and put focus back in the product search, behind
+        // Payment, so the cash typed next searched for a product and Enter
+        // added it to the bill. Over the picker it means "pay once the
+        // customer is attached", so it waits for that; over anything else
+        // it does nothing.
+        if (document.querySelector('[aria-modal="true"]')) {
+          if (pickingCustomer) payAfterPick.current = true;
+          return;
+        }
         openPayment();
       }
     }
@@ -485,7 +510,7 @@ export function SaleSurface() {
     return () => {
       document.removeEventListener('keydown', onKey);
     };
-  }, [openPayment]);
+  }, [openPayment, pickingCustomer]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -609,8 +634,23 @@ export function SaleSurface() {
                 remove
               </button>
             </div>
+          ) : lines.length > 0 ? (
+            // A button, not only a hint: a tablet has no udhaar key.
+            <button
+              type="button"
+              onClick={() => {
+                setPickingCustomer(true);
+              }}
+              className="border-line text-green-700 hover:bg-green-100/50 min-h-touch rounded border px-3 text-left text-sm"
+            >
+              Attach a customer for udhaar — {keyFor('udhaar')}
+            </button>
           ) : (
-            <p className="text-ink/40 text-xs">{keyFor('udhaar')} — attach a customer for udhaar</p>
+            // With nothing to bill the key settles instead (defect C5), and
+            // the hint says so; Udhaar on the key bar is the tap for it.
+            <p className="text-ink/40 text-xs">
+              {keyFor('udhaar')} — settle a customer&rsquo;s udhaar
+            </p>
           )}
 
           {/* A counter cannot number a receipt until it has heard from the
@@ -652,6 +692,17 @@ export function SaleSurface() {
               <p className="numeral text-ink/70">
                 {formatPaisa(paisa(lastSale.totalPaisa), { withSymbol: true })}
               </p>
+              {/* Where the money went, said where the operator looks: an
+                  udhaar sale read exactly like a cash one. */}
+              {(lastSale.receipt.creditPaisa ?? 0) > 0 && lastSale.receipt.customerName ? (
+                <p className="numeral text-ink/70">
+                  {(lastSale.receipt.cashPaisa ?? 0) > 0
+                    ? `${formatPaisa(paisa(lastSale.receipt.cashPaisa ?? 0), { withSymbol: true })} cash · `
+                    : ''}
+                  {formatPaisa(paisa(lastSale.receipt.creditPaisa ?? 0), { withSymbol: true })} on{' '}
+                  {lastSale.receipt.customerName}&rsquo;s udhaar
+                </p>
+              ) : null}
               {/* D2 made visible at the moment it happens, not only in the day view. */}
               {lastSale.pendingUnits > 0 ? (
                 <p className="text-amber mt-1">
@@ -662,19 +713,23 @@ export function SaleSurface() {
                   it?" and "can I have a receipt?" — answered where they are
                   asked. Reprinting is from the same local receipt the commit
                   built, so it needs nothing from the network either. */}
-              <p className="mt-2 flex gap-4 text-xs">
+              <p className="mt-1 flex gap-4 text-xs">
                 <button
                   type="button"
                   onClick={() => {
                     print(lastSale.receipt);
                   }}
-                  className="text-green-600 font-medium underline-offset-2 hover:underline"
+                  className="text-green-600 min-h-touch font-medium underline-offset-2 hover:underline"
                 >
                   Print receipt
                 </button>
+                {/* The sale's own page, where it is reviewed. It led to
+                    Returns, a screen that changes things, from before the
+                    receipt page existed (Day 9: a place to do, a separate
+                    place to review). */}
                 <a
-                  href="/returns"
-                  className="text-green-600 font-medium underline-offset-2 hover:underline"
+                  href={`/receipts/${encodeURIComponent(lastSale.receiptNumber)}`}
+                  className="text-green-600 flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
                 >
                   View sale
                 </a>
@@ -695,15 +750,18 @@ export function SaleSurface() {
 
       {paying ? (
         <PaymentOverlay
-          totalPaisa={totals.totalPaisa}
+          subtotalPaisa={totals.subtotalPaisa}
+          grossPaisa={grossSubtotalPaisa(lines)}
+          itemDiscountPaisa={totalLineDiscountPaisa(lines)}
+          capPercent={receiptContext?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT}
           customerName={customer?.name ?? null}
           busy={busy}
           onCancel={() => {
             setPaying(false);
             focusSearch();
           }}
-          onCommit={(split) => {
-            void commitWithSplit(split);
+          onCommit={(split, bill) => {
+            void commitWithSplit(split, bill);
           }}
         />
       ) : null}
@@ -714,9 +772,15 @@ export function SaleSurface() {
           onPick={(hit) => {
             setCustomer(hit);
             setPickingCustomer(false);
+            if (payAfterPick.current) {
+              payAfterPick.current = false;
+              setPaying(true);
+              return;
+            }
             focusSearch();
           }}
           onCancel={() => {
+            payAfterPick.current = false;
             setPickingCustomer(false);
             focusSearch();
           }}

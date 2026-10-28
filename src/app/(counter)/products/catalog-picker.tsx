@@ -106,6 +106,8 @@ export function CatalogPicker({
     term: string;
     rows: Suggestion[];
     catalogLoaded: boolean;
+    /** No answer came: "still searching" for ever would be the wrong state. */
+    failed?: boolean;
   }>({ term: '', rows: [], catalogLoaded: true });
   const [highlighted, setHighlighted] = useState(0);
   const field = useRef<HTMLInputElement>(null);
@@ -122,14 +124,19 @@ export function CatalogPicker({
     // Debounced: this is a server query, unlike the counter's own search, and a
     // keystroke-per-request would make it feel slower than typing.
     const timer = window.setTimeout(() => {
-      void searchCatalogAction(trimmed).then((result) => {
-        setAnswered({
-          term: trimmed,
-          rows: [...result.matches],
-          catalogLoaded: result.catalogLoaded,
-        });
-        setHighlighted(0);
-      });
+      searchCatalogAction(trimmed).then(
+        (result) => {
+          setAnswered({
+            term: trimmed,
+            rows: [...result.matches],
+            catalogLoaded: result.catalogLoaded,
+          });
+          setHighlighted(0);
+        },
+        () => {
+          setAnswered({ term: trimmed, rows: [], catalogLoaded: true, failed: true });
+        },
+      );
     }, 180);
     return () => {
       window.clearTimeout(timer);
@@ -141,6 +148,7 @@ export function CatalogPicker({
   const searching = trimmed.length >= 2 && answered.term !== trimmed;
   /** The catalogue is not there at all — a setup problem, not a search problem. */
   const catalogueMissing = answered.term === trimmed && !answered.catalogLoaded;
+  const searchFailed = answered.term === trimmed && answered.failed === true;
   const addable = results.filter((row) => row.alreadyStockedId === null);
 
   function choose(row: Suggestion): void {
@@ -158,8 +166,7 @@ export function CatalogPicker({
         .slice(1)
         .map((level) => `${level.name}:${level.factor}`)
         .join(', '),
-      mrpRupees:
-        row.referenceMrpPaisa === null ? '' : (row.referenceMrpPaisa / 100).toFixed(2),
+      mrpRupees: row.referenceMrpPaisa === null ? '' : (row.referenceMrpPaisa / 100).toFixed(2),
     });
   }
 
@@ -217,7 +224,18 @@ export function CatalogPicker({
         </div>
       ) : null}
 
-      {!catalogueMissing && trimmed.length >= 2 && !searching && results.length === 0 ? (
+      {searchFailed ? (
+        <p className="text-red text-sm" role="alert">
+          The catalogue did not answer — the shop&rsquo;s computer may be off. Type again to retry,
+          or enter the product yourself below.
+        </p>
+      ) : null}
+
+      {!catalogueMissing &&
+      !searchFailed &&
+      trimmed.length >= 2 &&
+      !searching &&
+      results.length === 0 ? (
         <p className="text-ink/60 text-sm">
           Nothing in the catalogue matches &ldquo;{trimmed}&rdquo;. That is normal for local
           products and general goods — enter it yourself below.
@@ -227,11 +245,7 @@ export function CatalogPicker({
       {results.length > 0 ? (
         <ul className="border-line divide-line divide-y rounded border">
           {results.map((row) => {
-            const detail = [
-              strengthLabel(row.strength),
-              formatForm(row.form),
-              row.manufacturer,
-            ]
+            const detail = [strengthLabel(row.strength), formatForm(row.form), row.manufacturer]
               .filter(Boolean)
               .join(' · ');
 
@@ -274,13 +288,14 @@ export function CatalogPicker({
                     {row.packLevels.length > 1
                       ? row.packLevels
                           .slice(1)
-                          .map((level) => `1 ${level.name} = ${level.factor} ${row.packLevels[0]?.name ?? ''}`)
+                          .map(
+                            (level) =>
+                              `1 ${level.name} = ${level.factor} ${row.packLevels[0]?.name ?? ''}`,
+                          )
                           .join(', ')
                       : null}
                     {row.referenceMrpPaisa !== null ? (
-                      <span className="ml-2">
-                        MRP {formatPaisa(paisa(row.referenceMrpPaisa))}
-                      </span>
+                      <span className="ml-2">MRP {formatPaisa(paisa(row.referenceMrpPaisa))}</span>
                     ) : null}
                   </span>
                 </button>
@@ -290,11 +305,7 @@ export function CatalogPicker({
         </ul>
       ) : null}
 
-      <button
-        type="button"
-        onClick={onSkip}
-        className="text-ink/60 self-start text-sm underline"
-      >
+      <button type="button" onClick={onSkip} className="text-ink/60 self-start text-sm underline">
         Not in the list — enter it myself
       </button>
     </div>

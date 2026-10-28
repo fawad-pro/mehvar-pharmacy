@@ -17,7 +17,12 @@ import { lastPurchaseCost } from '@/db/purchase-queries';
 import { commitAdjustment, type AdjustmentCommand } from '@/domain/inventory/commit-adjustment';
 
 import { revalidateAfter } from '../../revalidate';
-import type { AdjustmentRejection, BatchOnHand } from '@/domain/inventory/adjustment';
+import {
+  OWNER_ONLY_REASONS,
+  type AdjustmentRejection,
+  type BatchOnHand,
+} from '@/domain/inventory/adjustment';
+import { keyFor } from '@/client/keyboard/registry';
 
 export async function batchesOnHandAction(productId: string): Promise<BatchOnHand[]> {
   const session = await currentSession();
@@ -45,6 +50,8 @@ function messageFor(reason: AdjustmentRejection | 'stale_batch_state'): string {
       return 'That count no longer matches the product’s packs. Choose the product again.';
     case 'stale_batch_state':
       return 'That batch does not have that many left. Check the figure and try again.';
+    case 'mistake_on_purchased_stock':
+      return 'This stock came on an invoice. Correct the purchase instead, so what you owe is corrected too.';
     default:
       return 'That did not save. Try again.';
   }
@@ -63,6 +70,15 @@ export async function adjustStockAction(command: AdjustmentCommand): Promise<Adj
   const licensed = requireCapability(session, 'adjust_stock');
   if (!licensed.ok) {
     return { ok: false, message: licensed.message };
+  }
+
+  // [PCN-013] Kept out of every loss figure, so it is the owner's alone: in
+  // anyone else's hands it would be the way to hide a real loss.
+  if (OWNER_ONLY_REASONS.includes(command.reason) && session.userRole !== 'owner') {
+    return {
+      ok: false,
+      message: `Only the owner can remove stock as entered by mistake. Press ${keyFor('switch-user')} to switch user.`,
+    };
   }
 
   const result = await commitAdjustment(scopeFor(session), command);

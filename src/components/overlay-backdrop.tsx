@@ -17,23 +17,60 @@
  * Only a click that both starts and ends on the backdrop dismisses — otherwise
  * releasing a text selection outside the dialog closes it, which feels like
  * the software throwing the work away.
+ *
+ * Every overlay goes through here, the payment and settlement ones included,
+ * so what a modal means is decided once.
  */
 
 import { useRef } from 'react';
 
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Tab stays inside the dialog. It walked out into the screen behind — the
+ * key bar under the payment overlay — where an Enter navigated away with the
+ * sale still open. A modal (`aria-modal`) means the rest is out of reach.
+ */
+function keepTabInside(event: React.KeyboardEvent<HTMLDivElement>): void {
+  if (event.key !== 'Tab') return;
+  const inside = [...event.currentTarget.querySelectorAll<HTMLElement>(FOCUSABLE)];
+  const first = inside[0];
+  const last = inside.at(-1);
+  if (!first || !last) return;
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 export function OverlayBackdrop({
   label,
   onDismiss,
+  onEscape,
   children,
 }: {
   label: string;
   onDismiss?: (() => void) | undefined;
+  /**
+   * Esc from anywhere inside. A dialog owned by a screen rather than the
+   * shell has no one else to close it: Esc used to "work" only by sending
+   * the screen home to Sale.
+   */
+  onEscape?: (() => void) | undefined;
   children: React.ReactNode;
 }) {
   const pressedOnBackdrop = useRef(false);
 
   return (
     <div
+      onKeyDown={(event) => {
+        keepTabInside(event);
+        if (event.key === 'Escape' && onEscape) onEscape();
+      }}
       className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"

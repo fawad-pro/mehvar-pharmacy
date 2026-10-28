@@ -307,3 +307,72 @@ export function parseDiscountInput(raw: string, basisPaisa: Paisa): Paisa {
 
   return paisa(Math.max(0, Math.min(amount, basisPaisa)));
 }
+
+/* -------------------------------------------------------------------------- */
+/* [PCN-014] The bill discount                                                 */
+/* -------------------------------------------------------------------------- */
+
+/** The cap a tenant that never set one gets: 10% (the owner's decision). */
+export const DEFAULT_BILL_DISCOUNT_CAP_PERCENT = 10;
+
+export type BillDiscountRejection =
+  /** Not an amount at all — junk is never read as Rs 0 (the scan guard's rule). */
+  | 'not_an_amount'
+  /** More than the bill: a bill discount cannot take a bill below nothing. */
+  | 'above_bill';
+
+/**
+ * The bill discount the salesperson typed: what comes off, as an amount
+ * ("80") or a share of the bill ("10%") — the same words a line discount
+ * takes (`parseDiscountInput`), so there is one way to give a discount.
+ * `subtotalPaisa` is the bill after item discounts: what a bill discount
+ * comes off, and what its percentage is of.
+ *
+ * Blank is no discount. Unlike a line discount, junk and too much are
+ * refused rather than clamped: this field sets the figure the drawer is
+ * expected to hold, so "abc" must not quietly mean Rs 0 and "800" on a
+ * Rs 705 bill must not quietly mean "free". There is one bill discount per
+ * sale; typing again replaces it, so it is never given twice.
+ */
+export function billDiscountFromInput(
+  subtotalPaisa: Paisa,
+  raw: string,
+): { ok: true; discountPaisa: Paisa } | { ok: false; reason: BillDiscountRejection } {
+  const text = raw.trim();
+  if (text === '') {
+    return { ok: true, discountPaisa: ZERO_PAISA };
+  }
+  const isPercent = text.endsWith('%');
+  const number = parseRupeeInput(isPercent ? text.slice(0, -1) : text);
+  if (number === null) {
+    return { ok: false, reason: 'not_an_amount' };
+  }
+  // `parseRupeeInput` reads "10" as 1,000 paisa; as a percentage that is 10.00%.
+  const discount = isPercent ? Math.round((subtotalPaisa * number) / 10_000) : number;
+  if (discount > subtotalPaisa) {
+    return { ok: false, reason: 'above_bill' };
+  }
+  return { ok: true, discountPaisa: paisa(discount) };
+}
+
+/**
+ * Whether this bill discount needs the owner's PIN.
+ *
+ * The cap measures every discount on the bill together — item discounts and
+ * the bill discount — against the bill before any discount, so a large item
+ * discount cannot be stacked under a "10%" bill discount (PCN-014, decision
+ * 1). A cap of 0 means every bill discount needs the owner (decision 2). Item
+ * discounts alone, with no bill discount, are not gated here.
+ */
+export function billDiscountNeedsApproval(input: {
+  readonly grossPaisa: Paisa;
+  readonly itemDiscountPaisa: Paisa;
+  readonly billDiscountPaisa: Paisa;
+  readonly capPercent: number;
+}): boolean {
+  if (input.billDiscountPaisa <= 0) {
+    return false;
+  }
+  const cap = Math.floor((input.grossPaisa * Math.max(0, input.capPercent)) / 100);
+  return input.itemDiscountPaisa + input.billDiscountPaisa > cap;
+}

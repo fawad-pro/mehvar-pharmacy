@@ -41,6 +41,8 @@ export interface ReceiptData {
   readonly lines?: readonly ReceiptLine[];
   readonly subtotalPaisa?: number;
   readonly discountPaisa?: number;
+  /** [PCN-014] The bill discount, on a row of its own after item discounts. */
+  readonly billDiscountPaisa?: number;
   readonly totalPaisa?: number;
 
   /** Present for a sale: the tendered/change or cash/credit split. */
@@ -59,6 +61,13 @@ export interface ReceiptData {
    * "Paid".
    */
   readonly refund?: { readonly againstReceiptNumber: string };
+
+  /**
+   * [PCN-013] A payment typed wrong, cancelled: the customer holds a slip for
+   * the original, so this one says plainly that it no longer stands. Carries
+   * the mini-statement, in which the amount comes back onto the balance.
+   */
+  readonly cancellation?: { readonly againstReceiptNumber: string };
 
   /**
    * Test receipts only: two measured bars (50 mm and 72 mm) so the printout

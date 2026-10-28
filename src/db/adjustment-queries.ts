@@ -79,6 +79,7 @@ export async function batchesOnHand(
       unitCostPaisa: batches.unitCostPaisa,
       pricePerBaseUnitPaisa: batches.pricePerBaseUnitPaisa,
       arrivedUnitKey: purchaseLines.unitKey,
+      enteredByHand: sql<boolean>`coalesce(${adjustments.reason}::text in ('opening_stock', 'count_correction'), false)`,
     })
     .from(batches)
     .innerJoin(products, eq(products.id, batches.productId))
@@ -86,8 +87,28 @@ export async function batchesOnHand(
       purchaseLines,
       and(eq(batches.source, 'purchase_line'), eq(purchaseLines.id, batches.sourceId)),
     )
+    // [PCN-013] The adjustment that brought the batch in, if one did.
+    .leftJoin(
+      adjustments,
+      and(eq(batches.source, 'adjustment'), eq(adjustments.id, batches.sourceId)),
+    )
     .where(scope.scopeOf(batches, eq(batches.productId, productId), gt(batches.qtyRemainingBase, 0)))
     .orderBy(sql`${batches.expiryDate} asc nulls last`, asc(batches.createdAt));
+}
+
+/**
+ * [PCN-013] Whether a batch was typed in by hand — opening stock or a count —
+ * rather than received on an invoice or moved from a replaced product. Only
+ * such stock may be removed as "entered by mistake".
+ */
+export async function batchEnteredByHand(scope: TenantScope, batchId: Uuid): Promise<boolean> {
+  const [row] = await scope.db
+    .select({ reason: adjustments.reason })
+    .from(batches)
+    .innerJoin(adjustments, eq(adjustments.id, batches.sourceId))
+    .where(scope.scopeOf(batches, eq(batches.id, batchId), eq(batches.source, 'adjustment')))
+    .limit(1);
+  return row?.reason === 'opening_stock' || row?.reason === 'count_correction';
 }
 
 /* -------------------------------------------------------------------------- */

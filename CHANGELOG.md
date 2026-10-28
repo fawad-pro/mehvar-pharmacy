@@ -2,6 +2,218 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## The E2E suite refuses a working database
+
+Run against a working pharmacy, the suite left Rs 999,999 in the day's
+expected cash (its drawer-count spec, which now cancels its own entries).
+`playwright.config.ts` and `e2e:reset` now refuse any database not named for
+tests (`_test`, `_ci`), before anything is reset, and the suite no longer
+reuses a running dev server, which may be connected to any database.
+
+## A bill discount is given like an item discount (PCN-015)
+
+Payment always shows a "Discount on the bill" field, empty, saying
+"e.g. 50 or 10%". Type what comes off; the big figure changes to what to
+collect as you type, and Commit charges exactly that. It replaces the
+"Bill discount — %" button and the "Amount to collect" box, which asked for
+the new total instead. Over the shop's limit, the owner's PIN appears
+beneath it, with Approve and No discount buttons, and Commit waits.
+
+## Adjust stock asks for the reason
+
+The reason started on "Damaged", so a count that came up short saved as a
+loss unless someone changed it. It now starts blank, and Save says "Pick a
+reason." and puts the cursor on it (arrow keys pick, Enter saves). Each
+adjustment starts blank again; opening stock keeps its own reason. A reason
+the other direction does not allow becomes blank, never a different one.
+
+## The five common tasks, measured
+
+Each task was walked with every key logged; `e2e/key-budget.spec.ts` now
+does each with exactly its keys, so a change that adds a step fails.
+
+| Task | Keys (besides what is typed) |
+| --- | --- |
+| Sell one item | Enter · F12 · Enter (or scan · F12 · Enter) |
+| Sell several | Enter per item · F12 · Enter |
+| Udhaar sale | Enter · F4 · Enter · F12 · Enter, typing 0 for no cash |
+| Receive a one-line delivery | 10 (was 11) |
+| Return from a receipt | F2 · Enter · Tab · Tab · Enter · Enter |
+
+- **Receiving: Enter on an empty search goes to Paid now.** Tab got there by
+  way of the last line's Remove button, where a stray Enter deleted the line.
+- **The payment screen says how to put a sale on udhaar.** With a customer
+  attached it read only "Billing to …"; typing what they pay now (0 for all
+  of it) had to be taught.
+- **F12 while the customer picker is still finding waits for the customer.**
+  On a slow connection it opened Payment over the picker; the picker then
+  closed and left the cursor in the product search behind Payment, so the
+  cash typed next searched for a product and Enter added it to the bill.
+  While a picker is finding, it says so and holds the name still — on Receive
+  Stock, the invoice number typed next became part of the supplier's name.
+- Selling was already at its floor: each key is a decision.
+
+## The rest of the counter by keyboard
+
+- **Esc closes what is open, and stays.** Recording a payment on a
+  customer's page, a supplier payment on Receive Stock, and a purchase-line
+  correction: Esc went on to the counter's "go home" and left for Sale,
+  away from the record just changed — the correction's typing lost with it.
+- **Done means ready.** Settle udhaar, a return and a cancelled payment now
+  print before they say so, as a sale does; an Esc pressed on seeing "Done"
+  was lost about one time in five.
+- **Customers and Products start with the cursor in their search; Adjust
+  goes straight to the quantity** once the product is chosen.
+- **A scan delivered to a screen's search is never dropped** when the
+  search is a moment behind (about one scan in twelve on Receive Stock).
+
+## A scan always lands where it should
+
+- **A scan with nothing in focus is not lost.** After a tap — always, on a
+  tablet — or a click elsewhere, a scan went nowhere. It now goes to the
+  screen's own search: Sale and Adjust add the item, Receive Stock starts a
+  line, Products finds the product.
+- **A scan never presses a button.** Its Enter pressed whatever had focus:
+  on Receive Stock it opened the supplier picker with the code in it, and
+  with the payment screen open and focus on Commit it completed the sale.
+  Inside a dialog, or on a screen with no search (Stock), a scan is put back
+  with the usual notice.
+- **Products finds a product by barcode.**
+- **Receipts: a number typed and Enter at once opens that receipt.** It
+  opened the top of the list for the previous search.
+
+## The counter works by touch
+
+- **Udhaar and Switch user can be tapped.** On the key bar they were plain
+  text, so on a tablet an udhaar sale, a settlement and a user switch could
+  not be done at all. With items in the cart, "Attach a customer for udhaar"
+  is a button too.
+- **A line discount has an Apply button.** Tapping away from the field
+  cancels it, as leaving it by key does, and nothing on screen applied it.
+- **Every control on the counter screens is at least 44 px**, the design's
+  touch size: Print receipt, View sale, Settings, the user button, supplier
+  Pay, receipt and customer rows, page links.
+- **"View sale" opens the sale's receipt page.** It opened Returns. A sale
+  not yet sent from an offline counter says so there, instead of "removed".
+
+## Selling hardening, part 3: udhaar and returns
+
+- **"Saved" says where the money went.** An udhaar sale's confirmation now
+  reads "Rs 15.00 cash · Rs 20.00 on Rashid Sahib's udhaar"; it read exactly
+  like a cash sale.
+- **A return by keyboard.** On Returns, a typed or scanned receipt number and
+  Enter open that sale, and focus goes straight to how many came back; Enter
+  there confirms. Before, Enter did nothing and the typed quantity went
+  nowhere.
+- **Tab stays inside an open dialog.** It walked out of the payment screen
+  into the key bar behind it, where Enter left the sale.
+- **A sale clears only what it sold.** The cart was emptied after printing,
+  so a line added during the print was thrown away.
+
+## Selling and receiving hardening, part 2
+
+- **Picking a customer or supplier by name and Enter picks the right one,
+  however slow the connection.** Enter used whatever list had last arrived:
+  on a slow answer, "Rashid" + Enter created a second customer called
+  "Rashid" and put the udhaar on them, and a new supplier's name + Enter put
+  the delivery on another supplier. Enter now waits for the answer to what is
+  typed, and searching waits for a pause in typing.
+- **Receiving stock works from the keyboard alone.** F7 starts at the
+  supplier; choosing one goes on to the invoice number; Enter there goes to
+  the first line, skipping the date (today's, unless changed); Enter in Paid
+  now receives the invoice. Before, focus fell to nowhere twice before the
+  first line.
+- **A supplier or invoice number typed before the first line is kept** when
+  the operator serves a customer and comes back.
+
+## Selling hardening, part 1
+
+- **The key pressed straight after a sale is never lost.** F5 (or any key)
+  pressed the moment "Saved" appeared did nothing about one time in six: the
+  browser takes no keys while it prints, and the receipt printed just after
+  "Saved" showed. The sale now prints first and says "Saved" once the counter
+  can take the next key.
+- **The owner's phone view lists every expiring batch**, with how much is
+  left. Two batches of one product with the same expiry could show as one row
+  or twice.
+- **Correcting a purchase, returning to a supplier, replacing a product or
+  editing a customer or supplier** says it did not save when the shop's
+  computer does not answer, instead of staying on "busy".
+
+## A request with no answer says so
+
+- **Settings no longer sits on "Loading…" for good.** When the shop's computer
+  does not answer, each section says it did not load and offers Try again.
+  Save used to do nothing, and the user list looked like a shop with no users.
+- **A save with no answer says it did not save**, in red, and Save works again.
+- **Returns and Add product** say the search got no answer, instead of "No
+  sales found" or "Nothing in the catalogue matches". Removing a barcode that
+  got no answer says so.
+- **Development only:** a service worker left by the installed app at the same
+  address is removed, so `npm run dev` runs the current code.
+
+## A bill discount at the counter (PCN-014)
+
+- **Charge Rs 2,000 for a Rs 2,080 bill.** On the payment screen press `%`
+  (or tap **Bill discount**), type the amount to collect, press Enter. The
+  screen then shows **Collect 2,000.00** as its biggest figure, with the bill
+  and the discount beneath. Typing it again never doubles the discount.
+- **A limit the owner sets.** Settings → Selling, 10% to start: all discounts
+  on a bill together. Over it, the owner types their PIN on the payment screen
+  and the screen says who approved; without it, Esc sells at the full amount.
+- **The receipt shows it.** Item Discount and Bill Discount are separate rows.
+- **The owner sees every one afterwards.** Day & Reports lists each bill
+  discount with who gave it and who approved it, totals the period's
+  discounts beside the margin, and marks in red any over the limit without
+  approval. The receipt page shows each item's share and what it paid.
+
+## Refunds give back what was paid (PCN-014, step 1)
+
+- **A return from a discounted bill refunds what was actually paid.** A bill
+  of Rs 2,080 charged Rs 2,000 used to refund Rs 2,080 when returned whole;
+  each item now carries its share of the bill discount, and the whole bill
+  refunds exactly Rs 2,000.
+- **Returning in parts ends at the right amount.** Three tablets of a
+  Rs 10.00 line returned one at a time used to refund Rs 9.99; they now refund
+  Rs 10.00.
+- **A return receipt's lines add up to its refund.** They showed each item's
+  price before its discount.
+
+## Every typing mistake has a fix that tells the truth (PCN-013)
+
+- **Customers and suppliers can be corrected.** Fix a name or phone from
+  their page; the owner can remove one added by mistake, and restore it.
+  Removal is refused while money is owed either way, and the message says how
+  much. **All suppliers**, on Purchases, lists every supplier, including ones
+  with nothing owed.
+- **A payment typed wrong can be cancelled** — udhaar payments, supplier
+  payments and cash entries (expense, withdrawal, float). The owner presses
+  **Cancel entry**; the opposite entry is written and both stay on record,
+  marked. A cancelled udhaar payment prints a "PAYMENT CANCELLED" slip for the
+  customer. Balances, what is owed and expected cash return to what they would
+  have been. Cancellations show on the Day screen.
+- **"Entered by mistake — never there"** on Adjust stock takes back opening
+  stock or a count typed too high without reporting it as a loss. Owner only,
+  only for stock entered by hand, and listed on the Day screen. Stock that came
+  on an invoice is corrected on the purchase instead.
+- **Replace this product → "A product I already have"** moves stock typed
+  under the wrong product to the right one, at the count you confirm, with its
+  cost. Any sale that went short on the right product is answered by it.
+
+## A product entered by mistake can be removed
+
+- **Remove product**, on the product's page, takes it off the counter's
+  search and the Products list. Its past sales stay in every report.
+  It asks once more before removing.
+- **Refused while it has stock**, or while a sale is still waiting for stock.
+  The screen says how much, and links to writing it off or replacing it with
+  the right product.
+- **Its barcodes are unlinked**, and listed, so the right product can take
+  them. Before, a code left on the wrong product refused to link anywhere
+  else.
+- **Show removed products** on the Products list finds it again, with
+  **Restore**. A replaced product cannot be restored.
+
 ## Receipts say only what the customer needs
 
 - **No internal notes on the slip.** Selling more than the system had no

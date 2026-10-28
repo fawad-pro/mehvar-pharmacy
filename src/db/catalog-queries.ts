@@ -15,7 +15,7 @@ import 'server-only';
 
 import { and, asc, count, desc, eq, gt, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
-import { barcodeKeys } from '@/domain/catalog/barcode';
+import { barcodeKeys, looksLikeScannedCode } from '@/domain/catalog/barcode';
 import { equivalenceKey, identityKey } from '@/domain/catalog/identity';
 import type { CatalogSuggestion } from '@/domain/catalog/product';
 import { unitsOf, type ProductUnit } from '@/domain/catalog/units';
@@ -32,6 +32,7 @@ import {
   productBarcodes,
   products,
   purchaseLines,
+  saleLineAllocations,
   saleLines,
 } from './schema';
 
@@ -290,11 +291,25 @@ export async function listProducts(
   const term = query.search?.trim();
   if (term) {
     const pattern = `%${term.replace(/[%_]/g, (match) => `\\${match}`)}%`;
+    // A scanned code finds its product here too: a scan on this screen is
+    // "which product is this pack?". Looked up first, as plain ids, so the
+    // list query below stays one table with no subquery.
+    const scannedIds = looksLikeScannedCode(term)
+      ? (
+          await scope.db
+            .select({ productId: productBarcodes.productId })
+            .from(productBarcodes)
+            .where(
+              scope.scopeOf(productBarcodes, inArray(productBarcodes.barcode, barcodeKeys(term))),
+            )
+        ).map((row) => row.productId)
+      : [];
     filters.push(
       or(
         ilike(products.name, pattern),
         ilike(products.formulaText, pattern),
         ilike(products.manufacturer, pattern),
+        ...(scannedIds.length > 0 ? [inArray(products.id, scannedIds)] : []),
       ),
     );
   }
@@ -568,6 +583,45 @@ export async function deleteBarcode(
     .delete(productBarcodes)
     .where(scope.scopeOf(productBarcodes, eq(productBarcodes.id, barcodeId)));
   await scope.update(products, {}, eq(products.id, productId));
+}
+
+/**
+ * Unlinks every barcode a product holds and returns what was unlinked.
+ *
+ * For a product being removed: a code left on a product nobody sells would
+ * scan as nothing, and would refuse to be linked to the right product
+ * (`barcode_taken`). Hard-deleted for the reason `deleteBarcode` gives — a
+ * mapping, not history.
+ */
+export async function deleteProductBarcodes(
+  scope: TenantScope,
+  productId: Uuid,
+): Promise<Array<{ barcode: string; unitLevelName: string }>> {
+  return scope.db
+    .delete(productBarcodes)
+    .where(scope.scopeOf(productBarcodes, eq(productBarcodes.productId, productId)))
+    .returning({ barcode: productBarcodes.barcode, unitLevelName: productBarcodes.unitLevelName });
+}
+
+/**
+ * Base units this product has sold that no batch stands behind yet (D2).
+ *
+ * A join, not a correlated subquery (CLAUDE.md, Day 3).
+ */
+export async function unresolvedPendingBase(scope: TenantScope, productId: Uuid): Promise<number> {
+  const [row] = await scope.db
+    .select({ total: sql<string>`sum(${saleLineAllocations.qtyBase})` })
+    .from(saleLineAllocations)
+    .innerJoin(saleLines, eq(saleLines.id, saleLineAllocations.saleLineId))
+    .where(
+      scope.scopeOf(
+        saleLineAllocations,
+        eq(saleLines.productId, productId),
+        isNull(saleLineAllocations.batchId),
+        isNull(saleLineAllocations.resolvedAt),
+      ),
+    );
+  return Number(row?.total ?? 0);
 }
 
 /**

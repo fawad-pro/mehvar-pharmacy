@@ -33,6 +33,8 @@ async function sellOne(page: Page, term = 'panadol'): Promise<void> {
   await page.keyboard.press('F12');
   await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
   await page.keyboard.press('Enter');
+  // A person starts the next sale when this one says it is done.
+  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeHidden();
 }
 
 test('W1 through a disruption: sell, print, reconnect, reconcile — no user action', async ({
@@ -154,7 +156,13 @@ test('W6 offline: an unknown product becomes a real line without leaving the sal
 
   // Nothing on the shelf matches; the customer is waiting. P2 says this is
   // never a dead end.
-  const name = `Shelf Item ${Date.now()}`;
+  // Letters only, and random: the suite shares one database, and a name
+  // differing from an earlier run's only in its digits is found by search —
+  // so the quick-add was never offered.
+  const name = `Shelf ${Math.random()
+    .toString(36)
+    .replace(/[^a-z]/g, '')
+    .slice(0, 8)}`;
   await search(page).fill(name);
   await expect(page.getByRole('button', { name: /and keep selling/ })).toBeVisible();
   await page.keyboard.press('Enter');

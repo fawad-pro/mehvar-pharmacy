@@ -55,9 +55,9 @@ export default async function ReplaceProductPage({
         </Link>
         <h1 className="text-green-900 mt-1 text-2xl font-semibold">Replace this product</h1>
         <p className="text-ink/70 mt-1 text-sm leading-snug">
-          For a pack set up wrong. Mehvar makes a new product with the right pack and moves the
-          stock to it at the count you confirm, with its cost. Past sales stay on this product,
-          which stops being sold.
+          For a pack set up wrong, or stock entered under the wrong product. Mehvar moves the stock
+          — to a new product with the right pack, or to one you already have — at the count you
+          confirm, with its cost. Past sales stay on this product, which stops being sold.
         </p>
       </header>
       <ReplaceSurface

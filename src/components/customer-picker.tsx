@@ -14,7 +14,7 @@
  * separate form.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { searchCustomersAction, type CustomerHit } from '@/app/(counter)/customers/actions';
 import { CaptureBlockedError, useSync } from '@/client/sync/provider';
@@ -22,6 +22,9 @@ import { validateCustomerDraft } from '@/domain/udhaar/customer';
 import { uuidv7 } from '@/lib/uuid';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
 import { BalanceInline } from '@/components/balance-figure';
+
+/** How long typing must pause before the customer book is searched. */
+const SEARCH_PAUSE_MS = 200;
 
 export function CustomerPicker({
   title = 'Customer',
@@ -34,7 +37,20 @@ export function CustomerPicker({
   onCancel: () => void;
 }) {
   const [term, setTerm] = useState('');
-  const [hits, setHits] = useState<CustomerHit[]>([]);
+  /**
+   * Results carry the term they answer. Enter acts on the answer for what is
+   * typed NOW: acting on an earlier one made the same keys pick Rashid Sahib
+   * on a fast connection and create a second "Rashid" on a slow one, putting
+   * the udhaar on a customer who did not exist.
+   */
+  const [answered, setAnswered] = useState<{ term: string; hits: CustomerHit[] }>({
+    term: '',
+    hits: [],
+  });
+  /** The term an Enter is waiting on, until its answer arrives. */
+  const enterFor = useRef<string | null>(null);
+  /** Shown while an Enter waits, so the wait is visible, not a dead key. */
+  const [finding, setFinding] = useState<string | null>(null);
   const [active, setActive] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,28 +67,53 @@ export function CustomerPicker({
       return;
     }
     let cancelled = false;
-    void searchCustomersAction(trimmed)
-      .then((result) => {
-        if (!cancelled) {
-          setHits(result);
+    // A pause after the last key, as the catalogue picker has: Next sends
+    // server actions one at a time, so a search per keystroke on a slow
+    // connection queued every letter of a name ahead of the answer Enter
+    // waits for.
+    const timer = window.setTimeout(() => {
+      searchCustomersAction(trimmed).then(
+        (result) => {
+          if (cancelled) return;
+          setAnswered({ term: trimmed, hits: result });
           setActive(0);
-        }
-      })
-      .catch(() => {
-        // Offline (ADR-3): the customer book lives on the server, so lookup is
-        // one of the things that stops working. What remains is the thing that
-        // matters mid-rush — the inline create below is still right there, so
-        // W2 continues rather than dead-ending (P2).
-      });
+          answerArrived(trimmed, result);
+        },
+        () => {
+          // Offline (ADR-3): the customer book lives on the server, so lookup is
+          // one of the things that stops working. What remains is the thing that
+          // matters mid-rush — the inline create below is still right there, so
+          // W2 continues rather than dead-ending (P2). No answer is an empty one.
+          if (cancelled) return;
+          setAnswered({ term: trimmed, hits: [] });
+          answerArrived(trimmed, []);
+        },
+      );
+    }, SEARCH_PAUSE_MS);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
   }, [term]);
 
-  // Cleared by re-deriving rather than by resetting `hits` in the effect above
-  // (that would be a synchronous setState-in-effect — a stale list from a
-  // previous term never renders, it just never gets asked for).
-  const visibleHits = term.trim() === '' ? [] : hits;
+  const answerArrived = useEffectEvent((answeredTerm: string, found: CustomerHit[]) => {
+    if (enterFor.current !== answeredTerm) return;
+    enterFor.current = null;
+    setFinding(null);
+    choose(found[0], answeredTerm);
+  });
+
+  // A stale list from a previous term never renders.
+  const visibleHits = answered.term === term.trim() && term.trim() !== '' ? answered.hits : [];
+
+  /** Enter's meaning: the highlighted customer, or a new one by this name. */
+  function choose(hit: CustomerHit | undefined, name: string): void {
+    if (hit) {
+      onPick(hit);
+    } else {
+      void createInline(name);
+    }
+  }
 
   /**
    * W2's inline create — "udhaar is extended mid-rush, not pre-registered".
@@ -83,8 +124,7 @@ export function CustomerPicker({
    * reference this customer before either has reached the server; FIFO delivery
    * is what guarantees the customer lands first.
    */
-  async function createInline(): Promise<void> {
-    const name = term.trim();
+  async function createInline(name: string = term.trim()): Promise<void> {
     if (name === '' || busy) {
       return;
     }
@@ -137,12 +177,16 @@ export function CustomerPicker({
     }
     if (event.key === 'Enter') {
       event.preventDefault();
-      const hit = visibleHits[active];
-      if (hit) {
-        onPick(hit);
-      } else {
-        void createInline();
+      if (finding !== null) return;
+      const trimmed = term.trim();
+      if (trimmed === '') return;
+      if (answered.term !== trimmed) {
+        // Not answered yet: act the moment it is, on that answer.
+        enterFor.current = trimmed;
+        setFinding(trimmed);
+        return;
       }
+      choose(visibleHits[active], trimmed);
     }
   }
 
@@ -157,11 +201,21 @@ export function CustomerPicker({
           onChange={(event) => {
             setTerm(event.target.value);
           }}
+          // Once Enter is given the question is settled: keys typed while it
+          // is being answered (the cash, by a quick operator) must not turn
+          // the name into another customer's. Esc still cancels.
+          readOnly={finding !== null}
           onKeyDown={onKeyDown}
           autoComplete="off"
           placeholder="Name or phone…"
           className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
         />
+
+        {finding ? (
+          <p className="text-ink/60 mt-2 text-sm" role="status">
+            Finding &ldquo;{finding}&rdquo;…
+          </p>
+        ) : null}
 
         <ul className="mt-3 flex max-h-64 flex-col gap-1 overflow-auto" role="listbox">
           {visibleHits.map((hit, index) => (

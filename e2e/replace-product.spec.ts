@@ -88,3 +88,44 @@ test('replace a product set up with the wrong strip: stock moves at the confirme
     page.getByRole('alert').filter({ hasText: 'pack sizes cannot change' }),
   ).toContainText('Replace this product');
 });
+
+test('[PCN-013] stock typed under the wrong product moves to one the shop already has', async ({
+  page,
+}) => {
+  const stamp = Date.now();
+  const wrong = `Typed wrong ${stamp}`;
+  const right = `Right one ${stamp}`;
+  await openCounter(page);
+  await newProduct(page, wrong);
+  await newProduct(page, right);
+
+  await page.goto('/stock/adjust?opening=1');
+  await expect(search(page)).toBeVisible({ timeout: 30_000 });
+  await search(page).fill(wrong.toLowerCase());
+  await page.getByRole('option').first().click({ timeout: 30_000 });
+  await page.getByLabel('box', { exact: true }).fill('1');
+  await page.getByLabel(/^Cost per box/).fill('250');
+  await page.getByRole('button', { name: /Save/ }).click();
+  await expect(page.getByText('Saved.', { exact: false })).toBeVisible();
+
+  await openProduct(page, wrong);
+  await page.getByRole('link', { name: 'Replace this product' }).click();
+  await page.getByRole('button', { name: 'A product I already have' }).click();
+  await search(page).fill(right.toLowerCase());
+  await page
+    .getByRole('option', { name: new RegExp(right) })
+    .first()
+    .click({ timeout: 30_000 });
+  await expect(page.getByText(`counted in tab`)).toBeVisible();
+
+  // Counted in the receiving product's packs: the one box arrives as one box.
+  const batch = page.getByRole('group', { name: /Batch/ }).first();
+  await expect(batch.getByLabel('box', { exact: true })).toHaveValue('1');
+  await expect(batch).toContainText('= 100 tab');
+  await page.getByLabel('Why').fill('typed under the wrong name');
+  await page.getByRole('button', { name: `Move the stock to ${right}` }).click();
+
+  await expect(page.getByRole('heading', { name: right })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('status', { name: 'Replaced' })).toContainText('1 batch moved');
+  await expect(page.getByText('1 box on hand')).toBeVisible();
+});

@@ -22,6 +22,7 @@ import { miniStatement } from '@/domain/udhaar/settlement';
 import { settlementEffect } from '@/domain/udhaar/position';
 import { BalanceInline } from '@/components/balance-figure';
 import { CustomerPicker } from '@/components/customer-picker';
+import { OverlayBackdrop } from '@/components/overlay-backdrop';
 import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
@@ -110,10 +111,9 @@ export function SettleUdhaarOverlay({
       return;
     }
 
-    setBusy(false);
-    setStep({ name: 'done', customer, receiptNumber, statement });
-
-    print({
+    // Printed before "Done" shows: the page takes no keys while printing,
+    // and Done is when the next key is pressed (the Sale screen's rule).
+    await print({
       receiptNumber,
       dateTime: new Date(),
       salesmanName: receiptContext.salesmanName,
@@ -122,6 +122,8 @@ export function SettleUdhaarOverlay({
       customerName: customer.name,
       miniStatement: statement,
     });
+    setBusy(false);
+    setStep({ name: 'done', customer, receiptNumber, statement });
   }
 
   return (
@@ -135,12 +137,7 @@ export function SettleUdhaarOverlay({
           onCancel={onClose}
         />
       ) : (
-        <div
-          className="bg-ink/40 fixed inset-0 z-50 flex items-center justify-center p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Settle udhaar"
-        >
+        <OverlayBackdrop label="Settle udhaar" onEscape={onClose}>
           <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
             <h2 className="text-green-900 mb-1 text-lg font-semibold">Settle udhaar</h2>
             <p className="text-ink/60 mb-4 text-sm">{step.customer.name}</p>
@@ -257,10 +254,7 @@ export function SettleUdhaarOverlay({
                     vocabulary; only "Paid" is a plain amount, because it is a
                     transaction rather than a position. */}
                 <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-3 text-sm">
-                  <BalanceRow
-                    label="Before"
-                    balancePaisa={step.statement.previousBalancePaisa}
-                  />
+                  <BalanceRow label="Before" balancePaisa={step.statement.previousBalancePaisa} />
                   <Row label="Paid" amountPaisa={Math.abs(step.statement.amountPaisa)} />
                   <BalanceRow label="Now" balancePaisa={step.statement.newBalancePaisa} bold />
                 </div>
@@ -269,6 +263,9 @@ export function SettleUdhaarOverlay({
                 <div className="mt-4 flex justify-end">
                   <button
                     type="button"
+                    // Focus moves here when the payment is recorded, so Esc
+                    // and Enter reach the dialog rather than the page.
+                    autoFocus
                     onClick={onClose}
                     className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium"
                   >
@@ -278,7 +275,7 @@ export function SettleUdhaarOverlay({
               </>
             )}
           </div>
-        </div>
+        </OverlayBackdrop>
       )}
 
       {receipt ? <ReceiptView receipt={receipt} /> : null}

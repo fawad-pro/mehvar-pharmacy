@@ -97,10 +97,13 @@ export interface CustomerListItem {
   name: string;
   phone: string | null;
   balancePaisa: number;
+  isActive: boolean;
 }
 
 export interface CustomerListQuery {
   search?: string | undefined;
+  /** Removed customers too, for finding one to restore. */
+  includeRemoved?: boolean | undefined;
   page?: number | undefined;
   pageSize?: number | undefined;
 }
@@ -138,16 +141,9 @@ export async function listCustomers(
   const where = term
     ? scope.scopeOf(
         customers,
-        eq(customers.isActive, true),
         or(ilike(customers.name, `%${term}%`), ilike(customers.phone, `%${term}%`)),
       )
-    : scope.scopeOf(customers, eq(customers.isActive, true));
-
-  const [totals] = await scope.db
-    .select({ value: sql<number>`count(*)` })
-    .from(customers)
-    .where(where);
-  const total = Number(totals?.value ?? 0);
+    : scope.scopeOf(customers);
 
   // All matching customers are fetched to sort by derived balance, then sliced
   // to the page. A customer book stays in the low thousands at most (Phase 5
@@ -159,14 +155,20 @@ export async function listCustomers(
     rows.map((row) => row.id),
   );
 
+  // [PCN-013] A removed customer with a balance is never hidden. Removal is
+  // refused while one is owed, but an udhaar sale captured offline can still
+  // arrive afterwards, and a debt nobody can see is a debt nobody collects.
   const sorted = rows
     .map((row) => ({
       id: row.id,
       name: row.name,
       phone: row.phone,
       balancePaisa: balances[row.id] ?? 0,
+      isActive: row.isActive,
     }))
+    .filter((row) => row.isActive || query.includeRemoved || row.balancePaisa !== 0)
     .sort((a, b) => b.balancePaisa - a.balancePaisa);
+  const total = sorted.length;
 
   // Only debts count toward "owed to you" — a customer in credit (an overpaid
   // settlement, a return larger than the balance) does not offset someone
@@ -191,14 +193,20 @@ export async function listCustomers(
 
 export interface CustomerLedgerRow {
   id: string;
-  kind: 'sale' | 'payment' | 'return';
+  /** [PCN-013] `payment_reversal` cancels a payment typed wrong; it adds the amount back. */
+  kind: 'sale' | 'payment' | 'payment_reversal' | 'return';
   createdAt: Date;
   /** Positive = credit extended; negative = paid in or reversed. Signed for a running total. */
   amountPaisa: number;
   /** For a sale row, the receipt to look up; for a payment or return, its own. */
   receiptNumber: string;
-  /** The sale a return was written against, so the row can name what it reverses. */
+  /**
+   * The sale a return was written against, or the payment a cancellation
+   * cancels, so the row can name what it reverses.
+   */
   againstReceiptNumber?: string;
+  /** [PCN-013] A payment a later row cancelled. Still counted; its cancellation offsets it. */
+  reversed?: boolean;
 }
 
 /**
@@ -232,9 +240,13 @@ export async function customerLedger(
       createdAt: payments.createdAt,
       amountPaisa: payments.amountPaisa,
       receiptNumber: payments.receiptNumber,
+      reversesId: payments.reversesId,
     })
     .from(payments)
     .where(scope.scopeOf(payments, eq(payments.customerId, customerId)));
+  // A cancellation is always the same customer's, so both halves are here.
+  const receiptOf = new Map(paymentRows.map((row) => [row.id, row.receiptNumber]));
+  const cancelled = new Set(paymentRows.map((row) => row.reversesId).filter((id) => id !== null));
 
   // The third term of the balance: credit given back by a return (Day 7).
   // A return row carries no `customer_id` of its own — it is always the
@@ -262,13 +274,26 @@ export async function customerLedger(
         amountPaisa: row.creditPaisa,
         receiptNumber: row.receiptNumber,
       })),
-    ...paymentRows.map((row) => ({
-      id: row.id,
-      kind: 'payment' as const,
-      createdAt: row.createdAt,
-      amountPaisa: -row.amountPaisa,
-      receiptNumber: row.receiptNumber,
-    })),
+    ...paymentRows.map((row) =>
+      row.reversesId === null
+        ? {
+            id: row.id,
+            kind: 'payment' as const,
+            createdAt: row.createdAt,
+            amountPaisa: -row.amountPaisa,
+            receiptNumber: row.receiptNumber,
+            reversed: cancelled.has(row.id),
+          }
+        : {
+            id: row.id,
+            kind: 'payment_reversal' as const,
+            createdAt: row.createdAt,
+            // The stored amount is already negative: negated, it adds back.
+            amountPaisa: -row.amountPaisa,
+            receiptNumber: row.receiptNumber,
+            againstReceiptNumber: receiptOf.get(row.reversesId) ?? '',
+          },
+    ),
     ...returnRows
       .filter((row) => row.creditReducedPaisa > 0)
       .map((row) => ({
@@ -287,9 +312,9 @@ export async function customerLedger(
 export async function findCustomer(
   scope: TenantScope,
   customerId: Uuid,
-): Promise<{ id: string; name: string; phone: string | null } | undefined> {
+): Promise<{ id: string; name: string; phone: string | null; isActive: boolean } | undefined> {
   const row = await scope.selectOne(customers, eq(customers.id, customerId));
-  return row ? { id: row.id, name: row.name, phone: row.phone } : undefined;
+  return row ? { id: row.id, name: row.name, phone: row.phone, isActive: row.isActive } : undefined;
 }
 
 /** Type-ahead over name and phone — W2's customer picker, W3's settlement key. */
@@ -335,6 +360,15 @@ export async function insertCustomer(
   await scope.insert(customers, row);
 }
 
+/** [PCN-013] Identity fields and the soft archive only (Phase 9 §1). */
+export async function updateCustomer(
+  scope: TenantScope,
+  customerId: Uuid,
+  patch: { name?: string; phone?: string | null; isActive?: boolean },
+): Promise<void> {
+  await scope.update(customers, patch, eq(customers.id, customerId));
+}
+
 /** Idempotency (ADR-3): a settlement's client id already committed is not committed twice. */
 export async function findPaymentById(
   scope: TenantScope,
@@ -344,6 +378,45 @@ export async function findPaymentById(
   return row
     ? { id: row.id, receiptNumber: row.receiptNumber, amountPaisa: row.amountPaisa }
     : undefined;
+}
+
+/** [PCN-013] A payment as a reversal needs it: who, how much, and whether it is itself one. */
+export async function findPaymentForReversal(
+  scope: TenantScope,
+  paymentId: Uuid,
+): Promise<
+  | {
+      id: string;
+      customerId: string;
+      amountPaisa: number;
+      method: 'cash';
+      saleId: string | null;
+      receiptNumber: string;
+      reversesId: string | null;
+    }
+  | undefined
+> {
+  const row = await scope.selectOne(payments, eq(payments.id, paymentId));
+  return row
+    ? {
+        id: row.id,
+        customerId: row.customerId,
+        amountPaisa: row.amountPaisa,
+        method: row.method,
+        saleId: row.saleId,
+        receiptNumber: row.receiptNumber,
+        reversesId: row.reversesId,
+      }
+    : undefined;
+}
+
+/** [PCN-013] The row cancelling this payment, if one exists. */
+export async function findPaymentReversalOf(
+  scope: TenantScope,
+  paymentId: Uuid,
+): Promise<{ id: string; receiptNumber: string } | undefined> {
+  const row = await scope.selectOne(payments, eq(payments.reversesId, paymentId));
+  return row ? { id: row.id, receiptNumber: row.receiptNumber } : undefined;
 }
 
 export async function insertPayment(

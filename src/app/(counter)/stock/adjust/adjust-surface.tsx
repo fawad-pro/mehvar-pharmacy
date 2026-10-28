@@ -72,7 +72,14 @@ function largestFirst(units: readonly ProductUnit[]): ProductUnit[] {
   return [...units].reverse();
 }
 
-export function AdjustSurface({ openingStock = false }: { openingStock?: boolean }) {
+export function AdjustSurface({
+  openingStock = false,
+  isOwner = false,
+}: {
+  openingStock?: boolean;
+  /** [PCN-013] "Entered by mistake" is the owner's alone; the server checks again. */
+  isOwner?: boolean;
+}) {
   const { refresh, addLocalProduct } = useCatalog();
   const { capture } = useSync();
   /** W6's mini-form, reused: the typed name plus the resolver search awaits. */
@@ -92,7 +99,14 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   const [qty, setQty] = useState('');
   /** [PCN-012] Counts per unit when stock arrives, keyed by unit key. */
   const [counts, setCounts] = useState<Record<string, string>>({});
-  const [reason, setReason] = useState<AdjustmentReason>(openingStock ? 'opening_stock' : 'damage');
+  /**
+   * No reason until the operator picks one. A default is a reason nobody
+   * chose: "Damaged" pre-selected recorded every miscount as a loss. Opening
+   * stock is the exception — the page itself is the reason.
+   */
+  const [reason, setReason] = useState<AdjustmentReason | null>(
+    openingStock ? 'opening_stock' : null,
+  );
   const [note, setNote] = useState('');
   const [cost, setCost] = useState('');
   const [price, setPrice] = useState('');
@@ -102,6 +116,8 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   const [done, setDone] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const qtyRef = useRef<HTMLInputElement>(null);
+  /** Set when a product is chosen; the effect below focuses its quantity. */
+  const focusQty = useRef(false);
 
   // Batches only matter when stock is leaving.
   useEffect(() => {
@@ -128,6 +144,12 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     };
   }, [chosen, direction]);
 
+  useEffect(() => {
+    if (!focusQty.current) return;
+    focusQty.current = false;
+    qtyRef.current?.focus();
+  }, [chosen]);
+
   /**
    * A product chosen: counted in its own units, costed per its largest unit,
    * that cost pre-filled from the last purchase when there was one (PCN-012
@@ -142,7 +164,10 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     setCost('');
     setError(null);
     setDone(null);
-    qtyRef.current?.focus();
+    // Focused once the quantity is drawn: focusing here, before the first
+    // product's fields existed, did nothing, and the count typed next went
+    // to the unit buttons.
+    focusQty.current = true;
     void lastPurchaseCostAction(product.productId)
       .then((last) => {
         if (!last || !costUnit) return;
@@ -240,21 +265,38 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
   // direction, and the chosen reason is only honoured while it remains one of
   // them — so the form can never offer a combination `validateAdjustment`
   // would refuse, without an effect keeping two pieces of state in step.
+  // [PCN-013] "Entered by mistake" is offered only to the owner, and only
+  // while there is stock typed in by hand to take it from.
   const availableReasons = ADJUSTMENT_REASONS.filter((candidate) =>
-    direction === 'add' ? !isNegativeOnly(candidate) : candidate !== 'opening_stock',
+    direction === 'add'
+      ? !isNegativeOnly(candidate)
+      : candidate !== 'opening_stock' &&
+        (candidate !== 'entered_by_mistake' ||
+          (isOwner && batches.some((batch) => batch.enteredByHand))),
   );
-  const effectiveReason: AdjustmentReason = availableReasons.includes(reason)
-    ? reason
-    : (availableReasons[0] ?? 'count_correction');
+  // A reason the new direction does not allow is no reason, never a
+  // different one chosen for the operator.
+  const effectiveReason: AdjustmentReason | null =
+    reason !== null && availableReasons.includes(reason) ? reason : null;
 
   // Likewise: stock being added creates its own batch, so there is nothing to
-  // pick from and a stale list from a previous product must not show.
-  const visibleBatches = direction === 'add' ? [] : batches;
+  // pick from and a stale list from a previous product must not show. Stock
+  // that arrived on an invoice is corrected on the purchase, never removed as
+  // "entered by mistake", so it is not offered for that reason.
+  const visibleBatches =
+    direction === 'add'
+      ? []
+      : effectiveReason === 'entered_by_mistake'
+        ? batches.filter((batch) => batch.enteredByHand)
+        : batches;
+  const effectiveBatchId = visibleBatches.some((batch) => batch.batchId === batchId)
+    ? batchId
+    : (visibleBatches[0]?.batchId ?? null);
 
   // [PCN-012] Stock arriving, counted per unit: the base units it comes to,
   // and — costed per the largest unit — exactly what it cost, rounded once.
   const costUnit = chosen?.units[0];
-  const chosenBatch = batches.find((batch) => batch.batchId === batchId);
+  const chosenBatch = batches.find((batch) => batch.batchId === effectiveBatchId);
   const removeUnit = chosen
     ? (chosen.units.find((unit) => unit.key === removeUnitKey) ??
       chosen.units.find((unit) => unit.key === chosenBatch?.arrivedUnitKey) ??
@@ -302,6 +344,12 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
       return;
     }
 
+    if (effectiveReason === null) {
+      setError('Pick a reason.');
+      document.getElementById('adjust-reason')?.focus();
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
@@ -315,7 +363,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
           }
         : {}),
       reason: effectiveReason,
-      batchId: direction === 'add' ? null : batchId,
+      batchId: direction === 'add' ? null : effectiveBatchId,
       note: note.trim() === '' ? null : note.trim(),
       ...(direction === 'add' && costUnit && costTotalPaisa !== null
         ? {
@@ -351,6 +399,10 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
     setQty('');
     setCounts({});
     setNote('');
+    // The next adjustment is a different event; it gets its own reason.
+    if (!openingStock) {
+      setReason(null);
+    }
     refresh();
     searchRef.current?.focus();
   }
@@ -498,18 +550,31 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
               </label>
               <select
                 id="adjust-reason"
-                value={effectiveReason}
+                value={effectiveReason ?? ''}
                 onChange={(event) => {
                   setReason(event.target.value as AdjustmentReason);
                 }}
                 className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
               >
+                {effectiveReason === null ? (
+                  <option value="" disabled>
+                    Pick a reason…
+                  </option>
+                ) : null}
                 {availableReasons.map((candidate) => (
                   <option key={candidate} value={candidate}>
                     {REASON_LABELS[candidate]}
                   </option>
                 ))}
               </select>
+              {/* [PCN-013] Said before Save: this reason is not a loss, and it
+                  is not quiet either. */}
+              {effectiveReason === 'entered_by_mistake' ? (
+                <p className="text-ink/60 mt-1 text-xs">
+                  For stock typed in that was never there. It is not counted as a loss, and it shows
+                  on the day&rsquo;s list. Only stock you entered by hand can be removed this way.
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -525,7 +590,7 @@ export function AdjustSurface({ openingStock = false }: { openingStock?: boolean
               ) : (
                 <select
                   id="adjust-batch"
-                  value={batchId ?? ''}
+                  value={effectiveBatchId ?? ''}
                   onChange={(event) => {
                     setBatchId(event.target.value);
                     setRemoveUnitKey(null);

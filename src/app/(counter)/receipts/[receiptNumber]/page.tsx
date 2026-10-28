@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
 import { findReceipt } from '@/db/receipt-queries';
@@ -38,13 +38,22 @@ export default async function ReceiptDetailPage({
   }
 
   const { receiptNumber } = await params;
-  const receipt = await findReceipt(scopeFor(session), decodeURIComponent(receiptNumber));
+  const wanted = decodeURIComponent(receiptNumber);
+  const receipt = await findReceipt(scopeFor(session), wanted);
   if (!receipt) {
-    notFound();
+    // Not "removed": the usual reason is a sale this counter has not sent
+    // yet, reached from "View sale" a moment after it was made offline.
+    return <NotYetHere receiptNumber={wanted} />;
   }
 
   const heading =
-    receipt.kind === 'sale' ? 'Sale' : receipt.kind === 'settlement' ? 'Payment' : 'Return';
+    receipt.kind === 'sale'
+      ? 'Sale'
+      : receipt.kind === 'settlement'
+        ? 'Payment'
+        : receipt.kind === 'payment_cancelled'
+          ? 'Payment cancelled'
+          : 'Return';
 
   // [PCN-012] What the line actually charged: the stored amount when there is
   // one, per-base price × base quantity for a line from before PCN-012.
@@ -72,9 +81,7 @@ export default async function ReceiptDetailPage({
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">{heading}</p>
-          <h1 className="text-green-900 numeral text-2xl font-semibold">
-            {receipt.receiptNumber}
-          </h1>
+          <h1 className="text-green-900 numeral text-2xl font-semibold">{receipt.receiptNumber}</h1>
           <p className="text-ink/60 mt-1 text-sm">
             {receipt.createdAt.toLocaleString('en-PK', {
               weekday: 'short',
@@ -187,6 +194,14 @@ export default async function ReceiptDetailPage({
                         −{formatPaisa(paisa(line.lineDiscountPaisa))} off
                       </p>
                     ) : null}
+                    {/* [PCN-014] How the bill discount fell on this line, and
+                        so what it paid — what a return of it gives back. */}
+                    {line.invoiceDiscountSharePaisa > 0 ? (
+                      <p className="text-ink/50 text-xs">
+                        −{formatPaisa(paisa(line.invoiceDiscountSharePaisa))} bill discount · paid{' '}
+                        {formatPaisa(paisa(lineTotal(line) - line.invoiceDiscountSharePaisa))}
+                      </p>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -199,14 +214,23 @@ export default async function ReceiptDetailPage({
         {receipt.kind === 'sale' ? (
           <>
             <Line label="Subtotal" amountPaisa={subtotalPaisa} />
-            {/* One row for every discount that reduced this sale — the sum of
-                each line's own discount, plus any invoice-level discount an
-                older record might carry (the UI no longer writes one). */}
-            {lineDiscountTotalPaisa + (receipt.invoiceDiscountPaisa ?? 0) > 0 ? (
+            {/* [PCN-014] Item discounts and the bill discount, each on a row of
+                its own, in the order they came off — as the printed receipt. */}
+            {lineDiscountTotalPaisa > 0 ? (
               <Line
-                label="Discount"
-                amountPaisa={-(lineDiscountTotalPaisa + (receipt.invoiceDiscountPaisa ?? 0))}
+                label={receipt.invoiceDiscountPaisa ? 'Item discounts' : 'Discount'}
+                amountPaisa={-lineDiscountTotalPaisa}
               />
+            ) : null}
+            {receipt.invoiceDiscountPaisa ? (
+              <>
+                <Line label="Bill discount" amountPaisa={-receipt.invoiceDiscountPaisa} />
+                {receipt.invoiceDiscountApprovedByName ? (
+                  <p className="text-ink/50 text-xs">
+                    Approved by {receipt.invoiceDiscountApprovedByName}
+                  </p>
+                ) : null}
+              </>
             ) : null}
             <Line label="Total" amountPaisa={receipt.totalPaisa ?? 0} bold />
             {receipt.cashPaisa ? <Line label="Cash" amountPaisa={receipt.cashPaisa} /> : null}
@@ -218,7 +242,38 @@ export default async function ReceiptDetailPage({
         ) : null}
 
         {receipt.kind === 'settlement' ? (
-          <Line label="Paid" amountPaisa={receipt.amountPaisa ?? 0} bold />
+          <>
+            <Line label="Paid" amountPaisa={receipt.amountPaisa ?? 0} bold />
+            {receipt.cancelledByReceiptNumber ? (
+              <p className="text-amber mt-1 text-sm">
+                Cancelled — see receipt{' '}
+                <Link
+                  href={`/receipts/${encodeURIComponent(receipt.cancelledByReceiptNumber)}`}
+                  className="text-green-700 hover:underline"
+                >
+                  {receipt.cancelledByReceiptNumber}
+                </Link>
+              </p>
+            ) : null}
+          </>
+        ) : null}
+
+        {receipt.kind === 'payment_cancelled' ? (
+          <>
+            <Line label="Payment cancelled" amountPaisa={receipt.amountPaisa ?? 0} bold />
+            {receipt.cancelsReceiptNumber ? (
+              <p className="text-ink/60 mt-1 text-sm">
+                Cancels receipt{' '}
+                <Link
+                  href={`/receipts/${encodeURIComponent(receipt.cancelsReceiptNumber)}`}
+                  className="text-green-700 hover:underline"
+                >
+                  {receipt.cancelsReceiptNumber}
+                </Link>
+                ; the amount is back on the customer&rsquo;s balance.
+              </p>
+            ) : null}
+          </>
         ) : null}
 
         {receipt.kind === 'return' ? (
@@ -265,10 +320,9 @@ export default async function ReceiptDetailPage({
                     </td>
                     <td className="text-ink/60 px-3 py-2 text-sm">{entry.reasonNote ?? '—'}</td>
                     <td className="numeral px-3 py-2 text-right">
-                      {formatPaisa(
-                        paisa(entry.cashOutPaisa + entry.creditReducedPaisa),
-                        { withSymbol: true },
-                      )}
+                      {formatPaisa(paisa(entry.cashOutPaisa + entry.creditReducedPaisa), {
+                        withSymbol: true,
+                      })}
                     </td>
                   </tr>
                 ))}
@@ -298,5 +352,24 @@ function Line({
         {formatPaisa(paisa(Math.abs(amountPaisa)), { withSymbol: true })}
       </span>
     </div>
+  );
+}
+
+function NotYetHere({ receiptNumber }: { receiptNumber: string }) {
+  return (
+    <section className="mx-auto flex max-w-lg flex-col items-start gap-4 p-8">
+      <h1 className="text-green-900 text-2xl font-semibold">Receipt {receiptNumber}</h1>
+      <p className="text-ink/70 leading-relaxed">
+        This receipt is not on the shop&rsquo;s computer yet. A sale made while this counter was
+        offline appears here once the counter has sent it — the top bar says when anything is still
+        waiting. Otherwise, check the number.
+      </p>
+      <Link
+        href="/receipts"
+        className="bg-green-600 text-paper min-h-touch flex items-center rounded px-6 font-medium"
+      >
+        All receipts
+      </Link>
+    </section>
   );
 }

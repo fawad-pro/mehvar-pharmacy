@@ -9,6 +9,7 @@ import { describeQuantity } from '@/lib/quantity';
 
 import { ProductForm } from '../product-form';
 import { BarcodePanel } from './barcode-panel';
+import { RemovePanel } from './remove-panel';
 
 export default async function ProductDetailPage({
   params,
@@ -16,7 +17,7 @@ export default async function ProductDetailPage({
 }: {
   params: Promise<{ productId: string }>;
   /** [PCN-012] Set by "Replace this product" on arrival here. */
-  searchParams: Promise<{ replaced?: string; unlinked?: string }>;
+  searchParams: Promise<{ replaced?: string; removed?: string; unlinked?: string }>;
 }) {
   const session = await currentSession();
   if (!session) {
@@ -83,6 +84,23 @@ export default async function ProductDetailPage({
         </div>
       ) : null}
 
+      {arrival.removed !== undefined && !product.isActive && unlinked.length > 0 ? (
+        <div
+          className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm"
+          role="status"
+          aria-label="Removed"
+        >
+          <p>These barcodes were unlinked, so the right product can take them:</p>
+          <ul className="numeral">
+            {unlinked.map((code) => (
+              <li key={code.barcode}>
+                {code.barcode} <span className="text-ink/60">({code.unitLevelName})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {/* [PCN-012] A replaced product is history: say where it went. */}
       {product.replacedByProductId ? (
         <p className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm" role="note">
@@ -96,7 +114,7 @@ export default async function ProductDetailPage({
         </p>
       ) : hasHistory ? (
         <p className="text-ink/70 text-sm">
-          Pack sizes set up wrong?{' '}
+          Pack sizes set up wrong, or stock under the wrong product?{' '}
           <Link href={`/products/${product.id}/replace`} className="text-green-700 hover:underline">
             Replace this product
           </Link>{' '}
@@ -140,6 +158,17 @@ export default async function ProductDetailPage({
           </ul>
         </div>
       ) : null}
+
+      {/* A replaced product is already off sale, and restoring it would
+          duplicate its replacement; it gets neither control. */}
+      {product.replacedByProductId ? null : (
+        <RemovePanel
+          productId={product.id}
+          productName={product.name}
+          isActive={product.isActive}
+          canReplace={hasHistory}
+        />
+      )}
 
       <BarcodePanel
         productId={product.id}

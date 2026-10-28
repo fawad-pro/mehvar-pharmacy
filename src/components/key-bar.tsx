@@ -13,7 +13,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { GLOBAL_KEYS } from '@/client/keyboard/registry';
+import { GLOBAL_KEYS, type GlobalKey } from '@/client/keyboard/registry';
 
 /**
  * Keyboard-first is a claim about speed, not a reason to be inert to the
@@ -23,12 +23,21 @@ import { GLOBAL_KEYS } from '@/client/keyboard/registry';
  * muscle memory yet.
  *
  * Keys with a `dispatch` instead of an `href` — currently Udhaar and Switch
- * user — have no route, so those stay non-interactive rather than pretending
- * to lead somewhere; the handler that owns them lives in `AppShell`. Which
- * keys those are is whatever the registry says below, not a fact worth
- * repeating here as letters that a reorder would make wrong.
+ * user — have no route, so they are buttons that do what the key does,
+ * through the same handler (`AppShell` owns it). They were inert text, which
+ * on a tablet, with no F-keys, meant an udhaar sale and a user switch could
+ * not be done at all. Which keys those are is whatever the registry says
+ * below, not a fact worth repeating here as letters a reorder would make
+ * wrong.
  */
-export function KeyBar({ role }: { role: 'owner' | 'salesman' }) {
+export function KeyBar({
+  role,
+  onDispatch,
+}: {
+  role: 'owner' | 'salesman';
+  /** Runs a routeless key's meaning, exactly as pressing it does. */
+  onDispatch: (dispatch: NonNullable<GlobalKey['dispatch']>) => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -60,6 +69,22 @@ export function KeyBar({ role }: { role: 'owner' | 'salesman' }) {
             <span className="opacity-80">{binding.label}</span>
           </>
         );
+
+        if (binding.dispatch && permitted) {
+          const meaning = binding.dispatch;
+          return (
+            <button
+              key={binding.key}
+              type="button"
+              onClick={() => {
+                onDispatch(meaning);
+              }}
+              className={`${className} hover:bg-green-600/60`}
+            >
+              {content}
+            </button>
+          );
+        }
 
         if (binding.href === null || !permitted) {
           return (

@@ -79,7 +79,10 @@ export function TopBar({
         {/* No key bar entry (F1–F10 are spoken for) — Phase 10 §2 lists
             Settings without a shortcut, reachable from the owner chip. */}
         {userRole === 'owner' ? (
-          <Link href="/settings" className="text-ink/60 hover:text-green-900 text-sm">
+          <Link
+            href="/settings"
+            className="text-ink/60 hover:text-green-900 flex min-h-touch items-center px-2 text-sm"
+          >
             Settings
           </Link>
         ) : null}
@@ -87,7 +90,7 @@ export function TopBar({
         <button
           type="button"
           onClick={onSwitchUser}
-          className="border-line hover:bg-green-100 flex items-center gap-2 rounded border px-2 py-1 text-sm"
+          className="border-line hover:bg-green-100 flex min-h-touch items-center gap-2 rounded border px-3 text-sm"
         >
           <span className="font-medium">{userName}</span>
           <span className="text-ink/50 text-xs capitalize">{userRole}</span>

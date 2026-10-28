@@ -142,7 +142,7 @@ function SupplierName({ id, name }: { id: string; name: string }) {
   return (
     <Link
       href={`/purchases/suppliers/${id}`}
-      className="text-green-700 font-medium underline-offset-2 hover:underline"
+      className="text-green-700 inline-flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
     >
       {name}
     </Link>
@@ -160,6 +160,7 @@ export function SupplierCreditRow({
   onAccountPage?: boolean;
 }) {
   const [paying, setPaying] = useState(false);
+  const payButton = useRef<HTMLButtonElement>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -211,13 +212,14 @@ export function SupplierCreditRow({
           {formatPaisa(paisa(row.balancePaisa), { withSymbol: true })}
         </span>
         <button
+          ref={payButton}
           type="button"
           onClick={() => {
             setPaying((open) => !open);
             setAmount(paying ? '' : (row.balancePaisa / 100).toString());
             setError(null);
           }}
-          className="text-green-600 text-xs font-medium underline-offset-2 hover:underline"
+          className="text-green-600 min-h-touch min-w-touch px-3 text-xs font-medium underline-offset-2 hover:underline"
         >
           {paying ? 'Cancel' : 'Pay'}
         </button>
@@ -227,6 +229,17 @@ export function SupplierCreditRow({
         <div
           className="mt-2 flex flex-wrap items-end gap-2"
           onKeyDown={(event) => {
+            // Esc closes this form, as the line discount's does — it went
+            // past it to the shell, which left the screen for Sale.
+            if (event.key === 'Escape') {
+              // Taken here: see `use-global-keys.ts`.
+              event.preventDefault();
+              setPaying(false);
+              setAmount('');
+              setError(null);
+              payButton.current?.focus();
+              return;
+            }
             if (event.key === 'Enter') {
               event.preventDefault();
               // An amount too large to be real records only by a click.

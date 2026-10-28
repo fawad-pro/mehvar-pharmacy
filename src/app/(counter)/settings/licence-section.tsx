@@ -15,11 +15,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { LoadFailed, NO_ANSWER } from '@/components/load-failed';
+
 import {
   installLicenceAction,
   licencePanelAction,
   rebindLicenceAction,
   type LicencePanel,
+  type SettingsOutcome,
 } from './actions';
 
 export function LicenceSection() {
@@ -27,14 +30,23 @@ export function LicenceSection() {
   const [token, setToken] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   // The latest request's answer wins: a slow first load landing after a
   // licence was pasted put the old state back beside "Licence installed."
   const latest = useRef(0);
   async function refresh(): Promise<void> {
     const mine = ++latest.current;
-    const current = await licencePanelAction();
-    if (mine === latest.current) setPanel(current);
+    await licencePanelAction().then(
+      (current) => {
+        if (mine !== latest.current) return;
+        setPanel(current);
+        setLoadFailed(current === null);
+      },
+      () => {
+        if (mine === latest.current) setLoadFailed(true);
+      },
+    );
   }
 
   useEffect(() => {
@@ -42,28 +54,38 @@ export function LicenceSection() {
     void refresh();
   }, []);
 
-  async function paste(): Promise<void> {
+  /** A change's answer, or the plain fact that none came. */
+  async function change(run: () => Promise<SettingsOutcome>, said: string): Promise<boolean> {
     setBusy(true);
-    const result = await installLicenceAction(token);
-    setBusy(false);
-    setMessage(result.ok ? 'Licence installed.' : result.message);
-    if (result.ok) setToken('');
+    let ok = false;
+    try {
+      const result = await run();
+      ok = result.ok;
+      setMessage(result.ok ? said : result.message);
+    } catch {
+      setMessage(NO_ANSWER);
+    } finally {
+      setBusy(false);
+    }
     await refresh();
+    return ok;
+  }
+
+  async function paste(): Promise<void> {
+    if (await change(() => installLicenceAction(token), 'Licence installed.')) setToken('');
   }
 
   async function moveHere(): Promise<void> {
-    setBusy(true);
-    const result = await rebindLicenceAction();
-    setBusy(false);
-    setMessage(result.ok ? 'Licence moved to this computer.' : result.message);
-    await refresh();
+    await change(rebindLicenceAction, 'Licence moved to this computer.');
   }
 
   return (
     <div className="border-line rounded border p-4">
       <h2 className="text-green-900 mb-2 font-medium">Licence</h2>
 
-      {panel === null ? (
+      {panel === null && loadFailed ? (
+        <LoadFailed what="The licence" onRetry={() => void refresh()} />
+      ) : panel === null ? (
         <p className="text-ink/60 text-sm">Loading…</p>
       ) : (
         <>

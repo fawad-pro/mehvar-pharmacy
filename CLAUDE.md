@@ -619,6 +619,176 @@ exception visibility.
   `supplier-balance.integration` asserts the rows sum to the balance (Day 8).
   A new term in one is a new term in the other.
 
+## Things PCN-013 (fixing mistakes) established
+
+- **A correction is a row in the same table as what it corrects.** A
+  cancellation in `payments`, `supplier_payments` or `cash_movements` carries
+  `reverses_id` and the opposite sign or direction, so every reader that sums
+  the table is right without knowing. Before choosing a separate table, count
+  its readers: each one would have to learn to exclude, and the one that does
+  not is the Day 8 bug.
+- **"Sums correctly" is not "offsets exactly".** The crown suite recomputes
+  balances and expected cash from the entries that still stand (`standing`),
+  so a cancellation that undid the wrong amount fails, which re-summing the
+  same rows cannot catch. A reader that COUNTS instead of sums
+  (`hasOpeningFloat`) is where a compensating row breaks things.
+- **A reason that keeps something out of the loss figures is a way to hide a
+  loss.** "Entered by mistake" is owner only, only on stock typed in by hand,
+  and always on the exception list; invoiced stock is corrected on the
+  purchase, where the money is.
+- **Removing a record never hides its money.** A customer or supplier may be
+  removed only at zero, and a removed one that later has a balance (an offline
+  sale arriving after removal) is listed anyway.
+- **A control whose action can be refused must leave its confirm state.**
+  "Yes, remove" left showing after a refusal invites a press that cannot
+  succeed.
+- **A component that prints must outlive the refresh its own action causes.**
+  The cancel control renders for cancelled rows too, so the slip in its state
+  is still mounted when the row turns into "cancelled".
+- **Playwright types like a scanner.** Digits then Enter at machine speed is
+  a scan, and the scan guard rightly keeps it out of an ordinary field. Type
+  at a person's speed (`{ delay }`) in a spec; never weaken the guard.
+
+## Things the no-answer fix established
+
+- **A request has two outcomes, and a screen must show both.** Settings filled
+  four sections from `void action().then(fill)`: no rejection handler, so a
+  request with no answer left each one on "Loading…" for good, its Save dead,
+  and the user list an empty list that read as "no users". A load that fails
+  says so and offers Try again (`components/load-failed.tsx`); a save that
+  throws says it did not save. An empty result and no result are different
+  states.
+- **Dev at the installed app's address inherits its service worker.** Both run
+  on localhost:3000, and a registered worker outlives the build that made it,
+  controlling dev pages and caching their scripts. Not registering in
+  development was only half the rule: `service-worker.tsx` now removes one.
+- **Never `unroute` to end a simulated outage.** A request reaching the route
+  handler while it was removed stayed open for good, and Next sends server
+  actions one at a time, so every later action queued behind it — about one
+  run in twenty. Cut with a switch (`no-answer.spec.ts`). The same queueing
+  means one hung request in production stalls every later action; that
+  belongs to the online/offline decision.
+- **`pkill -f` matches the shell that runs it** when the pattern is in its own
+  command line, killing the rest of the command silently — including a
+  `git stash pop`. Stop servers by PID or exact process name.
+
+## Things selling hardening established
+
+- **The page takes no keys while `window.print()` runs, and drops them.** The
+  receipt printed two frames after "Saved" appeared, so the operator's next
+  key — pressed on seeing "Saved" — was lost about one time in six; it never
+  reached even a capture listener on `window`. The refresh guard
+  (`navigation/intent.ts`) fixed a real, different cause; this was what it
+  left. `print()`
+  now resolves when printing has returned, and the Sale screen says "Saved"
+  after it. A screen's confirmation means it is ready for the next key.
+- **Instrument from the outside in before theorising.** A capture-phase
+  listener installed by the test (`addInitScript`) answered in one run what
+  reading Next's action queue could only guess at: whether the key reached the
+  page at all.
+- **A list keyed by what it displays breaks when two rows look alike.** Two
+  batches of one product with one expiry shared `name-date`; key by the row's
+  identity, and show what tells them apart.
+
+## Things selling hardening part 2 established
+
+- **A key must mean the same thing on a slow connection as on a fast one.**
+  The pickers' Enter acted on the last list to arrive, so its meaning was a
+  race against the server: the right customer locally, a duplicate customer
+  or the wrong supplier over slow Wi-Fi. Results carry the term they answer
+  (as `catalog-picker.tsx` already did), and Enter waits for the answer to
+  what is typed. Test it by slowing the server (`slow-answers.spec.ts`); a
+  local server answers too fast for the race to show.
+- **Next sends server actions one at a time, so a search per keystroke
+  queues.** Thirty letters on a slow link is thirty searches ahead of the
+  one that matters. Every type-ahead pauses for typing first.
+- **Walk a workflow by keyboard and log where focus lands after each key.**
+  The receiving spec picked products with a mouse click, so focus starting
+  nowhere — twice — never showed. A spec that clicks is not evidence of a
+  keyboard path (I1).
+
+## Things selling hardening part 3 established
+
+- **Once a step is awaited, clear what it used, not everything.** Awaiting
+  the print moved the cart's clear after it, and `setLines([])` then threw
+  away anything added meanwhile. Remove exactly the sold lines.
+- **A mutation that passes is a test that does not test.** The first slow-
+  answer Returns test passed with the guard removed, because the list on
+  screen already held the typed receipt. The case that needs the guard is a
+  list of ONE from an earlier search; build that case, then watch the
+  mutation fail.
+- **A unique test name must differ in letters, not digits.** `Shelf Item
+  <timestamp>` was found by search as the previous run's item; fuzzy search
+  forgives a digit. Use random letters.
+- **Every modal is an `OverlayBackdrop`.** The payment and settlement screens
+  had their own copies of its markup, so the focus trap would have missed
+  the two that matter most.
+
+## Things the touch pass established
+
+- **An action with only a key does not exist on a tablet.** Udhaar and
+  Switch user were inert text in the key bar, on purpose ("rather than
+  pretending to lead somewhere"); on a device with no F-keys that made an
+  udhaar sale impossible. A routeless key is a button running the same
+  handler. `touch.spec.ts` runs as a tablet with no `keyboard.press` at all.
+- **Measure tap targets; do not eyeball them.** The spec reads
+  `--touch-target` and fails on any smaller control on the counter screens.
+  My own first audit filtered its output and hid the recent-purchases rows;
+  the test, which filters nothing, found them.
+- **Leaving a field cancels, so a touch path needs a visible commit.** Its
+  button must not take focus on press (`onMouseDown` preventDefault), or the
+  field's blur cancels before the tap lands.
+- **Prettier over a folder reformats files you did not touch.** Several are
+  not Prettier-clean on main. Format the files you changed, and check a file
+  was clean before letting Prettier rewrite it.
+
+## Things the scanner pass established
+
+- **A scan's Enter is a key press like any other: it presses the focused
+  button.** With Commit focused, a scan completed the sale. The scan guard
+  now also watches keys that land on no text field; a scan there goes to the
+  screen's `data-scan-home` field, or is put back, and its Enter is taken.
+  A new screen with a scan field marks it `data-scan-home`; nothing else.
+- **Playwright's key presses wait for the page; a scanner's do not.**
+  `keyboard.press` in a loop on a screen that re-renders per key measured
+  80–120 ms gaps, so the guard rightly saw a person. A scanner's keys carry
+  the time they were sent. Simulate a scan with `keyboard.type(code,
+  { delay: 0 })`, as `scanner.spec.ts` does, and measure the gaps when a
+  scan "fails".
+
+## Things the keyboard walks established
+
+- **A screen keeps Esc with `preventDefault`, never `stopPropagation`.**
+  Next hydrates the whole document, so React's listener and the shell's are
+  both on `document`; stopping propagation stops nothing between them. The
+  line discount only looked right because Sale is home already. The shell's
+  Esc also skips when any dialog was open as the key went down.
+- **Every receipt-producing screen prints before it confirms.** The rule
+  from Sale held for Settle udhaar, Returns and cancellations too, and a
+  flaky test (two in ten) is how it showed. One printing screen left with the
+  old order is the next flake.
+- **A focus call made before its field exists does nothing.** Adjust focused
+  the quantity in the same handler that made it appear. Focus from an effect
+  after the render, as Returns and Adjust now do.
+- **A test that picks "the last link" depends on the shared database.**
+  Choose by what the link leads to (`href`), not by its position or name.
+
+## Things the key count established
+
+- **Count keys in a test, not on paper.** `key-budget.spec.ts` does each
+  common task with exactly its keys. It found the worst bug of the pass on
+  its first run, which no walk had: a fast operator on a slow answer put a
+  product on the bill that nobody asked for.
+- **A key pressed during a wait must keep its meaning or do nothing.** F12
+  during the picker's wait opened Payment, and the picker's close then moved
+  focus behind it. F12 now waits for the customer; keys typed into a picker
+  that is finding change nothing (the field is read-only, and says
+  "Finding …"). Ignoring a key silently is a dead key; doing it later is
+  only right when the intent is unambiguous.
+- **A test that passes with a pause and fails without one has found
+  something.** The 300 ms waits in an instrumented run hid the race; the
+  budget test, which presses keys as fast as an operator, showed it.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

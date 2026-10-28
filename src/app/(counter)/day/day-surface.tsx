@@ -27,7 +27,9 @@ import { paisa } from '@/lib/branded';
 import { uuidv7 } from '@/lib/uuid';
 import type { BusinessDay } from '@/lib/business-day';
 
-import { recordCashMovementAction } from './actions';
+import { CancelEntryButton } from '@/components/cancel-entry-button';
+
+import { cancelCashMovementAction, recordCashMovementAction } from './actions';
 
 interface ThreeNumbers {
   salesPaisa: number;
@@ -44,6 +46,9 @@ interface ReportFigures {
   marginPaisa: number;
   /** [PCN-012, D2] Written off or counted short in the range, at cost. */
   writtenOffPaisa: number;
+  /** [PCN-014] Discounts given in the range. */
+  itemDiscountPaisa: number;
+  billDiscountPaisa: number;
   saleCount: number;
   unitsSold: number;
   returnCount: number;
@@ -56,6 +61,20 @@ interface OverrideRow {
   unitPricePaisa: number;
   lineDiscountPaisa: number;
   priceOverridden: boolean;
+  byName: string;
+  createdAt: Date;
+}
+
+/** [PCN-014] — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface BillDiscountRow {
+  saleId: string;
+  receiptNumber: string;
+  byName: string;
+  approvedByName: string | null;
+  billPaisa: number;
+  discountPaisa: number;
+  totalPaisa: number;
+  unapprovedOverLimit: boolean;
   createdAt: Date;
 }
 
@@ -135,6 +154,21 @@ interface CashMovementExceptionRow {
   note: string | null;
   byName: string;
   createdAt: Date;
+  /** [PCN-013] Set when this row cancels another. */
+  reversesId: string | null;
+  /** [PCN-013] Cancelled by a later row. */
+  reversed: boolean;
+}
+
+/** [PCN-013] — redeclared here rather than imported (CLAUDE.md, Day 7). */
+interface PaymentReversalExceptionRow {
+  id: string;
+  kind: 'udhaar' | 'supplier';
+  name: string;
+  amountPaisa: number;
+  receiptNumber: string | null;
+  byName: string;
+  createdAt: Date;
 }
 
 interface LateSyncedRow {
@@ -152,6 +186,7 @@ export function DaySurface({
   numbers,
   figures,
   overrides,
+  billDiscounts,
   returns,
   expiredSold,
   quickItems,
@@ -159,6 +194,7 @@ export function DaySurface({
   corrections,
   supplierReturns,
   cashMovements,
+  paymentReversals,
   lateSynced,
   hasOpeningFloat,
   supplierOwedPaisa,
@@ -171,6 +207,8 @@ export function DaySurface({
   numbers: ThreeNumbers;
   figures: ReportFigures;
   overrides: OverrideRow[];
+  /** [PCN-014] Bills charged less than they came to. */
+  billDiscounts: BillDiscountRow[];
   returns: ReturnExceptionRow[];
   /** PCN-008: sold from a batch already past its expiry date. */
   expiredSold: ExpiredSaleRow[];
@@ -181,6 +219,8 @@ export function DaySurface({
   /** [PCN-009] Goods sent back to suppliers. */
   supplierReturns: SupplierReturnExceptionRow[];
   cashMovements: CashMovementExceptionRow[];
+  /** [PCN-013] Udhaar and supplier payments cancelled. */
+  paymentReversals: PaymentReversalExceptionRow[];
   lateSynced: LateSyncedRow[];
   hasOpeningFloat: boolean;
   /** [PCN-007] What the pharmacy owes suppliers — a position, always all-time. */
@@ -197,12 +237,14 @@ export function DaySurface({
   const exceptionCount =
     expiredSold.length +
     overrides.length +
+    billDiscounts.length +
     returns.length +
     quickItems.length +
     adjustments.length +
     corrections.length +
     supplierReturns.length +
     cashMovements.length +
+    paymentReversals.length +
     lateSynced.length;
 
   return (
@@ -315,13 +357,14 @@ export function DaySurface({
         count={exceptionCount}
         parts={[
           [expiredSold.length, 'expired sale'],
-          [overrides.length, 'discount'],
+          [overrides.length + billDiscounts.length, 'discount'],
           [returns.length, 'return'],
           [quickItems.length, 'quick item'],
           [adjustments.length, 'adjustment'],
           [corrections.length, 'purchase correction'],
           [supplierReturns.length, 'return to supplier'],
           [cashMovements.length, 'cash movement'],
+          [paymentReversals.length, 'cancelled payment'],
           [lateSynced.length, 'synced late'],
         ]}
       />
@@ -336,6 +379,23 @@ export function DaySurface({
             {formatPaisa(paisa(figures.marginPaisa), { withSymbol: true })}
           </span>
         </span>
+        {/* [PCN-014] What discounts gave away in the range, said beside the
+            margin they came out of. Only when there were any. */}
+        {figures.itemDiscountPaisa + figures.billDiscountPaisa > 0 ? (
+          <span>
+            Discounts{' '}
+            <span className="numeral text-amber font-medium">
+              {formatPaisa(paisa(figures.itemDiscountPaisa + figures.billDiscountPaisa), {
+                withSymbol: true,
+              })}
+            </span>
+            <span className="text-ink/50 text-xs">
+              {' '}
+              ({formatPaisa(paisa(figures.itemDiscountPaisa))} on items,{' '}
+              {formatPaisa(paisa(figures.billDiscountPaisa))} on bills)
+            </span>
+          </span>
+        ) : null}
         {/* D2: stock that left without a sale is a loss at its cost, said
             beside the margin rather than hidden in it. Only when there is one. */}
         {figures.writtenOffPaisa > 0 ? (
@@ -419,7 +479,38 @@ export function DaySurface({
               ))}
             </ExceptionGroup>
 
-            <ExceptionGroup title="Discounts and overrides" rows={overrides} empty={false}>
+            <ExceptionGroup
+              title="Discounts and overrides"
+              rows={[...billDiscounts, ...overrides]}
+              empty={false}
+            >
+              {/* [PCN-014] Whole bills first: the larger act, and the one an
+                  owner's PIN may have approved. */}
+              {billDiscounts.map((row) => (
+                <Row key={row.saleId}>
+                  <span className="font-medium">Bill discount</span>
+                  <Link
+                    href={`/receipts/${encodeURIComponent(row.receiptNumber)}`}
+                    className="text-green-700 ml-2 hover:underline"
+                  >
+                    {row.receiptNumber}
+                  </Link>
+                  <span className="numeral text-ink/60 ml-2 text-xs">
+                    {formatPaisa(paisa(row.billPaisa))} → {formatPaisa(paisa(row.totalPaisa))}
+                  </span>
+                  {row.approvedByName ? (
+                    <span className="text-ink/50 ml-2 text-xs">
+                      approved by {row.approvedByName}
+                    </span>
+                  ) : row.unapprovedOverLimit ? (
+                    <span className="text-red ml-2 text-xs">over the limit, not approved</span>
+                  ) : null}
+                  <span className="numeral text-amber ml-auto">
+                    -{formatPaisa(paisa(row.discountPaisa))}
+                  </span>
+                  <span className="text-ink/40 ml-2 text-xs">{row.byName}</span>
+                </Row>
+              ))}
               {overrides.map((row) => (
                 <Row key={row.saleLineId}>
                   <span className="font-medium">{row.productName}</span>
@@ -432,6 +523,11 @@ export function DaySurface({
                       -{formatPaisa(paisa(row.lineDiscountPaisa))}
                     </span>
                   ) : null}
+                  <span
+                    className={`text-ink/40 text-xs ${row.lineDiscountPaisa > 0 ? 'ml-2' : 'ml-auto'}`}
+                  >
+                    {row.byName}
+                  </span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -523,6 +619,7 @@ export function DaySurface({
               {cashMovements.map((row) => (
                 <Row key={row.id}>
                   <span className="font-medium">
+                    {row.reversesId ? 'Cancelled: ' : ''}
                     {CASH_REASON_LABELS[row.reason as CashReason]}
                   </span>
                   <span
@@ -532,6 +629,36 @@ export function DaySurface({
                     {formatPaisa(paisa(row.amountPaisa))}
                   </span>
                   {row.note ? <span className="text-ink/50 ml-2 text-xs">“{row.note}”</span> : null}
+                  {/* [PCN-013] Typed wrong: cancel it with the opposite entry.
+                      Both stay listed, so the owner sees what was fixed. */}
+                  {row.reversed ? (
+                    <span className="text-ink/50 ml-2 text-xs">— cancelled</span>
+                  ) : row.reversesId === null ? (
+                    <span className="ml-2">
+                      <CancelEntryButton
+                        what={`this ${formatPaisa(paisa(row.amountPaisa), { withSymbol: true })} ${CASH_REASON_LABELS[row.reason as CashReason].toLowerCase()}`}
+                        run={() => cancelCashMovementAction(row.id)}
+                      />
+                    </span>
+                  ) : null}
+                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                </Row>
+              ))}
+            </ExceptionGroup>
+
+            <ExceptionGroup title="Cancelled payments" rows={paymentReversals} empty={false}>
+              {paymentReversals.map((row) => (
+                <Row key={row.id}>
+                  <span className="font-medium">
+                    {row.kind === 'udhaar' ? 'Udhaar payment' : 'Supplier payment'} cancelled
+                  </span>
+                  <span className="text-ink/70 ml-2">{row.name}</span>
+                  <span className="numeral text-amber ml-2">
+                    {formatPaisa(paisa(row.amountPaisa))}
+                  </span>
+                  {row.receiptNumber ? (
+                    <span className="text-ink/50 ml-2 text-xs">receipt {row.receiptNumber}</span>
+                  ) : null}
                   <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}

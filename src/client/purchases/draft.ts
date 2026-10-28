@@ -64,13 +64,19 @@ export function readDraft(tenantId: string): PurchaseDraft | null {
       return null;
     }
     const parsed = JSON.parse(raw) as PurchaseDraft;
-    // A draft with no lines is indistinguishable from no draft, and resuming
-    // into an empty form would be a confusing way to say "nothing was saved".
-    return parsed.lines.length > 0 ? parsed : null;
+    // Resuming into an empty form would be a confusing way to say "nothing
+    // was saved". A supplier or invoice number is not nothing: it is what an
+    // operator types first, and then a customer walks in.
+    return draftHasContent(parsed) ? parsed : null;
   } catch {
     // Corrupt or unavailable storage costs a re-typed invoice, never a sale.
     return null;
   }
+}
+
+/** Whether anything was typed into it — the line between a draft and none. */
+export function draftHasContent(draft: PurchaseDraft): boolean {
+  return draft.lines.length > 0 || draft.supplierId !== null || draft.invoiceRef.trim() !== '';
 }
 
 export function writeDraft(tenantId: string, draft: PurchaseDraft): void {

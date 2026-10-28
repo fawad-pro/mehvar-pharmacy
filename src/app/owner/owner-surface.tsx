@@ -41,7 +41,11 @@ interface LowStockItem {
 }
 
 interface ExpiringItem {
+  /** One row per batch: two of a product can share an expiry date. */
+  batchId: string;
   productName: string;
+  /** What is left in the batch, in the product's own units. */
+  amount: string;
   expiryDate: string;
   qtyRemainingBase: number;
   baseUnitName: string;
@@ -123,13 +127,7 @@ export function OwnerSurface({
   );
 }
 
-function TodayTab({
-  numbers,
-  incidents,
-}: {
-  numbers: ThreeNumbers;
-  incidents: IncidentItem[];
-}) {
+function TodayTab({ numbers, incidents }: { numbers: ThreeNumbers; incidents: IncidentItem[] }) {
   return (
     <div className="flex flex-col gap-6">
       {/* The three numbers, huge (I6) — this tab answers all three of the
@@ -159,13 +157,7 @@ function TodayTab({
   );
 }
 
-function StockTab({
-  lowStock,
-  expiring,
-}: {
-  lowStock: LowStockItem[];
-  expiring: ExpiringItem[];
-}) {
+function StockTab({ lowStock, expiring }: { lowStock: LowStockItem[]; expiring: ExpiringItem[] }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -178,11 +170,11 @@ function StockTab({
         ) : (
           <ul className="border-line divide-line divide-y rounded border text-sm">
             {expiring.map((row) => (
-              <li
-                key={`${row.productName}-${row.expiryDate}`}
-                className="flex justify-between px-3 py-2"
-              >
-                <span>{row.productName}</span>
+              <li key={row.batchId} className="flex justify-between gap-3 px-3 py-2">
+                <span>
+                  {row.productName}
+                  <span className="text-ink/50 ml-2 text-xs">{row.amount}</span>
+                </span>
                 <span className="numeral text-amber">{row.expiryDate}</span>
               </li>
             ))}
@@ -246,7 +238,9 @@ function NumberCard({
   return (
     <div className="border-line rounded border p-4">
       <p className="text-ink/60 text-xs tracking-[0.1em] uppercase">{label}</p>
-      <p className={`numeral mt-1 text-3xl font-semibold ${amber ? 'text-amber' : 'text-green-900'}`}>
+      <p
+        className={`numeral mt-1 text-3xl font-semibold ${amber ? 'text-amber' : 'text-green-900'}`}
+      >
         {formatPaisa(paisa(amountPaisa), { withSymbol: true })}
       </p>
     </div>

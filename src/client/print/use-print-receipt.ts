@@ -56,17 +56,36 @@ export function setReceiptPageSize(): void {
 export function usePrintReceipt() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
 
-  const print = useCallback((data: ReceiptData) => {
-    setReceipt(data);
-    // Two ticks: React must commit the receipt into the DOM (mounted, but
-    // display:none until print) before the browser's print engine walks it.
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setReceiptPageSize();
-        window.print();
-      });
-    });
-  }, []);
+  /**
+   * Resolves once `window.print()` has returned. While it runs the page takes
+   * no keys at all — the browser drops them rather than queueing them — so a
+   * screen that says "done" before then invites a key that is lost. The Sale
+   * screen awaits this before it shows "Saved": the F5 pressed the moment
+   * that appeared did nothing about one time in six.
+   */
+  const print = useCallback(
+    (data: ReceiptData) =>
+      new Promise<void>((resolve) => {
+        // Animation frames do not run in a hidden window. The screen moving
+        // on must never wait for one: the sale is already saved, and the
+        // receipt still prints when the frames come.
+        window.setTimeout(resolve, 1_000);
+        setReceipt(data);
+        // Two ticks: React must commit the receipt into the DOM (mounted, but
+        // display:none until print) before the browser's print engine walks it.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            try {
+              setReceiptPageSize();
+              window.print();
+            } finally {
+              resolve();
+            }
+          });
+        });
+      }),
+    [],
+  );
 
   /**
    * Takes the last printed slip out of the page. A sale that does not print

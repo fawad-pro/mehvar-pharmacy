@@ -122,7 +122,13 @@ export function AppShell({
             <main className="min-h-0 flex-1 overflow-auto">{children}</main>
           </UdhaarKeyProvider>
 
-          <KeyBar role={userRole} />
+          <KeyBar
+            role={userRole}
+            onDispatch={(meaning) => {
+              if (meaning === 'udhaar') handlers.onUdhaar();
+              else handlers.onSwitchUser();
+            }}
+          />
 
           {switching ? (
             <PinSwitchOverlay

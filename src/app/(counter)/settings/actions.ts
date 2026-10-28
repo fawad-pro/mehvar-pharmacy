@@ -76,19 +76,31 @@ export async function updateReceiptSettingsAction(input: {
   return { ok: true };
 }
 
-/** [PCN-012] Which unit a sale line starts in, for a product not sold before. */
-export async function updateSaleStartsLooseAction(
-  saleStartsLoose: boolean,
-): Promise<SettingsOutcome> {
+/**
+ * The Selling settings: [PCN-012] which unit a sale line starts in, for a
+ * product not sold before, and [PCN-014] the bill-discount cap.
+ */
+export async function updateSellingSettingsAction(input: {
+  saleStartsLoose: boolean;
+  billDiscountCapPercent: number;
+}): Promise<SettingsOutcome> {
   const session = await currentSession();
   if (!requireOwner(session)) {
     return { ok: false, message: 'Only the owner can change this.' };
+  }
+  const cap = input.billDiscountCapPercent;
+  if (!Number.isInteger(cap) || cap < 0 || cap > 100) {
+    return { ok: false, message: 'The discount limit is a whole percentage, from 0 to 100.' };
   }
   const current = await tenantSettings(session.tenantId);
   if (!current) {
     return { ok: false, message: 'Could not load current settings.' };
   }
-  await updateTenantSettings(session.tenantId, { ...current, saleStartsLoose });
+  await updateTenantSettings(session.tenantId, {
+    ...current,
+    saleStartsLoose: input.saleStartsLoose,
+    billDiscountCapPercent: cap,
+  });
   revalidateAfter('settings');
   return { ok: true };
 }

@@ -3,7 +3,9 @@ import { redirect } from 'next/navigation';
 import { currentSession, scopeFor } from '@/auth/session';
 import {
   adjustmentsInRange,
+  billDiscountsInRange,
   cashMovementsExceptionInRange,
+  paymentReversalsInRange,
   hasOpeningFloat,
   lateSyncedInRange,
   overridesAndDiscountsInRange,
@@ -16,6 +18,8 @@ import {
   threeNumbers,
 } from '@/db/reporting-queries';
 import { supplierBook } from '@/db/supplier-queries';
+import { tenantSettings } from '@/db/provisioning';
+import { DEFAULT_BILL_DISCOUNT_CAP_PERCENT } from '@/domain/sales/cart';
 import { businessDayBounds, businessDayOf, type BusinessDay } from '@/lib/business-day';
 import { describeCounted } from '@/lib/quantity';
 import { supplierReturnStockCosts } from '@/db/batch-cost-queries';
@@ -64,6 +68,7 @@ export default async function DayPage({
   const [
     numbers,
     overrides,
+    billDiscounts,
     returns,
     expiredSold,
     quickItems,
@@ -71,6 +76,7 @@ export default async function DayPage({
     corrections,
     supplierReturns,
     cashMovements,
+    paymentReversals,
     lateSynced,
     figures,
     openingFloat,
@@ -78,6 +84,14 @@ export default async function DayPage({
   ] = await Promise.all([
     threeNumbers(scope, range.start, range.end),
     overridesAndDiscountsInRange(scope, range.start, range.end),
+    tenantSettings(session.tenantId).then((settings) =>
+      billDiscountsInRange(
+        scope,
+        range.start,
+        range.end,
+        settings?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT,
+      ),
+    ),
     returnsInRange(scope, range.start, range.end),
     expiredStockSoldInRange(scope, range.start, range.end),
     quickItemsInRange(scope, range.start, range.end),
@@ -85,6 +99,7 @@ export default async function DayPage({
     purchaseCorrectionsInRange(scope, range.start, range.end),
     supplierReturnsInRange(scope, range.start, range.end),
     cashMovementsExceptionInRange(scope, range.start, range.end),
+    paymentReversalsInRange(scope, range.start, range.end),
     lateSyncedInRange(scope, range.start, range.end),
     reportFigures(scope, range.start, range.end),
     // Always today's bounds, never the range: the prompt is about the drawer
@@ -105,6 +120,7 @@ export default async function DayPage({
       numbers={numbers}
       figures={figures}
       overrides={overrides}
+      billDiscounts={billDiscounts}
       returns={returns}
       expiredSold={expiredSold}
       quickItems={quickItems}
@@ -121,6 +137,7 @@ export default async function DayPage({
         stockCostPaisa: stockCosts.get(row.id) ?? 0,
       }))}
       cashMovements={cashMovements}
+      paymentReversals={paymentReversals}
       lateSynced={lateSynced}
       hasOpeningFloat={openingFloat}
       supplierOwedPaisa={suppliers.owedPaisa}

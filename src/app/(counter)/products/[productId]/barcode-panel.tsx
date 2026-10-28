@@ -12,7 +12,7 @@
  * here, a scan fills it, and Enter submits.
  */
 
-import { useActionState, useEffect, useRef } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { useCatalog } from '@/client/search/provider';
@@ -43,6 +43,7 @@ export function BarcodePanel({
     { status: 'idle' },
   );
   const field = useRef<HTMLInputElement>(null);
+  const [unlinkFailed, setUnlinkFailed] = useState(false);
   const { refresh: refreshCatalog } = useCatalog();
 
   useEffect(() => {
@@ -77,9 +78,15 @@ export function BarcodePanel({
               <button
                 type="button"
                 onClick={() => {
-                  void unlinkBarcode(productId, code.id).then(() => {
-                    router.refresh();
-                  });
+                  setUnlinkFailed(false);
+                  unlinkBarcode(productId, code.id).then(
+                    () => {
+                      router.refresh();
+                    },
+                    () => {
+                      setUnlinkFailed(true);
+                    },
+                  );
                 }}
                 className="text-ink/50 hover:text-red ml-auto text-xs"
               >
@@ -89,6 +96,11 @@ export function BarcodePanel({
           ))}
         </ul>
       )}
+      {unlinkFailed ? (
+        <p className="text-red text-sm" role="alert">
+          That code was not removed — the shop&rsquo;s computer did not answer. Try again.
+        </p>
+      ) : null}
 
       <form action={action} className="flex flex-wrap items-end gap-2">
         <div className="min-w-48 flex-1">

@@ -75,6 +75,8 @@ export async function returnableLinesForSale(
       unitPricePaisa: saleLines.unitPricePaisa,
       lineAmountPaisa: saleLines.lineAmountPaisa,
       lineDiscountPaisa: saleLines.lineDiscountPaisa,
+      // [PCN-014] Stored at commit (and backfilled by migration 0017).
+      invoiceDiscountSharePaisa: saleLines.invoiceDiscountSharePaisa,
       soldUnitKey: saleLines.unitKey,
       packLevels: products.packLevels,
       pricePerBasePaisa: products.defaultPricePerBaseUnit,

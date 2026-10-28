@@ -72,12 +72,20 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   const overlay = page.getByRole('dialog', { name: 'Payment' });
   await expect(overlay).toContainText(`Billing to ${name}`);
 
+  // A modal keeps Tab inside it: from its last control Tab comes back round,
+  // never out to the key bar behind, where Enter would leave mid-sale.
+  await overlay.getByRole('button', { name: 'Commit — Enter' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(overlay.locator(':focus')).toHaveCount(1);
+
   // Half in cash, the rest goes on the customer's account.
   await overlay.getByLabel('Cash tendered').fill('15');
   await expect(overlay).toContainText('udhaar');
 
   await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Saved');
+  // And the confirmation says where the money went.
+  await expect(lastSale(page)).toContainText(`Rs 15.00 cash · Rs 20.00 on ${name}’s udhaar`);
 
   // The mini-statement is the dispute-ender (T4/T5): previous → this → new.
   await expect(receipt(page)).toContainText(name);
@@ -87,8 +95,10 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   await expect(receipt(page)).toContainText('20.00');
 
   // Attaching a customer does not persist across sales (T1 — each sale states
-  // its own attribution); the next one starts unattached.
-  await expect(page.locator('aside')).not.toContainText(name);
+  // its own attribution); the next one starts unattached: no customer block,
+  // whose control is "remove". The last sale's own line still names who it
+  // went to, which is the point of it.
+  await expect(page.locator('aside').getByRole('button', { name: 'remove' })).toHaveCount(0);
 });
 
 test('the payment overlay computes Remaining the instant tendered falls short — no separate calculator', async ({

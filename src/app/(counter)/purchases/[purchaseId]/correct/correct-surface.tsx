@@ -12,6 +12,7 @@
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import { NO_ANSWER } from '@/components/load-failed';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { defaultReturnCreditPaisa } from '@/domain/suppliers/supplier-return';
 import { baseQty, paisa } from '@/lib/branded';
@@ -96,7 +97,8 @@ export function CorrectSurface({
               <span className="ml-auto flex gap-3 text-sm">
                 <button
                   type="button"
-                  className="text-green-700 hover:underline"
+                  id={`correct-${line.lineId}`}
+                  className="text-green-700 min-h-touch hover:underline"
                   onClick={() => {
                     setDone(null);
                     setOpen({ lineId: line.lineId, mode: 'correct', key: uuidv7() });
@@ -106,7 +108,8 @@ export function CorrectSurface({
                 </button>
                 <button
                   type="button"
-                  className="text-green-700 hover:underline disabled:opacity-40"
+                  id={`return-${line.lineId}`}
+                  className="text-green-700 min-h-touch hover:underline disabled:opacity-40"
                   disabled={supplierName === null || line.onHandBase === 0}
                   onClick={() => {
                     setDone(null);
@@ -126,6 +129,10 @@ export function CorrectSurface({
                   setOpen(null);
                   setDone(message);
                 }}
+                onCancel={() => {
+                  setOpen(null);
+                  focusLater(`correct-${line.lineId}`);
+                }}
               />
             ) : null}
             {open?.lineId === line.lineId && open.mode === 'return' && supplierName ? (
@@ -137,6 +144,10 @@ export function CorrectSurface({
                 onDone={(message) => {
                   setOpen(null);
                   setDone(message);
+                }}
+                onCancel={() => {
+                  setOpen(null);
+                  focusLater(`return-${line.lineId}`);
                 }}
               />
             ) : null}
@@ -169,14 +180,35 @@ function returnUnitsOf(line: CorrectableLineView): { key: string; name: string; 
 const fieldClass =
   'border-line focus:border-green-600 h-touch mt-1 w-full rounded border px-3 outline-none';
 
+/** Back to the control that opened a form, once the form has gone. */
+function focusLater(id: string): void {
+  requestAnimationFrame(() => document.getElementById(id)?.focus());
+}
+
+/**
+ * Esc closes the form without recording anything. It went on to the shell,
+ * which left for Sale and threw the typed correction away; `preventDefault`
+ * is how a form keeps Esc (see `use-global-keys.ts`).
+ */
+function escapeCloses(onCancel: () => void) {
+  return (event: React.KeyboardEvent<HTMLFormElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onCancel();
+    }
+  };
+}
+
 function CorrectionForm({
   line,
   correctionId,
   onDone,
+  onCancel,
 }: {
   line: CorrectableLineView;
   correctionId: Uuid;
   onDone: (message: string) => void;
+  onCancel: () => void;
 }) {
   const router = useRouter();
   // In the line's own unit: whole boxes for a box line (PCN-012).
@@ -208,7 +240,7 @@ function CorrectionForm({
       bonusQtyBase: levelToBaseUnits(Number(bonus.trim()), unitLevel),
       unitCostPaisa: paisaFromRupeeInput(cost),
       note,
-    });
+    }).catch(() => ({ ok: false as const, message: NO_ANSWER }));
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.message);
@@ -221,6 +253,7 @@ function CorrectionForm({
   return (
     <form
       aria-label={`Correct ${line.productName}`}
+      onKeyDown={escapeCloses(onCancel)}
       className="bg-green-100/40 grid grid-cols-2 gap-3 rounded p-3 sm:grid-cols-4"
       onSubmit={(event) => {
         event.preventDefault();
@@ -291,11 +324,13 @@ function ReturnForm({
   returnId,
   supplierName,
   onDone,
+  onCancel,
 }: {
   line: CorrectableLineView;
   returnId: Uuid;
   supplierName: string;
   onDone: (message: string) => void;
+  onCancel: () => void;
 }) {
   const router = useRouter();
   // [PCN-012] Goods go back to a supplier in packs, never loose; the unit the
@@ -344,7 +379,7 @@ function ReturnForm({
       creditPaisa: paisaFromRupeeInput(creditShown),
       note,
       entered: { unitKey: unit.key, unitName: unit.name, unitCount: count },
-    });
+    }).catch(() => ({ ok: false as const, message: NO_ANSWER }));
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.message);
@@ -357,6 +392,7 @@ function ReturnForm({
   return (
     <form
       aria-label={`Return ${line.productName} to ${supplierName}`}
+      onKeyDown={escapeCloses(onCancel)}
       className="bg-green-100/40 grid grid-cols-2 gap-3 rounded p-3 sm:grid-cols-3"
       onSubmit={(event) => {
         event.preventDefault();

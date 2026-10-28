@@ -32,7 +32,7 @@ const COUNTER_DIR = join(SRC, 'app', '(counter)');
 
 /** Calls that reach the database to change something. Mirrors revalidate.test.ts. */
 const WRITER =
-  /\b(commit[A-Z]\w*|insert[A-Z]\w*|update[A-Z]\w*|create[A-Z]\w*|setUserActive|resetUserPin|removeBarcode|setProductActive)\s*\(/;
+  /\b(commit[A-Z]\w*|insert[A-Z]\w*|update[A-Z]\w*|create[A-Z]\w*|setUserActive|resetUserPin|edit[A-Z]\w*|remove[A-Z]\w*|restore[A-Z]\w*)\s*\(/;
 
 /**
  * Writing actions that are deliberately ungated, each with the reason.

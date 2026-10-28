@@ -24,7 +24,8 @@ import { describe, expect, it } from 'vitest';
 const COUNTER_DIR = join(process.cwd(), 'src', 'app', '(counter)');
 
 /** Calls that reach the database to change something. */
-const WRITER = /\b(commit[A-Z]\w*|insert[A-Z]\w*|update[A-Z]\w*|setUserActive|resetUserPin|removeBarcode|setProductActive)\s*\(/;
+const WRITER =
+  /\b(commit[A-Z]\w*|insert[A-Z]\w*|update[A-Z]\w*|setUserActive|resetUserPin|edit[A-Z]\w*|remove[A-Z]\w*|restore[A-Z]\w*)\s*\(/;
 
 /**
  * `sync/actions.ts` is the outbox's delivery endpoint. It writes, and it is

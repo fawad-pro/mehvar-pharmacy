@@ -20,7 +20,7 @@ import { describeQuantity } from '@/lib/quantity';
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string; queue?: string; archived?: string }>;
+  searchParams: Promise<{ q?: string; page?: string; queue?: string; removed?: string }>;
 }) {
   const session = await currentSession();
   if (!session) {
@@ -30,12 +30,13 @@ export default async function ProductsPage({
   const params = await searchParams;
   const scope = scopeFor(session);
   const onlyQueue = params.queue === '1';
+  const showRemoved = params.removed === '1';
 
   const [page, queueCount] = await Promise.all([
     listProducts(scope, {
       search: params.q,
       needsCompletion: onlyQueue,
-      includeInactive: params.archived === '1',
+      includeInactive: showRemoved,
       page: Number(params.page ?? 1),
     }),
     countNeedingCompletion(scope),
@@ -59,14 +60,27 @@ export default async function ProductsPage({
           autoComplete="off"
           name="q"
           defaultValue={params.q ?? ''}
-          placeholder="Search name, salt or maker"
+          placeholder="Search name, salt or maker — or scan"
           aria-label="Search the catalog"
+          // Arriving here is to look something up: the cursor starts in it.
+          autoFocus
+          // A scan finds its product here (by barcode), including one that
+          // landed with nothing in focus (the scan guard's home).
+          data-scan-target=""
+          data-scan-home=""
           className="border-line focus:border-green-600 h-touch min-w-64 flex-1 rounded border px-3 outline-none"
         />
         {onlyQueue ? <input type="hidden" name="queue" value="1" /> : null}
+        {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}
         <button type="submit" className="border-line min-h-touch rounded border px-4">
           Search
         </button>
+        <Link
+          href={removedToggleHref(params, !showRemoved)}
+          className="text-green-600 min-h-touch flex items-center px-2 text-sm"
+        >
+          {showRemoved ? 'Hide removed products' : 'Show removed products'}
+        </Link>
       </form>
 
       {/* D3 — quick items cannot be silently forgotten; the queue nags until
@@ -113,7 +127,7 @@ export default async function ProductsPage({
                       <span className="text-amber ml-2 text-xs">needs completing</span>
                     ) : null}
                     {!item.isActive ? (
-                      <span className="text-ink/40 ml-2 text-xs">archived</span>
+                      <span className="text-ink/40 ml-2 text-xs">removed</span>
                     ) : null}
                     {/* Strength and form carried on their own line, always.
                         Two Panadols differing only in milligrams are the
@@ -182,7 +196,7 @@ function PageLink({
   disabled,
   children,
 }: {
-  params: { q?: string; queue?: string; archived?: string };
+  params: { q?: string; queue?: string; removed?: string };
   page: number;
   disabled: boolean;
   children: React.ReactNode;
@@ -193,12 +207,24 @@ function PageLink({
   const query = new URLSearchParams();
   if (params.q) query.set('q', params.q);
   if (params.queue) query.set('queue', params.queue);
-  if (params.archived) query.set('archived', params.archived);
+  if (params.removed) query.set('removed', params.removed);
   query.set('page', String(page));
 
   return (
-    <Link href={`/products?${query.toString()}`} className="text-green-600">
+    <Link
+      href={`/products?${query.toString()}`}
+      className="text-green-600 inline-flex min-h-touch min-w-touch items-center px-3"
+    >
       {children}
     </Link>
   );
+}
+
+function removedToggleHref(params: { q?: string; queue?: string }, show: boolean): string {
+  const query = new URLSearchParams();
+  if (params.q) query.set('q', params.q);
+  if (params.queue) query.set('queue', params.queue);
+  if (show) query.set('removed', '1');
+  const text = query.toString();
+  return text ? `/products?${text}` : '/products';
 }

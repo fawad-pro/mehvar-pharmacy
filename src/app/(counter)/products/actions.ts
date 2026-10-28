@@ -16,7 +16,8 @@ import {
   createProduct,
   editProduct,
   removeBarcode,
-  setProductActive,
+  removeProduct,
+  restoreProduct,
   type CatalogResult,
 } from '@/domain/catalog/writers';
 import {
@@ -25,13 +26,19 @@ import {
   globalCatalogSize,
   searchGlobalCatalog,
 } from '@/db/catalog-queries';
-import { replaceProduct } from '@/domain/inventory/replace-product';
+import {
+  replaceIntoProduct,
+  replaceProduct,
+  type ReplaceProductResult,
+} from '@/domain/inventory/replace-product';
 import {
   parsePackLevels,
   type CatalogSearchResult,
   type ProductDraft,
 } from '@/domain/catalog/product';
 import { parseRupeeInput } from '@/domain/sales/cart';
+import { baseQty } from '@/lib/branded';
+import { describeQuantity } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
@@ -259,13 +266,70 @@ export async function unlinkBarcode(productId: Uuid, barcodeId: Uuid): Promise<v
   revalidateAfter('catalog');
 }
 
-export async function archiveProduct(productId: Uuid, isActive: boolean): Promise<void> {
+export type RemoveOutcome =
+  | { ok: true; unlinked: Array<{ barcode: string; unitLevelName: string }> }
+  | { ok: false; message: string; blockedBy?: 'stock' | 'pending' };
+
+/**
+ * Removes a product entered by mistake. The refusals say what to do next,
+ * in the product's own units (P9): a count that reads "40" when the shelf
+ * holds four strips sends the operator looking for the wrong thing.
+ */
+export async function removeProductAction(productId: Uuid): Promise<RemoveOutcome> {
   const gate = await requireAuthoring();
   if ('error' in gate) {
-    return;
+    return { ok: false, message: gate.error };
   }
-  await setProductActive(scopeFor(gate.session), productId, isActive);
+  const scope = scopeFor(gate.session);
+  const result = await removeProduct(scope, productId);
+  if (result.ok) {
+    revalidateAfter('catalog');
+    return { ok: true, unlinked: result.unlinked };
+  }
+  if (result.refusal === 'not_found') {
+    return { ok: false, message: 'That product no longer exists.' };
+  }
+  const product = await findProduct(scope, productId);
+  const counted = (base: number) =>
+    product
+      ? describeQuantity(baseQty(base), product.baseUnitName, product.packLevels)
+      : String(base);
+  if (result.refusal === 'has_stock') {
+    return {
+      ok: false,
+      blockedBy: 'stock',
+      message:
+        result.stockBase > 0
+          ? `It still has ${counted(result.stockBase)} on hand. Remove that stock first — “Entered by mistake” if it was never there — or replace it with the right product.`
+          : `It is ${counted(-result.stockBase)} below zero. Correct the count first.`,
+    };
+  }
+  return {
+    ok: false,
+    blockedBy: 'pending',
+    message: `${counted(result.pendingBase)} sold with no stock behind it is still waiting. Receive or count that stock first.`,
+  };
+}
+
+export async function restoreProductAction(
+  productId: Uuid,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const gate = await requireAuthoring();
+  if ('error' in gate) {
+    return { ok: false, message: gate.error };
+  }
+  const result = await restoreProduct(scopeFor(gate.session), productId);
+  if (!result.ok) {
+    return {
+      ok: false,
+      message:
+        result.refusal === 'replaced'
+          ? 'This product was replaced. Its stock and barcodes are on the replacement.'
+          : 'That product no longer exists.',
+    };
+  }
   revalidateAfter('catalog');
+  return { ok: true };
 }
 
 /**
@@ -368,30 +432,7 @@ export async function replaceProductAction(
   });
 
   if (!result.ok) {
-    switch (result.reason) {
-      case 'already_replaced':
-        return { ok: false, message: 'This product has already been replaced.' };
-      case 'stale_batches':
-        return {
-          ok: false,
-          message: 'Stock of this product changed while you were counting. Reload and count again.',
-        };
-      case 'invalid_count':
-        return {
-          ok: false,
-          message:
-            'Every batch needs a count above zero. If a batch is gone, write it off on Adjust first.',
-        };
-      case 'invalid_product':
-        return {
-          ok: false,
-          message: messageFor(
-            result.detail as Extract<CatalogResult<unknown>, { ok: false }>,
-          ),
-        };
-      default:
-        return { ok: false, message: 'That product no longer exists.' };
-    }
+    return { ok: false, message: replaceRefusalMessage(result) };
   }
 
   revalidateAfter('catalog', 'stock');
@@ -400,4 +441,62 @@ export async function replaceProductAction(
     newProductId: result.value.newProductId,
     unlinkedBarcodes: result.value.unlinkedBarcodes,
   };
+}
+
+/**
+ * [PCN-013] Moves the stock into a product the shop already has. Same owner
+ * gate and the same confirmed counts as a replacement; the counts are in the
+ * receiving product's packs.
+ */
+export async function replaceIntoProductAction(
+  oldProductId: Uuid,
+  input: {
+    intoProductId: string;
+    batches: { batchId: string; expectedRemainingBase: number; newQtyBase: number }[];
+    note: string;
+  },
+): Promise<ReplaceOutcome> {
+  const gate = await requireAuthoring();
+  if ('error' in gate) {
+    return { ok: false, message: gate.error };
+  }
+  const result = await replaceIntoProduct(scopeFor(gate.session), {
+    oldProductId,
+    intoProductId: input.intoProductId as Uuid,
+    batches: input.batches.map((batch) => ({
+      batchId: batch.batchId as Uuid,
+      expectedRemainingBase: batch.expectedRemainingBase,
+      newQtyBase: batch.newQtyBase,
+    })),
+    note: input.note.trim() === '' ? null : input.note.trim(),
+  });
+  if (!result.ok) {
+    return { ok: false, message: replaceRefusalMessage(result) };
+  }
+  revalidateAfter('catalog', 'stock');
+  return {
+    ok: true,
+    newProductId: result.value.newProductId,
+    unlinkedBarcodes: result.value.unlinkedBarcodes,
+  };
+}
+
+/** I5 — what to do next, for either kind of replacement. */
+function replaceRefusalMessage(result: Extract<ReplaceProductResult, { ok: false }>): string {
+  switch (result.reason) {
+    case 'already_replaced':
+      return 'This product has already been replaced.';
+    case 'stale_batches':
+      return 'Stock of this product changed while you were counting. Reload and count again.';
+    case 'invalid_count':
+      return 'Every batch needs a count above zero. If a batch is gone, write it off on Adjust first.';
+    case 'invalid_product':
+      return messageFor(result.detail as Extract<CatalogResult<unknown>, { ok: false }>);
+    case 'invalid_target':
+      return 'Choose another product to move the stock to — one that is on sale, and not this one.';
+    case 'base_unit_differs':
+      return 'Those two count different units, so the counts would change meaning. Choose a product counted the same way, or replace with a new product.';
+    default:
+      return 'That product no longer exists.';
+  }
 }

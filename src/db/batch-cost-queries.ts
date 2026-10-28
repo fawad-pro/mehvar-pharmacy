@@ -36,7 +36,13 @@ import {
   supplierReturns,
 } from './schema';
 
-export type MovementKind = 'sale' | 'adjustment' | 'supplier_return' | 'restock' | 'transfer';
+/**
+ * `mistake` [PCN-013]: units removed as entered by mistake — they never
+ * existed, so their share of the batch's cost is neither cost of goods sold
+ * nor a loss.
+ */
+export type MovementKind =
+  'sale' | 'adjustment' | 'supplier_return' | 'restock' | 'transfer' | 'mistake';
 
 export interface CostedMovement {
   readonly id: string;
@@ -187,7 +193,12 @@ export async function batchCostLedger(
       qtyBase: -row.delta,
       // [PCN-012] Units carried to a replacement product are not lost: they
       // leave with exactly the cost the new batch starts from.
-      kind: row.reason === 'product_replaced' ? ('transfer' as const) : ('adjustment' as const),
+      kind:
+        row.reason === 'product_replaced'
+          ? ('transfer' as const)
+          : row.reason === 'entered_by_mistake'
+            ? ('mistake' as const)
+            : ('adjustment' as const),
     })),
     ...returnedToSupplier.map((row) => ({ ...row, kind: 'supplier_return' as const })),
     ...restocked.map((row) => ({

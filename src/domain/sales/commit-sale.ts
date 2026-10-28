@@ -32,6 +32,7 @@ import {
   insertSaleLines,
   lockBatchesForProducts,
 } from '@/db/sales-queries';
+import { findUser } from '@/db/auth-queries';
 import { customerBalance } from '@/db/udhaar-queries';
 import type { TenantScope } from '@/db/scoped';
 import { packFactor, paisa, type Paisa } from '@/lib/branded';
@@ -41,7 +42,9 @@ import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { planAllocation } from '../inventory/allocation';
 import {
+  invoiceDiscountShares,
   saleLineGrossPaisa,
+  storedLineGrossPaisa,
   validateSaleCommand,
   type SaleCommand,
   type SaleRejection,
@@ -123,12 +126,21 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
         ? paisa(await customerBalance(tx, command.customerId))
         : undefined;
 
+    // [PCN-014] An approval names one of this shop's owners, or it is not
+    // kept. Never refused: the receipt has already printed (Phase 7 rule 3);
+    // a sale over the limit without a valid approver is the day list's job.
+    const approver =
+      command.invoiceDiscountPaisa > 0 && command.invoiceDiscountApprovedBy
+        ? await findUser(tx, command.invoiceDiscountApprovedBy)
+        : undefined;
+
     await insertSale(tx, {
       id: command.saleId,
       receiptNumber: command.receiptNumber,
       customerId: command.customerId,
       subtotalPaisa: validation.subtotalPaisa,
       invoiceDiscountPaisa: command.invoiceDiscountPaisa,
+      invoiceDiscountApprovedBy: approver?.role === 'owner' ? approver.id : null,
       totalPaisa: validation.totalPaisa,
       cashPaisa: command.cashPaisa,
       creditPaisa: command.creditPaisa,
@@ -138,32 +150,43 @@ export async function commitSale(scope: TenantScope, command: SaleCommand): Prom
       clientCommittedAt: command.clientCommittedAt,
     });
 
+    const lineRows = command.lines.map((line) => ({
+      id: line.lineId,
+      saleId: command.saleId,
+      productId: line.productId,
+      qtyBase: line.qtyBase,
+      enteredUnitLevel: line.enteredUnitLevel,
+      // [PCN-012] The nominal per-base price is derived here, not trusted:
+      // money is read from `lineAmountPaisa` whenever it is present.
+      unitPricePaisa:
+        line.unitCount !== undefined && line.unitPricePaisaEntered !== undefined
+          ? nominalPricePerBase(
+              paisa(line.unitPricePaisaEntered),
+              packFactor(line.qtyBase / line.unitCount),
+            )
+          : line.unitPricePaisa,
+      unitKey: line.unitCount !== undefined ? (line.unitKey ?? null) : null,
+      unitName: line.unitCount !== undefined ? (line.unitName ?? null) : null,
+      unitCount: line.unitCount ?? null,
+      unitPricePaisaEntered:
+        line.unitCount !== undefined ? (line.unitPricePaisaEntered ?? null) : null,
+      lineAmountPaisa: line.unitCount !== undefined ? saleLineGrossPaisa(line) : null,
+      lineDiscountPaisa: line.lineDiscountPaisa,
+      priceOverridden: line.priceOverridden,
+    }));
+    // [PCN-014] Each line's share of the bill discount, from the very values
+    // the rows store, so every later reader — a refund, the receipt page —
+    // reads the share this sale was charged with.
+    const shares = invoiceDiscountShares(
+      lineRows.map((row) => ({
+        id: row.id,
+        totalPaisa: storedLineGrossPaisa(row) - row.lineDiscountPaisa,
+      })),
+      command.invoiceDiscountPaisa,
+    );
     await insertSaleLines(
       tx,
-      command.lines.map((line) => ({
-        id: line.lineId,
-        saleId: command.saleId,
-        productId: line.productId,
-        qtyBase: line.qtyBase,
-        enteredUnitLevel: line.enteredUnitLevel,
-        // [PCN-012] The nominal per-base price is derived here, not trusted:
-        // money is read from `lineAmountPaisa` whenever it is present.
-        unitPricePaisa:
-          line.unitCount !== undefined && line.unitPricePaisaEntered !== undefined
-            ? nominalPricePerBase(
-                paisa(line.unitPricePaisaEntered),
-                packFactor(line.qtyBase / line.unitCount),
-              )
-            : line.unitPricePaisa,
-        unitKey: line.unitCount !== undefined ? (line.unitKey ?? null) : null,
-        unitName: line.unitCount !== undefined ? (line.unitName ?? null) : null,
-        unitCount: line.unitCount ?? null,
-        unitPricePaisaEntered:
-          line.unitCount !== undefined ? (line.unitPricePaisaEntered ?? null) : null,
-        lineAmountPaisa: line.unitCount !== undefined ? saleLineGrossPaisa(line) : null,
-        lineDiscountPaisa: line.lineDiscountPaisa,
-        priceOverridden: line.priceOverridden,
-      })),
+      lineRows.map((row) => ({ ...row, invoiceDiscountSharePaisa: shares.get(row.id) ?? 0 })),
     );
 
     const allocationRows: Array<{

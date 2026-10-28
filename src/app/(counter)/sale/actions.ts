@@ -14,9 +14,11 @@
  * action the queue replaced was deleted rather than left behind.
  */
 
+import { approveAsOwner } from '@/auth/owner-approval';
 import { currentSession, scopeFor } from '@/auth/session';
 import { highestReceiptCounterAcrossReceipts } from '@/db/udhaar-queries';
 import { tenantSettings } from '@/db/provisioning';
+import { DEFAULT_BILL_DISCOUNT_CAP_PERCENT } from '@/domain/sales/cart';
 
 export interface SaleContext {
   receiptPrefix: string;
@@ -28,6 +30,8 @@ export interface SaleContext {
   autoPrintReceipt: boolean;
   /** PCN-012: a product's first line starts in its loose unit (Settings). */
   saleStartsLoose: boolean;
+  /** PCN-014: all discounts together, as a % of the bill, before the owner's PIN. */
+  billDiscountCapPercent: number;
 }
 
 /**
@@ -55,5 +59,32 @@ export async function saleContext(): Promise<SaleContext | null> {
     // Absent means on: an existing tenant keeps the behaviour it had.
     autoPrintReceipt: settings?.autoPrintReceipt ?? true,
     saleStartsLoose: settings?.saleStartsLoose ?? false,
+    billDiscountCapPercent: settings?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT,
+  };
+}
+
+export type BillDiscountApproval =
+  { ok: true; ownerId: string; ownerName: string } | { ok: false; message: string };
+
+/**
+ * [PCN-014] The owner's PIN for a bill discount over the shop's limit. The
+ * signed-in salesperson stays signed in; the sale records the owner who
+ * approved. Needs the server — a thrown fetch on the counter means offline.
+ */
+export async function approveBillDiscountAction(pin: string): Promise<BillDiscountApproval> {
+  const session = await currentSession();
+  if (!session) {
+    return { ok: false, message: 'This device needs to sign in again.' };
+  }
+  const result = await approveAsOwner(scopeFor(session), pin);
+  if (result.ok) {
+    return { ok: true, ownerId: result.ownerId, ownerName: result.ownerName };
+  }
+  return {
+    ok: false,
+    message:
+      result.reason === 'locked_out'
+        ? `Too many wrong PINs. Try again in ${Math.ceil(result.retryAfterMs / 60_000)} minute(s).`
+        : 'That is not the owner’s PIN.',
   };
 }

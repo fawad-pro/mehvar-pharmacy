@@ -6,9 +6,10 @@
  *
  * A return is one compensating record against a sale that already happened
  * (ADR-1) — it never edits the sale row, only adds a new one that references
- * it. The refund owed per line is derived from what that line actually charged
- * (unit price net of its own line discount), not from the catalog price, so a
- * return of a discounted item refunds the discounted amount.
+ * it. The refund owed per line is derived from what that line actually paid
+ * (its charge, less its own item discount, less its share of the bill
+ * discount — PCN-014), not from the catalog price, so a return of a discounted
+ * item refunds the discounted amount.
  *
  * This module imports nothing below `lib/`, for the same reason
  * `purchase-command.ts` does: the return screen validates a quantity the
@@ -19,7 +20,7 @@
 import type { PackLevel } from '@/lib/quantity';
 import type { Uuid } from '@/lib/uuid';
 
-import { storedLineGrossPaisa } from './sale-command';
+import { linePaidPaisa } from './sale-command';
 
 export interface ReturnLineCommand {
   readonly saleLineId: Uuid;
@@ -63,6 +64,8 @@ export interface ReturnableSaleLine {
   /** [PCN-012] The exact amount charged, or null on a line from before it. */
   readonly lineAmountPaisa: number | null;
   readonly lineDiscountPaisa: number;
+  /** [PCN-014] This line's share of the sale's bill discount. */
+  readonly invoiceDiscountSharePaisa: number;
 }
 
 export function validateReturnCommand(
@@ -78,6 +81,11 @@ export function validateReturnCommand(
   }
 
   const byId = new Map(lines.map((line) => [line.saleLineId, line]));
+  // A line named twice would be validated twice against the same remainder,
+  // and could return — and refund — more than was sold.
+  if (new Set(command.lines.map((line) => line.saleLineId)).size !== command.lines.length) {
+    return { ok: false, reason: 'invalid_quantity' };
+  }
   for (const line of command.lines) {
     if (!Number.isSafeInteger(line.qtyBase) || line.qtyBase <= 0) {
       return { ok: false, reason: 'invalid_quantity', saleLineId: line.saleLineId };
@@ -102,19 +110,24 @@ export function validateReturnCommand(
 }
 
 /**
- * The refund owed for returning `qtyBase` units of a line, net of that line's
- * own discount and floored — the same honesty `costing.ts` applies to bonus
- * stock: a refund never rounds in the customer's favour beyond what they were
- * actually charged.
+ * The refund owed for returning `qtyBase` more units of a line.
+ *
+ * [PCN-014] Cumulative, the way stock is costed (Session 2): with `R(k) =
+ * ⌊paid × k ÷ sold⌋`, returning n units after `alreadyReturnedBase` refunds
+ * `R(already + n) − R(already)`. Every partial return rounds down, never in
+ * the customer's favour, and the parts always end at exactly what the line
+ * paid — rounding each return alone would leave the customer a paisa short.
+ * `paid` is what the line actually paid ([PCN-012] a box refunds as a share
+ * of the box price), net of its item discount and its bill-discount share.
  */
 export function refundForLine(line: ReturnableSaleLine, qtyBase: number): number {
   if (line.qtyBase <= 0) {
     return 0;
   }
-  // [PCN-012] What the line actually charged: a box refunds as a share of the
-  // box price, never of a rounded per-tablet figure.
-  const chargedTotal = storedLineGrossPaisa(line) - line.lineDiscountPaisa;
-  return Math.floor((chargedTotal * qtyBase) / line.qtyBase);
+  const paid = linePaidPaisa(line);
+  const refunded = (units: number) =>
+    Math.floor((paid * Math.min(units, line.qtyBase)) / line.qtyBase);
+  return refunded(line.alreadyReturnedBase + qtyBase) - refunded(line.alreadyReturnedBase);
 }
 
 export function totalRefundPaisa(
