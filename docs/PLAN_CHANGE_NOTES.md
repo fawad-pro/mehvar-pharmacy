@@ -1840,6 +1840,8 @@ go wrong:
   a discount cannot be added twice by accident. There is one bill discount per
   sale; entering again replaces it. An amount above the subtotal is refused; an
   amount equal to it clears the discount.
+  _Superseded by PCN-015 (2026-10-28): the salesperson types what comes off,
+  as for an item discount._
 - **Cap.** A setting the owner controls in Settings, **10% by default**, of the
   bill after item discounts. Within the cap the sale goes through. Above it,
   the owner's PIN is required at the counter, and the sale records who approved
@@ -1995,3 +1997,54 @@ rounding shortcut for now.
   share and what it paid. The cap's help text moved out of its label, so
   "Owner's PIN" and "PIN" stay distinct labels to a screen reader. The
   integration tests failed with the flag and the total mutated.
+
+## PCN-015 — a bill discount is entered the way an item discount is
+
+Session: pilot improvements · Raised: 2026-10-28 · Status: decided
+
+**Plan sections in tension.** PCN-014's entry rule: "The salesperson types
+the **amount to collect** ("2000"); Mehvar works out the discount." I1 (a
+discount completes by keyboard) and the touch pass (every action has
+something to tap, and a field needs a visible commit).
+
+**The gap.** The owner could not work out how to give a bill discount the
+first time. Seen on the pilot counter:
+
+1. It asked for the opposite of an item discount. An item takes what comes
+   off ("50" or "10%"); the bill took the new total, in a box that opened
+   already holding the bill (705.00), so nothing said a new figure was wanted.
+2. It had to be found first, behind a button labelled "Bill discount — %",
+   where the "%" read as "percent only" rather than as the key that opens it.
+3. Only Enter applied it, and Commit was disabled while the box was open, so
+   a tablet could leave only by the on-screen keyboard's Enter.
+4. The same figure showed three times (amount due, amount to collect, cash
+   tendered).
+
+**Decision.** 2026-10-28, the owner: enter it exactly as an item discount.
+
+- The payment screen always shows **Discount on the bill**, empty, with
+  "e.g. 50 or 10%" in it. `%` from Cash tendered goes to it. There is no
+  button to find and no box asking for the total.
+- It takes what comes off, an amount or a share of the bill after item
+  discounts (`billDiscountFromInput`, replacing `billDiscountFromCollect`).
+  Blank is no discount. Unlike a line discount, junk and more than the bill
+  are refused, not clamped: this field sets what the drawer should hold.
+- It applies as it is typed: the largest figure becomes "Collect", and Cash
+  tendered follows it until the cashier types one. There is no Apply step, so
+  the screen never shows one price while Commit would charge another. (The
+  recommendation put to the owner had an Apply button; applying as typed
+  removes the state it would have needed, and with it the touch gap.)
+- One bill discount per sale: typing replaces it, so it is never given twice
+  — PCN-014's reason for a final figure, kept by replacing rather than adding.
+- Over the limit, the owner's PIN is asked for beneath the field, with
+  **Approve** and **No discount** to tap, and Commit waits for it. An approval
+  holds only for the amount approved; changing the discount asks again.
+  Esc in the PIN clears the discount, as before.
+
+Unchanged: the cap and what it measures, approval, shares, refunds, the
+receipt, the Day screen. F12, Enter still sells at the full amount.
+
+Tests: `bill-discount.test.ts` (amounts, shares, replacing, refusals);
+`bill-discount.spec.ts` by keyboard, and a touch path in `touch.spec.ts`.
+Commit left enabled while the owner's PIN is pending fails the spec, and so
+does a total that does not follow the typed discount.

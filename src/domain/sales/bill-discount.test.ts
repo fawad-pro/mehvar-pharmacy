@@ -2,40 +2,59 @@ import { describe, expect, it } from 'vitest';
 
 import { paisa } from '@/lib/branded';
 
-import { billDiscountFromCollect, billDiscountNeedsApproval } from './cart';
+import { billDiscountFromInput, billDiscountNeedsApproval } from './cart';
 
-/** [PCN-014] The amount to collect, and the cap on all discounts together. */
-describe('billDiscountFromCollect', () => {
-  it('Rs 2,080 collected as Rs 2,000 is a Rs 80 discount', () => {
-    expect(billDiscountFromCollect(paisa(208_000), '2000')).toEqual({
+/** [PCN-014, PCN-015] What comes off the bill, and the cap on all discounts together. */
+describe('billDiscountFromInput', () => {
+  it('Rs 80 off a Rs 2,080 bill is a Rs 80 discount', () => {
+    expect(billDiscountFromInput(paisa(208_000), '80')).toEqual({
       ok: true,
       discountPaisa: 8_000,
     });
   });
 
-  it('is a final figure: the same amount typed again is the same discount', () => {
-    const once = billDiscountFromCollect(paisa(208_000), '2000');
-    const twice = billDiscountFromCollect(paisa(208_000), '2000');
-    expect(twice).toEqual(once);
+  it('takes a share of the bill, as a line discount does', () => {
+    expect(billDiscountFromInput(paisa(208_000), '10%')).toEqual({
+      ok: true,
+      discountPaisa: 20_800,
+    });
+    // Rounded to the paisa: 2.5% of Rs 705.00 is Rs 17.625.
+    expect(billDiscountFromInput(paisa(70_500), '2.5%')).toEqual({
+      ok: true,
+      discountPaisa: 1_763,
+    });
   });
 
-  it('collecting the whole bill clears the discount', () => {
-    expect(billDiscountFromCollect(paisa(208_000), '2080')).toEqual({ ok: true, discountPaisa: 0 });
+  it('replaces, never adds: the same text typed again is the same discount', () => {
+    expect(billDiscountFromInput(paisa(208_000), '80')).toEqual(
+      billDiscountFromInput(paisa(208_000), '80'),
+    );
+  });
+
+  it('blank or 0 is no discount; the whole bill is allowed', () => {
+    expect(billDiscountFromInput(paisa(208_000), '')).toEqual({ ok: true, discountPaisa: 0 });
+    expect(billDiscountFromInput(paisa(208_000), ' 0 ')).toEqual({ ok: true, discountPaisa: 0 });
+    expect(billDiscountFromInput(paisa(208_000), '100%')).toEqual({
+      ok: true,
+      discountPaisa: 208_000,
+    });
   });
 
   it('refuses more than the bill, and junk — never reading it as Rs 0', () => {
-    expect(billDiscountFromCollect(paisa(208_000), '2100')).toEqual({
+    expect(billDiscountFromInput(paisa(208_000), '2100')).toEqual({
       ok: false,
       reason: 'above_bill',
     });
-    expect(billDiscountFromCollect(paisa(208_000), 'abc')).toEqual({
+    expect(billDiscountFromInput(paisa(208_000), '101%')).toEqual({
       ok: false,
-      reason: 'not_an_amount',
+      reason: 'above_bill',
     });
-    expect(billDiscountFromCollect(paisa(208_000), '')).toEqual({
-      ok: false,
-      reason: 'not_an_amount',
-    });
+    for (const junk of ['abc', '%', '-5', '10%%']) {
+      expect(billDiscountFromInput(paisa(208_000), junk), junk).toEqual({
+        ok: false,
+        reason: 'not_an_amount',
+      });
+    }
   });
 });
 

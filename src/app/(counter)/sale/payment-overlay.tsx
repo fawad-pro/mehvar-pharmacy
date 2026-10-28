@@ -11,20 +11,21 @@
  *
  * Enter commits, Esc returns to the cart — no other path out.
  *
- * [PCN-014] The bill discount lives here, as the amount to collect: `%` (the
- * key a line discount already uses) or the "Bill discount" button opens it,
- * the salesperson types what the customer will pay, and Enter applies it. The
- * fast path is untouched — F12, Enter still sells at the full amount. When
- * all discounts together pass the shop's limit, the owner's PIN is asked for
- * here, and the screen then says who approved. Whatever the discount, the
- * figure to take is the largest thing on the screen.
+ * [PCN-014, PCN-015] The bill discount is a field on this screen, always in
+ * view, taking what a line discount takes: what comes off, "80" or "10%". It
+ * applies as it is typed — the largest figure becomes what to collect — so
+ * there is no step between what the screen says and what Commit charges. `%`
+ * from Cash tendered goes to it. The fast path is untouched: F12, Enter still
+ * sells at the full amount. When all discounts together pass the shop's
+ * limit, the owner's PIN is asked for beneath it and Commit waits for it; the
+ * screen then says who approved.
  */
 
 import { useEffect, useRef, useState } from 'react';
 
 import { PIN_LENGTH } from '@/auth/pin-policy';
 import {
-  billDiscountFromCollect,
+  billDiscountFromInput,
   billDiscountNeedsApproval,
   paisaFromRupeeInput,
   splitPayment,
@@ -50,9 +51,12 @@ export interface BillDiscount {
   approvedBy: { id: string; name: string } | null;
 }
 
-type Editing =
-  | { step: 'collect'; input: string; message: string | null }
-  | { step: 'pin'; discountPaisa: Paisa; pin: string; message: string | null; busy: boolean };
+/** The owner's PIN, while it is typed and checked. */
+interface PinEntry {
+  pin: string;
+  message: string | null;
+  busy: boolean;
+}
 
 export function PaymentOverlay({
   subtotalPaisa,
@@ -75,87 +79,79 @@ export function PaymentOverlay({
   onCancel: () => void;
   onCommit: (split: PaymentSplit, bill: BillDiscount) => void;
 }) {
-  const [bill, setBill] = useState<BillDiscount>({ discountPaisa: ZERO_PAISA, approvedBy: null });
-  const [editing, setEditing] = useState<Editing | null>(null);
-  const totalPaisa = subtractPaisa(subtotalPaisa, bill.discountPaisa);
-  const [tenderedInput, setTenderedInput] = useState(() => (subtotalPaisa / 100).toFixed(2));
+  const [discountInput, setDiscountInput] = useState('');
+  /** Who approved which discount. Only good for that exact amount. */
+  const [approval, setApproval] = useState<{
+    discountPaisa: Paisa;
+    by: { id: string; name: string };
+  } | null>(null);
+  const [pinEntry, setPinEntry] = useState<PinEntry>({ pin: '', message: null, busy: false });
+  const [tenderedInput, setTenderedInput] = useState('');
   /** Until the cashier types a tendered amount, it follows the amount to collect. */
   const [tenderedTyped, setTenderedTyped] = useState(false);
   const field = useRef<HTMLInputElement>(null);
+  const discountField = useRef<HTMLInputElement>(null);
+  const pinField = useRef<HTMLInputElement>(null);
   /** Why Enter did not commit: an amount too large to be cash (see amount-guard). */
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
-    if (editing === null) {
-      field.current?.focus();
-      field.current?.select();
-    }
-  }, [editing]);
+    field.current?.focus();
+    field.current?.select();
+  }, []);
 
-  const tenderedPaisa = paisaFromRupeeInput(tenderedInput);
+  const parsed = billDiscountFromInput(subtotalPaisa, discountInput);
+  const discountPaisa = parsed.ok ? parsed.discountPaisa : ZERO_PAISA;
+  const needsOwner = billDiscountNeedsApproval({
+    grossPaisa,
+    itemDiscountPaisa,
+    billDiscountPaisa: discountPaisa,
+    capPercent,
+  });
+  const approvedBy =
+    approval !== null && approval.discountPaisa === discountPaisa ? approval.by : null;
+  const waitingForOwner = needsOwner && approvedBy === null;
+  const totalPaisa = subtractPaisa(subtotalPaisa, discountPaisa);
+  const tenderedText = tenderedTyped ? tenderedInput : (totalPaisa / 100).toFixed(2);
+  const tenderedPaisa = paisaFromRupeeInput(tenderedText);
   const split = splitPayment(totalPaisa, tenderedPaisa);
   const short = split.creditPaisa > 0;
-  const canCommit = !short || customerName !== null;
+  const canCommit = parsed.ok && !waitingForOwner && (!short || customerName !== null);
 
   function commit(): void {
-    if (!canCommit || busy || editing !== null) {
+    if (!parsed.ok) {
+      discountField.current?.focus();
       return;
     }
-    onCommit({ ...split, tenderedPaisa }, bill);
-  }
-
-  function apply(discountPaisa: Paisa, approvedBy: BillDiscount['approvedBy']): void {
-    setBill({ discountPaisa, approvedBy });
-    setEditing(null);
-    if (!tenderedTyped) {
-      setTenderedInput((subtractPaisa(subtotalPaisa, discountPaisa) / 100).toFixed(2));
-    }
-  }
-
-  function openDiscount(): void {
-    setNotice(null);
-    setEditing({ step: 'collect', input: (totalPaisa / 100).toFixed(2), message: null });
-  }
-
-  function submitCollect(input: string): void {
-    const result = billDiscountFromCollect(subtotalPaisa, input);
-    if (!result.ok) {
-      setEditing({
-        step: 'collect',
-        input,
-        message:
-          result.reason === 'above_bill'
-            ? `That is more than the bill (${formatPaisa(subtotalPaisa)}). Type what the customer will pay.`
-            : 'Type the amount the customer will pay, in rupees.',
-      });
+    if (waitingForOwner) {
+      pinField.current?.focus();
       return;
     }
-    const needsOwner = billDiscountNeedsApproval({
-      grossPaisa,
-      itemDiscountPaisa,
-      billDiscountPaisa: result.discountPaisa,
-      capPercent,
-    });
-    if (needsOwner) {
-      setEditing({
-        step: 'pin',
-        discountPaisa: result.discountPaisa,
-        pin: '',
-        message: null,
-        busy: false,
-      });
+    if (!canCommit || busy) {
       return;
     }
-    apply(result.discountPaisa, null);
+    onCommit({ ...split, tenderedPaisa }, { discountPaisa, approvedBy });
   }
 
-  async function submitPin(state: Extract<Editing, { step: 'pin' }>): Promise<void> {
-    if (state.pin.length !== PIN_LENGTH || state.busy) return;
-    setEditing({ ...state, busy: true, message: null });
-    const approval = await approveBillDiscountAction(state.pin).catch(() => null);
-    if (approval === null) {
-      setEditing({
-        ...state,
+  function focusTendered(): void {
+    field.current?.focus();
+    field.current?.select();
+  }
+
+  /** Back to no discount, as Esc in the PIN promises. */
+  function clearDiscount(): void {
+    setDiscountInput('');
+    setPinEntry({ pin: '', message: null, busy: false });
+    focusTendered();
+  }
+
+  async function submitPin(): Promise<void> {
+    if (pinEntry.pin.length !== PIN_LENGTH || pinEntry.busy) return;
+    const asked = discountPaisa;
+    setPinEntry({ ...pinEntry, busy: true, message: null });
+    const answer = await approveBillDiscountAction(pinEntry.pin).catch(() => null);
+    if (answer === null) {
+      setPinEntry({
         pin: '',
         busy: false,
         message:
@@ -163,14 +159,16 @@ export function PaymentOverlay({
       });
       return;
     }
-    if (!approval.ok) {
-      setEditing({ ...state, pin: '', busy: false, message: approval.message });
+    if (!answer.ok) {
+      setPinEntry({ pin: '', busy: false, message: answer.message });
       return;
     }
-    apply(state.discountPaisa, { id: approval.ownerId, name: approval.ownerName });
+    setApproval({ discountPaisa: asked, by: { id: answer.ownerId, name: answer.ownerName } });
+    setPinEntry({ pin: '', message: null, busy: false });
+    focusTendered();
   }
 
-  const discounted = bill.discountPaisa > 0;
+  const discounted = discountPaisa > 0;
 
   return (
     // No onDismiss: Esc, deliberately pressed, is the only way out of this one.
@@ -191,9 +189,9 @@ export function PaymentOverlay({
         </p>
         {discounted ? (
           <p className="text-ink/60 numeral mt-1 text-sm" aria-label="Bill discount">
-            Bill {formatPaisa(subtotalPaisa)} · Discount {formatPaisa(bill.discountPaisa)}
-            {bill.approvedBy ? (
-              <span className="text-ink/50 block text-xs">Approved by {bill.approvedBy.name}</span>
+            Bill {formatPaisa(subtotalPaisa)} · Discount {formatPaisa(discountPaisa)}
+            {approvedBy ? (
+              <span className="text-ink/50 block text-xs">Approved by {approvedBy.name}</span>
             ) : null}
           </p>
         ) : null}
@@ -202,69 +200,73 @@ export function PaymentOverlay({
           <p className="text-ink/50 mt-1 text-sm">Billing to {customerName}</p>
         ) : null}
 
-        {editing?.step === 'collect' ? (
-          <div className="border-line mt-4 rounded border p-3">
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor="collect">
-              Amount to collect
-            </label>
-            <input
-              autoComplete="off"
-              id="collect"
-              autoFocus
-              value={editing.input}
-              inputMode="decimal"
-              onFocus={(event) => event.target.select()}
-              onChange={(event) =>
-                setEditing({ step: 'collect', input: event.target.value, message: null })
+        {/* In view from the start, empty, saying what to type: the same words
+            a line discount takes. A button to find first, and a box asking
+            for the new total, is what a salesperson could not work out. */}
+        <label className="text-ink/60 mt-4 mb-1 block text-xs" htmlFor="bill-discount">
+          Discount on the bill
+        </label>
+        <input
+          autoComplete="off"
+          id="bill-discount"
+          ref={discountField}
+          value={discountInput}
+          inputMode="decimal"
+          placeholder="e.g. 50 or 10%"
+          onFocus={(event) => event.target.select()}
+          onChange={(event) => {
+            setDiscountInput(event.target.value);
+            setPinEntry({ pin: '', message: null, busy: false });
+            setNotice(null);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              if (parsed.ok && waitingForOwner) {
+                pinField.current?.focus();
+              } else if (parsed.ok) {
+                focusTendered();
               }
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault();
-                  submitCollect(editing.input);
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault();
-                  setEditing(null);
-                }
-              }}
-              className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-2xl outline-none"
-            />
-            <p className="text-ink/50 mt-1 text-xs">
-              Bill {formatPaisa(subtotalPaisa)}. Enter to apply, Esc to leave it as it was.
-            </p>
-            {editing.message ? (
-              <p className="text-red mt-1 text-sm" role="alert">
-                {editing.message}
-              </p>
-            ) : null}
-          </div>
+            }
+            if (event.key === 'Escape') {
+              onCancel();
+            }
+          }}
+          className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-lg outline-none"
+        />
+        {!parsed.ok ? (
+          <p className="text-red mt-1 text-sm" role="alert">
+            {parsed.reason === 'above_bill'
+              ? `That is more than the bill (${formatPaisa(subtotalPaisa)}).`
+              : 'Type what comes off, like 50 or 10%.'}
+          </p>
         ) : null}
 
-        {editing?.step === 'pin' ? (
-          <div className="border-line mt-4 rounded border p-3">
+        {waitingForOwner ? (
+          <div className="border-line mt-2 rounded border p-3">
             <p className="text-sm">
-              Discount {formatPaisa(editing.discountPaisa)} is over the shop&rsquo;s limit of{' '}
-              {capPercent}%. The owner enters their PIN to approve it.
+              Discount {formatPaisa(discountPaisa)} is over the shop&rsquo;s limit of {capPercent}%.
+              The owner enters their PIN to approve it.
             </p>
             <label className="text-ink/60 mt-2 mb-1 block text-xs" htmlFor="owner-pin">
               Owner&rsquo;s PIN
             </label>
             <input
               id="owner-pin"
-              autoFocus
+              ref={pinField}
               // A PIN, never a saved login: `off` is ignored on credential
               // fields, `one-time-code` is not (password-autofill.test.ts).
               autoComplete="one-time-code"
               type="password"
               inputMode="numeric"
               maxLength={PIN_LENGTH}
-              value={editing.pin}
+              value={pinEntry.pin}
               // Read-only, not disabled, while it is checked: a disabled field
               // loses focus, and Esc after a wrong PIN then reached nothing.
-              readOnly={editing.busy}
+              readOnly={pinEntry.busy}
               onChange={(event) =>
-                setEditing({
-                  ...editing,
+                setPinEntry({
+                  ...pinEntry,
                   pin: event.target.value.replace(/\D/g, ''),
                   message: null,
                 })
@@ -272,19 +274,35 @@ export function PaymentOverlay({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
-                  void submitPin(editing);
+                  void submitPin();
                 }
                 if (event.key === 'Escape') {
                   event.preventDefault();
-                  setEditing(null);
+                  clearDiscount();
                 }
               }}
               className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-2xl tracking-[0.5em] outline-none"
             />
-            <p className="text-ink/50 mt-1 text-xs">Esc to sell without this discount.</p>
-            {editing.message ? (
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={clearDiscount}
+                className="text-ink/60 min-h-touch text-sm"
+              >
+                No discount — Esc
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitPin()}
+                disabled={pinEntry.pin.length !== PIN_LENGTH || pinEntry.busy}
+                className="bg-green-600 text-paper min-h-touch rounded px-4 text-sm font-medium disabled:opacity-40"
+              >
+                {pinEntry.busy ? 'Checking…' : 'Approve'}
+              </button>
+            </div>
+            {pinEntry.message ? (
               <p className="text-red mt-1 text-sm" role="alert">
-                {editing.message}
+                {pinEntry.message}
               </p>
             ) : null}
           </div>
@@ -297,9 +315,8 @@ export function PaymentOverlay({
           autoComplete="off"
           id="tendered"
           ref={field}
-          value={tenderedInput}
+          value={tenderedText}
           inputMode="decimal"
-          disabled={editing !== null}
           onChange={(event) => {
             setTenderedInput(event.target.value);
             setTenderedTyped(true);
@@ -308,7 +325,7 @@ export function PaymentOverlay({
           onKeyDown={(event) => {
             if (event.key === '%') {
               event.preventDefault();
-              openDiscount();
+              discountField.current?.focus();
               return;
             }
             if (event.key === 'Enter') {
@@ -384,16 +401,8 @@ export function PaymentOverlay({
           </button>
           <button
             type="button"
-            onClick={openDiscount}
-            disabled={editing !== null || busy}
-            className="border-line min-h-touch rounded border px-3 text-sm"
-          >
-            {discounted ? 'Change discount — %' : 'Bill discount — %'}
-          </button>
-          <button
-            type="button"
             onClick={commit}
-            disabled={!canCommit || busy || editing !== null}
+            disabled={!canCommit || busy}
             className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
           >
             {busy ? 'Saving…' : 'Commit — Enter'}

@@ -315,30 +315,44 @@ export function parseDiscountInput(raw: string, basisPaisa: Paisa): Paisa {
 /** The cap a tenant that never set one gets: 10% (the owner's decision). */
 export const DEFAULT_BILL_DISCOUNT_CAP_PERCENT = 10;
 
-export type CollectRejection =
+export type BillDiscountRejection =
   /** Not an amount at all — junk is never read as Rs 0 (the scan guard's rule). */
   | 'not_an_amount'
-  /** More than the bill: a bill discount cannot raise the price. */
+  /** More than the bill: a bill discount cannot take a bill below nothing. */
   | 'above_bill';
 
 /**
- * The bill discount the salesperson asked for, by typing the amount to
- * collect. A final figure, not an amount off: typing "2000" twice is still
- * Rs 2,000, so a discount cannot be given twice by accident. Collecting the
- * whole bill clears the discount.
+ * The bill discount the salesperson typed: what comes off, as an amount
+ * ("80") or a share of the bill ("10%") — the same words a line discount
+ * takes (`parseDiscountInput`), so there is one way to give a discount.
+ * `subtotalPaisa` is the bill after item discounts: what a bill discount
+ * comes off, and what its percentage is of.
+ *
+ * Blank is no discount. Unlike a line discount, junk and too much are
+ * refused rather than clamped: this field sets the figure the drawer is
+ * expected to hold, so "abc" must not quietly mean Rs 0 and "800" on a
+ * Rs 705 bill must not quietly mean "free". There is one bill discount per
+ * sale; typing again replaces it, so it is never given twice.
  */
-export function billDiscountFromCollect(
+export function billDiscountFromInput(
   subtotalPaisa: Paisa,
-  collectInput: string,
-): { ok: true; discountPaisa: Paisa } | { ok: false; reason: CollectRejection } {
-  const collect = parseRupeeInput(collectInput);
-  if (collect === null) {
+  raw: string,
+): { ok: true; discountPaisa: Paisa } | { ok: false; reason: BillDiscountRejection } {
+  const text = raw.trim();
+  if (text === '') {
+    return { ok: true, discountPaisa: ZERO_PAISA };
+  }
+  const isPercent = text.endsWith('%');
+  const number = parseRupeeInput(isPercent ? text.slice(0, -1) : text);
+  if (number === null) {
     return { ok: false, reason: 'not_an_amount' };
   }
-  if (collect > subtotalPaisa) {
+  // `parseRupeeInput` reads "10" as 1,000 paisa; as a percentage that is 10.00%.
+  const discount = isPercent ? Math.round((subtotalPaisa * number) / 10_000) : number;
+  if (discount > subtotalPaisa) {
     return { ok: false, reason: 'above_bill' };
   }
-  return { ok: true, discountPaisa: subtractPaisa(subtotalPaisa, collect) };
+  return { ok: true, discountPaisa: paisa(discount) };
 }
 
 /**

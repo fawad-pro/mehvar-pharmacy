@@ -10,13 +10,14 @@ import {
 } from './support/counter';
 
 /**
- * [PCN-014] The bill discount, as the counter gives it: the amount to collect,
- * typed on the payment screen. The figure to take is the largest on screen;
- * a discount over the shop's limit needs the owner's PIN; the receipt shows
- * the bill discount on its own row.
+ * [PCN-014, PCN-015] The bill discount, as the counter gives it: what comes
+ * off, "5" or "10%", typed into a field the payment screen always shows. It
+ * applies as it is typed, and the figure to take is the largest on screen; a
+ * discount over the shop's limit needs the owner's PIN, and Commit waits for
+ * it; the receipt shows the bill discount on its own row.
  *
  * Three strips of Panadol: a Rs 105.00 bill, under the default 10% limit at
- * Rs 100 and over it at Rs 80.
+ * Rs 5 off and over it at Rs 25 off.
  */
 
 async function threeStrips(page: Page): Promise<void> {
@@ -31,19 +32,25 @@ async function threeStrips(page: Page): Promise<void> {
 const OWNER_PIN = '1234';
 
 const payment = (page: Page) => page.getByRole('dialog', { name: 'Payment' });
+const discount = (page: Page) => payment(page).getByLabel('Discount on the bill');
+const commit = (page: Page) => payment(page).getByRole('button', { name: /^Commit/ });
 
-test('within the limit: % , the amount to collect, Enter — by keyboard', async ({ page }) => {
+test('within the limit: %, what comes off, Enter — by keyboard', async ({ page }) => {
   await openCounter(page);
   await threeStrips(page);
 
   await page.keyboard.press('F12');
   await expect(payment(page).getByLabel('Amount due')).toHaveText('105.00');
+  // In view and empty before anything is pressed, saying what to type.
+  await expect(discount(page)).toHaveValue('');
+  await expect(discount(page)).toHaveAttribute('placeholder', 'e.g. 50 or 10%');
   await page.keyboard.press('%');
-  const collect = payment(page).getByLabel('Amount to collect');
-  await expect(collect).toBeFocused();
+  await expect(discount(page)).toBeFocused();
   // Filled, not typed: digits then Enter at machine speed is a scan, and the
   // scan guard rightly keeps it out of an amount field (CLAUDE.md, PCN-013).
-  await collect.fill('100');
+  await discount(page).fill('5');
+  // Applied as typed: the screen never shows one price while Commit charges another.
+  await expect(payment(page).getByLabel('Collect', { exact: true })).toHaveText('100.00');
   await page.keyboard.press('Enter');
 
   // The figure to take is the largest on the screen, and says what it is.
@@ -67,7 +74,9 @@ test('over the limit with a wrong PIN: Esc sells at the full amount', async ({ p
 
   await page.keyboard.press('F12');
   await page.keyboard.press('%');
-  await payment(page).getByLabel('Amount to collect').fill('80');
+  await discount(page).fill('25');
+  // Nothing is sold at a price the owner has not approved.
+  await expect(commit(page)).toBeDisabled();
   await page.keyboard.press('Enter');
 
   const pin = payment(page).getByLabel('Owner’s PIN');
@@ -79,6 +88,8 @@ test('over the limit with a wrong PIN: Esc sells at the full amount', async ({ p
 
   await page.keyboard.press('Escape');
   await expect(payment(page).getByLabel('Amount due')).toHaveText('105.00');
+  await expect(discount(page)).toHaveValue('');
+  await expect(payment(page).getByLabel('Cash tendered')).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Rs 105.00');
   await expect(receipt(page)).not.toContainText('Bill Discount');
@@ -90,7 +101,7 @@ test('over the limit: the owner’s PIN approves, and the screen says who', asyn
 
   await page.keyboard.press('F12');
   await page.keyboard.press('%');
-  await payment(page).getByLabel('Amount to collect').fill('80');
+  await discount(page).fill('25');
   await page.keyboard.press('Enter');
   // The demo owner's PIN (scripts/db/seed.ts).
   await payment(page).getByLabel('Owner’s PIN').fill(OWNER_PIN);
@@ -100,6 +111,7 @@ test('over the limit: the owner’s PIN approves, and the screen says who', asyn
   await expect(payment(page).getByLabel('Bill discount')).toContainText(
     `Approved by ${DEMO.owner}`,
   );
+  await expect(payment(page).getByLabel('Cash tendered')).toBeFocused();
   await page.keyboard.press('Enter');
 
   await expect(lastSale(page)).toContainText('Rs 80.00');
@@ -133,16 +145,16 @@ test('more than the bill is refused, and junk is never read as Rs 0', async ({ p
   await threeStrips(page);
 
   await page.keyboard.press('F12');
-  await page.getByRole('button', { name: 'Bill discount — %' }).click();
-  const collect = payment(page).getByLabel('Amount to collect');
-  await collect.fill('200');
-  await page.keyboard.press('Enter');
+  await discount(page).click();
+  await discount(page).fill('200');
   await expect(payment(page).getByRole('alert')).toContainText('more than the bill');
-  await collect.fill('abc');
-  await page.keyboard.press('Enter');
-  await expect(payment(page).getByRole('alert')).toContainText('Type the amount');
-  await page.keyboard.press('Escape');
+  await expect(commit(page)).toBeDisabled();
+  await discount(page).fill('abc');
+  await expect(payment(page).getByRole('alert')).toContainText('Type what comes off');
   await expect(payment(page).getByLabel('Amount due')).toHaveText('105.00');
+  await expect(commit(page)).toBeDisabled();
+  await discount(page).fill('');
+  await expect(commit(page)).toBeEnabled();
   await page.keyboard.press('Escape');
 });
 
@@ -170,7 +182,7 @@ test('the owner sets the limit; at 0 every bill discount needs the PIN', async (
     await threeStrips(page);
     await page.keyboard.press('F12');
     await page.keyboard.press('%');
-    await payment(page).getByLabel('Amount to collect').fill('104');
+    await discount(page).fill('1');
     await page.keyboard.press('Enter');
     await expect(payment(page)).toContainText('over the shop’s limit of 0%');
     await expect(payment(page).getByLabel('Owner’s PIN')).toBeFocused();

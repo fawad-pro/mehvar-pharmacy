@@ -2,6 +2,15 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## A bill discount is given like an item discount (PCN-015)
+
+Payment always shows a "Discount on the bill" field, empty, saying
+"e.g. 50 or 10%". Type what comes off; the big figure changes to what to
+collect as you type, and Commit charges exactly that. It replaces the
+"Bill discount — %" button and the "Amount to collect" box, which asked for
+the new total instead. Over the shop's limit, the owner's PIN appears
+beneath it, with Approve and No discount buttons, and Commit waits.
+
 ## Adjust stock asks for the reason
 
 The reason started on "Damaged", so a count that came up short saved as a

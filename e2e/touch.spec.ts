@@ -100,6 +100,22 @@ test('an udhaar sale by touch, then the customer settles it', async ({ page }) =
   await expect(settle).toContainText('Receipt');
 });
 
+test('a bill discount by touch: tap the field, type what comes off, Commit', async ({ page }) => {
+  await openCounter(page);
+  await addByTouch(page, 'panadol', 'Panadol');
+  await tap(page.getByRole('button', { name: /^Pay/ }));
+  await expect(payment(page).getByLabel('Amount due')).toHaveText('35.00');
+
+  // No button to find and no Apply to remember: the field is there, and the
+  // figure to collect follows what is typed into it.
+  await tap(payment(page).getByLabel('Discount on the bill'));
+  await payment(page).getByLabel('Discount on the bill').fill('4%');
+  await expect(payment(page).getByLabel('Collect', { exact: true })).toHaveText('33.60');
+  await expect(payment(page).getByLabel('Cash tendered')).toHaveValue('33.60');
+  await tap(payment(page).getByRole('button', { name: /^Commit/ }));
+  await expect(lastSale(page)).toContainText('Rs 33.60');
+});
+
 test('Switch user by touch', async ({ page }) => {
   await openCounter(page);
   await tap(keyBar(page).getByRole('button', { name: /Switch user/ }));
