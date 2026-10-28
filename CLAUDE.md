@@ -742,6 +742,20 @@ exception visibility.
   not Prettier-clean on main. Format the files you changed, and check a file
   was clean before letting Prettier rewrite it.
 
+## Things the scanner pass established
+
+- **A scan's Enter is a key press like any other: it presses the focused
+  button.** With Commit focused, a scan completed the sale. The scan guard
+  now also watches keys that land on no text field; a scan there goes to the
+  screen's `data-scan-home` field, or is put back, and its Enter is taken.
+  A new screen with a scan field marks it `data-scan-home`; nothing else.
+- **Playwright's key presses wait for the page; a scanner's do not.**
+  `keyboard.press` in a loop on a screen that re-renders per key measured
+  80–120 ms gaps, so the guard rightly saw a person. A scanner's keys carry
+  the time they were sent. Simulate a scan with `keyboard.type(code,
+  { delay: 0 })`, as `scanner.spec.ts` does, and measure the gaps when a
+  scan "fails".
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

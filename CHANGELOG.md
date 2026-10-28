@@ -2,6 +2,21 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## A scan always lands where it should
+
+- **A scan with nothing in focus is not lost.** After a tap — always, on a
+  tablet — or a click elsewhere, a scan went nowhere. It now goes to the
+  screen's own search: Sale and Adjust add the item, Receive Stock starts a
+  line, Products finds the product.
+- **A scan never presses a button.** Its Enter pressed whatever had focus:
+  on Receive Stock it opened the supplier picker with the code in it, and
+  with the payment screen open and focus on Commit it completed the sale.
+  Inside a dialog, or on a screen with no search (Stock), a scan is put back
+  with the usual notice.
+- **Products finds a product by barcode.**
+- **Receipts: a number typed and Enter at once opens that receipt.** It
+  opened the top of the list for the previous search.
+
 ## The counter works by touch
 
 - **Udhaar and Switch user can be tapped.** On the key bar they were plain
