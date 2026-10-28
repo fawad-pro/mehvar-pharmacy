@@ -756,6 +756,23 @@ exception visibility.
   { delay: 0 })`, as `scanner.spec.ts` does, and measure the gaps when a
   scan "fails".
 
+## Things the keyboard walks established
+
+- **A screen keeps Esc with `preventDefault`, never `stopPropagation`.**
+  Next hydrates the whole document, so React's listener and the shell's are
+  both on `document`; stopping propagation stops nothing between them. The
+  line discount only looked right because Sale is home already. The shell's
+  Esc also skips when any dialog was open as the key went down.
+- **Every receipt-producing screen prints before it confirms.** The rule
+  from Sale held for Settle udhaar, Returns and cancellations too, and a
+  flaky test (two in ten) is how it showed. One printing screen left with the
+  old order is the next flake.
+- **A focus call made before its field exists does nothing.** Adjust focused
+  the quantity in the same handler that made it appear. Focus from an effect
+  after the render, as Returns and Adjust now do.
+- **A test that picks "the last link" depends on the shared database.**
+  Choose by what the link leads to (`href`), not by its position or name.
+
 ## Commits
 
 Conventional messages (`feat(sales): …`), small, trunk-based, tags at day

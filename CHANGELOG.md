@@ -2,6 +2,20 @@
 
 All approved plan changes and implementation milestones will be recorded here.
 
+## The rest of the counter by keyboard
+
+- **Esc closes what is open, and stays.** Recording a payment on a
+  customer's page, a supplier payment on Receive Stock, and a purchase-line
+  correction: Esc went on to the counter's "go home" and left for Sale,
+  away from the record just changed — the correction's typing lost with it.
+- **Done means ready.** Settle udhaar, a return and a cancelled payment now
+  print before they say so, as a sale does; an Esc pressed on seeing "Done"
+  was lost about one time in five.
+- **Customers and Products start with the cursor in their search; Adjust
+  goes straight to the quantity** once the product is chosen.
+- **A scan delivered to a screen's search is never dropped** when the
+  search is a moment behind (about one scan in twelve on Receive Stock).
+
 ## A scan always lands where it should
 
 - **A scan with nothing in focus is not lost.** After a tap — always, on a
