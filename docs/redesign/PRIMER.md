@@ -102,6 +102,22 @@ from drifting.
 
 Sale and Receive Stock are the screens used all day; spend the care there.
 
+**Sessions.** One session builds one session's worth, then stops; a fresh
+session starts the next. The ten batches run as seven sessions:
+
+| Session | Batches                                                           | Model, effort  |
+| ------- | ----------------------------------------------------------------- | -------------- |
+| A       | 1 Foundation                                                      | Opus, medium   |
+| B       | 2 Sale                                                            | Opus, high     |
+| C       | 3 Receive Stock                                                   | Opus, high     |
+| D       | 4 Invoices and suppliers + 6 Customers (the same account pattern) | Sonnet, medium |
+| E       | 5 Receipts and Returns                                            | Opus, medium   |
+| F       | 7 Products                                                        | Sonnet, medium |
+| G       | 8 Stock and Adjust + 9 Day + 10 Settings                          | Sonnet, medium |
+
+A session that finishes its batches early stops there; it does not start
+the next session's.
+
 ## Done, per batch
 
 - `npm run verify` clean, and the E2E specs for that screen run for real
@@ -117,6 +133,28 @@ Sale and Receive Stock are the screens used all day; spend the care there.
   hints; from tablet up, hints come from `keyFor` only (Day 16).
 - A CHANGELOG entry naming the batch and citing PCN-016 (and PCN-017 for
   batch 3).
+
+## Working within the quota
+
+The owner's token quota is tight; quality is not negotiable. Spend tokens on
+building and checking, never on re-reading or re-printing.
+
+- **Read narrowly.** Only the boards for the screen in hand (Artifact `read`
+  with `paths`), and only the source files that screen touches. Do not read
+  the whole canvas, the whole design system or whole planning phases; the
+  decisions are in PCN-016 and PCN-017.
+- **Test narrowly while building, fully once.** While a screen is in
+  progress, run only its own specs (for example
+  `npx playwright test e2e/sale.spec.ts`) and its unit tests. At the end of
+  the batch, run the full "Done, per batch" set once. Never skip that run.
+- **Keep test output short.** Pipe runs through `tail` or `grep` for the
+  summary and failures (`… 2>&1 | grep -E "✘|passed|failed|Error"`); print
+  a whole log only to diagnose a failure.
+- **No narrating.** Short progress lines; the commit message and the
+  CHANGELOG entry are the record.
+- **Escalate, don't circle.** If a failure is not understood after one real
+  attempt, stop and tell the owner what is failing and what was tried,
+  rather than trying variations.
 
 ## Things that will bite
 
