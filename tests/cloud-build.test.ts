@@ -27,6 +27,11 @@ describe('the cloud image', () => {
       expect(cloud, `${entry} missing from build-cloud.ts`).toContain(entry);
   });
 
+  it('copies the standalone tree with its symlinks verbatim', () => {
+    // Absolute links to the build machine survive a local run and break in the image.
+    expect(read('scripts', 'package', 'build-cloud.ts')).toContain('verbatimSymlinks: true');
+  });
+
   it('runs in cloud mode, as a non-root user, on the platform port', () => {
     const dockerfile = read('Dockerfile');
     expect(dockerfile).toContain('MEHVAR_DEPLOYMENT=cloud');

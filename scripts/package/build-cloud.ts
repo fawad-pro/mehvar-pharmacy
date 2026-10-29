@@ -57,7 +57,11 @@ async function main(): Promise<void> {
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
 
-  cpSync(standalone, join(out, 'app'), { recursive: true });
+  // `verbatimSymlinks`: standalone holds RELATIVE links (Turbopack's hashed
+  // `.next/node_modules/pg-<hash>` -> `../../node_modules/pg`). cpSync rewrites
+  // them to absolute build-machine paths by default, which resolve on the build
+  // machine and nowhere else — the server then dies on its first query.
+  cpSync(standalone, join(out, 'app'), { recursive: true, verbatimSymlinks: true });
   stripEnvFiles(join(out, 'app'));
 
   // Standalone omits both; without them every asset 404s.
