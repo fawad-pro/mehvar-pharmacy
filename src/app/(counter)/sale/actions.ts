@@ -30,6 +30,8 @@ export interface SaleContext {
   autoPrintReceipt: boolean;
   /** PCN-012: a product's first line starts in its loose unit (Settings). */
   saleStartsLoose: boolean;
+  /** Whether this shop sells on udhaar (Settings). */
+  udhaarEnabled: boolean;
   /** PCN-014: all discounts together, as a % of the bill, before the owner's PIN. */
   billDiscountCapPercent: number;
 }
@@ -59,6 +61,7 @@ export async function saleContext(): Promise<SaleContext | null> {
     // Absent means on: an existing tenant keeps the behaviour it had.
     autoPrintReceipt: settings?.autoPrintReceipt ?? true,
     saleStartsLoose: settings?.saleStartsLoose ?? false,
+    udhaarEnabled: settings?.udhaarEnabled ?? true,
     billDiscountCapPercent: settings?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT,
   };
 }

@@ -77,6 +77,15 @@ export const GLOBAL_KEYS: readonly GlobalKey[] = [
   { key: 'F10', label: 'Switch user', href: null, dispatch: 'switch-user', group: 'owner' },
 ] as const;
 
+/**
+ * The keys this shop uses. A shop that does not sell on udhaar (Settings) has
+ * no udhaar key: it is left off the bar and the tabs, and the handler ignores
+ * it, all from this one filter.
+ */
+export function keysFor(udhaarEnabled: boolean): readonly GlobalKey[] {
+  return udhaarEnabled ? GLOBAL_KEYS : GLOBAL_KEYS.filter((key) => key.dispatch !== 'udhaar');
+}
+
 /** Esc returns to Sale, or closes the overlay on top of it (Phase 10 §1). */
 export const BACK_KEY = 'Escape';
 

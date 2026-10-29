@@ -13,7 +13,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { GLOBAL_KEYS, keyFor } from './registry';
+import { GLOBAL_KEYS, keyFor, keysFor } from './registry';
 
 describe('the global key registry', () => {
   it('binds every routeless key to a meaning', () => {
@@ -91,5 +91,16 @@ describe('keyFor — the one way a UI hint may name a dispatch key', () => {
   it('returns whatever key currently dispatches switch-user', () => {
     const binding = GLOBAL_KEYS.find((candidate) => candidate.dispatch === 'switch-user');
     expect(keyFor('switch-user')).toBe(binding?.key);
+  });
+});
+
+describe('keysFor — a shop that does not sell on udhaar', () => {
+  it('has no udhaar key, and keeps every other key in order', () => {
+    expect(keysFor(true)).toEqual(GLOBAL_KEYS);
+    const without = keysFor(false);
+    expect(without.some((key) => key.dispatch === 'udhaar')).toBe(false);
+    expect(without.map((key) => key.key)).toEqual(
+      GLOBAL_KEYS.filter((key) => key.dispatch !== 'udhaar').map((key) => key.key),
+    );
   });
 });

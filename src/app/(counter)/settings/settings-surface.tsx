@@ -57,6 +57,7 @@ export function SettingsSurface() {
 function SellingSettings() {
   const receiptContext = useReceiptContext();
   const [startsLoose, setStartsLoose] = useState<boolean | null>(null);
+  const [udhaar, setUdhaar] = useState(true);
   /** [PCN-014] As typed; checked on Save. */
   const [cap, setCap] = useState('');
   const [busy, setBusy] = useState(false);
@@ -78,6 +79,7 @@ function SellingSettings() {
           return;
         }
         setStartsLoose(current.saleStartsLoose ?? false);
+        setUdhaar(current.udhaarEnabled ?? true);
         setCap(String(current.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT));
       },
       () => {
@@ -100,6 +102,7 @@ function SellingSettings() {
     try {
       const outcome = await updateSellingSettingsAction({
         saleStartsLoose: startsLoose,
+        udhaarEnabled: udhaar,
         billDiscountCapPercent: capPercent,
       });
       // The counter holds its settings for the session, as with the receipt.
@@ -146,6 +149,25 @@ function SellingSettings() {
               <span className="text-ink-2 block text-xs">
                 Off: a sale starts in the strip (the smallest pack). Either way every unit is one
                 tap away on the line, and each product starts in the unit it was last sold in.
+              </span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={udhaar}
+              onChange={(event) => {
+                setUdhaar(event.target.checked);
+                setDone(null);
+              }}
+              className="mt-1"
+            />
+            <span>
+              Sell on udhaar
+              <span className="text-ink-2 block text-xs">
+                Off: the sale screen and the key bar have no udhaar controls, and every sale is paid
+                in full. Existing customer accounts and their balances are kept and stay on the
+                Customers screen.
               </span>
             </span>
           </label>

@@ -11,6 +11,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
+import { keysFor } from '@/client/keyboard/registry';
 import { useGlobalKeys } from '@/client/keyboard/use-global-keys';
 import { UdhaarKeyProvider, useUdhaarKeyRegistry } from '@/client/keyboard/udhaar-key-context';
 import { ReceiptContextProvider } from '@/client/receipt/receipt-context';
@@ -35,6 +36,7 @@ export function AppShell({
   userRole,
   users,
   licence,
+  udhaarEnabled,
   children,
 }: {
   tenantId: string;
@@ -45,12 +47,15 @@ export function AppShell({
   userRole: 'owner' | 'salesman';
   users: SwitchableUser[];
   licence: LicenceNotice | null;
+  /** Whether this shop sells on udhaar (Settings); off removes its key. */
+  udhaarEnabled: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
   const [switching, setSwitching] = useState(false);
   const [settling, setSettling] = useState(false);
   const { register, dispatch } = useUdhaarKeyRegistry();
+  const keys = keysFor(udhaarEnabled);
 
   const handlers = useMemo(
     () => ({
@@ -58,6 +63,7 @@ export function AppShell({
         setSwitching(true);
       },
       onUdhaar: () => {
+        if (!udhaarEnabled) return;
         // Defect C5: the Sale surface takes the udhaar key for itself when
         // the cart has items (attach customer, W2); with nothing registered
         // — an empty cart, or any other screen — this is the fallback
@@ -78,7 +84,7 @@ export function AppShell({
         return false;
       },
     }),
-    [switching, settling, dispatch],
+    [switching, settling, dispatch, udhaarEnabled],
   );
 
   useGlobalKeys(handlers);
@@ -130,9 +136,9 @@ export function AppShell({
             <main className="min-h-0 flex-1 overflow-auto">{children}</main>
           </UdhaarKeyProvider>
 
-          <KeyBar role={userRole} onDispatch={onDispatch} />
+          <KeyBar role={userRole} keys={keys} onDispatch={onDispatch} />
           {/* Below 768px the key bar gives way to five tabs (PCN-016). */}
-          <PhoneTabs role={userRole} onDispatch={onDispatch} />
+          <PhoneTabs role={userRole} keys={keys} onDispatch={onDispatch} />
 
           {switching ? (
             <PinSwitchOverlay

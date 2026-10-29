@@ -34,9 +34,12 @@ import { keyChipClass, keyChipKeyClass, keyChipLabelClass } from './ui/key-chip'
  */
 export function KeyBar({
   role,
+  keys = GLOBAL_KEYS,
   onDispatch,
 }: {
   role: 'owner' | 'salesman';
+  /** The keys this shop uses — see `keysFor`. */
+  keys?: readonly GlobalKey[];
   /** Runs a routeless key's meaning, exactly as pressing it does. */
   onDispatch: (dispatch: NonNullable<GlobalKey['dispatch']>) => void;
 }) {
@@ -49,12 +52,12 @@ export function KeyBar({
       aria-label="Function keys"
       className="bg-surface text-navy shadow-bar flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 max-md:hidden"
     >
-      {GLOBAL_KEYS.map((binding, index) => {
+      {keys.map((binding, index) => {
         const active = binding.href !== null && pathname.startsWith(binding.href);
         // A visible break between the registry's bands (counter / goods /
         // owner). Without it the grouping exists only in a source comment,
         // which helps nobody standing at the counter.
-        const startsBand = index > 0 && GLOBAL_KEYS[index - 1]!.group !== binding.group;
+        const startsBand = index > 0 && keys[index - 1]!.group !== binding.group;
         // Salesmen have no report access beyond the current day (Phase 5 §2).
         // The key stays visible and dimmed: the map is furniture, and furniture
         // that rearranges itself stops being trustworthy.

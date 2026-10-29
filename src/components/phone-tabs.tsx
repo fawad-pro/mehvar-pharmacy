@@ -32,16 +32,19 @@ const ROW =
 
 export function PhoneTabs({
   role,
+  keys = GLOBAL_KEYS,
   onDispatch,
 }: {
   role: 'owner' | 'salesman';
+  /** The keys this shop uses — see `keysFor`. */
+  keys?: readonly GlobalKey[];
   onDispatch: (dispatch: NonNullable<GlobalKey['dispatch']>) => void;
 }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
 
   const tabbed = new Set(TABS.map((tab) => tab.href));
-  const rest = GLOBAL_KEYS.filter((binding) => binding.href === null || !tabbed.has(binding.href));
+  const rest = keys.filter((binding) => binding.href === null || !tabbed.has(binding.href));
   const permitted = (binding: GlobalKey) => !binding.ownerOnly || role === 'owner';
   const restIsCurrent = rest.some(
     (binding) => binding.href !== null && pathname.startsWith(binding.href),
