@@ -16,6 +16,9 @@
  * Pure, and in `domain/` because it is business meaning (Phase 11 §1).
  */
 
+import { paisa } from '@/lib/branded';
+import { formatPaisa } from '@/lib/money';
+
 export interface SupplierBook {
   /** Σ of what the pharmacy owes. Never negative. */
   readonly owedPaisa: number;
@@ -67,4 +70,28 @@ export function supplierPaymentEffect(
   const paid = Math.max(0, amountPaisa);
   const clearsPaisa = Math.min(owed, paid);
   return { clearsPaisa, leavesCreditPaisa: paid - clearsPaisa };
+}
+
+/**
+ * [PCN-016] A supplier balance as one phrase, words first — "You owe
+ * Rs 4,500.00", "They owe you Rs 300.00", "Settled up". The mirror of the
+ * customer side's `positionPhrase`: never a minus sign, the words carry the
+ * direction.
+ */
+export type SupplierPositionKind = 'you_owe' | 'they_owe' | 'settled';
+
+export function supplierPositionKind(balancePaisa: number): SupplierPositionKind {
+  return balancePaisa > 0 ? 'you_owe' : balancePaisa < 0 ? 'they_owe' : 'settled';
+}
+
+export function supplierPositionPhrase(balancePaisa: number): string {
+  const amount = formatPaisa(paisa(Math.abs(balancePaisa)), { withSymbol: true });
+  switch (supplierPositionKind(balancePaisa)) {
+    case 'you_owe':
+      return `You owe ${amount}`;
+    case 'they_owe':
+      return `They owe you ${amount}`;
+    case 'settled':
+      return 'Settled up';
+  }
 }

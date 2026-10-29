@@ -36,6 +36,7 @@ import {
   type BatchOnHand,
 } from '@/domain/inventory/adjustment';
 import { baseQty, packFactor, paisa } from '@/lib/branded';
+import { formatExpiry, parseExpiryInput } from '@/lib/expiry';
 import { formatPaisa } from '@/lib/money';
 import {
   costOfBaseUnits,
@@ -344,6 +345,14 @@ export function AdjustSurface({
       return;
     }
 
+    // [PCN-017] Month and year, as the pack prints it; the month's last day.
+    const expiryDate = expiry.trim() === '' ? null : parseExpiryInput(expiry);
+    if (direction === 'add' && expiry.trim() !== '' && expiryDate === null) {
+      setError('Type the expiry as month and year, as on the pack: 03/28 or 03/2028.');
+      document.getElementById('adjust-expiry')?.focus();
+      return;
+    }
+
     if (effectiveReason === null) {
       setError('Pick a reason.');
       document.getElementById('adjust-reason')?.focus();
@@ -375,7 +384,7 @@ export function AdjustSurface({
               packFactor(costUnit.factor),
               packFactor(1),
             ),
-            expiryDate: expiry.trim() === '' ? null : expiry.trim(),
+            expiryDate,
             batchNumber: null,
           }
         : {}),
@@ -599,7 +608,8 @@ export function AdjustSurface({
                 >
                   {visibleBatches.map((batch) => (
                     <option key={batch.batchId} value={batch.batchId}>
-                      {batch.batchNumber ?? 'no batch no.'} · expires {batch.expiryDate ?? '—'} ·{' '}
+                      {batch.batchNumber ?? 'no batch no.'} · expires{' '}
+                      {batch.expiryDate ? formatExpiry(batch.expiryDate) : '—'} ·{' '}
                       {amountOf(chosen, batch.qtyRemainingBase)} left
                     </option>
                   ))}
@@ -644,12 +654,14 @@ export function AdjustSurface({
                 </label>
                 <input
                   id="adjust-expiry"
-                  type="date"
+                  autoComplete="off"
+                  inputMode="numeric"
+                  placeholder="MM/YY"
                   value={expiry}
                   onChange={(event) => {
                     setExpiry(event.target.value);
                   }}
-                  className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
                 />
               </div>
               {/* What the count comes to, said before saving. */}

@@ -115,11 +115,11 @@ test('a supplier added by mistake: found from All suppliers, renamed, removed', 
   await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('button', { name: 'Supplier' }).click();
   await page.getByPlaceholder('Name or phone…').fill(name);
-  await page.getByRole('button', { name: `+ Add “${name}” as a new supplier` }).click();
+  await page.getByRole('button', { name: `Add “${name}” as a new supplier` }).click();
   await expect(page.getByRole('button', { name: 'Supplier' })).toContainText(name);
 
   // Nothing owed, so the owed panel cannot lead here; All suppliers does.
-  await page.getByRole('link', { name: 'All suppliers →' }).click();
+  await page.getByRole('link', { name: 'All suppliers', exact: true }).click();
   await expect(page).toHaveURL(/\/purchases\/suppliers$/, { timeout: 30_000 });
   await expect(page.getByRole('heading', { name: 'Suppliers', exact: true })).toBeVisible({
     timeout: 30_000,
@@ -149,8 +149,6 @@ test('a supplier added by mistake: found from All suppliers, renamed, removed', 
   await page.goto('/purchases');
   await page.getByRole('button', { name: 'Supplier' }).click({ timeout: 30_000 });
   await page.getByPlaceholder('Name or phone…').fill(name);
-  await expect(
-    page.getByRole('button', { name: `+ Add “${name}” as a new supplier` }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: `Add “${name}” as a new supplier` })).toBeVisible();
   await expect(page.getByRole('option', { name: new RegExp(`${name} Ltd`) })).toHaveCount(0);
 });

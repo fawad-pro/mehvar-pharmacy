@@ -23,15 +23,15 @@ test('a later payment to a supplier shows on their account and from the invoice'
   await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('button', { name: 'Supplier' }).click();
   await page.getByPlaceholder('Name or phone…').fill(supplier);
-  await page.getByRole('button', { name: `+ Add “${supplier}” as a new supplier` }).click();
+  await page.getByRole('button', { name: `Add “${supplier}” as a new supplier` }).click();
   await expect(page.getByRole('button', { name: 'Supplier' })).toContainText(supplier);
 
   await search(page).fill('flagyl');
   await page.getByRole('option').first().click();
-  await page.getByLabel(/^Qty/).fill('10');
-  await page.getByLabel(/^Cost \//).fill('150.00');
-  await page.getByLabel('Expiry').fill('2030-12-31');
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^How many/).fill('10');
+  await page.getByLabel(/^Cost of 1/).fill('150.00');
+  await page.getByLabel('Expiry').fill('12/2030');
+  await page.getByLabel(/^Cost of 1/).press('Enter');
   await page.getByLabel('Paid now').fill('1000');
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
@@ -52,7 +52,7 @@ test('a later payment to a supplier shows on their account and from the invoice'
   // The invoice still says what it left owing on arrival — and where the
   // account stands now, with the way to the payments.
   await page
-    .getByRole('region', { name: 'Received recently' })
+    .getByRole('region', { name: 'Recent deliveries' })
     .getByRole('link', { name: new RegExp(supplier) })
     .first()
     .click();

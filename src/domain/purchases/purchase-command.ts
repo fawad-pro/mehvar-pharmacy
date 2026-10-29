@@ -131,7 +131,15 @@ export type PurchaseWarning =
   | { readonly kind: 'price_above_mrp'; readonly lineId: Uuid }
   | { readonly kind: 'price_below_cost'; readonly lineId: Uuid }
   | { readonly kind: 'expiry_missing'; readonly lineId: Uuid }
-  | { readonly kind: 'expiry_in_past'; readonly lineId: Uuid };
+  | { readonly kind: 'expiry_in_past'; readonly lineId: Uuid }
+  | { readonly kind: 'expiry_soon'; readonly lineId: Uuid };
+
+/**
+ * [PCN-016] A line whose stock expires within W12's widest near-expiry
+ * horizon is "Expires soon" as it is received — the moment it can still be
+ * refused or returned to the distributor, rather than found on the list later.
+ */
+export const EXPIRES_SOON_DAYS = 90;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -207,10 +215,16 @@ export function enteredUnitFactor(line: PurchaseLineCommand): number {
   return line.entered ? line.qtyBase / line.entered.unitCount : 1;
 }
 
+/** `YYYY-MM-DD` plus whole days, in calendar terms (no clock, no time zone). */
+function addDays(day: string, days: number): string {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(Date.UTC(year!, month! - 1, date! + days)).toISOString().slice(0, 10);
+}
+
 /**
  * Everything worth telling the operator that is not worth stopping them for.
  *
- * All four of these are things a careful person wants to see and a busy person
+ * All of these are things a careful person wants to see and a busy person
  * must be able to override — which is the whole shape of T1: sensitive acts are
  * *visible*, not blocked (Phase 7 rule 2).
  */
@@ -244,6 +258,8 @@ export function purchaseWarnings(
       // Receiving already-expired stock happens, and recording it truthfully
       // is how it reaches the near-expiry list and gets returned (W12).
       warnings.push({ kind: 'expiry_in_past', lineId: line.lineId });
+    } else if (line.expiryDate <= addDays(today, EXPIRES_SOON_DAYS)) {
+      warnings.push({ kind: 'expiry_soon', lineId: line.lineId });
     }
   }
 

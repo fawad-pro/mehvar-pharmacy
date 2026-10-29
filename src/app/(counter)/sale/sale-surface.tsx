@@ -61,6 +61,7 @@ import {
   type CartLine,
 } from '@/domain/sales/cart';
 import { packFactor, paisa } from '@/lib/branded';
+import { formatExpiry } from '@/lib/expiry';
 import { formatPaisa } from '@/lib/money';
 import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
@@ -74,11 +75,6 @@ import { PaymentOverlay, type BillDiscount, type PaymentSplit } from './payment-
  */
 const PAY_KEY = 'F12';
 
-/** PCN-017: an expiry is read as MM/YYYY everywhere. */
-function formatExpiry(isoDate: string): string {
-  const [year, month] = isoDate.split('-');
-  return year && month ? `${month}/${year}` : isoDate;
-}
 
 interface Committed {
   receiptNumber: string;

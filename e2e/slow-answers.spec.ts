@@ -196,5 +196,6 @@ test('the supplier picker holds the name while it finds it', async ({ page }) =>
   // The invoice number, typed on before the picker has closed.
   await page.keyboard.type('INV-77', { delay: 100 });
   await expect(picker).toBeHidden({ timeout: 15_000 });
-  await expect(page.getByRole('button', { name: 'Supplier' })).toHaveText(name);
+  // The name exactly as typed, with its balance (PCN-016) — a new supplier.
+  await expect(page.getByRole('button', { name: 'Supplier' })).toHaveText(`${name} · settled up`);
 });
