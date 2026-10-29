@@ -421,11 +421,6 @@ export function CartTable({
       </table>
       {/* Beneath the table, not a row in it: a cell spanning columns the
           phone hides would set the columns' widths. */}
-      {lines.length === 0 ? (
-        <p className="text-body-sm text-ink-2 m-0 px-3.5 py-7 text-center">
-          Scan a barcode or type a name — Enter puts it on the bill.
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -546,7 +546,7 @@ export function SaleSurface() {
         >
           <ProductSearch
             label="Search or scan"
-            hint={<>Enter adds · ↑ goes to the cart · 3*brufen for three</>}
+            hint={<>↑ goes to the cart</>}
             onSelect={onSelect}
             inputRef={searchRef}
             onEnterCart={() => {
@@ -628,11 +628,6 @@ export function SaleSurface() {
               onLeaveCart={focusSearch}
               onPay={openPayment}
             />
-            {lines.length > 0 ? (
-              <p className="text-caption text-ink-2 mt-3 px-1 max-md:hidden">
-                ↑ ↓ pick a line · + − quantity · Tab unit · % discount · Delete removes
-              </p>
-            ) : null}
           </div>
         </section>
 
@@ -653,12 +648,14 @@ export function SaleSurface() {
               <span>Items</span>
               <b className="numeral text-navy font-medium">{itemsSummary}</b>
             </p>
-            <p className="text-body-sm text-ink-2 m-0 flex justify-between">
-              <span>Discount on items</span>
-              <b className="numeral text-navy font-medium">
-                {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
-              </b>
-            </p>
+            {discountOnItems > 0 ? (
+              <p className="text-body-sm text-ink-2 m-0 flex justify-between">
+                <span>Discount on items</span>
+                <b className="numeral text-navy font-medium">
+                  {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
+                </b>
+              </p>
+            ) : null}
           </div>
 
           {customer ? (
