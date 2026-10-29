@@ -31,17 +31,17 @@ async function addLine(
 
   await page.getByLabel(/^Qty/).fill(fields.qty);
   if (fields.bonus) {
-    await page.getByLabel('Bonus').fill(fields.bonus);
+    await page.getByLabel(/^Bonus/).fill(fields.bonus);
   }
-  await page.getByLabel(/^Cost \//).fill(fields.cost);
+  await page.getByLabel(/^Cost of 1/).fill(fields.cost);
   if (fields.expiry) {
     await page.getByLabel('Expiry').fill(fields.expiry);
   }
   if (fields.price) {
-    await page.getByLabel(/^Price \//).fill(fields.price);
+    await page.getByLabel('Sells for').fill(fields.price);
   }
   // Enter from any field adds the line and returns focus to search.
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^Cost of 1/).press('Enter');
 }
 
 /**
@@ -77,7 +77,7 @@ test('the invoice total reflects the cost of every entered line', async ({ page 
   await page.keyboard.press('F7');
   await expect(page).toHaveURL(PURCHASES_URL);
 
-  const invoiceTotal = page.getByText('Invoice total').locator('..');
+  const invoiceTotal = page.getByText('Invoice total', { exact: true }).locator('..');
 
   // A line with no unit cost is refused, so the total can never be a meaningless
   // zero behind a line that looks entered.
@@ -86,21 +86,21 @@ test('the invoice total reflects the cost of every entered line', async ({ page 
   await page.getByLabel(/^Qty/).fill('100');
   await page.getByRole('button', { name: /^Add/ }).click();
   await expect(page.getByText(/type 0 if it was free/i)).toBeVisible();
-  await expect(invoiceTotal).toContainText('0 lines');
+  await expect(invoiceTotal).toContainText(/Lines\s*0$/);
 
   // With the cost entered, the line lands and the total is qty × cost.
-  await page.getByLabel(/^Cost \//).fill('2.80');
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^Cost of 1/).fill('2.80');
+  await page.getByLabel(/^Cost of 1/).press('Enter');
   await expect(page.getByRole('table')).toContainText('Panadol');
   await expect(invoiceTotal).toContainText('Rs 280.00');
-  await expect(invoiceTotal).toContainText('1 line');
+  await expect(invoiceTotal).toContainText(/Lines\s*1$/);
 
   // An explicit zero is still allowed — a free sample is a real thing, and it
   // adds nothing to the total, which is correct.
   await addLine(page, 'brufen', { qty: '5', cost: '0' });
   await expect(page.getByRole('table')).toContainText('Brufen');
   await expect(invoiceTotal).toContainText('Rs 280.00');
-  await expect(invoiceTotal).toContainText('2 lines');
+  await expect(invoiceTotal).toContainText(/Lines\s*2$/);
 });
 
 test('W7: an invoice enters line by line, and the draft survives an interruption', async ({
@@ -112,7 +112,7 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   await expect(page).toHaveURL(PURCHASES_URL);
 
   await page.getByLabel('Invoice no.').fill('DIST-4417');
-  await addLine(page, 'panadol', { qty: '100', cost: '2.80', expiry: '2027-06-30' });
+  await addLine(page, 'panadol', { qty: '100', cost: '2.80', expiry: '06/2027' });
   await addLine(page, 'brufen', { qty: '50', bonus: '5', cost: '7.20' });
 
   const table = page.getByRole('table');
@@ -121,7 +121,9 @@ test('W7: an invoice enters line by line, and the draft survives an interruption
   // The scheme line keeps its free units as their own count, and its line
   // cost is what was paid for the 50 alone (PCN-012): the bonus is never
   // charged, and never folded into the quantity.
-  await expect(table).toContainText('+5');
+  await expect(
+    table.getByRole('row').filter({ hasText: 'Brufen' }).getByRole('cell').nth(2),
+  ).toHaveText(/^5 /);
   await expect(table.getByRole('row').filter({ hasText: 'Brufen' })).toContainText('360.00');
 
   // A customer walks in mid-invoice. This is the case W7 exists for.
@@ -203,7 +205,7 @@ test('the done-when: receiving stock resolves a shortfall the counter sold into'
   await addLine(page, SHORTFALL_PRODUCT.toLowerCase(), {
     qty: '500',
     cost: '95.00',
-    expiry: '2027-12-31',
+    expiry: '12/2027',
   });
   await page.getByRole('button', { name: 'Receive stock' }).click();
 
@@ -246,9 +248,9 @@ test('W7: twenty lines go in without the invoice growing harder to enter', async
   await expect(rows).toHaveCount(21);
   // This draft's count, not the recent-purchases list beneath it, which on a
   // database this test has run against before lists an earlier 20-line invoice.
-  await expect(
-    page.getByText('Invoice total').locator('..').getByText('20 lines', { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByText('Invoice total', { exact: true }).locator('..')).toContainText(
+    /Lines\s*20$/,
+  );
 
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('20 batches');
@@ -435,7 +437,7 @@ test('W7 by keyboard alone: supplier, invoice, a line, received', async ({ page 
   await page.keyboard.type('2', { delay: 120 });
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
-  await expect(page.getByLabel(/^Cost \//)).toBeFocused();
+  await expect(page.getByLabel(/^Cost of 1/)).toBeFocused();
   await page.keyboard.type('100', { delay: 120 });
   await page.keyboard.press('Enter');
   await expect(page.getByRole('table')).toContainText('Hydryllin');

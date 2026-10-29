@@ -146,14 +146,14 @@ test('Receive Stock: a code in Paid now or a supplier Pay records nothing and cr
   await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('button', { name: 'Supplier' }).click();
   await page.getByPlaceholder('Name or phone…').fill(supplier);
-  await page.getByRole('button', { name: `+ Add “${supplier}” as a new supplier` }).click();
+  await page.getByRole('button', { name: `Add “${supplier}” as a new supplier` }).click();
 
   // Flagyl only ever receives stock in the suite (supplier-account.spec).
   await search(page).fill('flagyl');
   await page.getByRole('option').first().click();
   await page.getByLabel(/^Qty/).fill('10');
-  await page.getByLabel(/^Cost \//).fill('150.00');
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^Cost of 1/).fill('150.00');
+  await page.getByLabel(/^Cost of 1/).press('Enter');
 
   // Paid now: a scan is put back; the same text typed by hand is "not an
   // amount" — never Rs 0 with the whole invoice silently on credit.
@@ -164,7 +164,7 @@ test('Receive Stock: a code in Paid now or a supplier Pay records nothing and cr
   await expect(paidNow).toHaveValue('');
   await paidNow.pressSequentially(GS1, { delay: 80 });
   await expect(page.getByText('Not an amount — type what was paid')).toBeVisible();
-  await expect(page.getByText('On credit', { exact: true })).toHaveCount(0);
+  await expect(page.getByText(/less than the bill/)).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Receive stock' })).toBeDisabled();
 
   await paidNow.fill('1000');

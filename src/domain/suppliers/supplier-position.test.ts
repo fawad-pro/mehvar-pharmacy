@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { summariseSupplierBook, supplierPaymentEffect } from './supplier-position';
+import {
+  summariseSupplierBook,
+  supplierPaymentEffect,
+  supplierPositionPhrase,
+} from './supplier-position';
 
 describe('summariseSupplierBook (PCN-011)', () => {
   it('reports owed and credit separately, never netted', () => {
@@ -56,5 +60,13 @@ describe('supplierPaymentEffect (PCN-011)', () => {
       clearsPaisa: 0,
       leavesCreditPaisa: 1_000,
     });
+  });
+});
+
+describe('supplierPositionPhrase — PCN-016', () => {
+  it('says the direction in words and never prints a minus sign', () => {
+    expect(supplierPositionPhrase(450_000)).toBe('You owe Rs 4,500.00');
+    expect(supplierPositionPhrase(-30_000)).toBe('They owe you Rs 300.00');
+    expect(supplierPositionPhrase(0)).toBe('Settled up');
   });
 });

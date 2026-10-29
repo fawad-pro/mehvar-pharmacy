@@ -15,6 +15,10 @@ import { useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { createSupplierAction, searchSuppliersAction, type SupplierHit } from './actions';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
+import { Button, Kbd } from '@/components/ui/button';
+import { dialogPanelClass } from '@/components/ui/dialog';
+import { FieldLabel, inputClass } from '@/components/ui/field';
+import { supplierPositionKind, supplierPositionPhrase } from '@/domain/suppliers/supplier-position';
 
 /** How long typing must pause before suppliers are searched (as for customers). */
 const SEARCH_PAUSE_MS = 200;
@@ -118,104 +122,179 @@ export function SupplierPicker({
     onPick(result.supplier);
   }
 
+  const trimmedTerm = term.trim();
+  /** With no supplier by that name, Enter adds one: the Add row is the one chosen. */
+  const addChosen = trimmedTerm !== '' && answered.term === trimmedTerm && hits.length === 0;
+
   return (
     <OverlayBackdrop label="Supplier" onDismiss={onCancel}>
-      <div className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5">
-        <h2 className="text-navy mb-4 text-lg font-semibold">Supplier</h2>
+      <div className={dialogPanelClass}>
+        <h2 className="text-heading m-0">Supplier</h2>
 
-        <input
-          ref={field}
-          value={term}
-          onChange={(event) => {
-            setTerm(event.target.value);
-          }}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') {
-              onCancel();
-            }
-            if (event.key === 'ArrowDown') {
-              event.preventDefault();
-              setActive((current) => Math.min(current + 1, hits.length - 1));
-            }
-            if (event.key === 'ArrowUp') {
-              event.preventDefault();
-              setActive((current) => Math.max(current - 1, 0));
-            }
-            if (event.key === 'Enter') {
-              event.preventDefault();
-              if (finding !== null) return;
-              const trimmed = term.trim();
-              if (answered.term !== trimmed) {
-                // Not answered yet: act the moment it is, on that answer.
-                enterFor.current = trimmed;
-                setFinding(trimmed);
-                return;
+        <label className="flex flex-col gap-1.5">
+          <FieldLabel>Name or phone</FieldLabel>
+          <input
+            ref={field}
+            value={term}
+            onChange={(event) => {
+              setTerm(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                onCancel();
               }
-              choose(hits[active], trimmed);
-            }
-          }}
-          // The customer picker's rule: the invoice number typed next must
-          // not become part of the supplier's name.
-          readOnly={finding !== null}
-          autoComplete="off"
-          placeholder="Name or phone…"
-          className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3 text-lg"
-        />
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActive((current) => Math.min(current + 1, hits.length - 1));
+              }
+              if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                setActive((current) => Math.max(current - 1, 0));
+              }
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                if (finding !== null) return;
+                if (answered.term !== trimmedTerm) {
+                  // Not answered yet: act the moment it is, on that answer.
+                  enterFor.current = trimmedTerm;
+                  setFinding(trimmedTerm);
+                  return;
+                }
+                choose(hits[active], trimmedTerm);
+              }
+            }}
+            // The customer picker's rule: the invoice number typed next must
+            // not become part of the supplier's name.
+            readOnly={finding !== null}
+            autoComplete="off"
+            placeholder="Name or phone…"
+            className={inputClass}
+          />
+        </label>
 
         {finding ? (
-          <p className="text-ink-2 mt-2 text-sm" role="status">
+          <p className="text-body-sm text-ink-2 m-0" role="status">
             Finding &ldquo;{finding}&rdquo;…
           </p>
         ) : null}
 
-        <ul className="mt-3 flex max-h-64 flex-col gap-1 overflow-auto" role="listbox">
-          {hits.map((hit, index) => (
-            <li key={hit.id} role="option" aria-selected={index === active}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick(hit);
-                }}
-                onMouseEnter={() => {
-                  setActive(index);
-                }}
-                className={[
-                  'flex min-h-touch w-full items-center justify-between rounded-control px-3 text-left',
-                  index === active ? 'bg-blue-50' : 'hover:bg-mist',
-                ].join(' ')}
-              >
-                <span className="font-medium">{hit.name}</span>
-                {hit.phone ? <span className="text-ink-2 text-xs">{hit.phone}</span> : null}
-              </button>
-            </li>
-          ))}
+        {hits.length > 0 || trimmedTerm !== '' ? (
+          <ul
+            className="bg-page m-0 flex max-h-60 list-none flex-col overflow-auto rounded-card p-0"
+            role="listbox"
+            aria-label="Suppliers"
+          >
+            {hits.map((hit, index) => (
+              <li key={hit.id} role="option" aria-selected={index === active}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPick(hit);
+                  }}
+                  onMouseEnter={() => {
+                    setActive(index);
+                  }}
+                  className={[
+                    'border-line flex min-h-touch w-full items-center gap-3 px-4 py-2 text-left',
+                    index === 0 ? '' : 'border-t',
+                    index === active ? 'bg-blue-50' : 'hover:bg-mist',
+                  ].join(' ')}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-control truncate font-medium">{hit.name}</span>
+                    {hit.phone ? (
+                      <span className="text-label text-ink-2 numeral truncate font-normal">
+                        {hit.phone}
+                      </span>
+                    ) : null}
+                  </span>
+                  {/* PCN-016: what is owed is seen before a delivery adds to it. */}
+                  <SupplierPosition balancePaisa={hit.balancePaisa} className="text-body-sm" />
+                </button>
+              </li>
+            ))}
 
-          {term.trim() !== '' ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => void createInline()}
-                disabled={busy}
-                className="text-blue-600 hover:bg-mist min-h-touch w-full rounded-control px-3 text-left font-medium disabled:opacity-40"
-              >
-                {busy ? 'Adding…' : `+ Add “${term.trim()}” as a new supplier`}
-              </button>
-            </li>
-          ) : null}
-        </ul>
+            {trimmedTerm !== '' ? (
+              // Not an option: a tap meant for a supplier must never land on
+              // adding a second one by that name.
+              <li>
+                <button
+                  type="button"
+                  onClick={() => void createInline()}
+                  disabled={busy}
+                  className={[
+                    'border-line flex min-h-touch w-full flex-col justify-center px-4 py-2 text-left disabled:opacity-40',
+                    hits.length > 0 ? 'border-t' : '',
+                    addChosen ? 'bg-blue-50' : 'hover:bg-mist',
+                  ].join(' ')}
+                >
+                  <span className="text-control font-medium text-blue-600">
+                    {busy ? 'Adding…' : `Add “${trimmedTerm}” as a new supplier`}
+                  </span>
+                  {addChosen && !busy ? (
+                    <span className="text-label text-ink-2 font-normal">
+                      No supplier by that name yet. Starts settled up.
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        ) : null}
 
         {error ? (
-          <p className="text-red mt-2 text-sm" role="alert">
+          <p className="text-body-sm text-red m-0 font-medium" role="alert">
             {error}
           </p>
         ) : null}
 
-        <div className="mt-4">
-          <button type="button" onClick={onCancel} className="text-ink-2 text-sm">
-            Esc to cancel
-          </button>
+        <p className="text-body-sm text-ink-2 m-0 max-md:hidden">
+          <Kbd>↑</Kbd> <Kbd>↓</Kbd> choose · <Kbd>Enter</Kbd> {addChosen ? 'adds it' : 'picks it'},
+          then the invoice number
+        </p>
+
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 max-md:flex-col-reverse max-md:items-stretch">
+          <Button kind="quiet" onClick={onCancel}>
+            Cancel <Kbd>Esc</Kbd>
+          </Button>
+          <Button
+            kind="primary"
+            disabled={
+              finding !== null ||
+              busy ||
+              answered.term !== trimmedTerm ||
+              (hits.length === 0 && !addChosen)
+            }
+            onClick={() => {
+              choose(hits[active], trimmedTerm);
+            }}
+          >
+            {addChosen ? 'Add supplier' : 'Choose'} <Kbd>Enter</Kbd>
+          </Button>
         </div>
       </div>
     </OverlayBackdrop>
+  );
+}
+
+/** A supplier balance in words and its colour: owing is attention, settled is done. */
+export function SupplierPosition({
+  balancePaisa,
+  midSentence = false,
+  className = '',
+}: {
+  balancePaisa: number;
+  /** "… after this you owe Rs 500.00": the phrase starts lower case. */
+  midSentence?: boolean;
+  className?: string;
+}) {
+  const phrase = supplierPositionPhrase(balancePaisa);
+  const kind = supplierPositionKind(balancePaisa);
+  const tone =
+    kind === 'you_owe' ? 'text-amber-text' : kind === 'settled' ? 'text-green-700' : 'text-navy';
+  return (
+    <span className={`numeral font-semibold whitespace-nowrap ${tone} ${className}`}>
+      {midSentence ? phrase.charAt(0).toLowerCase() + phrase.slice(1) : phrase}
+    </span>
   );
 }

@@ -23,7 +23,11 @@ import {
 } from '@/domain/suppliers/commit-supplier-payment';
 import { insertSupplier, listPurchases, searchSuppliers } from '@/db/purchase-queries';
 import { recordDeliveredMrp } from '@/domain/catalog/writers';
-import { supplierPositions, type SupplierPositions } from '@/db/supplier-queries';
+import {
+  balancesBySupplier,
+  supplierPositions,
+  type SupplierPositions,
+} from '@/db/supplier-queries';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { revalidateAfter } from '../revalidate';
@@ -32,6 +36,8 @@ export interface SupplierHit {
   id: string;
   name: string;
   phone: string | null;
+  /** [PCN-016] Signed as `supplierBalance`: positive, the pharmacy owes them. */
+  balancePaisa: number;
 }
 
 export async function searchSuppliersAction(term: string): Promise<SupplierHit[]> {
@@ -39,7 +45,14 @@ export async function searchSuppliersAction(term: string): Promise<SupplierHit[]
   if (!session) {
     return [];
   }
-  return searchSuppliers(scopeFor(session), term);
+  const scope = scopeFor(session);
+  // The balance beside each name, as the customer picker shows a customer's:
+  // what is owed is seen before a delivery adds to it (T4).
+  const [hits, balances] = await Promise.all([
+    searchSuppliers(scope, term),
+    balancesBySupplier(scope),
+  ]);
+  return hits.map((hit) => ({ ...hit, balancePaisa: balances[hit.id] ?? 0 }));
 }
 
 export async function createSupplierAction(
@@ -57,7 +70,7 @@ export async function createSupplierAction(
   const id = uuidv7();
   await insertSupplier(scopeFor(session), { id, name: trimmed, phone: null });
   revalidateAfter('purchases');
-  return { ok: true, supplier: { id, name: trimmed, phone: null } };
+  return { ok: true, supplier: { id, name: trimmed, phone: null, balancePaisa: 0 } };
 }
 
 export type ReceivePurchaseOutcome =
@@ -77,7 +90,7 @@ function messageFor(reason: PurchaseRejection): string {
     case 'invalid_price':
       return 'Every line needs a selling price.';
     case 'invalid_expiry':
-      return 'Check the expiry date — it should look like 2027-06-30.';
+      return 'Check the expiry — type the month and year on the pack, like 03/28.';
     case 'negative_cash_paid':
       return 'The amount paid now cannot be negative.';
     case 'credit_without_supplier':

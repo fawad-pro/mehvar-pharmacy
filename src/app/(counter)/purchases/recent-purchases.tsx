@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { CardTitle, cardClass } from '@/components/ui/card';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 
@@ -54,19 +55,17 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
 
   useEffect(load, [load, reloadKey]);
 
-  if (rows === null) {
-    return <p className="text-ink-2 text-sm">Loading…</p>;
-  }
-
   return (
-    <section aria-label="Received recently">
-      <h2 className="text-navy mb-2 font-medium">Received recently</h2>
-      {rows.length === 0 ? (
-        <p className="text-ink-2 text-sm">Nothing received yet.</p>
+    <section aria-label="Recent deliveries" className={cardClass}>
+      <CardTitle>Recent deliveries</CardTitle>
+      {rows === null ? (
+        <p className="text-body-sm text-ink-2 m-0">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="text-body-sm text-ink-2 m-0">Nothing received yet.</p>
       ) : (
-        <ul className="border-line divide-line divide-y rounded border text-sm">
+        <ul className="divide-line text-body-sm -mx-5 m-0 list-none divide-y p-0">
           {rows.map((row) => (
-            <li key={row.id} className="flex flex-wrap items-center gap-x-3 px-3">
+            <li key={row.id} className="flex flex-wrap items-center gap-x-3 px-5">
               {/* Was a dead end: a supplier, a date and a total with nothing
                   behind them, so "what actually came in?" had no answer. The
                   invoice is a record you can open now, like a receipt. */}
@@ -77,10 +76,12 @@ export function RecentPurchases({ reloadKey }: { reloadKey: number }) {
                 {row.supplierName ?? 'No supplier'}
               </Link>
               {row.invoiceRef ? <span className="text-ink-2">invoice {row.invoiceRef}</span> : null}
-              <span className="text-ink-2 text-xs">
-                {row.invoiceDate ?? new Date(row.createdAt).toLocaleDateString('en-PK')}
+              <span className="text-ink-2">
+                {row.invoiceDate
+                  ? row.invoiceDate.split('-').reverse().join('/')
+                  : new Date(row.createdAt).toLocaleDateString('en-PK')}
               </span>
-              <span className="text-ink-2 ml-auto text-xs">
+              <span className="text-ink-2 ml-auto">
                 {row.lineCount} line{row.lineCount === 1 ? '' : 's'}
               </span>
               <span className="numeral w-28 font-medium">

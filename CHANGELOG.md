@@ -3,6 +3,52 @@
 All approved plan changes and implementation milestones will be recorded here.
 
 
+## Redesign batch 3: Receive Stock, and expiry as month and year (PCN-016, PCN-017)
+
+The other screen used all day, redrawn to the canvas at laptop, tablet and
+phone. No key changed meaning and no task takes an extra press: a one-line
+delivery is still ten keys, Enter on an empty search still goes to Paid now,
+and Esc in a line still returns to the search.
+
+- **Expiry is month and year** (PCN-017). Typed as `MM/YY` or `MM/YYYY` (or
+  four digits, `0328`, from a phone's number pad), stored as the last day of
+  that month — how a scanned GS1 code with day `00` was already read, so
+  typed and scanned packs agree. `parseExpiryInput` in `src/lib/expiry.ts` is
+  the one place text becomes an expiry; a scanned 2D code's own date stands
+  while the field still shows its month. Shown as `MM/YYYY` everywhere,
+  through `formatExpiry` (the Sale screen's two private copies now use it).
+  Adjust's found and opening stock take the same field. Stored rows keep
+  their dates.
+- **Receive Stock.** Supplier (with "you owe Rs …" beside the name),
+  invoice number, and the date behind "More details — dated today". The
+  line is a card under the labelled "Search or scan a product" field: the
+  product, its pack as buttons with "1 box = 10 strip", then two rows of
+  four — Qty, Bonus, Cost of 1 box, Expiry; Batch, MRP of 1 box, Sells
+  for, Add line — so batch, MRP and price are on screen, not behind a
+  toggle. The lines table has Free, Cost each, "Expiry · batch", Sells for
+  and Amount, with a badge only when a line needs a look: "Expires soon"
+  (within W12's widest horizon, 90 days), "Expired", "No expiry", "Above
+  MRP", "Sells below cost". Empty, it says how to start.
+- **The rail.** Invoice total and lines; Paid now saying what it means
+  ("Paid in full", or "Rs 4,510.00 less than the bill. It goes on Zafar’s
+  account — after this you owe Rs 4,510.00"); links to Owed to suppliers,
+  Recent deliveries (both now cards below, the first saying "Settled up with
+  every supplier" rather than vanishing) and All suppliers; Receive stock.
+  Tablet puts the rail under the delivery in two columns; phone puts the
+  total and Receive stock in a bar above the tabs, with no key hints.
+- **Supplier picker** (R-Supplier): labelled field, each supplier's balance
+  in words ("You owe Rs …", "They owe you Rs …", "Settled up" — never a
+  minus sign), "Add “…” as a new supplier" with "No supplier by that name
+  yet", and Choose / Add supplier as a button as well as Enter.
+
+Specs that found fields by a renamed label were updated to the new one
+("Cost of 1 box", "MRP of 1 box", "Sells for",
+"Batch", "Add line", "Recent deliveries", `MM/YYYY` expiries); the layout
+spec now pins the two rows of four the canvas draws.
+
+Satisfies PCN-016 batch 3 and PCN-017; W7, W8, W12; D1, D2, D4; P2; I1,
+I6, I7; T1, T4.
+
 ## Redesign batch 2: Sale, Payment and the Sale dialogs (PCN-016)
 
 The screen used all day, redrawn to the canvas at laptop, tablet and phone.

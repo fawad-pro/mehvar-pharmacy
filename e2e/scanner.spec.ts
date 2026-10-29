@@ -218,8 +218,8 @@ test('scanning a pack on Receive Stock fills its batch and expiry', async ({ pag
   await page.keyboard.press('F7');
   await expect(page).toHaveURL(/\/purchases$/);
   await scan(page, `010${gtin}17300131` + '10B7Q41');
-  await expect(page.getByLabel('Expiry')).toHaveValue('2030-01-31');
-  await expect(page.getByLabel('Batch no.')).toHaveValue('B7Q41');
+  await expect(page.getByLabel('Expiry')).toHaveValue('01/2030');
+  await expect(page.getByLabel('Batch', { exact: true })).toHaveValue('B7Q41');
 });
 
 test('on Receive Stock, scanning the next product moves on — wherever the cursor is', async ({
@@ -240,7 +240,7 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
 
   // A 2D pack opens its line with batch and expiry; the cursor goes to Qty.
   await scan(page, `010${packGtin}17280331` + '10563C');
-  await expect(page.getByLabel('Batch no.')).toHaveValue('563C');
+  await expect(page.getByLabel('Batch', { exact: true })).toHaveValue('563C');
   await expect(page.getByLabel(/^Qty/)).toBeFocused();
 
   // Scanned again before the line is finished: refused, and Qty is not left
@@ -257,16 +257,16 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
   // then the next product scanned: the first line is added, the next opens with
   // nothing carried over from the pack before it.
   await page.getByLabel(/^Qty/).pressSequentially('5', { delay: 120 });
-  await page.getByLabel(/^Cost \//).pressSequentially('12', { delay: 120 });
+  await page.getByLabel(/^Cost of 1/).pressSequentially('12', { delay: 120 });
   // A person reaches for the scanner: never within 50 ms of their last key.
   await page.waitForTimeout(300);
   await page.keyboard.type(boxEan, { delay: 0 });
   await page.keyboard.press('Enter');
   const lines = page.getByRole('table');
   await expect(lines).toContainText(first!.name);
-  // Added with the pack's own expiry (the draft table shows expiry, not batch).
-  await expect(lines).toContainText('2028-03-31');
-  await expect(page.getByLabel(/^Cost \//)).toHaveValue('');
+  // Added with the pack's own expiry, read as MM/YYYY (PCN-017).
+  await expect(lines).toContainText('03/2028');
+  await expect(page.getByLabel(/^Cost of 1/)).toHaveValue('');
   // The next product's code is 1D: it says nothing about expiry or batch, so
   // both are asked for from the pack, and the cursor starts at its expiry
   // (PCN-012, Session 2) — nothing carried over from the pack before.
@@ -284,10 +284,10 @@ test('on Receive Stock, a barcode-sized number is refused as a quantity', async 
 
   // Typed slowly, so it is not a scan — the backstop catches it on Add.
   await page.getByLabel(/^Qty/).pressSequentially('8961101721817', { delay: 60 });
-  await page.getByLabel(/^Cost \//).fill('10');
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^Cost of 1/).fill('10');
+  await page.getByLabel(/^Cost of 1/).press('Enter');
   await expect(page.getByText(/That quantity looks like a barcode/)).toBeVisible();
-  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByText('No lines yet.')).toBeVisible();
 });
 
 test('on Receive Stock, a barcode run into a price is refused, never a crash', async ({ page }) => {
@@ -304,10 +304,10 @@ test('on Receive Stock, a barcode run into a price is refused, never a crash', a
 
   await page.getByLabel(/^Qty/).fill('5');
   // Typed slowly, so it is not a scan — the backstop catches it on Add.
-  await page.getByLabel(/^Cost \//).pressSequentially('122030297825992', { delay: 60 });
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^Cost of 1/).pressSequentially('122030297825992', { delay: 60 });
+  await page.getByLabel(/^Cost of 1/).press('Enter');
   await expect(page.getByText(/That price looks like a barcode/)).toBeVisible();
-  await expect(page.getByRole('table')).toHaveCount(0);
+  await expect(page.getByText('No lines yet.')).toBeVisible();
   expect(crashes).toEqual([]);
 });
 

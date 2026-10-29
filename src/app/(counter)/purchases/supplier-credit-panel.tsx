@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { supplierPaymentEffect } from '@/domain/suppliers/supplier-position';
+import { CardTitle, cardClass } from '@/components/ui/card';
 import { formatPaisa } from '@/lib/money';
 import { paisa } from '@/lib/branded';
 import type { Uuid } from '@/lib/uuid';
@@ -74,10 +75,20 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
 
   useEffect(load, [load, reloadKey, bump]);
 
-  if (positions === null || (positions.owed.length === 0 && positions.inCredit.length === 0)) {
-    // Nothing owed is the common, healthy state; a panel that always shows would
-    // just be an empty box on the busy Purchases screen. Absent is the answer.
+  if (positions === null) {
     return null;
+  }
+  if (positions.owed.length === 0 && positions.inCredit.length === 0) {
+    // PCN-016: Receive Stock links here, so nothing owed is said, not absent —
+    // the common, healthy state, as a positive statement (Day 9).
+    return (
+      <section aria-label="Owed to suppliers" className={cardClass}>
+        <CardTitle>Owed to suppliers</CardTitle>
+        <p className="text-body-sm text-green-700 m-0 font-medium">
+          Settled up with every supplier.
+        </p>
+      </section>
+    );
   }
 
   const { owed, inCredit } = positions;
@@ -87,14 +98,14 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
   return (
     <div className="flex flex-col gap-4">
       {owed.length > 0 ? (
-        <div>
-          <div className="mb-2 flex items-baseline gap-3">
-            <h2 className="text-navy font-medium">Owed to suppliers</h2>
-            <span className="text-amber-text numeral font-semibold">
+        <section aria-label="Owed to suppliers" className={cardClass}>
+          <div className="flex items-baseline gap-3">
+            <CardTitle>Owed to suppliers</CardTitle>
+            <span className="text-amber-text numeral ml-auto font-semibold">
               {formatPaisa(paisa(total), { withSymbol: true })}
             </span>
           </div>
-          <ul className="border-line divide-line divide-y rounded border text-sm">
+          <ul className="divide-line text-body-sm -mx-5 m-0 list-none divide-y p-0">
             {owed.map((row) => (
               <SupplierCreditRow
                 key={row.id}
@@ -105,19 +116,19 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
               />
             ))}
           </ul>
-        </div>
+        </section>
       ) : null}
       {inCredit.length > 0 ? (
-        <section aria-label="Credit with suppliers">
-          <div className="mb-2 flex items-baseline gap-3">
-            <h2 className="text-navy font-medium">Credit with suppliers</h2>
-            <span className="numeral font-semibold">
+        <section aria-label="Credit with suppliers" className={cardClass}>
+          <div className="flex items-baseline gap-3">
+            <CardTitle>Credit with suppliers</CardTitle>
+            <span className="numeral ml-auto font-semibold">
               {formatPaisa(paisa(creditTotal), { withSymbol: true })}
             </span>
           </div>
-          <ul className="border-line divide-line divide-y rounded border text-sm">
+          <ul className="divide-line text-body-sm -mx-5 m-0 list-none divide-y p-0">
             {inCredit.map((row) => (
-              <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
+              <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-5 py-1">
                 <SupplierName id={row.id} name={row.name} />
                 {row.phone ? <span className="text-ink-2 text-xs">{row.phone}</span> : null}
                 <span className="numeral ml-auto font-medium">
@@ -127,7 +138,7 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
               </li>
             ))}
           </ul>
-          <p className="text-ink-2 mt-1 text-xs">
+          <p className="text-caption text-ink-2 m-0">
             Paid ahead, or credited for goods sent back. It counts against what you next owe that
             supplier.
           </p>
@@ -200,7 +211,7 @@ export function SupplierCreditRow({
   }
 
   return (
-    <li className="px-3 py-2">
+    <li className={onAccountPage ? 'px-3 py-2' : 'px-5 py-1'}>
       <div className="flex flex-wrap items-baseline gap-x-3">
         {onAccountPage ? (
           <span className="font-medium">{row.name}</span>

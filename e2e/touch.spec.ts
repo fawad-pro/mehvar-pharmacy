@@ -199,13 +199,13 @@ test('receiving a delivery by touch', async ({ page }) => {
   await tap(page.getByRole('button', { name: 'Supplier' }));
   const picker = page.getByRole('dialog', { name: 'Supplier' });
   await picker.getByPlaceholder('Name or phone…').fill(supplier);
-  await tap(picker.getByRole('button', { name: `+ Add “${supplier}” as a new supplier` }));
+  await tap(picker.getByRole('button', { name: `Add “${supplier}” as a new supplier` }));
   await expect(page.getByRole('button', { name: 'Supplier' })).toContainText(supplier);
 
   await page.getByLabel('Invoice no.').fill('TOUCH-1');
   await addByTouch(page, 'hydryllin', 'Hydryllin');
   await page.getByLabel(/^Qty/).fill('1');
-  await page.getByLabel(/^Cost \//).fill('100');
+  await page.getByLabel(/^Cost of 1/).fill('100');
   await tap(page.getByRole('button', { name: /^Add/ }));
   await expect(page.getByRole('table')).toContainText('Hydryllin');
 

@@ -28,6 +28,7 @@ import {
   type updateLine,
 } from '@/domain/sales/cart';
 import { paisa } from '@/lib/branded';
+import { formatExpiry } from '@/lib/expiry';
 import { formatPaisa } from '@/lib/money';
 
 export interface CartTableProps {
@@ -428,11 +429,6 @@ function cartBadge(tone: 'attention' | 'refused'): string {
   ].join(' ');
 }
 
-/** PCN-017: an expiry is read as MM/YYYY everywhere. */
-function formatExpiry(isoDate: string): string {
-  const [year, month] = isoDate.split('-');
-  return year && month ? `${month}/${year}` : isoDate;
-}
 
 /**
  * The selected line's discount, as something to press. Every button in the

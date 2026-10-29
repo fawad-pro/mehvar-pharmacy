@@ -25,24 +25,24 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   await expect(page).toHaveURL(/\/purchases$/);
   await page.getByRole('button', { name: 'Supplier' }).click();
   await page.getByPlaceholder('Name or phone…').fill(supplier);
-  await page.getByRole('button', { name: `+ Add “${supplier}” as a new supplier` }).click();
+  await page.getByRole('button', { name: `Add “${supplier}” as a new supplier` }).click();
   await expect(page.getByRole('button', { name: 'Supplier' })).toContainText(supplier);
 
   await search(page).fill(PRODUCT.toLowerCase());
   await page.getByRole('option').first().click();
   await page.getByLabel(/^Qty/).fill('50');
-  await page.getByLabel(/^Cost \//).fill('10.00');
-  await page.getByLabel('Expiry').fill('2030-12-31');
-  await page.getByLabel(/^Cost \//).press('Enter');
+  await page.getByLabel(/^Cost of 1/).fill('10.00');
+  await page.getByLabel('Expiry').fill('12/2030');
+  await page.getByLabel(/^Cost of 1/).press('Enter');
   await page.getByLabel('Paid now').fill('0');
   await page.getByRole('button', { name: 'Receive stock' }).click();
   await expect(page.getByRole('status', { name: 'Received' })).toContainText('1 batch');
 
   // Open the invoice from the recent list.
-  // From "Received recently": the supplier's name in "Owed to suppliers" is a
+  // From "Recent deliveries": the supplier's name in "Owed to suppliers" is a
   // link too, to the supplier's account.
   await page
-    .getByRole('region', { name: 'Received recently' })
+    .getByRole('region', { name: 'Recent deliveries' })
     .getByRole('link', { name: new RegExp(supplier) })
     .first()
     .click();
@@ -96,7 +96,7 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
   // stays visible instead of the supplier vanishing from the panel.
   await page.keyboard.press('F7');
   await expect(page).toHaveURL(/\/purchases$/);
-  // The owed row links to the supplier's account. "Received recently" names
+  // The owed row links to the supplier's account. "Recent deliveries" names
   // the supplier too, and matching both made this flaky: strict mode failed
   // whenever that list had loaded first.
   const owedRow = page.locator('li', {
