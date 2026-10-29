@@ -5,7 +5,7 @@
 # Keep PG_MAJOR at or above the Railway Postgres major version — pg_dump
 # refuses a server newer than itself.
 FROM alpine:3.22
-ARG PG_MAJOR=17
+ARG PG_MAJOR=18
 RUN apk add --no-cache postgresql${PG_MAJOR}-client aws-cli bash coreutils
 COPY ops/cloud/backup.sh /usr/local/bin/backup.sh
 RUN chmod +x /usr/local/bin/backup.sh
