@@ -271,9 +271,16 @@ export function CartTable({
       <table className="text-table w-full table-fixed border-collapse text-left">
         <colgroup>
           <col />
-          <col className="w-[164px] md:w-[244px] lg:w-[250px]" />
-          <col className="w-[100px] max-md:hidden" />
-          <col className="w-[112px] max-md:hidden" />
+          {/* From tablet up the quantity cell holds a button per unit plus − n +,
+              so its column is sized to the most units any line offers; a fixed
+              width let the controls run over the Price column. On a phone the
+              units fold into one button and the narrow width stands. */}
+          <col
+            className="w-[164px] md:w-(--qty-col)"
+            style={{ '--qty-col': `${quantityColumnPx(lines)}px` } as React.CSSProperties}
+          />
+          <col className="w-[84px] max-md:hidden lg:w-[100px]" />
+          <col className="w-[72px] max-md:hidden lg:w-[112px]" />
           <col className="w-[100px] md:w-[110px]" />
         </colgroup>
         <thead className="bg-page text-ink-2 text-label">
@@ -283,8 +290,8 @@ export function CartTable({
               <span className="max-md:hidden">Quantity</span>
               <span className="md:hidden">Qty</span>
             </th>
-            <th className="px-3.5 py-2.5 text-right font-medium max-md:hidden">Price</th>
-            <th className="px-3.5 py-2.5 text-right font-medium max-md:hidden">Discount</th>
+            <th className="px-2 py-2.5 text-right font-medium max-md:hidden lg:px-3.5">Price</th>
+            <th className="px-2 py-2.5 text-right font-medium max-md:hidden lg:px-3.5">Discount</th>
             <th className="px-3.5 py-2.5 text-right font-medium max-md:pr-2.5">Amount</th>
           </tr>
         </thead>
@@ -332,7 +339,12 @@ export function CartTable({
                       this row only), then a badge only when something needs
                       attention (PCN-016). */}
                   <div className="flex min-h-5 flex-wrap items-center gap-x-2 gap-y-0.5 py-1">
-                    <span className="text-body-sm lg:text-table font-medium">{line.name}</span>
+                    <span className="text-body-sm lg:text-table min-w-0 font-medium break-words">
+                      {line.name}
+                      {line.strength ? (
+                        <span className="text-ink-2 font-normal"> {line.strength}</span>
+                      ) : null}
+                    </span>
                     {fromExpired ? (
                       <span role="alert" className={cartBadge('refused')}>
                         {expired !== null && stock !== null && stock - expired.qtyBase <= 0
@@ -375,10 +387,10 @@ export function CartTable({
                     </span>
                   )}
                 </td>
-                <td className="numeral text-body-sm lg:text-table px-3.5 text-right whitespace-nowrap max-md:hidden">
+                <td className="numeral text-body-sm lg:text-table px-2 text-right whitespace-nowrap max-md:hidden lg:px-3.5">
                   {formatPaisa(paisa(line.pricePerUnitPaisa), { withSymbol: true })}
                 </td>
-                <td className="numeral text-body-sm lg:text-table relative px-3.5 text-right whitespace-nowrap max-md:hidden">
+                <td className="numeral text-body-sm lg:text-table relative px-2 text-right whitespace-nowrap max-md:hidden lg:px-3.5">
                   {shown ? (
                     <DiscountButton line={line} onOpen={openDiscountEditor} />
                   ) : discounted ? (
@@ -416,6 +428,16 @@ export function CartTable({
       ) : null}
     </div>
   );
+}
+
+/**
+ * Width of the quantity column from tablet up: the cell's padding (28), the
+ * − count + stepper (44 + 22 + 44 + gaps), and ~56 for each unit's button. A
+ * product with one unit shows no toggle.
+ */
+function quantityColumnPx(lines: readonly CartLine[]): number {
+  const units = Math.max(1, ...lines.map((line) => line.units.length));
+  return 28 + 130 + (units > 1 ? units * 56 + 4 : 0);
 }
 
 /** The cart's badges are the design system's, one size down to keep the row at 44 px. */
