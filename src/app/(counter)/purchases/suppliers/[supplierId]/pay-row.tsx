@@ -14,7 +14,7 @@ export function SupplierPayRow(props: {
 }) {
   const router = useRouter();
   return (
-    <ul className="border-line rounded border text-sm">
+    <ul className="bg-surface shadow-card rounded-card text-sm">
       <SupplierCreditRow
         row={props.row}
         onAccountPage

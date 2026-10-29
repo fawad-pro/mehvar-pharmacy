@@ -37,7 +37,7 @@ interface ReceiptSettings {
 export function SettingsSurface() {
   return (
     <section className="mx-auto flex max-w-2xl flex-col gap-8 p-4">
-      <h1 className="text-green-900 text-2xl font-semibold">Settings</h1>
+      <h1 className="text-navy text-2xl font-semibold">Settings</h1>
       <ReceiptSettingsForm />
       <SellingSettings />
       <UsersAndPins />
@@ -117,8 +117,8 @@ function SellingSettings() {
   }
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Selling</h2>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Selling</h2>
       {startsLoose === null && loadFailed ? (
         <LoadFailed
           what="The selling settings"
@@ -128,7 +128,7 @@ function SellingSettings() {
           }}
         />
       ) : startsLoose === null ? (
-        <p className="text-ink/50 text-sm">Loading…</p>
+        <p className="text-ink-2 text-sm">Loading…</p>
       ) : (
         <div className="flex flex-col gap-3">
           <label className="flex items-start gap-2 text-sm">
@@ -143,7 +143,7 @@ function SellingSettings() {
             />
             <span>
               Start sales in loose tablets/capsules
-              <span className="text-ink/50 block text-xs">
+              <span className="text-ink-2 block text-xs">
                 Off: a sale starts in the strip (the smallest pack). Either way every unit is one
                 tap away on the line, and each product starts in the unit it was last sold in.
               </span>
@@ -161,11 +161,11 @@ function SellingSettings() {
                 setCap(event.target.value);
                 setDone(null);
               }}
-              className="border-line focus:border-green-600 h-touch w-24 rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 h-touch w-24 rounded-control border px-3"
             />
             {/* Described, not part of the label: a label is the field's name,
                 and this one would otherwise be called "…owner's PIN…". */}
-            <p id="bill-discount-cap-help" className="text-ink/50 text-xs">
+            <p id="bill-discount-cap-help" className="text-ink-2 text-xs">
               All discounts on a bill together — item discounts and the bill discount — as a share
               of the bill before any discount. A bill discount over this needs the owner&rsquo;s
               PIN. 0 means every bill discount does.
@@ -177,7 +177,7 @@ function SellingSettings() {
               onClick={() => void save()}
               aria-label="Save selling setting"
               disabled={busy}
-              className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+              className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
             >
               {busy ? 'Saving…' : 'Save'}
             </button>
@@ -199,7 +199,7 @@ function SaveResult({ done, problem }: { done: string | null; problem: string | 
     );
   }
   return done ? (
-    <p className="text-green-900 text-sm" role="status">
+    <p className="text-green-700 text-sm" role="status">
       {done}
     </p>
   ) : null;
@@ -264,8 +264,8 @@ function ReceiptSettingsForm() {
   }
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Receipt</h2>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Receipt</h2>
       {!settings && loadFailed ? (
         <LoadFailed
           what="The receipt settings"
@@ -275,11 +275,11 @@ function ReceiptSettingsForm() {
           }}
         />
       ) : !settings ? (
-        <p className="text-ink/50 text-sm">Loading…</p>
+        <p className="text-ink-2 text-sm">Loading…</p>
       ) : (
         <div className="flex flex-col gap-3">
           <div>
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor="receipt-header">
+            <label className="text-ink-2 mb-1 block text-xs" htmlFor="receipt-header">
               Header (printed at the top, one line per row)
             </label>
             <textarea
@@ -291,11 +291,11 @@ function ReceiptSettingsForm() {
                 setDone(null);
               }}
               rows={3}
-              className="border-line focus:border-green-600 w-full rounded border px-3 py-2 outline-none"
+              className="border-border focus:border-blue-600 w-full rounded border px-3 py-2"
             />
           </div>
           <div>
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor="receipt-footer">
+            <label className="text-ink-2 mb-1 block text-xs" htmlFor="receipt-footer">
               Footer (thank-you line)
             </label>
             <input
@@ -306,7 +306,7 @@ function ReceiptSettingsForm() {
                 setSettings({ ...settings, receiptFooter: event.target.value });
                 setDone(null);
               }}
-              className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
             />
           </div>
           {/* Some shops hand a receipt over only when it is asked for. The
@@ -325,7 +325,7 @@ function ReceiptSettingsForm() {
             />
             <span>
               Print a receipt for every sale
-              <span className="text-ink/50 block text-xs">
+              <span className="text-ink-2 block text-xs">
                 Off: nothing prints unless you press Print receipt.
               </span>
             </span>
@@ -336,7 +336,7 @@ function ReceiptSettingsForm() {
               type="button"
               onClick={() => void save()}
               disabled={busy}
-              className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+              className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
             >
               {busy ? 'Saving…' : 'Save'}
             </button>
@@ -420,14 +420,14 @@ function UsersAndPins() {
   }
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Users & PINs</h2>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Users & PINs</h2>
 
       {users === null ? (
         loadFailed ? (
           <LoadFailed what="The list of users" onRetry={refresh} />
         ) : (
-          <p className="text-ink/50 text-sm">Loading…</p>
+          <p className="text-ink-2 text-sm">Loading…</p>
         )
       ) : (
         <ul className="border-line divide-line divide-y rounded border text-sm">
@@ -435,22 +435,22 @@ function UsersAndPins() {
             <li key={user.id} className="flex items-center justify-between px-3 py-2">
               <span>
                 <span className="font-medium">{user.name}</span>
-                <span className="text-ink/60 ml-2">{user.role}</span>
-                {!user.isActive ? <span className="text-ink/40 ml-2 text-xs">inactive</span> : null}
+                <span className="text-ink-2 ml-2">{user.role}</span>
+                {!user.isActive ? <span className="text-ink-2 ml-2 text-xs">inactive</span> : null}
               </span>
               {user.role === 'salesman' ? (
                 <span className="flex gap-3">
                   <button
                     type="button"
                     onClick={() => void resetPin(user)}
-                    className="text-ink/60 text-xs"
+                    className="text-ink-2 text-xs"
                   >
                     Reset PIN
                   </button>
                   <button
                     type="button"
                     onClick={() => void toggleActive(user)}
-                    className="text-ink/60 text-xs"
+                    className="text-ink-2 text-xs"
                   >
                     {user.isActive ? 'Deactivate' : 'Reactivate'}
                   </button>
@@ -471,7 +471,7 @@ function UsersAndPins() {
         }}
       >
         <div className="min-w-40">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="new-user-name">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="new-user-name">
             New salesman&rsquo;s name
           </label>
           <input
@@ -481,11 +481,11 @@ function UsersAndPins() {
             onChange={(event) => {
               setName(event.target.value);
             }}
-            className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
           />
         </div>
         <div className="w-32">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="new-user-pin">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="new-user-pin">
             PIN
           </label>
           <input
@@ -501,14 +501,14 @@ function UsersAndPins() {
             onChange={(event) => {
               setPin(event.target.value);
             }}
-            className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
           />
         </div>
         <button
           type="button"
           onClick={() => void addUser()}
           disabled={busy || name.trim() === '' || pin === ''}
-          className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
         >
           Add — Enter
         </button>
@@ -527,16 +527,16 @@ function PrinterGuide() {
   const { receipt, print } = usePrintReceipt();
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Printer setup</h2>
-      <ol className="text-ink/70 list-inside list-decimal space-y-1 text-sm">
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Printer setup</h2>
+      <ol className="text-ink-2 list-inside list-decimal space-y-1 text-sm">
         <li>
           Connect the receipt printer and set it as the Windows default printer — not
           &ldquo;Microsoft Print to PDF&rdquo;, which saves a file instead of printing.
         </li>
         <li>
           Launch the browser with kiosk printing so a receipt prints silently:{' '}
-          <code className="bg-green-100/60 rounded px-1">--kiosk-printing</code>.
+          <code className="bg-mist rounded px-1">--kiosk-printing</code>.
         </li>
         <li>Print a test receipt and check that it comes out of the receipt printer.</li>
       </ol>
@@ -556,7 +556,7 @@ function PrinterGuide() {
           );
         }}
         disabled={!receiptContext}
-        className="border-line hover:bg-green-100 min-h-touch mt-3 rounded border px-5 font-medium disabled:opacity-40"
+        className="border-border hover:bg-blue-50 min-h-touch mt-3 rounded-control border px-5 font-medium disabled:opacity-40"
       >
         Print test receipt
       </button>
@@ -567,15 +567,15 @@ function PrinterGuide() {
 
 function ExportSection() {
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Export your data</h2>
-      <p className="text-ink/70 mb-3 text-sm">
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Export your data</h2>
+      <p className="text-ink-2 mb-3 text-sm">
         Every table, filtered to this pharmacy, as one CSV per table in a zip. Available any time —
         even if the account is on hold.
       </p>
       <a
         href="/api/export"
-        className="bg-green-600 text-paper min-h-touch inline-flex items-center rounded px-5 font-medium"
+        className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch inline-flex items-center rounded-control px-5"
       >
         Download export
       </a>

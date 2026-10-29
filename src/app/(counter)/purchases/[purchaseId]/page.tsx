@@ -90,16 +90,16 @@ export default async function PurchaseDetailPage({
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
-      <Link href="/purchases" className="text-green-600 text-sm">
+      <Link href="/purchases" className="text-blue-600 text-sm">
         ← Purchases
       </Link>
 
       <header>
-        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Received</p>
-        <h1 className="text-green-900 text-2xl font-semibold">
+        <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Received</p>
+        <h1 className="text-navy text-2xl font-semibold">
           {purchase.supplierName ?? 'No supplier'}
         </h1>
-        <p className="text-ink/60 mt-1 text-sm">
+        <p className="text-ink-2 mt-1 text-sm">
           {purchase.invoiceRef ? (
             <>
               Invoice <span className="numeral">{purchase.invoiceRef}</span> ·{' '}
@@ -108,12 +108,12 @@ export default async function PurchaseDetailPage({
           {purchase.invoiceDate ?? purchase.createdAt.toLocaleDateString('en-PK')} ·{' '}
           {purchase.receivedByName}
         </p>
-        {purchase.note ? <p className="text-ink/60 mt-1 text-sm">{purchase.note}</p> : null}
+        {purchase.note ? <p className="text-ink-2 mt-1 text-sm">{purchase.note}</p> : null}
       </header>
 
-      <div className="border-line overflow-x-auto rounded border">
+      <div className="bg-surface shadow-card overflow-x-auto rounded-card">
         <table className="text-table w-full text-left">
-          <thead className="bg-green-100/50 text-ink/60 text-xs">
+          <thead className="bg-mist text-ink-2 text-xs">
             <tr>
               <th className="px-3 py-2 font-medium">Item</th>
               <th className="px-3 py-2 font-medium">Received</th>
@@ -129,12 +129,12 @@ export default async function PurchaseDetailPage({
                 <td className="px-3 py-2">
                   <Link
                     href={`/products/${line.productId}`}
-                    className="text-green-700 hover:underline"
+                    className="text-blue-600 hover:underline"
                   >
                     {line.productName}
                   </Link>
                 </td>
-                <td className="text-ink/70 px-3 py-2">
+                <td className="text-ink-2 px-3 py-2">
                   {/* [PCN-012] As invoiced: "10 box", never the 140 capsules
                       they hold, so the line reads like the paper. */}
                   {line.unitCount !== null && line.unitName !== null
@@ -144,11 +144,11 @@ export default async function PurchaseDetailPage({
                       it arrived free, and an owner comparing this screen to the
                       distributor's invoice needs the two numbers to match. */}
                   {line.bonusUnitCount !== null && line.bonusUnitCount > 0 && line.unitName ? (
-                    <p className="text-green-700 text-xs">
+                    <p className="text-ink-2 text-xs">
                       + {line.bonusUnitCount} {line.unitName} bonus
                     </p>
                   ) : line.unitCount === null && line.bonusQtyBase > 0 ? (
-                    <p className="text-green-700 text-xs">
+                    <p className="text-ink-2 text-xs">
                       +{' '}
                       {describeQuantity(
                         baseQty(line.bonusQtyBase),
@@ -159,20 +159,20 @@ export default async function PurchaseDetailPage({
                     </p>
                   ) : null}
                 </td>
-                <td className="text-ink/70 px-3 py-2 text-sm">
+                <td className="text-ink-2 px-3 py-2 text-sm">
                   {line.batchNumber ? <span className="numeral">{line.batchNumber}</span> : '—'}
                   {line.expiryDate ? (
-                    <p className="text-ink/50 numeral text-xs">exp {line.expiryDate}</p>
+                    <p className="text-ink-2 numeral text-xs">exp {line.expiryDate}</p>
                   ) : null}
                 </td>
                 <td className="numeral px-3 py-2 text-right">
                   {formatPaisa(paisa(line.unitCostPaisaEntered ?? line.unitCostPaisa))}
-                  <p className="text-ink/50 text-xs">/ {line.unitName ?? line.baseUnitName}</p>
+                  <p className="text-ink-2 text-xs">/ {line.unitName ?? line.baseUnitName}</p>
                 </td>
                 <td className="numeral px-3 py-2 text-right">
                   {formatPaisa(paisa(line.pricePaisaEntered ?? line.priceAtReceivingPaisa))}
                   {line.mrpAtReceivingPaisa ? (
-                    <p className="text-ink/50 text-xs">
+                    <p className="text-ink-2 text-xs">
                       MRP {formatPaisa(paisa(line.mrpAtReceivingPaisa))}
                     </p>
                   ) : null}
@@ -186,7 +186,7 @@ export default async function PurchaseDetailPage({
         </table>
       </div>
 
-      <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-4 text-sm">
+      <div className="bg-surface shadow-card flex flex-col gap-1 rounded-card p-4 text-sm">
         <div className="flex justify-between font-semibold">
           <span>Invoice total{correctedDeltaPaisa !== 0 ? ' as entered' : ''}</span>
           <span className="numeral">
@@ -207,13 +207,13 @@ export default async function PurchaseDetailPage({
             in full, so an ordinary cash purchase reads exactly as before. */}
         {creditPaisa > 0 ? (
           <>
-            <div className="text-ink/70 flex justify-between">
+            <div className="text-ink-2 flex justify-between">
               <span>Paid now</span>
               <span className="numeral">
                 {formatPaisa(paisa(purchase.cashPaidPaisa), { withSymbol: true })}
               </span>
             </div>
-            <div className="text-amber flex justify-between font-medium">
+            <div className="text-amber-text flex justify-between font-medium">
               <span>
                 On credit{purchase.supplierName ? ` — owed to ${purchase.supplierName}` : ''}
               </span>
@@ -224,10 +224,10 @@ export default async function PurchaseDetailPage({
           </>
         ) : null}
         {accountPaisa !== null && purchase.supplierId ? (
-          <p className="text-ink/70 border-line mt-1 flex flex-wrap justify-between gap-x-3 border-t pt-2">
+          <p className="text-ink-2 border-line mt-1 flex flex-wrap justify-between gap-x-3 border-t pt-2">
             <span>
               {purchase.supplierName} account today:{' '}
-              <span className={accountPaisa > 0 ? 'text-amber font-medium' : 'font-medium'}>
+              <span className={accountPaisa > 0 ? 'text-amber-text font-medium' : 'font-medium'}>
                 {accountPaisa > 0
                   ? `you owe ${formatPaisa(paisa(accountPaisa), { withSymbol: true })}`
                   : accountPaisa < 0
@@ -237,20 +237,20 @@ export default async function PurchaseDetailPage({
             </span>
             <Link
               href={`/purchases/suppliers/${purchase.supplierId}`}
-              className="text-green-600 hover:underline"
+              className="text-blue-600 hover:underline"
             >
               Payments and account →
             </Link>
           </p>
         ) : null}
         {purchase.creditTracked ? null : (
-          <p className="text-ink/60 text-xs">
+          <p className="text-ink-2 text-xs">
             Payment not recorded — this invoice was entered before Mehvar tracked supplier credit,
             so it is not counted in what is owed to suppliers.
           </p>
         )}
         {bonusBase > 0 ? (
-          <p className="text-ink/60 text-xs">
+          <p className="text-ink-2 text-xs">
             Includes bonus stock received free — it lowers the effective cost per unit without
             changing what was paid.
           </p>
@@ -258,13 +258,13 @@ export default async function PurchaseDetailPage({
       </div>
 
       {corrections.length > 0 || returns.length > 0 ? (
-        <div className="border-line rounded border p-4 text-sm">
-          <h2 className="text-green-900 mb-2 font-medium">Corrections and returns</h2>
+        <div className="bg-surface shadow-card rounded-card p-4 text-sm">
+          <h2 className="text-navy mb-2 font-medium">Corrections and returns</h2>
           <ul className="divide-line divide-y">
             {corrections.map((row) => (
               <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
                 <span className="font-medium">{row.productName}</span>
-                <span className="text-ink/70">
+                <span className="text-ink-2">
                   {[
                     row.qtyDeltaBase !== 0
                       ? `quantity ${row.qtyDeltaBase > 0 ? '+' : ''}${row.qtyDeltaBase}`
@@ -286,8 +286,8 @@ export default async function PurchaseDetailPage({
                     .filter(Boolean)
                     .join(' · ')}
                 </span>
-                <span className="text-ink/50">“{row.note}”</span>
-                <span className="text-ink/40 ml-auto text-xs">
+                <span className="text-ink-2">“{row.note}”</span>
+                <span className="text-ink-2 ml-auto text-xs">
                   {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
                 </span>
               </li>
@@ -295,7 +295,7 @@ export default async function PurchaseDetailPage({
             {returns.map((row) => (
               <li key={row.id} className="flex flex-wrap gap-x-3 py-1.5">
                 <span className="font-medium">{row.productName}</span>
-                <span className="text-ink/70">
+                <span className="text-ink-2">
                   {describeCounted(row)} returned to {row.supplierName}, credit{' '}
                   {formatPaisa(paisa(row.creditPaisa))}
                   {/* [PCN-012] Beside the stock cost it took out, so a credit
@@ -305,8 +305,8 @@ export default async function PurchaseDetailPage({
                     ? ` (${creditAgainstStockCost(row.creditPaisa, stockCosts.get(row.id) ?? 0)})`
                     : ''}
                 </span>
-                {row.note ? <span className="text-ink/50">“{row.note}”</span> : null}
-                <span className="text-ink/40 ml-auto text-xs">
+                {row.note ? <span className="text-ink-2">“{row.note}”</span> : null}
+                <span className="text-ink-2 ml-auto text-xs">
                   {row.byName} · {row.createdAt.toLocaleDateString('en-PK')}
                 </span>
               </li>
@@ -320,7 +320,7 @@ export default async function PurchaseDetailPage({
       {session.userRole === 'owner' ? (
         <Link
           href={`/purchases/${purchaseId}/correct`}
-          className="text-green-700 self-start text-sm hover:underline"
+          className="text-blue-600 self-start text-sm hover:underline"
         >
           Correct this invoice or return goods to the supplier →
         </Link>

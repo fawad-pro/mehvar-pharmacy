@@ -109,11 +109,11 @@ function Notice({
   if (kind === 'duplicate') {
     const existing = products[0]!;
     return (
-      <div className="border-amber/50 bg-amber/5 rounded border p-3 text-sm" role="status">
-        <p className="text-amber font-medium">You already have this medicine.</p>
-        <p className="text-ink/70 mt-1">
+      <div className="border-amber bg-amber-50 rounded border p-3 text-sm" role="status">
+        <p className="text-amber-text font-medium">You already have this medicine.</p>
+        <p className="text-ink-2 mt-1">
           Saving it again would split its stock across two entries.{' '}
-          <Link href={`/products/${existing.id}`} className="text-green-700 underline">
+          <Link href={`/products/${existing.id}`} className="text-blue-600 underline">
             Open {describe(existing)}
           </Link>{' '}
           instead.
@@ -124,9 +124,9 @@ function Notice({
 
   if (kind === 'strength-differs') {
     return (
-      <div className="border-amber/50 bg-amber/5 rounded border p-3 text-sm" role="status">
-        <p className="text-amber font-medium">Check the strength.</p>
-        <p className="text-ink/70 mt-1">
+      <div className="border-amber bg-amber-50 rounded border p-3 text-sm" role="status">
+        <p className="text-amber-text font-medium">Check the strength.</p>
+        <p className="text-ink-2 mt-1">
           You already stock {products.map(describe).join(', ')}. If this really is a different
           strength, carry on — if it is a typing slip, fix it before saving.
         </p>
@@ -135,7 +135,7 @@ function Notice({
   }
 
   return (
-    <p className="text-ink/60 text-sm" role="status">
+    <p className="text-ink-2 text-sm" role="status">
       {/* Deliberately plain text, no border, no colour. Stocking several brands
           of one molecule is normal, and dressing it up as a warning would teach
           the operator to skip past this whole area of the screen (I7). */}

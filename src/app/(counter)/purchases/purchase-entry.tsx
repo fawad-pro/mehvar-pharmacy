@@ -493,10 +493,10 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   return (
     <section className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-green-900 text-2xl font-semibold">Receive stock</h1>
+        <h1 className="text-navy text-2xl font-semibold">Receive stock</h1>
         {resumed ? (
           <span
-            className="border-line text-ink/60 rounded border px-2 py-0.5 text-xs"
+            className="bg-surface shadow-card text-ink-2 rounded-card px-2 py-0.5 text-xs"
             role="status"
           >
             Resumed — this invoice was saved as you typed
@@ -505,9 +505,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       </header>
 
       {/* Invoice header: supplier, reference, date. */}
-      <div className="border-line flex flex-wrap items-end gap-3 rounded border p-3">
+      <div className="bg-surface shadow-card flex flex-wrap items-end gap-3 rounded-card p-3">
         <div className="min-w-48">
-          <span className="text-ink/60 mb-1 block text-xs" id="supplier-label">
+          <span className="text-ink-2 mb-1 block text-xs" id="supplier-label">
             Supplier
           </span>
           <button
@@ -517,14 +517,14 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             onClick={() => {
               setPicking(true);
             }}
-            className="border-line hover:bg-green-100/50 h-touch w-full rounded border px-3 text-left"
+            className="border-border hover:bg-mist h-touch w-full rounded-control border px-3 text-left"
           >
-            {draft.supplierName ?? <span className="text-ink/40">Choose…</span>}
+            {draft.supplierName ?? <span className="text-ink-2">Choose…</span>}
           </button>
         </div>
 
         <div className="w-40">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="invoice-ref">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="invoice-ref">
             Invoice no.
           </label>
           <input
@@ -536,12 +536,12 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             onChange={(event) => {
               setDraft((current) => ({ ...current, invoiceRef: event.target.value }));
             }}
-            className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
           />
         </div>
 
         <div className="w-44">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="invoice-date">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="invoice-date">
             Invoice date
           </label>
           <input
@@ -552,13 +552,13 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             onChange={(event) => {
               setDraft((current) => ({ ...current, invoiceDate: event.target.value }));
             }}
-            className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
           />
         </div>
       </div>
 
       {/* The line being entered. */}
-      <div className="border-line rounded border p-3">
+      <div className="bg-surface shadow-card rounded-card p-3">
         <ProductSearch
           onSelect={onSelectProduct}
           inputRef={searchRef}
@@ -609,12 +609,12 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                           setPrice((unit.pricePaisa / 100).toFixed(2));
                         }}
                         className={[
-                          'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                          'border-border h-touch min-w-11 border px-3 text-sm capitalize',
                           index === 0 ? 'rounded-l' : '-ml-px',
                           index === pending.units.length - 1 ? 'rounded-r' : '',
                           chosen
-                            ? 'bg-green-600 text-paper border-green-600 font-medium'
-                            : 'bg-paper text-ink hover:bg-green-100',
+                            ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                            : 'bg-surface text-navy hover:bg-page',
                         ].join(' ')}
                       >
                         {unit.name}
@@ -638,7 +638,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setQty(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -651,7 +651,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setBonus(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -663,7 +663,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setCost(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -681,7 +681,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setExpiry(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -698,7 +698,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setBatchNumber(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -713,7 +713,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setMrp(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -725,7 +725,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   onChange={(event) => {
                     setPrice(event.target.value);
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-2 outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-2"
                 />
               </Field>
 
@@ -734,14 +734,14 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                 onClick={() => {
                   addLine();
                 }}
-                className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium whitespace-nowrap"
+                className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-4 whitespace-nowrap"
               >
                 Add — Enter
               </button>
             </div>
           </div>
         ) : (
-          <p className="text-ink/40 mt-2 text-xs">
+          <p className="text-ink-2 mt-2 text-xs">
             Search or scan the product to start a line. Esc returns here from any field.
             {draft.lines.length > 0
               ? ' Lines all in? Enter on an empty search goes to Paid now.'
@@ -758,16 +758,16 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
       {received ? (
         <div
-          className="border-line bg-green-100/50 rounded border p-3 text-sm"
+          className="bg-surface shadow-card rounded-card p-3 text-sm"
           role="status"
           aria-label="Received"
         >
-          <p className="text-green-900 font-medium">
+          <p className="text-navy font-medium">
             Received — {received.batchCount} batch{received.batchCount === 1 ? '' : 'es'} on the
             shelf
             <a
               href="/stock"
-              className="text-green-600 ml-3 text-xs font-normal underline-offset-2 hover:underline"
+              className="text-blue-600 ml-3 text-xs font-normal underline-offset-2 hover:underline"
             >
               See it in stock →
             </a>
@@ -775,7 +775,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
           {received.resolvedPendingBase > 0 ? (
             // D2 closing its loop, said plainly: the shortfall the counter sold
             // into is now accounted for.
-            <p className="text-ink/70 mt-1">
+            <p className="text-ink-2 mt-1">
               {received.resolvedPendingBase} unit
               {received.resolvedPendingBase === 1 ? '' : 's'} that had already been sold are now
               accounted for.
@@ -785,9 +785,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       ) : null}
 
       {draft.lines.length > 0 ? (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Item</th>
                 <th className="px-3 py-2 text-right font-medium">Qty</th>
@@ -807,7 +807,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                     <td className="px-3 py-2">
                       <span className="font-medium">{line.productName}</span>
                       {lineWarnings.map((warning) => (
-                        <span key={warning.kind} className="text-amber ml-2 text-xs">
+                        <span key={warning.kind} className="text-amber-text ml-2 text-xs">
                           {warningText(warning)}
                         </span>
                       ))}
@@ -826,7 +826,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                         ? `${line.entered.unitCount} ${line.entered.unitName}`
                         : `${line.qtyBase} ${line.baseUnitName}`}
                     </td>
-                    <td className="numeral text-ink/60 px-3 py-2">
+                    <td className="numeral text-ink-2 px-3 py-2">
                       {line.entered
                         ? line.entered.bonusUnitCount > 0
                           ? `+${line.entered.bonusUnitCount} ${line.entered.unitName}`
@@ -839,11 +839,11 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                       {formatPaisa(paisa(line.entered?.unitCostPaisa ?? line.unitCostPaisa))}
                     </td>
                     <td className="numeral px-3 py-2">{formatPaisa(paisa(lineCostPaisa(line)))}</td>
-                    <td className="text-ink/70 px-3 py-2">{line.expiryDate ?? '—'}</td>
+                    <td className="text-ink-2 px-3 py-2">{line.expiryDate ?? '—'}</td>
                     <td className="numeral px-3 py-2">
                       {formatPaisa(paisa(line.entered?.pricePaisa ?? line.priceAtReceivingPaisa))}
                       {line.mrpAtReceivingPaisa !== null ? (
-                        <span className="text-ink/50 block text-xs">
+                        <span className="text-ink-2 block text-xs">
                           MRP {formatPaisa(paisa(line.mrpAtReceivingPaisa))}
                         </span>
                       ) : null}
@@ -854,7 +854,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                         onClick={() => {
                           removeLine(line.lineId);
                         }}
-                        className="text-ink/50 text-xs"
+                        className="text-ink-2 text-xs"
                         aria-label={`Remove ${line.productName}`}
                       >
                         Remove
@@ -870,11 +870,11 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
       <div className="flex flex-wrap items-end gap-4">
         <div>
-          <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Invoice total</p>
-          <p className="text-green-900 numeral text-2xl font-semibold">
+          <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Invoice total</p>
+          <p className="text-navy numeral text-2xl font-semibold">
             {formatPaisa(paisa(invoiceTotal), { withSymbol: true })}
           </p>
-          <p className="text-ink/50 text-xs">
+          <p className="text-ink-2 text-xs">
             {draft.lines.length} line{draft.lines.length === 1 ? '' : 's'}
           </p>
         </div>
@@ -884,7 +884,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             becomes what the pharmacy owes this supplier — the mirror of an
             udhaar sale. */}
         <div className="w-40">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="cash-paid">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="cash-paid">
             Paid now
           </label>
           <input
@@ -907,14 +907,14 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             {...(cashPaidUnreadable || needsClickToCommit(cashPaidPaisa)
               ? { 'aria-describedby': 'cash-paid-problem' }
               : {})}
-            className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
           />
           {cashPaidUnreadable ? (
             <p id="cash-paid-problem" className="text-red mt-1 text-xs" role="alert">
               Not an amount — type what was paid, or clear it for paid in full.
             </p>
           ) : needsClickToCommit(cashPaidPaisa) ? (
-            <p id="cash-paid-problem" className="text-amber mt-1 text-xs" role="alert">
+            <p id="cash-paid-problem" className="text-amber-text mt-1 text-xs" role="alert">
               {formatPaisa(paisa(cashPaidPaisa), { withSymbol: true })} looks like a barcode. Check
               Paid now.
             </p>
@@ -923,11 +923,11 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
         {creditPaisa > 0 ? (
           <div>
-            <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">On credit</p>
-            <p className="text-amber numeral text-2xl font-semibold">
+            <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">On credit</p>
+            <p className="text-amber-text numeral text-2xl font-semibold">
               {formatPaisa(paisa(creditPaisa), { withSymbol: true })}
             </p>
-            <p className={`text-xs ${draft.supplierId ? 'text-ink/50' : 'text-amber'}`}>
+            <p className={`text-xs ${draft.supplierId ? 'text-ink-2' : 'text-amber-text'}`}>
               {draft.supplierName ? `owed to ${draft.supplierName}` : 'choose a supplier'}
             </p>
           </div>
@@ -937,7 +937,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
           type="button"
           onClick={() => void receive()}
           disabled={!canReceive}
-          className="bg-green-600 text-paper min-h-touch ml-auto rounded px-6 text-lg font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch ml-auto rounded-control px-6 text-lg disabled:opacity-40"
         >
           {busy ? 'Receiving…' : 'Receive stock'}
         </button>
@@ -949,7 +949,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
           the usual state of one added by mistake, is reached from here. */}
       <Link
         href="/purchases/suppliers"
-        className="text-green-600 min-h-touch flex items-center self-start text-sm underline-offset-2 hover:underline"
+        className="text-blue-600 min-h-touch flex items-center self-start text-sm underline-offset-2 hover:underline"
       >
         All suppliers →
       </Link>
@@ -1003,7 +1003,7 @@ function Field({
             hover. */}
         <span
           title={label}
-          className={`mb-1 block truncate text-xs ${attention ? 'text-amber font-medium' : 'text-ink/60'}`}
+          className={`mb-1 block truncate text-xs ${attention ? 'text-amber-text font-medium' : 'text-ink-2'}`}
         >
           {label}
         </span>
@@ -1095,7 +1095,7 @@ function MrpOffer({
 
   return (
     <span className="mt-1 block text-xs" role="note">
-      <span className="text-amber">
+      <span className="text-amber-text">
         MRP on pack {formatPaisa(paisa(onPack))} per {unit.name} —{' '}
         {recorded === null ? 'none on record' : `on record ${formatPaisa(paisa(recorded))}`}.
       </span>
@@ -1106,7 +1106,7 @@ function MrpOffer({
               type="button"
               disabled={state === 'busy'}
               onClick={() => void record(newPrice)}
-              className="text-green-600 font-medium underline-offset-2 hover:underline"
+              className="text-blue-600 font-medium underline-offset-2 hover:underline"
             >
               Record it, and sell at {formatPaisa(paisa(newPrice))} per {unit.name}
             </button>
@@ -1115,13 +1115,13 @@ function MrpOffer({
             type="button"
             disabled={state === 'busy'}
             onClick={() => void record(null)}
-            className="text-green-600 font-medium underline-offset-2 hover:underline"
+            className="text-blue-600 font-medium underline-offset-2 hover:underline"
           >
             {newPrice !== null ? 'Record the MRP only' : 'Record the MRP'}
           </button>
         </span>
       ) : (
-        <span className="text-ink/50 ml-2">The owner can update it.</span>
+        <span className="text-ink-2 ml-2">The owner can update it.</span>
       )}
       {typeof state === 'object' ? (
         <span className="text-red ml-2" role="alert">

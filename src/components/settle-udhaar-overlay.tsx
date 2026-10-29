@@ -138,9 +138,9 @@ export function SettleUdhaarOverlay({
         />
       ) : (
         <OverlayBackdrop label="Settle udhaar" onEscape={onClose}>
-          <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
-            <h2 className="text-green-900 mb-1 text-lg font-semibold">Settle udhaar</h2>
-            <p className="text-ink/60 mb-4 text-sm">{step.customer.name}</p>
+          <div className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5">
+            <h2 className="text-navy mb-1 text-lg font-semibold">Settle udhaar</h2>
+            <p className="text-ink-2 mb-4 text-sm">{step.customer.name}</p>
 
             {step.name === 'amount' ? (
               <>
@@ -148,12 +148,12 @@ export function SettleUdhaarOverlay({
                     entry — which makes "half of what?" a question the screen
                     has to answer at the moment the figure is typed, not one
                     the cashier carries in their head from the picker. */}
-                <div className="border-line mb-3 flex items-baseline justify-between rounded border px-3 py-2">
-                  <span className="text-ink/60 text-xs tracking-[0.1em] uppercase">Before</span>
+                <div className="bg-surface shadow-card mb-3 flex items-baseline justify-between rounded-card px-3 py-2">
+                  <span className="text-ink-2 text-xs tracking-[0.1em] uppercase">Before</span>
                   <BalanceInline balancePaisa={step.customer.balancePaisa} />
                 </div>
 
-                <label className="text-ink/60 mb-1 block text-xs" htmlFor="settle-amount">
+                <label className="text-ink-2 mb-1 block text-xs" htmlFor="settle-amount">
                   Amount paid
                 </label>
                 <input
@@ -181,7 +181,7 @@ export function SettleUdhaarOverlay({
                       onClose();
                     }
                   }}
-                  className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 text-2xl outline-none"
+                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-2xl"
                   placeholder="0"
                 />
 
@@ -197,12 +197,12 @@ export function SettleUdhaarOverlay({
                   const effect = settlementEffect(step.customer.balancePaisa, typed);
                   if (effect.overpaidPaisa === 0) {
                     return (
-                      <p className="text-ink/60 mt-2 text-sm">
+                      <p className="text-ink-2 mt-2 text-sm">
                         Leaves{' '}
                         {effect.resulting.kind === 'settled' ? (
-                          <strong className="text-green-900">nothing owing</strong>
+                          <strong className="text-navy">nothing owing</strong>
                         ) : (
-                          <strong className="text-amber">
+                          <strong className="text-amber-text">
                             {formatPaisa(paisa(effect.resulting.amountPaisa), { withSymbol: true })}{' '}
                             still owing
                           </strong>
@@ -212,7 +212,7 @@ export function SettleUdhaarOverlay({
                     );
                   }
                   return (
-                    <p className="text-ink/70 border-line mt-2 rounded border border-dashed p-2 text-sm">
+                    <p className="bg-surface shadow-card text-ink-2 mt-2 rounded-card border-dashed p-2 text-sm">
                       That is more than is owed.{' '}
                       {effect.clearsPaisa > 0 ? (
                         <>
@@ -235,14 +235,14 @@ export function SettleUdhaarOverlay({
                 ) : null}
 
                 <div className="mt-4 flex items-center justify-between">
-                  <button type="button" onClick={onClose} className="text-ink/60 text-sm">
+                  <button type="button" onClick={onClose} className="text-ink-2 text-sm">
                     Esc to cancel
                   </button>
                   <button
                     type="button"
                     onClick={() => void commit(step.customer)}
                     disabled={paisaFromRupeeInput(amount) <= 0 || busy || !receiptContext}
-                    className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+                    className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
                   >
                     {busy ? 'Saving…' : 'Settle — Enter'}
                   </button>
@@ -253,12 +253,12 @@ export function SettleUdhaarOverlay({
                 {/* The dispute-ender (T4/T5). Balances speak the position
                     vocabulary; only "Paid" is a plain amount, because it is a
                     transaction rather than a position. */}
-                <div className="border-line bg-green-100/50 flex flex-col gap-1 rounded border p-3 text-sm">
+                <div className="bg-page flex flex-col gap-1 rounded-card p-3 text-sm">
                   <BalanceRow label="Before" balancePaisa={step.statement.previousBalancePaisa} />
                   <Row label="Paid" amountPaisa={Math.abs(step.statement.amountPaisa)} />
                   <BalanceRow label="Now" balancePaisa={step.statement.newBalancePaisa} bold />
                 </div>
-                <p className="text-ink/50 mt-2 text-xs">Receipt {step.receiptNumber}</p>
+                <p className="text-ink-2 mt-2 text-xs">Receipt {step.receiptNumber}</p>
 
                 <div className="mt-4 flex justify-end">
                   <button
@@ -267,7 +267,7 @@ export function SettleUdhaarOverlay({
                     // and Enter reach the dialog rather than the page.
                     autoFocus
                     onClick={onClose}
-                    className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium"
+                    className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5"
                   >
                     Done — Esc
                   </button>

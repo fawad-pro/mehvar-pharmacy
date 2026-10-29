@@ -71,7 +71,7 @@ export function CorrectSurface({
   return (
     <div className="flex flex-col gap-3">
       {done ? (
-        <p className="text-green-900 text-sm" role="status">
+        <p className="text-green-700 text-sm" role="status">
           {done}
         </p>
       ) : null}
@@ -80,7 +80,7 @@ export function CorrectSurface({
           <li key={line.lineId} className="flex flex-col gap-2 p-3">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <span className="font-medium">{line.productName}</span>
-              <span className="text-ink/60 text-sm">
+              <span className="text-ink-2 text-sm">
                 {line.factor === 1
                   ? describeQuantity(baseQty(line.qtyBase), line.baseUnitName, line.packLevels)
                   : `${line.qtyBase / line.factor} ${line.unitName}`}
@@ -89,7 +89,7 @@ export function CorrectSurface({
                   : ''}{' '}
                 at {formatPaisa(paisa(line.unitCostPaisa))} / {line.unitName}
               </span>
-              <span className="text-ink/50 text-xs">
+              <span className="text-ink-2 text-xs">
                 {describeQuantity(baseQty(line.onHandBase), line.baseUnitName, line.packLevels)} on
                 hand
                 {line.expiryDate ? ` · exp ${line.expiryDate}` : ''}
@@ -98,7 +98,7 @@ export function CorrectSurface({
                 <button
                   type="button"
                   id={`correct-${line.lineId}`}
-                  className="text-green-700 min-h-touch hover:underline"
+                  className="text-blue-600 min-h-touch hover:underline"
                   onClick={() => {
                     setDone(null);
                     setOpen({ lineId: line.lineId, mode: 'correct', key: uuidv7() });
@@ -109,7 +109,7 @@ export function CorrectSurface({
                 <button
                   type="button"
                   id={`return-${line.lineId}`}
-                  className="text-green-700 min-h-touch hover:underline disabled:opacity-40"
+                  className="text-blue-600 min-h-touch hover:underline disabled:opacity-40"
                   disabled={supplierName === null || line.onHandBase === 0}
                   onClick={() => {
                     setDone(null);
@@ -155,7 +155,7 @@ export function CorrectSurface({
         ))}
       </ul>
       {supplierName === null ? (
-        <p className="text-ink/60 text-xs">
+        <p className="text-ink-2 text-xs">
           This invoice has no supplier, so goods from it cannot be returned for credit. Use a
           distributor-return adjustment on the Adjust screen instead.
         </p>
@@ -178,7 +178,7 @@ function returnUnitsOf(line: CorrectableLineView): { key: string; name: string; 
 }
 
 const fieldClass =
-  'border-line focus:border-green-600 h-touch mt-1 w-full rounded border px-3 outline-none';
+  'border-border focus:border-blue-600 h-touch mt-1 w-full rounded-control border px-3';
 
 /** Back to the control that opened a form, once the form has gone. */
 function focusLater(id: string): void {
@@ -254,13 +254,13 @@ function CorrectionForm({
     <form
       aria-label={`Correct ${line.productName}`}
       onKeyDown={escapeCloses(onCancel)}
-      className="bg-green-100/40 grid grid-cols-2 gap-3 rounded p-3 sm:grid-cols-4"
+      className="bg-mist grid grid-cols-2 gap-3 rounded p-3 sm:grid-cols-4"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
       }}
     >
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Quantity ({line.unitName})
         <input
           autoComplete="off"
@@ -271,7 +271,7 @@ function CorrectionForm({
           className={fieldClass}
         />
       </label>
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Bonus ({line.unitName})
         <input
           autoComplete="off"
@@ -281,7 +281,7 @@ function CorrectionForm({
           className={fieldClass}
         />
       </label>
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Unit cost (Rs per {line.unitName})
         <input
           autoComplete="off"
@@ -291,7 +291,7 @@ function CorrectionForm({
           className={`${fieldClass} numeral`}
         />
       </label>
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Why
         <input
           autoComplete="off"
@@ -305,7 +305,7 @@ function CorrectionForm({
         <button
           type="submit"
           disabled={busy}
-          className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
         >
           {busy ? 'Saving…' : 'Record correction — Enter'}
         </button>
@@ -393,7 +393,7 @@ function ReturnForm({
     <form
       aria-label={`Return ${line.productName} to ${supplierName}`}
       onKeyDown={escapeCloses(onCancel)}
-      className="bg-green-100/40 grid grid-cols-2 gap-3 rounded p-3 sm:grid-cols-3"
+      className="bg-mist grid grid-cols-2 gap-3 rounded p-3 sm:grid-cols-3"
       onSubmit={(event) => {
         event.preventDefault();
         void save();
@@ -410,12 +410,12 @@ function ReturnForm({
                 aria-pressed={pressed}
                 onClick={() => setUnitKey(candidate.key)}
                 className={[
-                  'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                  'border-border h-touch min-w-11 border px-3 text-sm capitalize',
                   index === 0 ? 'rounded-l' : '-ml-px',
                   index === units.length - 1 ? 'rounded-r' : '',
                   pressed
-                    ? 'bg-green-600 text-paper border-green-600 font-medium'
-                    : 'bg-paper text-ink hover:bg-green-100',
+                    ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                    : 'bg-surface text-navy hover:bg-page',
                 ].join(' ')}
               >
                 {candidate.name}
@@ -424,7 +424,7 @@ function ReturnForm({
           })}
         </div>
       ) : null}
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Quantity going back ({unit.name}, up to {upTo})
         <input
           autoComplete="off"
@@ -435,7 +435,7 @@ function ReturnForm({
           className={fieldClass}
         />
       </label>
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Credit from {supplierName} (Rs)
         <input
           autoComplete="off"
@@ -449,7 +449,7 @@ function ReturnForm({
         />
       </label>
       {counted ? (
-        <p className="text-ink/60 col-span-full text-xs" role="status" aria-label="Stock cost">
+        <p className="text-ink-2 col-span-full text-xs" role="status" aria-label="Stock cost">
           These go back at a stock cost of {formatPaisa(paisa(stockCostPaisa))}
           {creditPaisa !== null && creditPaisa !== stockCostPaisa
             ? creditPaisa < stockCostPaisa
@@ -458,7 +458,7 @@ function ReturnForm({
             : '.'}
         </p>
       ) : null}
-      <label className="text-ink/70 text-xs">
+      <label className="text-ink-2 text-xs">
         Note
         <input
           autoComplete="off"
@@ -472,7 +472,7 @@ function ReturnForm({
         <button
           type="submit"
           disabled={busy}
-          className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
         >
           {busy ? 'Saving…' : 'Record return — Enter'}
         </button>

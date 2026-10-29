@@ -603,23 +603,23 @@ export function SaleSurface() {
         {/* Right rail — Phase 10 §4's ~38%. */}
         <aside className="border-line flex flex-[38] flex-col gap-4 border-l p-4">
           <div>
-            <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Total</p>
+            <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Total</p>
             {/* I6: the biggest numerals on the display. */}
-            <p className="text-green-900 numeral text-total leading-none font-semibold">
+            <p className="text-navy numeral text-total leading-none font-semibold">
               {formatPaisa(totals.totalPaisa)}
             </p>
-            <p className="text-ink/50 mt-1 text-sm">
+            <p className="text-ink-2 mt-1 text-sm">
               {totals.lineCount} line{totals.lineCount === 1 ? '' : 's'} · {totals.itemCount} unit
               {totals.itemCount === 1 ? '' : 's'}
             </p>
           </div>
 
           {customer ? (
-            <div className="border-line bg-green-100/50 flex items-center justify-between rounded border p-2 text-sm">
+            <div className="bg-surface shadow-card flex items-center justify-between rounded-card p-2 text-sm">
               <span>
                 <span className="font-medium">{customer.name}</span>
                 {customer.balancePaisa > 0 ? (
-                  <span className="text-amber ml-2 numeral">
+                  <span className="text-amber-text ml-2 numeral">
                     {formatPaisa(paisa(customer.balancePaisa))} owed
                   </span>
                 ) : null}
@@ -629,7 +629,7 @@ export function SaleSurface() {
                 onClick={() => {
                   setCustomer(null);
                 }}
-                className="text-ink/50 text-xs"
+                className="text-ink-2 text-xs"
               >
                 remove
               </button>
@@ -641,14 +641,14 @@ export function SaleSurface() {
               onClick={() => {
                 setPickingCustomer(true);
               }}
-              className="border-line text-green-700 hover:bg-green-100/50 min-h-touch rounded border px-3 text-left text-sm"
+              className="border-border text-blue-600 hover:bg-mist min-h-touch rounded-control border px-3 text-left text-sm"
             >
               Attach a customer for udhaar — {keyFor('udhaar')}
             </button>
           ) : (
             // With nothing to bill the key settles instead (defect C5), and
             // the hint says so; Udhaar on the key bar is the tap for it.
-            <p className="text-ink/40 text-xs">
+            <p className="text-ink-2 text-xs">
               {keyFor('udhaar')} — settle a customer&rsquo;s udhaar
             </p>
           )}
@@ -659,13 +659,17 @@ export function SaleSurface() {
               thing that gets a shop phoning the founder. The retry behind this
               is in `receipt-context.tsx`. */}
           {!receiptContext ? (
-            <p className="text-amber text-xs" role="status">
+            <p className="text-amber-text text-xs" role="status">
               Getting this counter ready…
             </p>
           ) : null}
 
           {expiredPack ? (
-            <p className="text-amber text-sm font-medium" role="status" aria-label="Expired pack">
+            <p
+              className="text-amber-text text-sm font-medium"
+              role="status"
+              aria-label="Expired pack"
+            >
               Scanned pack of {expiredPack.name} expired on{' '}
               {new Date(`${expiredPack.expiry}T00:00:00`).toLocaleDateString('en-PK', {
                 day: 'numeric',
@@ -684,18 +688,18 @@ export function SaleSurface() {
 
           {lastSale ? (
             <div
-              className="border-line bg-green-100/50 rounded border p-3 text-sm"
+              className="bg-surface shadow-card rounded-card p-3 text-sm"
               role="status"
               aria-label="Last sale"
             >
-              <p className="text-green-900 font-medium">Saved — {lastSale.receiptNumber}</p>
-              <p className="numeral text-ink/70">
+              <p className="text-navy font-medium">Saved — {lastSale.receiptNumber}</p>
+              <p className="numeral text-ink-2">
                 {formatPaisa(paisa(lastSale.totalPaisa), { withSymbol: true })}
               </p>
               {/* Where the money went, said where the operator looks: an
                   udhaar sale read exactly like a cash one. */}
               {(lastSale.receipt.creditPaisa ?? 0) > 0 && lastSale.receipt.customerName ? (
-                <p className="numeral text-ink/70">
+                <p className="numeral text-ink-2">
                   {(lastSale.receipt.cashPaisa ?? 0) > 0
                     ? `${formatPaisa(paisa(lastSale.receipt.cashPaisa ?? 0), { withSymbol: true })} cash · `
                     : ''}
@@ -705,7 +709,7 @@ export function SaleSurface() {
               ) : null}
               {/* D2 made visible at the moment it happens, not only in the day view. */}
               {lastSale.pendingUnits > 0 ? (
-                <p className="text-amber mt-1">
+                <p className="text-amber-text mt-1">
                   Sold more than the system had. It is on the owner’s exception list.
                 </p>
               ) : null}
@@ -719,7 +723,7 @@ export function SaleSurface() {
                   onClick={() => {
                     print(lastSale.receipt);
                   }}
-                  className="text-green-600 min-h-touch font-medium underline-offset-2 hover:underline"
+                  className="text-blue-600 min-h-touch font-medium underline-offset-2 hover:underline"
                 >
                   Print receipt
                 </button>
@@ -729,7 +733,7 @@ export function SaleSurface() {
                     place to review). */}
                 <a
                   href={`/receipts/${encodeURIComponent(lastSale.receiptNumber)}`}
-                  className="text-green-600 flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
+                  className="text-blue-600 flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
                 >
                   View sale
                 </a>
@@ -741,7 +745,7 @@ export function SaleSurface() {
             type="button"
             onClick={openPayment}
             disabled={lines.length === 0 || busy || !receiptContext}
-            className="bg-green-600 text-paper min-h-touch mt-auto rounded text-lg font-medium disabled:opacity-40"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch mt-auto rounded-control text-lg disabled:opacity-40"
           >
             {busy ? 'Saving…' : 'Pay — F12'}
           </button>

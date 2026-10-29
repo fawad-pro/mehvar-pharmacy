@@ -146,9 +146,9 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
       <input type="hidden" name="globalProductId" value={globalProductId ?? ''} />
 
       {globalProductId ? (
-        <p className="border-line bg-green-100/40 rounded border px-3 py-2 text-sm">
-          <span className="text-green-900 font-medium">From Mehvar&rsquo;s catalogue.</span>{' '}
-          <span className="text-ink/70">
+        <p className="bg-surface shadow-card rounded-card px-3 py-2 text-sm">
+          <span className="text-navy font-medium">From Mehvar&rsquo;s catalogue.</span>{' '}
+          <span className="text-ink-2">
             The details below came with it — change any of them if your pack differs. Only the
             selling prices are yours to set.
           </span>
@@ -224,7 +224,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
         />
         <PackLevelPreview baseUnit={baseUnit} levels={parsed} />
         {initial.unitsLocked ? (
-          <p className="text-ink/70 text-sm leading-snug" role="note">
+          <p className="text-ink-2 text-sm leading-snug" role="note">
             This product already has stock or sales, so its pack sizes stay as they are —
             everything recorded so far is counted in them. You can rename a unit (pack to strip) or
             add a bigger pack at the end, like a carton.
@@ -233,7 +233,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
       </Section>
 
       <Section title="Price">
-        <p className="text-ink/60 text-sm leading-snug">
+        <p className="text-ink-2 text-sm leading-snug">
           Type the prices you know, in rupees. Mehvar fills in the rest from the pack sizes — shown
           faintly until you type your own.
         </p>
@@ -257,7 +257,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
         ))}
         {structure.length > 1 ? (
           <div className="flex items-center gap-3">
-            <span className="text-ink/70 text-sm">MRP printed on</span>
+            <span className="text-ink-2 text-sm">MRP printed on</span>
             <div role="group" aria-label="MRP printed on" className="flex">
               {structure.map((unit, index) => {
                 const pressed = index === mrpUnitAt;
@@ -268,12 +268,12 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
                     aria-pressed={pressed}
                     onClick={() => setMrpUnitName(unit.name)}
                     className={[
-                      'border-line h-touch min-w-11 border px-3 text-sm capitalize',
+                      'border-border h-touch min-w-11 border px-3 text-sm capitalize',
                       index === 0 ? 'rounded-l' : '-ml-px',
                       index === structure.length - 1 ? 'rounded-r' : '',
                       pressed
-                        ? 'bg-green-600 text-paper border-green-600 font-medium'
-                        : 'bg-paper text-ink hover:bg-green-100',
+                        ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                        : 'bg-surface text-navy hover:bg-page',
                     ].join(' ')}
                   >
                     {unit.name}
@@ -294,7 +294,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           onChange={setMrp}
         />
         {overMrp ? (
-          <p className="text-amber text-sm">
+          <p className="text-amber-text text-sm">
             The {mrpUnit?.name} price is above the MRP you recorded. That is allowed — the pack in
             hand is what counts.
           </p>
@@ -323,7 +323,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
         <button
           type="submit"
           disabled={pending}
-          className="bg-green-600 text-paper min-h-touch rounded px-6 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-6 disabled:opacity-40"
         >
           {pending ? 'Saving…' : 'Save product'}
         </button>
@@ -332,7 +332,7 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
           onClick={() => {
             router.push('/products');
           }}
-          className="text-ink/60 text-sm"
+          className="text-ink-2 text-sm"
         >
           Cancel
         </button>
@@ -350,11 +350,11 @@ export function ProductForm({ initial }: { initial: ProductFormValues }) {
  */
 function PackLevelPreview({ baseUnit, levels }: { baseUnit: string; levels: PackLevel[] }) {
   if (levels.length === 0) {
-    return <p className="text-ink/50 text-sm">Sold only as single {baseUnit || 'units'}.</p>;
+    return <p className="text-ink-2 text-sm">Sold only as single {baseUnit || 'units'}.</p>;
   }
 
   return (
-    <ul className="text-ink/60 flex flex-wrap gap-x-4 text-sm">
+    <ul className="text-ink-2 flex flex-wrap gap-x-4 text-sm">
       {levels.map((level, index) => (
         <li key={`${level.name}-${index}`}>
           1 {level.name} ={' '}
@@ -370,8 +370,8 @@ function PackLevelPreview({ baseUnit, levels }: { baseUnit: string; levels: Pack
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <fieldset className="border-line flex flex-col gap-3 rounded border p-4">
-      <legend className="text-ink/50 px-1 text-xs tracking-[0.14em] uppercase">{title}</legend>
+    <fieldset className="bg-surface shadow-card flex flex-col gap-3 rounded-card p-4">
+      <legend className="text-ink-2 px-1 text-xs tracking-[0.14em] uppercase">{title}</legend>
       {children}
     </fieldset>
   );
@@ -405,11 +405,11 @@ function Field({
   const hintId = `${name}-hint`;
   return (
     <div>
-      <label htmlFor={name} className="text-ink block text-sm font-medium">
+      <label htmlFor={name} className="text-navy block text-sm font-medium">
         {label}
       </label>
       {hint ? (
-        <p id={hintId} className="text-ink/60 mt-0.5 text-sm leading-snug">
+        <p id={hintId} className="text-ink-2 mt-0.5 text-sm leading-snug">
           {hint}
         </p>
       ) : null}
@@ -431,7 +431,7 @@ function Field({
               },
             }
           : { defaultValue })}
-        className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
+        className="border-border focus:border-blue-600 h-touch mt-1.5 w-full rounded-control border px-3"
       />
     </div>
   );

@@ -250,14 +250,14 @@ export function DaySurface({
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-6 p-4">
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-green-900 text-2xl font-semibold">Day & Reports</h1>
+        <h1 className="text-navy text-2xl font-semibold">Day & Reports</h1>
         <nav className="ml-auto flex gap-1" aria-label="Report range">
           <a
             href={`/day?day=${day}&view=daily`}
             aria-current={view === 'daily' ? 'page' : undefined}
             className={[
               'rounded px-3 py-1 text-sm',
-              view === 'daily' ? 'bg-green-100 text-green-900 font-medium' : 'text-ink/60',
+              view === 'daily' ? 'bg-blue-50 text-navy font-medium' : 'text-ink-2',
             ].join(' ')}
           >
             Daily
@@ -267,7 +267,7 @@ export function DaySurface({
             aria-current={view === 'overall' ? 'page' : undefined}
             className={[
               'rounded px-3 py-1 text-sm',
-              view === 'overall' ? 'bg-green-100 text-green-900 font-medium' : 'text-ink/60',
+              view === 'overall' ? 'bg-blue-50 text-navy font-medium' : 'text-ink-2',
             ].join(' ')}
           >
             Overall
@@ -277,7 +277,7 @@ export function DaySurface({
 
       {view === 'daily' ? (
         <div className="flex items-center gap-3">
-          <label className="text-ink/60 text-sm" htmlFor="day-picker">
+          <label className="text-ink-2 text-sm" htmlFor="day-picker">
             Business day
           </label>
           <input
@@ -290,7 +290,7 @@ export function DaySurface({
                 window.location.href = `/day?day=${event.target.value}&view=daily`;
               }
             }}
-            className="border-line focus:border-green-600 h-touch rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch rounded-control border px-3"
           />
         </div>
       ) : null}
@@ -372,10 +372,10 @@ export function DaySurface({
       {/* Everything below here is detail. An owner who wanted the ten-second
           read has already had it and stopped. */}
 
-      <div className="text-ink/60 flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
+      <div className="text-ink-2 flex flex-wrap items-baseline gap-x-6 gap-y-1 text-sm">
         <span>
           Margin{' '}
-          <span className="numeral text-green-900 font-medium">
+          <span className="numeral text-navy font-medium">
             {formatPaisa(paisa(figures.marginPaisa), { withSymbol: true })}
           </span>
         </span>
@@ -384,12 +384,12 @@ export function DaySurface({
         {figures.itemDiscountPaisa + figures.billDiscountPaisa > 0 ? (
           <span>
             Discounts{' '}
-            <span className="numeral text-amber font-medium">
+            <span className="numeral text-amber-text font-medium">
               {formatPaisa(paisa(figures.itemDiscountPaisa + figures.billDiscountPaisa), {
                 withSymbol: true,
               })}
             </span>
-            <span className="text-ink/50 text-xs">
+            <span className="text-ink-2 text-xs">
               {' '}
               ({formatPaisa(paisa(figures.itemDiscountPaisa))} on items,{' '}
               {formatPaisa(paisa(figures.billDiscountPaisa))} on bills)
@@ -401,7 +401,7 @@ export function DaySurface({
         {figures.writtenOffPaisa > 0 ? (
           <span>
             Written off{' '}
-            <span className="numeral text-amber font-medium">
+            <span className="numeral text-amber-text font-medium">
               {formatPaisa(paisa(figures.writtenOffPaisa), { withSymbol: true })}
             </span>{' '}
             at cost
@@ -411,7 +411,7 @@ export function DaySurface({
             ones — and this used to land on Returns, dropping someone reviewing
             the day into a refund workflow. It goes to Receipts now: a place to
             look, with no way to change anything from it. */}
-        <Link href="/receipts" className="text-green-600 hover:underline">
+        <Link href="/receipts" className="text-blue-600 hover:underline">
           {figures.saleCount} sale{figures.saleCount === 1 ? '' : 's'} →
         </Link>
         <span>{figures.unitsSold.toLocaleString()} units sold</span>
@@ -422,7 +422,7 @@ export function DaySurface({
         {supplierOwedPaisa > 0 ? (
           <Link href="/purchases" className="hover:underline">
             Owed to suppliers{' '}
-            <span className="numeral text-amber font-medium">
+            <span className="numeral text-amber-text font-medium">
               {formatPaisa(paisa(supplierOwedPaisa), { withSymbol: true })}
             </span>
           </Link>
@@ -469,12 +469,12 @@ export function DaySurface({
               {expiredSold.map((row) => (
                 <Row key={row.allocationId}>
                   <span className="font-medium">{row.productName}</span>
-                  <span className="numeral text-amber ml-2">
+                  <span className="numeral text-amber-text ml-2">
                     {row.qtyBase} {row.baseUnitName}
                   </span>
-                  <span className="text-amber ml-2">expired {row.expiryDate}</span>
-                  <span className="text-ink/60 ml-2">{row.receiptNumber}</span>
-                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                  <span className="text-amber-text ml-2">expired {row.expiryDate}</span>
+                  <span className="text-ink-2 ml-2">{row.receiptNumber}</span>
+                  <span className="text-ink-2 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -491,40 +491,40 @@ export function DaySurface({
                   <span className="font-medium">Bill discount</span>
                   <Link
                     href={`/receipts/${encodeURIComponent(row.receiptNumber)}`}
-                    className="text-green-700 ml-2 hover:underline"
+                    className="text-blue-600 ml-2 hover:underline"
                   >
                     {row.receiptNumber}
                   </Link>
-                  <span className="numeral text-ink/60 ml-2 text-xs">
+                  <span className="numeral text-ink-2 ml-2 text-xs">
                     {formatPaisa(paisa(row.billPaisa))} → {formatPaisa(paisa(row.totalPaisa))}
                   </span>
                   {row.approvedByName ? (
-                    <span className="text-ink/50 ml-2 text-xs">
+                    <span className="text-ink-2 ml-2 text-xs">
                       approved by {row.approvedByName}
                     </span>
                   ) : row.unapprovedOverLimit ? (
                     <span className="text-red ml-2 text-xs">over the limit, not approved</span>
                   ) : null}
-                  <span className="numeral text-amber ml-auto">
+                  <span className="numeral text-amber-text ml-auto">
                     -{formatPaisa(paisa(row.discountPaisa))}
                   </span>
-                  <span className="text-ink/40 ml-2 text-xs">{row.byName}</span>
+                  <span className="text-ink-2 ml-2 text-xs">{row.byName}</span>
                 </Row>
               ))}
               {overrides.map((row) => (
                 <Row key={row.saleLineId}>
                   <span className="font-medium">{row.productName}</span>
-                  <span className="text-ink/60 ml-2">{row.receiptNumber}</span>
+                  <span className="text-ink-2 ml-2">{row.receiptNumber}</span>
                   {row.priceOverridden ? (
-                    <span className="text-amber ml-2 text-xs">price changed</span>
+                    <span className="text-amber-text ml-2 text-xs">price changed</span>
                   ) : null}
                   {row.lineDiscountPaisa > 0 ? (
-                    <span className="numeral text-amber ml-auto">
+                    <span className="numeral text-amber-text ml-auto">
                       -{formatPaisa(paisa(row.lineDiscountPaisa))}
                     </span>
                   ) : null}
                   <span
-                    className={`text-ink/40 text-xs ${row.lineDiscountPaisa > 0 ? 'ml-2' : 'ml-auto'}`}
+                    className={`text-ink-2 text-xs ${row.lineDiscountPaisa > 0 ? 'ml-2' : 'ml-auto'}`}
                   >
                     {row.byName}
                   </span>
@@ -536,8 +536,8 @@ export function DaySurface({
               {returns.map((row) => (
                 <Row key={row.returnId}>
                   <span className="font-medium">{row.receiptNumber}</span>
-                  <span className="text-ink/60 ml-2">for {row.saleReceiptNumber}</span>
-                  <span className="numeral text-amber ml-auto">
+                  <span className="text-ink-2 ml-2">for {row.saleReceiptNumber}</span>
+                  <span className="numeral text-amber-text ml-auto">
                     -{formatPaisa(paisa(row.cashOutPaisa + row.creditReducedPaisa))}
                   </span>
                 </Row>
@@ -548,7 +548,7 @@ export function DaySurface({
               {quickItems.map((row) => (
                 <Row key={row.productId}>
                   <span className="font-medium">{row.name}</span>
-                  <span className="text-ink/50 ml-auto text-xs">needs completing</span>
+                  <span className="text-ink-2 ml-auto text-xs">needs completing</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -562,7 +562,7 @@ export function DaySurface({
                   >
                     {row.productName}
                   </Link>
-                  <span className="text-ink/60 ml-2">
+                  <span className="text-ink-2 ml-2">
                     {[
                       row.qtyDeltaBase !== 0
                         ? `qty ${row.qtyDeltaBase > 0 ? '+' : ''}${row.qtyDeltaBase}`
@@ -575,8 +575,8 @@ export function DaySurface({
                       .filter(Boolean)
                       .join(' · ')}
                   </span>
-                  <span className="text-ink/50 ml-2 truncate">{row.note}</span>
-                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                  <span className="text-ink-2 ml-2 truncate">{row.note}</span>
+                  <span className="text-ink-2 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -585,16 +585,16 @@ export function DaySurface({
               {supplierReturns.map((row) => (
                 <Row key={row.id}>
                   <span className="font-medium">{row.productName}</span>
-                  <span className="numeral text-amber ml-2">−{row.amount}</span>
-                  <span className="text-ink/60 ml-2">to {row.supplierName}</span>
+                  <span className="numeral text-amber-text ml-2">−{row.amount}</span>
+                  <span className="text-ink-2 ml-2">to {row.supplierName}</span>
                   <span className="numeral ml-2">credit {formatPaisa(paisa(row.creditPaisa))}</span>
-                  <span className="numeral text-ink/60 ml-2">
+                  <span className="numeral text-ink-2 ml-2">
                     stock cost {formatPaisa(paisa(row.stockCostPaisa))}
                     {creditAgainstStockCost(row.creditPaisa, row.stockCostPaisa)
                       ? ` (${creditAgainstStockCost(row.creditPaisa, row.stockCostPaisa)})`
                       : ''}
                   </span>
-                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                  <span className="text-ink-2 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -604,13 +604,13 @@ export function DaySurface({
                 <Row key={row.id}>
                   <span className="font-medium">{row.productName}</span>
                   <span
-                    className={`numeral ml-2 ${row.qtyBaseDelta < 0 ? 'text-amber' : 'text-green-900'}`}
+                    className={`numeral ml-2 ${row.qtyBaseDelta < 0 ? 'text-amber-text' : 'text-navy'}`}
                   >
                     {row.qtyBaseDelta > 0 ? '+' : '−'}
                     {row.amount}
                   </span>
-                  <span className="text-ink/60 ml-2">{row.reason.replaceAll('_', ' ')}</span>
-                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                  <span className="text-ink-2 ml-2">{row.reason.replaceAll('_', ' ')}</span>
+                  <span className="text-ink-2 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -623,16 +623,16 @@ export function DaySurface({
                     {CASH_REASON_LABELS[row.reason as CashReason]}
                   </span>
                   <span
-                    className={`numeral ml-2 ${row.direction === 'out' ? 'text-amber' : 'text-green-900'}`}
+                    className={`numeral ml-2 ${row.direction === 'out' ? 'text-amber-text' : 'text-navy'}`}
                   >
                     {row.direction === 'in' ? '+' : '-'}
                     {formatPaisa(paisa(row.amountPaisa))}
                   </span>
-                  {row.note ? <span className="text-ink/50 ml-2 text-xs">“{row.note}”</span> : null}
+                  {row.note ? <span className="text-ink-2 ml-2 text-xs">“{row.note}”</span> : null}
                   {/* [PCN-013] Typed wrong: cancel it with the opposite entry.
                       Both stay listed, so the owner sees what was fixed. */}
                   {row.reversed ? (
-                    <span className="text-ink/50 ml-2 text-xs">— cancelled</span>
+                    <span className="text-ink-2 ml-2 text-xs">— cancelled</span>
                   ) : row.reversesId === null ? (
                     <span className="ml-2">
                       <CancelEntryButton
@@ -641,7 +641,7 @@ export function DaySurface({
                       />
                     </span>
                   ) : null}
-                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                  <span className="text-ink-2 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -652,14 +652,14 @@ export function DaySurface({
                   <span className="font-medium">
                     {row.kind === 'udhaar' ? 'Udhaar payment' : 'Supplier payment'} cancelled
                   </span>
-                  <span className="text-ink/70 ml-2">{row.name}</span>
-                  <span className="numeral text-amber ml-2">
+                  <span className="text-ink-2 ml-2">{row.name}</span>
+                  <span className="numeral text-amber-text ml-2">
                     {formatPaisa(paisa(row.amountPaisa))}
                   </span>
                   {row.receiptNumber ? (
-                    <span className="text-ink/50 ml-2 text-xs">receipt {row.receiptNumber}</span>
+                    <span className="text-ink-2 ml-2 text-xs">receipt {row.receiptNumber}</span>
                   ) : null}
-                  <span className="text-ink/40 ml-auto text-xs">{row.byName}</span>
+                  <span className="text-ink-2 ml-auto text-xs">{row.byName}</span>
                 </Row>
               ))}
             </ExceptionGroup>
@@ -668,8 +668,8 @@ export function DaySurface({
               {lateSynced.map((row) => (
                 <Row key={row.id}>
                   <span className="font-medium">{row.receiptNumber}</span>
-                  <span className="text-ink/60 ml-2">{row.kind}</span>
-                  <span className="text-ink/40 ml-auto text-xs">
+                  <span className="text-ink-2 ml-2">{row.kind}</span>
+                  <span className="text-ink-2 ml-auto text-xs">
                     recorded {row.clientCommittedAt.toLocaleTimeString('en-PK')}, synced{' '}
                     {row.createdAt.toLocaleTimeString('en-PK')}
                   </span>
@@ -704,7 +704,7 @@ function AttentionBanner({
 }) {
   if (count === 0) {
     return (
-      <p className="border-line text-green-900 rounded border bg-green-100/50 px-4 py-3 text-sm font-medium">
+      <p className="bg-surface shadow-card text-navy rounded-card px-4 py-3 text-sm font-medium">
         Nothing needs a look today.
       </p>
     );
@@ -716,11 +716,11 @@ function AttentionBanner({
     .join(' · ');
 
   return (
-    <div className="border-amber/40 bg-amber/5 rounded border px-4 py-3">
-      <p className="text-amber text-sm font-medium">
+    <div className="border-amber bg-amber-50 rounded border px-4 py-3">
+      <p className="text-amber-text text-sm font-medium">
         {count} thing{count === 1 ? '' : 's'} need{count === 1 ? 's' : ''} a look
       </p>
-      <p className="text-ink/60 mt-0.5 text-sm">{named}</p>
+      <p className="text-ink-2 mt-0.5 text-sm">{named}</p>
     </div>
   );
 }
@@ -740,8 +740,8 @@ function ExceptionGroup<T>({
   }
   return (
     <div>
-      <h3 className="text-ink/70 mb-1 text-sm font-medium">
-        {title} <span className="text-ink/40">({rows.length})</span>
+      <h3 className="text-ink-2 mb-1 text-sm font-medium">
+        {title} <span className="text-ink-2">({rows.length})</span>
       </h3>
       <ul className="border-line divide-line divide-y rounded border text-sm">{children}</ul>
     </div>
@@ -786,14 +786,14 @@ function NumberCard({
   note?: string;
 }) {
   return (
-    <div className="border-line rounded border p-4">
-      <p className="text-ink/60 text-xs tracking-[0.1em] uppercase">{label}</p>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <p className="text-ink-2 text-xs tracking-[0.1em] uppercase">{label}</p>
       <p
-        className={`numeral mt-1 text-3xl font-semibold ${amber ? 'text-amber' : 'text-green-900'}`}
+        className={`numeral mt-1 text-3xl font-semibold ${amber ? 'text-amber-text' : 'text-navy'}`}
       >
         {formatPaisa(paisa(amountPaisa), { withSymbol: true })}
       </p>
-      {note ? <p className="text-ink/50 mt-1 text-xs">{note}</p> : null}
+      {note ? <p className="text-ink-2 mt-1 text-xs">{note}</p> : null}
     </div>
   );
 }
@@ -837,11 +837,11 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
   }
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Count the drawer</h2>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Count the drawer</h2>
       <div className="flex flex-wrap items-end gap-4">
         <div className="w-40">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="drawer-counted">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="drawer-counted">
             What&rsquo;s actually in the drawer
           </label>
           <input
@@ -853,7 +853,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
               setCounted(event.target.value);
               setDone(null);
             }}
-            className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
           />
         </div>
         {unreadable ? (
@@ -861,7 +861,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
             Not an amount — type the cash you counted.
           </p>
         ) : counted !== '' ? (
-          <p className={`text-sm ${differencePaisa === 0 ? 'text-green-900' : 'text-amber'}`}>
+          <p className={`text-sm ${differencePaisa === 0 ? 'text-green-700' : 'text-amber-text'}`}>
             {differencePaisa === 0
               ? 'Matches exactly.'
               : `${differencePaisa > 0 ? 'Over' : 'Short'} by ${formatPaisa(paisa(Math.abs(differencePaisa)))}`}
@@ -871,7 +871,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
           type="button"
           onClick={() => void record()}
           disabled={busy || countedParsed === null || differencePaisa === 0}
-          className="bg-green-600 text-paper min-h-touch ml-auto rounded px-5 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch ml-auto rounded-control px-5 disabled:opacity-40"
         >
           {busy ? 'Recording…' : 'Record over/short'}
         </button>
@@ -882,7 +882,7 @@ function DrawerCount({ expectedCashPaisa }: { expectedCashPaisa: number }) {
         </p>
       ) : null}
       {done ? (
-        <p className="text-green-900 mt-2 text-sm" role="status">
+        <p className="text-green-700 mt-2 text-sm" role="status">
           {done}
         </p>
       ) : null}
@@ -936,17 +936,17 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
   }
 
   return (
-    <div className="border-line rounded border p-4">
-      <h2 className="text-green-900 mb-2 font-medium">Record a cash movement</h2>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <h2 className="text-navy mb-2 font-medium">Record a cash movement</h2>
       {needsOpeningFloat ? (
-        <p className="text-amber mb-3 text-sm">
+        <p className="text-amber-text mb-3 text-sm">
           No opening float recorded today — the expected cash figure above assumes the drawer
           started empty.
         </p>
       ) : null}
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-40">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="movement-reason">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="movement-reason">
             Reason
           </label>
           <select
@@ -956,7 +956,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
               setReason(event.target.value as CashReason);
               setDone(null);
             }}
-            className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
           >
             {otherReasons.map((candidate) => (
               <option key={candidate} value={candidate}>
@@ -966,7 +966,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
           </select>
         </div>
         <div className="w-32">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="movement-amount">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="movement-amount">
             Amount
           </label>
           <input
@@ -978,11 +978,11 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
               setAmount(event.target.value);
               setDone(null);
             }}
-            className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
           />
         </div>
         <div className="min-w-48 flex-1">
-          <label className="text-ink/60 mb-1 block text-xs" htmlFor="movement-note">
+          <label className="text-ink-2 mb-1 block text-xs" htmlFor="movement-note">
             Note (optional)
           </label>
           <input
@@ -992,14 +992,14 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
             onChange={(event) => {
               setNote(event.target.value);
             }}
-            className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
           />
         </div>
         <button
           type="button"
           onClick={() => void record()}
           disabled={busy || paisaFromRupeeInput(amount) <= 0}
-          className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
         >
           {busy ? 'Saving…' : 'Save'}
         </button>
@@ -1010,7 +1010,7 @@ function CashMovementForm({ needsOpeningFloat }: { needsOpeningFloat: boolean })
         </p>
       ) : null}
       {done ? (
-        <p className="text-green-900 mt-2 text-sm" role="status">
+        <p className="text-green-700 mt-2 text-sm" role="status">
           {done}
         </p>
       ) : null}

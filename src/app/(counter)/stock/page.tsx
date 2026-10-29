@@ -50,19 +50,19 @@ export default async function StockPage({
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-6 p-4">
       <header className="flex flex-wrap items-center gap-3">
-        <h1 className="text-green-900 text-2xl font-semibold">Stock</h1>
+        <h1 className="text-navy text-2xl font-semibold">Stock</h1>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {/* W9's guided flow was reachable only by typing `?opening=1`. It is
               the first thing a new pharmacy does and it had no door. */}
           <Link
             href="/stock/adjust?opening=1"
-            className="border-line hover:bg-green-100 min-h-touch flex items-center rounded border px-4 text-sm"
+            className="border-border hover:bg-blue-50 min-h-touch flex items-center rounded-control border px-4 text-sm"
           >
             Enter opening stock
           </Link>
           <Link
             href="/stock/adjust"
-            className="border-line hover:bg-green-100 min-h-touch flex items-center rounded border px-4 text-sm"
+            className="border-border hover:bg-blue-50 min-h-touch flex items-center rounded-control border px-4 text-sm"
           >
             Adjust stock — F8
           </Link>
@@ -73,12 +73,12 @@ export default async function StockPage({
           and the shelf currently disagree. */}
       {incidents.length > 0 ? (
         <div
-          className="border-amber/40 bg-amber/10 rounded border p-3"
+          className="border-amber bg-amber-50 rounded border p-3"
           role="region"
           aria-label="Sold more than the system had"
         >
-          <h2 className="text-amber mb-2 font-medium">Sold more than the system had</h2>
-          <p className="text-ink/70 mb-3 text-sm">
+          <h2 className="text-amber-text mb-2 font-medium">Sold more than the system had</h2>
+          <p className="text-ink-2 mb-3 text-sm">
             These went out before the stock was entered. Receiving the delivery or correcting the
             count clears them.
           </p>
@@ -89,26 +89,26 @@ export default async function StockPage({
             {incidents.map((incident) => (
               <li key={incident.productId} className="flex flex-wrap items-baseline gap-x-3">
                 <span className="font-medium">{incident.productName}</span>
-                <span className="numeral text-amber">
+                <span className="numeral text-amber-text">
                   {describeQuantity(
                     baseQty(incident.pendingBase),
                     incident.baseUnitName,
                     incident.packLevels,
                   )}
                 </span>
-                <span className="text-ink/50 text-xs">
+                <span className="text-ink-2 text-xs">
                   since {incident.oldestAt.toLocaleDateString('en-PK')}
                 </span>
                 <span className="ml-auto flex gap-3">
                   <Link
                     href="/purchases"
-                    className="text-green-600 text-xs underline-offset-2 hover:underline"
+                    className="text-blue-600 text-xs underline-offset-2 hover:underline"
                   >
                     Receive delivery
                   </Link>
                   <Link
                     href="/stock/adjust"
-                    className="text-green-600 text-xs underline-offset-2 hover:underline"
+                    className="text-blue-600 text-xs underline-offset-2 hover:underline"
                   >
                     Correct the count
                   </Link>
@@ -122,7 +122,7 @@ export default async function StockPage({
       {/* Near expiry — W12's horizons. */}
       <div>
         <div className="mb-2 flex flex-wrap items-center gap-3">
-          <h2 className="text-green-900 font-medium">Expiring soon</h2>
+          <h2 className="text-navy font-medium">Expiring soon</h2>
           <nav className="flex gap-1" aria-label="Expiry horizon">
             {HORIZONS.map((days) => (
               <Link
@@ -131,7 +131,7 @@ export default async function StockPage({
                 aria-current={days === within ? 'page' : undefined}
                 className={[
                   'rounded px-3 py-1 text-sm',
-                  days === within ? 'bg-green-100 text-green-900 font-medium' : 'text-ink/60',
+                  days === within ? 'bg-blue-50 text-navy font-medium' : 'text-ink-2',
                 ].join(' ')}
               >
                 {days} days
@@ -141,11 +141,11 @@ export default async function StockPage({
         </div>
 
         {expiring.length === 0 ? (
-          <p className="text-ink/50 text-sm">Nothing expiring within {within} days.</p>
+          <p className="text-ink-2 text-sm">Nothing expiring within {within} days.</p>
         ) : (
-          <div className="border-line overflow-x-auto rounded border">
+          <div className="bg-surface shadow-card overflow-x-auto rounded-card">
             <table className="text-table w-full text-left">
-              <thead className="bg-green-100/50 text-ink/60 text-xs">
+              <thead className="bg-mist text-ink-2 text-xs">
                 <tr>
                   <th className="px-3 py-2 font-medium">Item</th>
                   <th className="px-3 py-2 font-medium">Batch</th>
@@ -160,9 +160,9 @@ export default async function StockPage({
                   return (
                     <tr key={row.batchId} className="border-line border-t">
                       <td className="px-3 py-2 font-medium">{row.productName}</td>
-                      <td className="text-ink/60 px-3 py-2">{row.batchNumber ?? '—'}</td>
+                      <td className="text-ink-2 px-3 py-2">{row.batchNumber ?? '—'}</td>
                       <td
-                        className={`px-3 py-2 ${expired ? 'text-red font-medium' : 'text-amber'}`}
+                        className={`px-3 py-2 ${expired ? 'text-red font-medium' : 'text-amber-text'}`}
                       >
                         {row.expiryDate}
                         {expired ? ' — expired' : ''}
@@ -188,9 +188,9 @@ export default async function StockPage({
 
       {/* Low stock — only where a minimum is set (Phase 5 §6's boundary). */}
       <div>
-        <h2 className="text-green-900 mb-2 font-medium">Running low</h2>
+        <h2 className="text-navy mb-2 font-medium">Running low</h2>
         {lowStock.length === 0 ? (
-          <p className="text-ink/50 text-sm">
+          <p className="text-ink-2 text-sm">
             Nothing below its minimum. Set minimum levels on a product (F3) to see it here.
           </p>
         ) : (
@@ -204,7 +204,7 @@ export default async function StockPage({
                     row.baseUnitName,
                     (row.packLevels as PackLevel[] | null) ?? [],
                   )}
-                  <span className="text-ink/50 ml-2 text-xs">
+                  <span className="text-ink-2 ml-2 text-xs">
                     min{' '}
                     {describeQuantity(
                       baseQty(row.minStockBaseUnits),

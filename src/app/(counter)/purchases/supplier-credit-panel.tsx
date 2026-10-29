@@ -89,8 +89,8 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
       {owed.length > 0 ? (
         <div>
           <div className="mb-2 flex items-baseline gap-3">
-            <h2 className="text-green-900 font-medium">Owed to suppliers</h2>
-            <span className="text-amber numeral font-semibold">
+            <h2 className="text-navy font-medium">Owed to suppliers</h2>
+            <span className="text-amber-text numeral font-semibold">
               {formatPaisa(paisa(total), { withSymbol: true })}
             </span>
           </div>
@@ -110,7 +110,7 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
       {inCredit.length > 0 ? (
         <section aria-label="Credit with suppliers">
           <div className="mb-2 flex items-baseline gap-3">
-            <h2 className="text-green-900 font-medium">Credit with suppliers</h2>
+            <h2 className="text-navy font-medium">Credit with suppliers</h2>
             <span className="numeral font-semibold">
               {formatPaisa(paisa(creditTotal), { withSymbol: true })}
             </span>
@@ -119,15 +119,15 @@ export function SupplierCreditPanel({ reloadKey }: { reloadKey: number }) {
             {inCredit.map((row) => (
               <li key={row.id} className="flex flex-wrap items-baseline gap-x-3 px-3 py-2">
                 <SupplierName id={row.id} name={row.name} />
-                {row.phone ? <span className="text-ink/50 text-xs">{row.phone}</span> : null}
+                {row.phone ? <span className="text-ink-2 text-xs">{row.phone}</span> : null}
                 <span className="numeral ml-auto font-medium">
                   {formatPaisa(paisa(row.creditPaisa), { withSymbol: true })}
                 </span>
-                <span className="text-ink/60 text-xs">held for you</span>
+                <span className="text-ink-2 text-xs">held for you</span>
               </li>
             ))}
           </ul>
-          <p className="text-ink/60 mt-1 text-xs">
+          <p className="text-ink-2 mt-1 text-xs">
             Paid ahead, or credited for goods sent back. It counts against what you next owe that
             supplier.
           </p>
@@ -142,7 +142,7 @@ function SupplierName({ id, name }: { id: string; name: string }) {
   return (
     <Link
       href={`/purchases/suppliers/${id}`}
-      className="text-green-700 inline-flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
+      className="text-blue-600 inline-flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
     >
       {name}
     </Link>
@@ -207,8 +207,8 @@ export function SupplierCreditRow({
         ) : (
           <SupplierName id={row.id} name={row.name} />
         )}
-        {row.phone ? <span className="text-ink/50 text-xs">{row.phone}</span> : null}
-        <span className="numeral text-amber ml-auto font-medium">
+        {row.phone ? <span className="text-ink-2 text-xs">{row.phone}</span> : null}
+        <span className="numeral text-amber-text ml-auto font-medium">
           {formatPaisa(paisa(row.balancePaisa), { withSymbol: true })}
         </span>
         <button
@@ -219,7 +219,7 @@ export function SupplierCreditRow({
             setAmount(paying ? '' : (row.balancePaisa / 100).toString());
             setError(null);
           }}
-          className="text-green-600 min-h-touch min-w-touch px-3 text-xs font-medium underline-offset-2 hover:underline"
+          className="text-blue-600 min-h-touch min-w-touch px-3 text-xs font-medium underline-offset-2 hover:underline"
         >
           {paying ? 'Cancel' : 'Pay'}
         </button>
@@ -254,7 +254,7 @@ export function SupplierCreditRow({
           }}
         >
           <div className="w-36">
-            <label className="text-ink/60 mb-1 block text-xs" htmlFor={`pay-${row.id}`}>
+            <label className="text-ink-2 mb-1 block text-xs" htmlFor={`pay-${row.id}`}>
               Amount paid
             </label>
             <input
@@ -267,14 +267,14 @@ export function SupplierCreditRow({
                 setAmount(event.target.value);
                 setError(null);
               }}
-              className="border-line focus:border-green-600 numeral h-touch w-full rounded border px-3 outline-none"
+              className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3"
             />
           </div>
           <button
             type="button"
             onClick={() => void settle()}
             disabled={busy || !(enteredPaisa > 0)}
-            className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
           >
             {busy
               ? 'Saving…'
@@ -283,7 +283,7 @@ export function SupplierCreditRow({
                 : 'Record payment'}
           </button>
           {leavesCreditPaisa > 0 ? (
-            <p className="text-amber w-full text-sm" role="status">
+            <p className="text-amber-text w-full text-sm" role="status">
               {formatPaisa(paisa(leavesCreditPaisa), { withSymbol: true })} more than you owe{' '}
               {row.name}. It stays with them as credit.
             </p>

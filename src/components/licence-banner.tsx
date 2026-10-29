@@ -16,6 +16,8 @@
  * "a type-only import is fine" (CLAUDE.md, Day 7).
  */
 
+import { Banner } from './ui/banner';
+
 export interface LicenceNotice {
   readonly status: string;
   readonly tier: 'full' | 'restricted';
@@ -48,20 +50,21 @@ export function LicenceBanner({
     // every navigation, which is noise rather than help. It also kept every
     // `getByRole('status')` in the E2E suite ambiguous, which is the same fact
     // showing up as a test failure.
-    <div
-      className="border-amber/40 bg-amber/5 text-amber shrink-0 border-b px-3 py-2 text-sm"
+    <Banner
+      tone="attention"
+      strip
       role="note"
       aria-label="Licence"
+      lead={words}
+      className="shrink-0"
     >
-      <span className="font-medium">{words}</span>
       {notice.withheld.length > 0 ? (
-        <span className="text-ink/70">
-          {' '}
+        <>
           Paused until activated: {notice.withheld.join(', ')}. Settling udhaar, printing receipts
           and exporting your data keep working.
-        </span>
+        </>
       ) : null}
-    </div>
+    </Banner>
   );
 }
 

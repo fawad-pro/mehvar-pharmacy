@@ -44,19 +44,19 @@ export default async function LoginPage({
   return (
     <main className="flex min-h-screen items-start justify-center p-6 sm:items-center">
       <form action={loginDeviceAction} className="w-full max-w-md">
-        <p className="text-green-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
-        <h1 className="text-green-900 mt-1 text-2xl font-semibold">Set up this counter</h1>
-        <p className="text-ink/70 mt-2 leading-relaxed">
+        <p className="text-blue-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
+        <h1 className="text-navy mt-1 text-2xl font-semibold">Set up this counter</h1>
+        <p className="text-ink-2 mt-2 leading-relaxed">
           This links this machine to your pharmacy. You do this once, on this machine.
         </p>
 
         {/* Where every value comes from, and who has it — said once, not three
             times. This single sentence is the point of the redesign. */}
-        <div className="border-line bg-green-100/60 mt-5 rounded border p-3">
-          <p className="text-green-900 text-sm font-medium">
+        <div className="bg-page mt-5 rounded-card p-3">
+          <p className="text-navy text-sm font-medium">
             All three are on your setup sheet from Mehvar.
           </p>
-          <p className="text-ink/70 mt-0.5 text-sm">
+          <p className="text-ink-2 mt-0.5 text-sm">
             Don’t have it? Ask the owner — or message us on WhatsApp.
           </p>
         </div>
@@ -114,7 +114,7 @@ export default async function LoginPage({
 
         <button
           type="submit"
-          className="bg-green-600 text-paper min-h-touch mt-5 w-full rounded font-medium"
+          className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch mt-5 w-full rounded-control"
         >
           Set up counter
         </button>
@@ -122,7 +122,7 @@ export default async function LoginPage({
         {/* The reassurance that matters most to the person who will actually use
             this machine every day, and who is probably not the person holding
             the sheet. */}
-        <p className="text-ink/60 border-line mt-5 border-t pt-4 text-sm leading-relaxed">
+        <p className="text-ink-2 border-line mt-5 border-t pt-4 text-sm leading-relaxed">
           After this, the counter stays signed in. Every day you just tap your name and type your{' '}
           {PIN_LENGTH}-digit PIN.
         </p>
@@ -156,13 +156,13 @@ function Field({
 
   return (
     <div>
-      <label htmlFor={name} className="text-ink block text-sm font-medium">
+      <label htmlFor={name} className="text-navy block text-sm font-medium">
         {label}
       </label>
       {/* Hint above the input, not below it: it is read before typing, and it
           keeps the validation message the only thing that ever appears under a
           field. */}
-      <p id={hintId} className="text-ink/60 mt-0.5 text-sm leading-snug">
+      <p id={hintId} className="text-ink-2 mt-0.5 text-sm leading-snug">
         {hint}
       </p>
       <input
@@ -173,7 +173,7 @@ function Field({
         autoFocus={autoFocus}
         autoComplete={autoComplete}
         aria-describedby={hintId}
-        className="border-line focus:border-green-600 h-touch mt-1.5 w-full rounded border px-3 outline-none"
+        className="border-border focus:border-blue-600 h-touch mt-1.5 w-full rounded-control border px-3"
       />
     </div>
   );

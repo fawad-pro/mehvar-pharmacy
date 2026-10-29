@@ -15,6 +15,8 @@ import { usePathname } from 'next/navigation';
 
 import { GLOBAL_KEYS, type GlobalKey } from '@/client/keyboard/registry';
 
+import { keyChipClass, keyChipKeyClass, keyChipLabelClass } from './ui/key-chip';
+
 /**
  * Keyboard-first is a claim about speed, not a reason to be inert to the
  * pointer. The bar prints the shortcut either way; making the entry navigable
@@ -41,9 +43,11 @@ export function KeyBar({
   const pathname = usePathname();
 
   return (
+    // The light bar of PCN-016: soft chips on a white strip, the active key
+    // blue. A phone has no function keys; below 768px the tab bar takes over.
     <nav
       aria-label="Function keys"
-      className="bg-green-900 text-paper flex h-touch shrink-0 items-stretch gap-px overflow-x-auto text-xs"
+      className="bg-surface text-navy shadow-bar flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 max-md:hidden"
     >
       {GLOBAL_KEYS.map((binding, index) => {
         const active = binding.href !== null && pathname.startsWith(binding.href);
@@ -56,17 +60,12 @@ export function KeyBar({
         // that rearranges itself stops being trustworthy.
         const permitted = !binding.ownerOnly || role === 'owner';
 
-        const className = [
-          'flex items-center gap-1.5 whitespace-nowrap px-3 transition-colors',
-          active ? 'bg-green-600' : '',
-          permitted ? '' : 'opacity-40',
-          startsBand ? 'ml-2 border-l border-paper/25' : '',
-        ].join(' ');
+        const className = keyChipClass({ active, permitted, startsBand });
 
         const content = (
           <>
-            <kbd className="font-semibold tracking-tight">{binding.key}</kbd>
-            <span className="opacity-80">{binding.label}</span>
+            <kbd className={keyChipKeyClass(active)}>{binding.key}</kbd>
+            <span className={keyChipLabelClass(active)}>{binding.label}</span>
           </>
         );
 
@@ -79,7 +78,7 @@ export function KeyBar({
               onClick={() => {
                 onDispatch(meaning);
               }}
-              className={`${className} hover:bg-green-600/60`}
+              className={className}
             >
               {content}
             </button>
@@ -88,7 +87,12 @@ export function KeyBar({
 
         if (binding.href === null || !permitted) {
           return (
-            <span key={binding.key} data-active={active || undefined} className={className}>
+            <span
+              key={binding.key}
+              data-active={active || undefined}
+              aria-disabled={permitted ? undefined : true}
+              className={className}
+            >
               {content}
             </span>
           );
@@ -99,7 +103,8 @@ export function KeyBar({
             key={binding.key}
             href={binding.href}
             data-active={active || undefined}
-            className={`${className} ${active ? '' : 'hover:bg-green-600/60'}`}
+            aria-current={active ? 'page' : undefined}
+            className={className}
           >
             {content}
           </Link>

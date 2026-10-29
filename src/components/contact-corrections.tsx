@@ -65,14 +65,14 @@ export function ContactCorrections({
 
   if (!isActive) {
     return (
-      <div className="border-line flex flex-wrap items-center gap-3 rounded border px-3 py-2">
+      <div className="bg-surface shadow-card flex flex-wrap items-center gap-3 rounded-card px-3 py-2">
         <p className="text-sm">Removed — not offered when picking a {kind}.</p>
         {canRemove ? (
           <button
             type="button"
             onClick={() => void run(restore, () => undefined)}
             disabled={busy}
-            className="border-line min-h-touch ml-auto rounded border px-4"
+            className="border-border min-h-touch ml-auto rounded-control border px-4"
           >
             Restore
           </button>
@@ -87,7 +87,7 @@ export function ContactCorrections({
   }
 
   return (
-    <div className="border-line flex flex-col gap-2 rounded border p-3">
+    <div className="bg-surface shadow-card flex flex-col gap-2 rounded-card p-3">
       {editing ? (
         <form
           className="flex flex-wrap items-end gap-2"
@@ -99,30 +99,30 @@ export function ContactCorrections({
             );
           }}
         >
-          <label className="text-ink/70 flex flex-col text-xs">
+          <label className="text-ink-2 flex flex-col text-xs">
             Name
             <input
               autoComplete="off"
               autoFocus
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
-              className="border-line focus:border-green-600 h-touch min-w-56 rounded border px-3 text-base outline-none"
+              className="border-border focus:border-blue-600 h-touch min-w-56 rounded-control border px-3 text-base"
             />
           </label>
-          <label className="text-ink/70 flex flex-col text-xs">
+          <label className="text-ink-2 flex flex-col text-xs">
             Phone
             <input
               autoComplete="off"
               inputMode="tel"
               value={draftPhone}
               onChange={(event) => setDraftPhone(event.target.value)}
-              className="border-line focus:border-green-600 h-touch min-w-40 rounded border px-3 text-base outline-none"
+              className="border-border focus:border-blue-600 h-touch min-w-40 rounded-control border px-3 text-base"
             />
           </label>
           <button
             type="submit"
             disabled={busy}
-            className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium"
+            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-4"
           >
             Save
           </button>
@@ -135,7 +135,7 @@ export function ContactCorrections({
               setDraftPhone(phone ?? '');
               setError(null);
             }}
-            className="border-line min-h-touch rounded border px-4"
+            className="border-border min-h-touch rounded-control border px-4"
           >
             Cancel
           </button>
@@ -150,7 +150,7 @@ export function ContactCorrections({
             autoFocus
             onClick={() => void run(remove, () => undefined)}
             disabled={busy}
-            className="bg-red text-paper min-h-touch rounded px-4 font-medium"
+            className="bg-red text-surface min-h-touch rounded-control px-4 font-medium"
           >
             Yes, remove
           </button>
@@ -158,7 +158,7 @@ export function ContactCorrections({
             type="button"
             onClick={() => setConfirming(false)}
             disabled={busy}
-            className="border-line min-h-touch rounded border px-4"
+            className="border-border min-h-touch rounded-control border px-4"
           >
             Cancel
           </button>
@@ -171,7 +171,7 @@ export function ContactCorrections({
               setError(null);
               setEditing(true);
             }}
-            className="border-line min-h-touch rounded border px-4"
+            className="border-border min-h-touch rounded-control border px-4"
           >
             Edit name or phone
           </button>
@@ -182,7 +182,7 @@ export function ContactCorrections({
                 setError(null);
                 setConfirming(true);
               }}
-              className="border-line min-h-touch rounded border px-4"
+              className="border-border min-h-touch rounded-control border px-4"
             >
               Remove {kind}
             </button>

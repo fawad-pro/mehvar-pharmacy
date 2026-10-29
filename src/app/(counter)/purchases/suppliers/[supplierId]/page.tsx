@@ -63,14 +63,14 @@ export default async function SupplierAccountPage({
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
-      <Link href="/purchases/suppliers" className="text-green-600 text-sm">
+      <Link href="/purchases/suppliers" className="text-blue-600 text-sm">
         ← Suppliers
       </Link>
 
       <header>
-        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Supplier account</p>
-        <h1 className="text-green-900 text-2xl font-semibold">{supplier.name}</h1>
-        {supplier.phone ? <p className="text-ink/50 text-sm">{supplier.phone}</p> : null}
+        <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Supplier account</p>
+        <h1 className="text-navy text-2xl font-semibold">{supplier.name}</h1>
+        {supplier.phone ? <p className="text-ink-2 text-sm">{supplier.phone}</p> : null}
       </header>
 
       <ContactCorrections
@@ -84,7 +84,7 @@ export default async function SupplierAccountPage({
         restore={restoreSupplierAction.bind(null, supplier.id as Uuid)}
       />
 
-      <div className="border-line bg-green-100/50 flex flex-col gap-3 rounded border p-4">
+      <div className="bg-surface shadow-card flex flex-col gap-3 rounded-card p-4">
         <SupplierPosition name={supplier.name} balancePaisa={balancePaisa} />
         {balancePaisa > 0 ? (
           <SupplierPayRow
@@ -94,13 +94,13 @@ export default async function SupplierAccountPage({
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-ink/50 p-8 text-center text-sm">
+        <p className="text-ink-2 p-8 text-center text-sm">
           No invoices or payments recorded with this supplier yet.
         </p>
       ) : (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left text-sm">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Date</th>
                 <th className="px-3 py-2 font-medium">What</th>
@@ -114,9 +114,9 @@ export default async function SupplierAccountPage({
                 <tr key={row.id} className="border-line border-t align-top">
                   {/* The time too: "when was the rest paid?" is the question this
                       page exists to answer, and two payments can share a day. */}
-                  <td className="text-ink/70 px-3 py-2 whitespace-nowrap">
+                  <td className="text-ink-2 px-3 py-2 whitespace-nowrap">
                     {row.createdAt.toLocaleDateString('en-PK')}{' '}
-                    <span className="text-ink/40 text-xs">
+                    <span className="text-ink-2 text-xs">
                       {row.createdAt.toLocaleTimeString('en-PK', {
                         hour: 'numeric',
                         minute: '2-digit',
@@ -130,9 +130,9 @@ export default async function SupplierAccountPage({
                       isOwner={session.userRole === 'owner'}
                     />
                   </td>
-                  <td className="text-ink/70 px-3 py-2">{row.byName}</td>
+                  <td className="text-ink-2 px-3 py-2">{row.byName}</td>
                   <td
-                    className={`numeral px-3 py-2 text-right ${row.amountPaisa > 0 ? 'text-amber' : 'text-green-900'}`}
+                    className={`numeral px-3 py-2 text-right ${row.amountPaisa > 0 ? 'text-amber-text' : 'text-navy'}`}
                   >
                     {row.amountPaisa === 0 ? '—' : row.amountPaisa > 0 ? '+' : '−'}
                     {row.amountPaisa === 0 ? null : formatPaisa(paisa(Math.abs(row.amountPaisa)))}
@@ -146,7 +146,7 @@ export default async function SupplierAccountPage({
           </table>
         </div>
       )}
-      <p className="text-ink/60 text-xs">
+      <p className="text-ink-2 text-xs">
         + adds to what you owe; − is paid, returned or credited. Invoices entered before Mehvar
         tracked supplier credit are not part of this account.
       </p>
@@ -159,8 +159,8 @@ function SupplierPosition({ name, balancePaisa }: { name: string; balancePaisa: 
   if (balancePaisa > 0) {
     return (
       <p className="flex flex-wrap items-baseline gap-x-3">
-        <span className="text-ink/70">You owe {name}</span>
-        <span className="text-amber numeral text-2xl font-semibold">
+        <span className="text-ink-2">You owe {name}</span>
+        <span className="text-amber-text numeral text-2xl font-semibold">
           {formatPaisa(paisa(balancePaisa), { withSymbol: true })}
         </span>
       </p>
@@ -169,24 +169,24 @@ function SupplierPosition({ name, balancePaisa }: { name: string; balancePaisa: 
   if (balancePaisa < 0) {
     return (
       <p className="flex flex-wrap items-baseline gap-x-3">
-        <span className="text-ink/70">{name} holds credit for you</span>
+        <span className="text-ink-2">{name} holds credit for you</span>
         <span className="numeral text-2xl font-semibold">
           {formatPaisa(paisa(-balancePaisa), { withSymbol: true })}
         </span>
       </p>
     );
   }
-  return <p className="text-green-900 text-lg font-medium">Settled — nothing owed</p>;
+  return <p className="text-green-700 text-lg font-medium">Settled — nothing owed</p>;
 }
 
 function RunningPosition({ balancePaisa }: { balancePaisa: number }) {
   if (balancePaisa > 0) {
-    return <span className="text-amber">owe {formatPaisa(paisa(balancePaisa))}</span>;
+    return <span className="text-amber-text">owe {formatPaisa(paisa(balancePaisa))}</span>;
   }
   if (balancePaisa < 0) {
     return <span>credit {formatPaisa(paisa(-balancePaisa))}</span>;
   }
-  return <span className="text-green-900">settled</span>;
+  return <span className="text-green-700">settled</span>;
 }
 
 function LedgerWhat({
@@ -204,10 +204,10 @@ function LedgerWhat({
     case 'invoice':
       return (
         <>
-          <Link href={`/purchases/${row.id}`} className="text-green-700 hover:underline">
+          <Link href={`/purchases/${row.id}`} className="text-blue-600 hover:underline">
             Invoice{row.invoiceRef ? ` ${row.invoiceRef}` : ''}
           </Link>
-          <span className="text-ink/50 ml-1 text-xs">
+          <span className="text-ink-2 ml-1 text-xs">
             {formatPaisa(paisa(row.invoiceTotalPaisa), { withSymbol: true })}, paid{' '}
             {formatPaisa(paisa(row.paidNowPaisa), { withSymbol: true })} on receiving
           </span>
@@ -217,10 +217,10 @@ function LedgerWhat({
       return (
         <>
           Correction to{' '}
-          <Link href={`/purchases/${row.purchaseId}`} className="text-green-700 hover:underline">
+          <Link href={`/purchases/${row.purchaseId}`} className="text-blue-600 hover:underline">
             invoice{row.invoiceRef ? ` ${row.invoiceRef}` : ''}
           </Link>
-          <span className="text-ink/50 ml-1 text-xs">“{row.note}”</span>
+          <span className="text-ink-2 ml-1 text-xs">“{row.note}”</span>
         </>
       );
     case 'return':
@@ -228,23 +228,23 @@ function LedgerWhat({
         <>
           Returned {describeCounted(row)} {row.productName}
           {stockCostPaisa !== undefined ? (
-            <span className="text-ink/50 ml-1 text-xs">
+            <span className="text-ink-2 ml-1 text-xs">
               stock cost {formatPaisa(paisa(stockCostPaisa))}
               {creditAgainstStockCost(-row.amountPaisa, stockCostPaisa)
                 ? ` · credit ${creditAgainstStockCost(-row.amountPaisa, stockCostPaisa)}`
                 : ''}
             </span>
           ) : null}
-          {row.note ? <span className="text-ink/50 ml-1 text-xs">“{row.note}”</span> : null}
+          {row.note ? <span className="text-ink-2 ml-1 text-xs">“{row.note}”</span> : null}
         </>
       );
     case 'payment':
       return (
         <span className="inline-flex flex-wrap items-center gap-x-2">
           Payment
-          {row.note ? <span className="text-ink/50 text-xs">“{row.note}”</span> : null}
+          {row.note ? <span className="text-ink-2 text-xs">“{row.note}”</span> : null}
           {row.reversed ? (
-            <span className="text-ink/50 text-xs">— cancelled</span>
+            <span className="text-ink-2 text-xs">— cancelled</span>
           ) : isOwner ? (
             <CancelEntryButton
               what={`the ${formatPaisa(paisa(-row.amountPaisa), { withSymbol: true })} payment`}
@@ -258,7 +258,7 @@ function LedgerWhat({
         <>
           Payment cancelled
           {row.reversesPaidAt ? (
-            <span className="text-ink/50 ml-1 text-xs">
+            <span className="text-ink-2 ml-1 text-xs">
               the one of {row.reversesPaidAt.toLocaleDateString('en-PK')}{' '}
               {row.reversesPaidAt.toLocaleTimeString('en-PK', {
                 hour: 'numeric',

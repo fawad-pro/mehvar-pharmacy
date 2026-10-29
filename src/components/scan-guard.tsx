@@ -48,7 +48,7 @@ export function ScanGuard() {
       <p
         key={shownAt}
         role="alert"
-        className="bg-paper border-red text-ink max-w-md rounded border-2 px-4 py-2 text-sm shadow-xl"
+        className="bg-surface border-red text-navy max-w-md rounded border-2 px-4 py-2 text-sm shadow-xl"
       >
         <span className="font-medium">That was a barcode — nothing was entered or saved.</span> This
         field does not take scans; scan products in the search box.

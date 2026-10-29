@@ -38,7 +38,7 @@ export function SettleButton({
         onClick={() => {
           setOpen(true);
         }}
-        className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium"
+        className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5"
       >
         Record a payment
       </button>

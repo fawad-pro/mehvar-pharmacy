@@ -290,16 +290,16 @@ export function ProductSearch({
         aria-controls="product-search-results"
         aria-expanded={visibleHits.length > 0 || codeOptions.length > 0}
         role="combobox"
-        className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
+        className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3 text-lg"
       />
 
       {parsed.hasExplicitCount ? (
-        <p className="text-green-600 mt-1 text-xs">
+        <p className="text-blue-600 mt-1 text-xs">
           Quantity {parsed.count} — searching “{parsed.query}”
         </p>
       ) : null}
 
-      <p className="text-ink/40 mt-1 text-xs">
+      <p className="text-ink-2 mt-1 text-xs">
         {status === 'loading'
           ? 'Loading catalog…'
           : status === 'unavailable'
@@ -310,18 +310,18 @@ export function ProductSearch({
       </p>
 
       {linking ? (
-        <div className="border-green-600 bg-green-100/40 mt-2 rounded border px-3 py-2 text-sm">
+        <div className="border-blue-600 bg-mist mt-2 rounded border px-3 py-2 text-sm">
           <p role="status">
             Linking code <span className="numeral font-medium">{linking.code}</span> — find the
             product it belongs to.{' '}
-            <button type="button" onClick={cancelLinking} className="text-ink/60 underline">
+            <button type="button" onClick={cancelLinking} className="text-ink-2 underline">
               Cancel (Esc)
             </button>
           </p>
           {linkTarget ? (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="font-medium">{linkTarget.product.name}:</span>
-              <span className="text-ink/70">which unit is this code printed on?</span>
+              <span className="text-ink-2">which unit is this code printed on?</span>
               {/* Largest first: a code on a pack is far more often the box's. */}
               {unitLevels(linkTarget.product.baseUnitName, linkTarget.product.packLevels)
                 .reverse()
@@ -333,7 +333,7 @@ export function ProductSearch({
                     onClick={() => {
                       void link(level.name);
                     }}
-                    className="bg-green-600 text-paper min-h-touch rounded px-4 font-medium"
+                    className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-4"
                   >
                     Link to {level.name}
                   </button>
@@ -353,11 +353,11 @@ export function ProductSearch({
           id="product-search-results"
           role="listbox"
           aria-label="Unknown code"
-          className="border-line bg-paper absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded border shadow-lg"
+          className="bg-surface shadow-card absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded-card shadow-lg"
         >
           <li className="px-3 py-2 text-sm">
             <span className="font-medium">This code is not linked to a product yet</span>
-            <span className="text-ink/60 numeral block truncate text-xs">{parsed.query}</span>
+            <span className="text-ink-2 numeral block truncate text-xs">{parsed.query}</span>
           </li>
           {codeOptions.map((option, position) => (
             <li
@@ -371,12 +371,12 @@ export function ProductSearch({
                 setActive(position);
                 setCodeChosen(true);
               }}
-              className={`cursor-pointer px-3 py-2 ${codeChosen && position === active ? 'bg-green-100/60' : ''}`}
+              className={`cursor-pointer px-3 py-2 ${codeChosen && position === active ? 'bg-mist' : ''}`}
             >
-              <span className="text-green-600 block font-medium">
+              <span className="text-blue-600 block font-medium">
                 {option === 'link' ? 'Link it to a product' : 'Add a new product'}
               </span>
-              <span className="text-ink/50 block text-xs">
+              <span className="text-ink-2 block text-xs">
                 {option === 'link'
                   ? 'Find the product and choose the unit — the next scan adds it directly'
                   : 'Type its name and price — the code is not used as a name'}
@@ -384,7 +384,7 @@ export function ProductSearch({
             </li>
           ))}
           {codeOptions.length === 0 ? (
-            <li className="text-ink/60 px-3 py-2 text-xs">
+            <li className="text-ink-2 px-3 py-2 text-xs">
               Link it from the product’s page on the Products screen.
             </li>
           ) : null}
@@ -394,12 +394,12 @@ export function ProductSearch({
           id="product-search-results"
           role="listbox"
           aria-label="Search results"
-          className="border-line bg-paper absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded border shadow-lg"
+          className="bg-surface shadow-card absolute z-20 mt-1 max-h-[60vh] w-full overflow-auto rounded-card shadow-lg"
         >
           {visibleHits.length === 0 && linking ? (
             // Linking attaches a code to a product that exists; offering to
             // invent one here would be the junk-product path again.
-            <li className="text-ink/60 px-3 py-2 text-sm">
+            <li className="text-ink-2 px-3 py-2 text-sm">
               No product matches — check the spelling, or press Esc to cancel linking.
             </li>
           ) : visibleHits.length === 0 ? (
@@ -412,17 +412,17 @@ export function ProductSearch({
                 onClick={() => {
                   onQuickAdd?.(parsed.query);
                 }}
-                className="hover:bg-green-100/50 flex w-full items-center gap-3 px-3 py-2 text-left"
+                className="hover:bg-mist flex w-full items-center gap-3 px-3 py-2 text-left"
               >
                 <span className="min-w-0 flex-1">
-                  <span className="text-green-600 block truncate font-medium">
+                  <span className="text-blue-600 block truncate font-medium">
                     Add “{parsed.query}” and keep selling
                   </span>
-                  <span className="text-ink/50 block truncate text-xs">
+                  <span className="text-ink-2 block truncate text-xs">
                     Name and price only — the owner completes it later
                   </span>
                 </span>
-                <kbd className="text-ink/40 shrink-0 text-xs">Enter</kbd>
+                <kbd className="text-ink-2 shrink-0 text-xs">Enter</kbd>
               </button>
             </li>
           ) : (
@@ -474,27 +474,25 @@ function ResultRow({
         tabIndex={-1}
         className={[
           'flex w-full items-center gap-3 px-3 py-2 text-left',
-          active ? 'bg-green-100' : '',
+          active ? 'bg-blue-50' : '',
         ].join(' ')}
       >
         <span className="min-w-0 flex-1">
           <span className="block truncate">
             <span className="font-medium">{product.name}</span>
-            {product.strength ? <span className="text-ink/70"> {product.strength}</span> : null}
+            {product.strength ? <span className="text-ink-2"> {product.strength}</span> : null}
           </span>
-          <span className="text-ink/50 block truncate text-xs">
+          <span className="text-ink-2 block truncate text-xs">
             {secondary}
             {/* Phase 10 §5: a salt match is "labelled as such — substitution
                 support". The salesman must know why an unasked-for brand is on
                 screen. */}
             {hit.matchedOn === 'formula' ? (
-              <span className="text-green-600"> · same salt</span>
+              <span className="text-blue-600"> · same salt</span>
             ) : null}
-            {hit.matchedOn === 'barcode' ? (
-              <span className="text-green-600"> · scanned</span>
-            ) : null}
+            {hit.matchedOn === 'barcode' ? <span className="text-blue-600"> · scanned</span> : null}
             {hit.tier === MatchTier.Fuzzy ? (
-              <span className="text-ink/40"> · close match</span>
+              <span className="text-ink-2"> · close match</span>
             ) : null}
           </span>
         </span>
@@ -531,9 +529,7 @@ function UnitPrice({ hit }: { hit: SearchHit }) {
   return (
     <span className="numeral w-28 shrink-0 text-right tabular-nums">
       {formatPaisa(paisa(unit?.pricePaisa ?? product.pricePaisa))}
-      {unit && units.length > 1 ? (
-        <span className="text-ink/50 text-xs"> / {unit.name}</span>
-      ) : null}
+      {unit && units.length > 1 ? <span className="text-ink-2 text-xs"> / {unit.name}</span> : null}
     </span>
   );
 }
@@ -558,7 +554,7 @@ function OnHand({
   }
 
   return (
-    <span className="text-ink/40 numeral shrink-0 text-xs">
+    <span className="text-ink-2 numeral shrink-0 text-xs">
       On hand: {describeQuantity(baseQty(stockBase), product.baseUnitName, [...product.packLevels])}
     </span>
   );
@@ -590,5 +586,5 @@ function StockBadge({
   ]);
   const low = stockBase <= (product.packLevels[0]?.factor ?? 1);
 
-  return low ? <span className="text-amber shrink-0 text-xs">{natural}</span> : null;
+  return low ? <span className="text-amber-text shrink-0 text-xs">{natural}</span> : null;
 }

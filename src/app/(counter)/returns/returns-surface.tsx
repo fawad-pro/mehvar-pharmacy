@@ -312,11 +312,11 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
 
   return (
     <section className="mx-auto flex max-w-3xl flex-col gap-4 p-4">
-      <h1 className="text-green-900 text-2xl font-semibold">Returns</h1>
+      <h1 className="text-navy text-2xl font-semibold">Returns</h1>
 
       {!sale ? (
         <>
-          <label className="text-ink/60 text-sm" htmlFor="return-search">
+          <label className="text-ink-2 text-sm" htmlFor="return-search">
             Receipt number or customer name
           </label>
           <input
@@ -345,7 +345,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
             }}
             placeholder="Scan or search…"
             data-scan-target=""
-            className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+            className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
           />
 
           {searchFailed ? (
@@ -359,24 +359,24 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
           ) : (
             <ul className="border-line divide-line divide-y rounded border">
               {results.length === 0 ? (
-                <li className="text-ink/50 px-3 py-3 text-sm">No sales found.</li>
+                <li className="text-ink-2 px-3 py-3 text-sm">No sales found.</li>
               ) : (
                 results.map((found) => (
                   <li key={found.saleId}>
                     <button
                       type="button"
                       onClick={() => void selectSale(found)}
-                      className="hover:bg-green-100/50 flex min-h-touch w-full items-center justify-between px-3 text-left"
+                      className="hover:bg-mist flex min-h-touch w-full items-center justify-between px-3 text-left"
                     >
                       <span>
                         <span className="font-medium">{found.receiptNumber}</span>
                         {found.customerName ? (
-                          <span className="text-ink/60 ml-2 text-sm">{found.customerName}</span>
+                          <span className="text-ink-2 ml-2 text-sm">{found.customerName}</span>
                         ) : null}
                       </span>
                       <span className="numeral text-sm">
                         {formatPaisa(paisa(found.totalPaisa))}
-                        <span className="text-ink/40 ml-2 text-xs">
+                        <span className="text-ink-2 ml-2 text-xs">
                           {found.createdAt.toLocaleDateString('en-PK')}
                         </span>
                       </span>
@@ -389,25 +389,23 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
         </>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="border-line flex items-center justify-between rounded border p-3">
+          <div className="bg-surface shadow-card flex items-center justify-between rounded-card p-3">
             <div>
               <p className="font-medium">{sale.receiptNumber}</p>
-              {sale.customerName ? (
-                <p className="text-ink/60 text-sm">{sale.customerName}</p>
-              ) : null}
+              {sale.customerName ? <p className="text-ink-2 text-sm">{sale.customerName}</p> : null}
             </div>
             <button
               type="button"
               onClick={backToSearch}
-              className="text-ink/60 min-h-touch px-2 text-sm"
+              className="text-ink-2 min-h-touch px-2 text-sm"
             >
               ← Find a different sale
             </button>
           </div>
 
-          <div className="border-line overflow-x-auto rounded border">
+          <div className="bg-surface shadow-card overflow-x-auto rounded-card">
             <table className="text-table w-full text-left">
-              <thead className="bg-green-100/50 text-ink/60 text-xs">
+              <thead className="bg-mist text-ink-2 text-xs">
                 <tr>
                   <th className="px-3 py-2 font-medium">Item</th>
                   <th className="px-3 py-2 text-right font-medium">Sold</th>
@@ -453,12 +451,12 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                                       }));
                                     }}
                                     className={[
-                                      'border-line h-touch min-w-11 border px-3 text-sm capitalize disabled:opacity-40',
+                                      'border-border h-touch min-w-11 border px-3 text-sm capitalize disabled:opacity-40',
                                       index === 0 ? 'rounded-l' : '-ml-px',
                                       index === line.units.length - 1 ? 'rounded-r' : '',
                                       pressed
-                                        ? 'bg-green-600 text-paper border-green-600 font-medium'
-                                        : 'bg-paper text-ink hover:bg-green-100',
+                                        ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                                        : 'bg-surface text-navy hover:bg-page',
                                     ].join(' ')}
                                   >
                                     {unit.name}
@@ -491,7 +489,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                                 },
                               }));
                             }}
-                            className="border-line focus:border-green-600 numeral h-touch w-20 rounded border px-2 outline-none disabled:opacity-40"
+                            className="border-border focus:border-blue-600 numeral h-touch w-20 rounded-control border px-2 disabled:opacity-40"
                           />
                         </div>
                       </td>
@@ -512,7 +510,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                               },
                             }));
                           }}
-                          className="border-line focus:border-green-600 h-touch rounded border px-2 outline-none"
+                          className="border-border focus:border-blue-600 h-touch rounded-control border px-2"
                         >
                           <option value="">Write off (no restock)</option>
                           {line.sourceBatches.map((batch) => (
@@ -531,7 +529,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
 
           <div className="flex flex-wrap items-end gap-4">
             <div>
-              <p className="text-ink/60 mb-1 text-xs">Refund method</p>
+              <p className="text-ink-2 mb-1 text-xs">Refund method</p>
               <div className="flex gap-2" role="group" aria-label="Refund method">
                 {(['cash', 'credit'] as const).map((option) => (
                   <button
@@ -543,10 +541,10 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                     }}
                     aria-pressed={refundMethod === option}
                     className={[
-                      'min-h-touch rounded border px-4 text-sm disabled:opacity-40',
+                      'min-h-touch rounded-control border px-4 text-sm disabled:opacity-40',
                       refundMethod === option
-                        ? 'border-green-600 bg-green-100 text-green-900 font-medium'
-                        : 'border-line text-ink/60',
+                        ? 'border-blue-600 bg-blue-50 text-navy font-medium'
+                        : 'border-line text-ink-2',
                     ].join(' ')}
                   >
                     {option === 'cash' ? 'Cash out' : 'Reduce credit'}
@@ -556,7 +554,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
             </div>
 
             <div className="min-w-48 flex-1">
-              <label className="text-ink/60 mb-1 block text-xs" htmlFor="return-reason">
+              <label className="text-ink-2 mb-1 block text-xs" htmlFor="return-reason">
                 Reason (optional)
               </label>
               <input
@@ -566,7 +564,7 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
                 onChange={(event) => {
                   setReasonNote(event.target.value);
                 }}
-                className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+                className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
               />
             </div>
           </div>
@@ -578,25 +576,25 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
           ) : null}
 
           {done ? (
-            <p className="text-green-900 text-sm" role="status">
+            <p className="text-green-700 text-sm" role="status">
               {done}
             </p>
           ) : null}
 
           <div className="flex items-center justify-between">
             {/* The idea is worth saying on this screen; the identifier is not. */}
-            <p className="text-ink/50 text-xs">
+            <p className="text-ink-2 text-xs">
               The original sale is never changed — this is recorded against it.
             </p>
             <div className="flex items-center gap-3">
-              <span className="numeral text-green-900 text-lg font-semibold">
+              <span className="numeral text-navy text-lg font-semibold">
                 {formatPaisa(paisa(totalRefundPaisa), { withSymbol: true })}
               </span>
               <button
                 type="button"
                 onClick={() => void confirm()}
                 disabled={busy || totalRefundPaisa <= 0 || !receiptContext}
-                className="bg-green-600 text-paper min-h-touch rounded px-5 font-medium disabled:opacity-40"
+                className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
               >
                 {busy ? 'Saving…' : 'Confirm return — Enter'}
               </button>

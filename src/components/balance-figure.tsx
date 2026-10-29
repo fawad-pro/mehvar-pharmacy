@@ -21,11 +21,11 @@ import { formatPaisa } from '@/lib/money';
 function toneOf(kind: ReturnType<typeof positionOf>['kind']): string {
   switch (kind) {
     case 'owes':
-      return 'text-amber';
+      return 'text-amber-text';
     case 'in_credit':
-      return 'text-ink/70';
+      return 'text-ink-2';
     case 'settled':
-      return 'text-green-900';
+      return 'text-green-700';
   }
 }
 
@@ -45,7 +45,7 @@ export function BalanceFigure({
 
   return (
     <span className="flex flex-col gap-0.5">
-      <span className="text-ink/50 text-xs tracking-[0.14em] uppercase">
+      <span className="text-ink-2 text-xs tracking-[0.14em] uppercase">
         {positionLabel(position.kind)}
       </span>
       <span
@@ -64,14 +64,14 @@ export function BalanceInline({ balancePaisa }: { balancePaisa: number }) {
   const position = positionOf(balancePaisa);
 
   if (position.kind === 'settled') {
-    return <span className="text-ink/50">Settled up</span>;
+    return <span className="text-ink-2">Settled up</span>;
   }
 
   return (
     <span className={`numeral ${toneOf(position.kind)}`}>
       {formatPaisa(paisa(position.amountPaisa), { withSymbol: true })}
       {position.kind === 'in_credit' ? (
-        <span className="text-ink/50 ml-1 text-xs">advance</span>
+        <span className="text-ink-2 ml-1 text-xs">advance</span>
       ) : null}
     </span>
   );

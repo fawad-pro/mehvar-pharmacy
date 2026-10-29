@@ -71,13 +71,13 @@ export function RemovePanel({
 
   if (!isActive) {
     return (
-      <div className="border-line flex flex-wrap items-center gap-3 rounded border px-3 py-2">
+      <div className="bg-surface shadow-card flex flex-wrap items-center gap-3 rounded-card px-3 py-2">
         <p className="text-sm">Removed — not shown at the counter or in Products.</p>
         <button
           type="button"
           onClick={() => void restore()}
           disabled={busy}
-          className="border-line min-h-touch ml-auto rounded border px-4"
+          className="border-border min-h-touch ml-auto rounded-control border px-4"
         >
           Restore
         </button>
@@ -91,8 +91,8 @@ export function RemovePanel({
   }
 
   return (
-    <div className="border-line flex flex-col gap-2 rounded border p-3">
-      <h2 className="text-ink/60 text-xs tracking-[0.14em] uppercase">Entered by mistake?</h2>
+    <div className="bg-surface shadow-card flex flex-col gap-2 rounded-card p-3">
+      <h2 className="text-ink-2 text-xs tracking-[0.14em] uppercase">Entered by mistake?</h2>
       {confirming ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="text-sm">
@@ -103,7 +103,7 @@ export function RemovePanel({
             autoFocus
             onClick={() => void remove()}
             disabled={busy}
-            className="bg-red text-paper min-h-touch rounded px-4 font-medium"
+            className="bg-red text-surface min-h-touch rounded-control px-4 font-medium"
           >
             Yes, remove it
           </button>
@@ -111,7 +111,7 @@ export function RemovePanel({
             type="button"
             onClick={() => setConfirming(false)}
             disabled={busy}
-            className="border-line min-h-touch rounded border px-4"
+            className="border-border min-h-touch rounded-control border px-4"
           >
             Cancel
           </button>
@@ -124,7 +124,7 @@ export function RemovePanel({
               setRefusal(null);
               setConfirming(true);
             }}
-            className="border-line min-h-touch rounded border px-4"
+            className="border-border min-h-touch rounded-control border px-4"
           >
             Remove product
           </button>
@@ -135,13 +135,13 @@ export function RemovePanel({
           <p className="text-red">{refusal.message}</p>
           {refusal.blockedBy === 'stock' ? (
             <p className="mt-1 flex flex-wrap gap-x-4">
-              <Link href="/stock/adjust" className="text-green-700 hover:underline">
+              <Link href="/stock/adjust" className="text-blue-600 hover:underline">
                 Remove the stock
               </Link>
               {canReplace ? (
                 <Link
                   href={`/products/${productId}/replace`}
-                  className="text-green-700 hover:underline"
+                  className="text-blue-600 hover:underline"
                 >
                   Replace it with the right product
                 </Link>
@@ -149,10 +149,10 @@ export function RemovePanel({
             </p>
           ) : refusal.blockedBy === 'pending' ? (
             <p className="mt-1 flex flex-wrap gap-x-4">
-              <Link href="/purchases" className="text-green-700 hover:underline">
+              <Link href="/purchases" className="text-blue-600 hover:underline">
                 Receive stock
               </Link>
-              <Link href="/stock/adjust" className="text-green-700 hover:underline">
+              <Link href="/stock/adjust" className="text-blue-600 hover:underline">
                 Correct the count
               </Link>
             </p>

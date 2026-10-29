@@ -41,14 +41,14 @@ interface Row {
 function kindLabel(kind: ReceiptKind): { text: string; className: string } {
   switch (kind) {
     case 'sale':
-      return { text: 'Sale', className: 'text-ink/60' };
+      return { text: 'Sale', className: 'text-ink-2' };
     case 'settlement':
-      return { text: 'Payment', className: 'text-green-700' };
+      return { text: 'Payment', className: 'text-navy' };
     // [PCN-013] Money back onto a customer's debt: worth the second look.
     case 'payment_cancelled':
-      return { text: 'Payment cancelled', className: 'text-amber' };
+      return { text: 'Payment cancelled', className: 'text-amber-text' };
     case 'return':
-      return { text: 'Return', className: 'text-amber' };
+      return { text: 'Return', className: 'text-amber-text' };
   }
 }
 
@@ -136,8 +136,8 @@ export function ReceiptsSurface({
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-green-900 text-2xl font-semibold">Receipts</h1>
-          <p className="text-ink/60 text-sm">
+          <h1 className="text-navy text-2xl font-semibold">Receipts</h1>
+          <p className="text-ink-2 text-sm">
             Every sale, payment and return. Open one to see what it contained.
           </p>
         </div>
@@ -148,7 +148,7 @@ export function ReceiptsSurface({
             only from a record nobody can find is not reachable (Day 8). */}
         <Link
           href="/returns"
-          className="border-line min-h-touch text-ink hover:bg-green-100/50 inline-flex items-center rounded border px-4 text-sm font-medium"
+          className="border-border min-h-touch text-navy hover:bg-mist inline-flex items-center rounded-control border px-4 text-sm font-medium"
         >
           Return without a receipt
         </Link>
@@ -180,17 +180,17 @@ export function ReceiptsSurface({
         }}
         placeholder="Receipt number or customer name"
         aria-label="Find a receipt"
-        className="border-line focus:border-green-600 h-touch w-full rounded border px-3 outline-none"
+        className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
       />
 
       {rows.length === 0 ? (
-        <p className="text-ink/50 p-8 text-center text-sm">
+        <p className="text-ink-2 p-8 text-center text-sm">
           {search === '' ? 'No receipts yet.' : `Nothing matching “${search}”.`}
         </p>
       ) : (
-        <div className="border-line overflow-x-auto rounded border">
+        <div className="bg-surface shadow-card overflow-x-auto rounded-card">
           <table className="text-table w-full text-left">
-            <thead className="bg-green-100/50 text-ink/60 text-xs">
+            <thead className="bg-mist text-ink-2 text-xs">
               <tr>
                 <th className="px-3 py-2 font-medium">Receipt</th>
                 <th className="px-3 py-2 font-medium">When</th>
@@ -215,12 +215,12 @@ export function ReceiptsSurface({
                           // Cancels the pending search sync — see the effect.
                           leaving.current = true;
                         }}
-                        className="numeral text-green-700 inline-flex min-h-touch items-center font-medium hover:underline"
+                        className="numeral text-blue-600 inline-flex min-h-touch min-w-touch items-center font-medium hover:underline"
                       >
                         {row.receiptNumber}
                       </Link>
                     </td>
-                    <td className="text-ink/70 px-3 py-2 text-sm">
+                    <td className="text-ink-2 px-3 py-2 text-sm">
                       {row.createdAt.toLocaleString('en-PK', {
                         day: 'numeric',
                         month: 'short',
@@ -231,18 +231,18 @@ export function ReceiptsSurface({
                     <td className={`px-3 py-2 text-sm ${kind.className}`}>
                       {kind.text}
                       {row.onCredit ? (
-                        <span className="text-ink/50 ml-1 text-xs">udhaar</span>
+                        <span className="text-ink-2 ml-1 text-xs">udhaar</span>
                       ) : null}
                     </td>
-                    <td className="text-ink/70 px-3 py-2">{row.customerName ?? '—'}</td>
-                    <td className="text-ink/50 px-3 py-2 text-sm">{row.salesmanName}</td>
+                    <td className="text-ink-2 px-3 py-2">{row.customerName ?? '—'}</td>
+                    <td className="text-ink-2 px-3 py-2 text-sm">{row.salesmanName}</td>
                     <td className="numeral px-3 py-2 text-right">
                       {formatPaisa(paisa(row.amountPaisa), { withSymbol: true })}
                       {/* Stated on the sale, not only on the return, because
                           the question "was any of this brought back?" is asked
                           of the sale. */}
                       {row.hasReturns ? (
-                        <span className="text-amber ml-1 text-xs">returned</span>
+                        <span className="text-amber-text ml-1 text-xs">returned</span>
                       ) : null}
                     </td>
                   </tr>
@@ -254,7 +254,7 @@ export function ReceiptsSurface({
       )}
 
       {hasMore ? (
-        <p className="text-ink/50 text-center text-xs">
+        <p className="text-ink-2 text-center text-xs">
           Showing the most recent {rows.length}. Search to narrow.
         </p>
       ) : null}

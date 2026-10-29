@@ -20,6 +20,7 @@ import { ServiceWorker } from '@/client/sync/service-worker';
 
 import { KeyBar } from './key-bar';
 import { LicenceBanner, type LicenceNotice } from './licence-banner';
+import { PhoneTabs } from './phone-tabs';
 import { PinSwitchOverlay, type SwitchableUser } from './pin-switch-overlay';
 import { ScanGuard } from './scan-guard';
 import { SettleUdhaarOverlay } from './settle-udhaar-overlay';
@@ -82,6 +83,13 @@ export function AppShell({
 
   useGlobalKeys(handlers);
 
+  // A routeless key's meaning, run exactly as pressing it does — from the key
+  // bar's chip on a tablet or the tab bar's More on a phone.
+  const onDispatch = (meaning: 'udhaar' | 'switch-user') => {
+    if (meaning === 'udhaar') handlers.onUdhaar();
+    else handlers.onSwitchUser();
+  };
+
   const onSwitched = useCallback(() => {
     setSwitching(false);
     // The session row moved; re-render the server components so the active-user
@@ -103,7 +111,7 @@ export function AppShell({
             on every screen (see the component). */}
         <ScanGuard />
 
-        <div className="flex h-screen flex-col">
+        <div className="bg-page flex h-dvh flex-col">
           <TopBar
             tenantName={tenantName}
             userName={userName}
@@ -122,13 +130,9 @@ export function AppShell({
             <main className="min-h-0 flex-1 overflow-auto">{children}</main>
           </UdhaarKeyProvider>
 
-          <KeyBar
-            role={userRole}
-            onDispatch={(meaning) => {
-              if (meaning === 'udhaar') handlers.onUdhaar();
-              else handlers.onSwitchUser();
-            }}
-          />
+          <KeyBar role={userRole} onDispatch={onDispatch} />
+          {/* Below 768px the key bar gives way to five tabs (PCN-016). */}
+          <PhoneTabs role={userRole} onDispatch={onDispatch} />
 
           {switching ? (
             <PinSwitchOverlay

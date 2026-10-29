@@ -120,8 +120,8 @@ export function SupplierPicker({
 
   return (
     <OverlayBackdrop label="Supplier" onDismiss={onCancel}>
-      <div className="bg-paper w-full max-w-sm rounded-lg p-5 shadow-xl">
-        <h2 className="text-green-900 mb-4 text-lg font-semibold">Supplier</h2>
+      <div className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5">
+        <h2 className="text-navy mb-4 text-lg font-semibold">Supplier</h2>
 
         <input
           ref={field}
@@ -159,11 +159,11 @@ export function SupplierPicker({
           readOnly={finding !== null}
           autoComplete="off"
           placeholder="Name or phone…"
-          className="border-line focus:border-green-600 h-touch w-full rounded border px-3 text-lg outline-none"
+          className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3 text-lg"
         />
 
         {finding ? (
-          <p className="text-ink/60 mt-2 text-sm" role="status">
+          <p className="text-ink-2 mt-2 text-sm" role="status">
             Finding &ldquo;{finding}&rdquo;…
           </p>
         ) : null}
@@ -180,12 +180,12 @@ export function SupplierPicker({
                   setActive(index);
                 }}
                 className={[
-                  'flex min-h-touch w-full items-center justify-between rounded px-3 text-left',
-                  index === active ? 'bg-green-100' : 'hover:bg-green-100/50',
+                  'flex min-h-touch w-full items-center justify-between rounded-control px-3 text-left',
+                  index === active ? 'bg-blue-50' : 'hover:bg-mist',
                 ].join(' ')}
               >
                 <span className="font-medium">{hit.name}</span>
-                {hit.phone ? <span className="text-ink/50 text-xs">{hit.phone}</span> : null}
+                {hit.phone ? <span className="text-ink-2 text-xs">{hit.phone}</span> : null}
               </button>
             </li>
           ))}
@@ -196,7 +196,7 @@ export function SupplierPicker({
                 type="button"
                 onClick={() => void createInline()}
                 disabled={busy}
-                className="text-green-600 hover:bg-green-100/50 min-h-touch w-full rounded px-3 text-left font-medium disabled:opacity-40"
+                className="text-blue-600 hover:bg-mist min-h-touch w-full rounded-control px-3 text-left font-medium disabled:opacity-40"
               >
                 {busy ? 'Adding…' : `+ Add “${term.trim()}” as a new supplier`}
               </button>
@@ -211,7 +211,7 @@ export function SupplierPicker({
         ) : null}
 
         <div className="mt-4">
-          <button type="button" onClick={onCancel} className="text-ink/60 text-sm">
+          <button type="button" onClick={onCancel} className="text-ink-2 text-sm">
             Esc to cancel
           </button>
         </div>

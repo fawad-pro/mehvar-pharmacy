@@ -86,8 +86,8 @@ export function OwnerSurface({
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col">
       <header className="border-line border-b p-4">
-        <p className="text-green-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
-        <h1 className="text-green-900 text-lg font-semibold">{tenantName}</h1>
+        <p className="text-blue-600 text-xs font-medium tracking-[0.18em] uppercase">Mehvar</p>
+        <h1 className="text-navy text-lg font-semibold">{tenantName}</h1>
       </header>
 
       <main className="flex-1 overflow-y-auto p-4 pb-20">
@@ -97,7 +97,7 @@ export function OwnerSurface({
       </main>
 
       <nav
-        className="border-line bg-paper fixed bottom-0 left-0 right-0 mx-auto flex max-w-md border-t"
+        className="border-line bg-surface fixed bottom-0 left-0 right-0 mx-auto flex max-w-md border-t"
         aria-label="Owner view"
       >
         {(
@@ -116,7 +116,7 @@ export function OwnerSurface({
             aria-current={tab === item.id ? 'page' : undefined}
             className={[
               'min-h-touch flex-1 py-3 text-sm font-medium',
-              tab === item.id ? 'text-green-900 border-green-600 border-t-2' : 'text-ink/50',
+              tab === item.id ? 'text-navy border-blue-600 border-t-2' : 'text-ink-2',
             ].join(' ')}
           >
             {item.label}
@@ -139,15 +139,15 @@ function TodayTab({ numbers, incidents }: { numbers: ThreeNumbers; incidents: In
       </div>
 
       <div>
-        <h2 className="text-green-900 mb-2 font-medium">Sold more than the system had</h2>
+        <h2 className="text-navy mb-2 font-medium">Sold more than the system had</h2>
         {incidents.length === 0 ? (
-          <p className="text-ink/50 text-sm">Nothing outstanding.</p>
+          <p className="text-ink-2 text-sm">Nothing outstanding.</p>
         ) : (
           <ul className="border-line divide-line divide-y rounded border text-sm">
             {incidents.map((incident) => (
               <li key={incident.productName} className="flex justify-between px-3 py-2">
                 <span>{incident.productName}</span>
-                <span className="numeral text-amber">{incident.amount}</span>
+                <span className="numeral text-amber-text">{incident.amount}</span>
               </li>
             ))}
           </ul>
@@ -161,21 +161,21 @@ function StockTab({ lowStock, expiring }: { lowStock: LowStockItem[]; expiring: 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-green-900 mb-2 flex items-baseline gap-2 font-medium">
+        <h2 className="text-navy mb-2 flex items-baseline gap-2 font-medium">
           Expiring within 30 days
-          <span className="numeral text-ink/50 text-sm font-normal">{expiring.length}</span>
+          <span className="numeral text-ink-2 text-sm font-normal">{expiring.length}</span>
         </h2>
         {expiring.length === 0 ? (
-          <p className="text-ink/50 text-sm">Nothing expiring soon.</p>
+          <p className="text-ink-2 text-sm">Nothing expiring soon.</p>
         ) : (
           <ul className="border-line divide-line divide-y rounded border text-sm">
             {expiring.map((row) => (
               <li key={row.batchId} className="flex justify-between gap-3 px-3 py-2">
                 <span>
                   {row.productName}
-                  <span className="text-ink/50 ml-2 text-xs">{row.amount}</span>
+                  <span className="text-ink-2 ml-2 text-xs">{row.amount}</span>
                 </span>
-                <span className="numeral text-amber">{row.expiryDate}</span>
+                <span className="numeral text-amber-text">{row.expiryDate}</span>
               </li>
             ))}
           </ul>
@@ -183,12 +183,12 @@ function StockTab({ lowStock, expiring }: { lowStock: LowStockItem[]; expiring: 
       </div>
 
       <div>
-        <h2 className="text-green-900 mb-2 flex items-baseline gap-2 font-medium">
+        <h2 className="text-navy mb-2 flex items-baseline gap-2 font-medium">
           Running low
-          <span className="numeral text-ink/50 text-sm font-normal">{lowStock.length}</span>
+          <span className="numeral text-ink-2 text-sm font-normal">{lowStock.length}</span>
         </h2>
         {lowStock.length === 0 ? (
-          <p className="text-ink/50 text-sm">Nothing below its minimum.</p>
+          <p className="text-ink-2 text-sm">Nothing below its minimum.</p>
         ) : (
           <ul className="border-line divide-line divide-y rounded border text-sm">
             {lowStock.map((row) => (
@@ -207,9 +207,9 @@ function StockTab({ lowStock, expiring }: { lowStock: LowStockItem[]; expiring: 
 function UdhaarTab({ customers }: { customers: CustomerItem[] }) {
   return (
     <div>
-      <h2 className="text-green-900 mb-2 font-medium">Balances, largest first</h2>
+      <h2 className="text-navy mb-2 font-medium">Balances, largest first</h2>
       {customers.length === 0 ? (
-        <p className="text-ink/50 text-sm">No udhaar customers yet.</p>
+        <p className="text-ink-2 text-sm">No udhaar customers yet.</p>
       ) : (
         <ul className="border-line divide-line divide-y rounded border text-sm">
           {customers.map((customer) => (
@@ -236,10 +236,10 @@ function NumberCard({
   amber?: boolean;
 }) {
   return (
-    <div className="border-line rounded border p-4">
-      <p className="text-ink/60 text-xs tracking-[0.1em] uppercase">{label}</p>
+    <div className="bg-surface shadow-card rounded-card p-4">
+      <p className="text-ink-2 text-xs tracking-[0.1em] uppercase">{label}</p>
       <p
-        className={`numeral mt-1 text-3xl font-semibold ${amber ? 'text-amber' : 'text-green-900'}`}
+        className={`numeral mt-1 text-3xl font-semibold ${amber ? 'text-amber-text' : 'text-navy'}`}
       >
         {formatPaisa(paisa(amountPaisa), { withSymbol: true })}
       </p>

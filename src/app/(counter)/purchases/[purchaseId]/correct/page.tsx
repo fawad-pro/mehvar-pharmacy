@@ -77,18 +77,18 @@ export default async function CorrectPurchasePage({
 
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-4 p-4">
-      <Link href={`/purchases/${purchaseId}`} className="text-green-600 text-sm">
+      <Link href={`/purchases/${purchaseId}`} className="text-blue-600 text-sm">
         ← Back to the invoice
       </Link>
       <header>
-        <p className="text-ink/50 text-xs tracking-[0.14em] uppercase">Correct or return</p>
-        <h1 className="text-green-900 text-2xl font-semibold">
+        <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Correct or return</p>
+        <h1 className="text-navy text-2xl font-semibold">
           {purchase.supplierName ?? 'No supplier'}
           {purchase.invoiceRef ? (
-            <span className="text-ink/60 numeral ml-2 text-lg">{purchase.invoiceRef}</span>
+            <span className="text-ink-2 numeral ml-2 text-lg">{purchase.invoiceRef}</span>
           ) : null}
         </h1>
-        <p className="text-ink/60 mt-1 text-sm">
+        <p className="text-ink-2 mt-1 text-sm">
           Corrections are recorded beside the invoice, never over it, and every one appears on the
           Day screen. Needs a connection.
         </p>

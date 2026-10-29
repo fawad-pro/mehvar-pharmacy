@@ -12,14 +12,14 @@ import Link from 'next/link';
 export default function CounterNotFound() {
   return (
     <section className="mx-auto flex max-w-lg flex-col items-start gap-4 p-8">
-      <h1 className="text-green-900 text-2xl font-semibold">That page isn’t here</h1>
-      <p className="text-ink/70 leading-relaxed">
+      <h1 className="text-navy text-2xl font-semibold">That page isn’t here</h1>
+      <p className="text-ink-2 leading-relaxed">
         The record you were looking for could not be found. It may have been removed, or the link
         may be out of date.
       </p>
       <Link
         href="/sale"
-        className="bg-green-600 text-paper min-h-touch flex items-center rounded px-6 font-medium"
+        className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch flex items-center rounded-control px-6"
       >
         Back to the counter
       </Link>
