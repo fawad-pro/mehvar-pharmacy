@@ -50,8 +50,9 @@ go-live gate at the bottom is signed off.
 `DATABASE_ADMIN_URL=${{Postgres.DATABASE_URL}}` (the owner — a dump through the
 app role would silently omit what the event tables restrict), plus the bucket's
 `BUCKET`, `ENDPOINT`, `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY`, `REGION` (Railway
-bucket → Credentials; reference them as `${{<bucket>.NAME}}`). Build arg
-`PG_MAJOR` must be ≥ the Postgres major version. Custom domain on `web`:
+bucket → Credentials; reference them as `${{<bucket>.NAME}}`). `Dockerfile.backup`
+uses `postgres:18-alpine`, matching the Railway PostgreSQL 18 server, so the
+image includes a compatible `pg_dump`. Custom domain on `web`:
 `pharmacy.getmehvar.com`.
 
 ## Creating a pharmacy
