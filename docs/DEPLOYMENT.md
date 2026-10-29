@@ -18,8 +18,12 @@ go-live gate at the bottom is signed off.
 - **Pre-deploy command** (runs between build and deploy; a failure stops the deploy):
 
   ```
-  node app/bin/db/migrate.js && node app/bin/db/grants.js && node app/bin/catalog/import-pack.js catalog/starter.json --origin cloud --trusted-local
+  sh /srv/predeploy.sh
   ```
+
+  migrate → grants → catalogue import. A script, not `a && b && c`: Railway does
+  not run the command through a shell, so `&&` reached `node` as an argument and
+  only the migration ran.
 
 - **Healthcheck path:** `/api/health` (200 `ok`, 503 `database_down`; unauthenticated, says nothing else).
 - **Start command:** the image's `CMD` (`node app/server.js`); binds `0.0.0.0:$PORT`.

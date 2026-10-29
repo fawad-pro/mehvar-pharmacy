@@ -32,6 +32,17 @@ describe('the cloud image', () => {
     expect(read('scripts', 'package', 'build-cloud.ts')).toContain('verbatimSymlinks: true');
   });
 
+  it('pre-deploy runs migrate, grants, then the catalogue, failing on the first error', () => {
+    const script = read('ops', 'cloud', 'predeploy.sh');
+    expect(script).toContain('set -eu');
+    const order = ['db/migrate.js', 'db/grants.js', 'catalog/import-pack.js'].map((name) =>
+      script.indexOf(name),
+    );
+    expect(order.every((index) => index >= 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    expect(read('Dockerfile')).toContain('predeploy.sh');
+  });
+
   it('runs in cloud mode, as a non-root user, on the platform port', () => {
     const dockerfile = read('Dockerfile');
     expect(dockerfile).toContain('MEHVAR_DEPLOYMENT=cloud');

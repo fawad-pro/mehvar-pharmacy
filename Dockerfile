@@ -35,6 +35,7 @@ ENV NODE_ENV=production \
     PORT=3000
 
 COPY --from=build --chown=node:node /src/dist/cloud /srv
+COPY --chown=node:node ops/cloud/predeploy.sh /srv/predeploy.sh
 USER node
 EXPOSE 3000
 CMD ["node", "app/server.js"]
