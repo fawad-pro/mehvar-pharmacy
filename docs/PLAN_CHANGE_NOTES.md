@@ -2181,3 +2181,27 @@ dates; nothing is rewritten (ADR-1). One parser in `src/lib` turns the text
 into the date and is the only place that does.
 
 **Applied.** With the Receive Stock and Adjust screens of PCN-016.
+
+## PCN-018 — the Sale cart's "Expires soon" badge waits for its data
+
+Session: redesign B · Raised: 2026-10-29 · Status: decided (deferred)
+
+**Plan sections in tension.** PCN-016 (Sale: "badges only for attention"),
+the canvas's Sale boards (an "Expires 11/26" badge), W12, D1.
+
+**The gap.** The boards show a near-expiry badge on a cart line. The
+counter's catalog payload carries stock and expired stock per product, not
+the nearest unexpired expiry, so the badge has nothing to read. PCN-016 does
+not list it.
+
+**Decision.** 2026-10-29, the owner, on the session's recommendation: not
+built in batch 2. A short-dated line at the counter is a nice-to-know, not a
+refusal; the cases that matter (expired stock, more than in stock) already
+show. When it is built, it is one field in the catalog payload (nearest
+unexpired expiry per product) and the same 60/90-day horizon W12 uses, shown
+as `Expires MM/YYYY` (PCN-017). Also decided in the same pass, as built: the
+product count stays under the Sale search (it says when the counter is on an
+offline copy), and the other screens' product searches keep their
+screen-reader name until their own batch.
+
+**Applied.** Not yet; a later session takes it with W12's horizons.
