@@ -9,7 +9,7 @@ test('the application boots and renders with tokens applied', async ({ page }) =
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
   const background = await page.evaluate(() =>
-    getComputedStyle(document.documentElement).getPropertyValue('--paper').trim(),
+    getComputedStyle(document.documentElement).getPropertyValue('--page').trim(),
   );
   expect(background).not.toBe('');
 });
