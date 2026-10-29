@@ -81,6 +81,11 @@ Rules that keep it one product:
    nightly `pg_dump` to a Railway bucket; DNS CNAME at Hostinger. Pilot sees a demo
    on `pharmacy.getmehvar.com` — **with demo data only** (see the gate below).
 
+   Keep room for online subscriptions (PCN-019 decision 10): read entitlement
+   through one seam chosen by `MEHVAR_DEPLOYMENT`, keep a cloud tenant's
+   entitlement in its own record, and leave the offline licence untouched.
+   No billing is built now.
+
    > **Gate — no real pharmacy data online until verified.** Deploying early and
    > demonstrating is fine; the pilot's real stock, sales and customers go into the
    > cloud only after all three are checked and written down: (a) **authentication**
@@ -119,10 +124,16 @@ Rules that keep it one product:
     herbal ranges as CSV → `scripts/catalog/import-csv.ts` → `validate.ts` →
     `build-pack.ts` → ship as a pack. Popular gaps (e.g. Reltus) first.
 
-**Later (after the pilot proves the product)** 12. **Hybrid cloud copy** (roadmap Phase 3): local install pushes new event rows to the
-cloud when online; owner remote view + offsite backup. Never on the sale path. 13. **Online catalogue/licence/update service** at `updates.getmehvar.com` (roadmap Phase 2). 14. **Insights** (Ailaaj One-style): only from tenants who opt in, aggregated and
-anonymised, built on the hybrid copy. One cheap step now: put a data-use/consent
-clause in the pilot and licence terms so the option exists later.
+**Later (after the pilot proves the product)**
+
+12. **Hybrid cloud copy** (roadmap Phase 3): local install pushes new event rows to the
+    cloud when online; owner remote view + offsite backup. Never on the sale path.
+13. **Online subscription management** for cloud tenants (unscheduled; its own PCN).
+    The offline licence is untouched. See PCN-019 decision 10.
+14. **Online catalogue/licence/update service** at `updates.getmehvar.com` (roadmap Phase 2).
+15. **Insights** (Ailaaj One-style): only from tenants who opt in, aggregated and
+    anonymised, built on the hybrid copy. One cheap step now: put a data-use/consent
+    clause in the pilot and licence terms so the option exists later.
 
 ## 5. What not to do for the pilot
 
