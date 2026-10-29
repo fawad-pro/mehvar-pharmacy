@@ -241,7 +241,7 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
   // A 2D pack opens its line with batch and expiry; the cursor goes to Qty.
   await scan(page, `010${packGtin}17280331` + '10563C');
   await expect(page.getByLabel('Batch', { exact: true })).toHaveValue('563C');
-  await expect(page.getByLabel(/^How many/)).toBeFocused();
+  await expect(page.getByLabel(/^Qty/)).toBeFocused();
 
   // Scanned again before the line is finished: refused, and Qty is not left
   // holding barcode digits.
@@ -251,12 +251,12 @@ test('on Receive Stock, scanning the next product moves on — wherever the curs
   await expect(
     page.getByText(`Finish the ${first!.name} line first`, { exact: false }),
   ).toBeVisible();
-  await expect(page.getByLabel(/^How many/)).toHaveValue('');
+  await expect(page.getByLabel(/^Qty/)).toHaveValue('');
 
   // Finished like a person (one key at a time), the cursor left in Unit cost,
   // then the next product scanned: the first line is added, the next opens with
   // nothing carried over from the pack before it.
-  await page.getByLabel(/^How many/).pressSequentially('5', { delay: 120 });
+  await page.getByLabel(/^Qty/).pressSequentially('5', { delay: 120 });
   await page.getByLabel(/^Cost of 1/).pressSequentially('12', { delay: 120 });
   // A person reaches for the scanner: never within 50 ms of their last key.
   await page.waitForTimeout(300);
@@ -283,7 +283,7 @@ test('on Receive Stock, a barcode-sized number is refused as a quantity', async 
   await page.getByRole('option').first().click();
 
   // Typed slowly, so it is not a scan — the backstop catches it on Add.
-  await page.getByLabel(/^How many/).pressSequentially('8961101721817', { delay: 60 });
+  await page.getByLabel(/^Qty/).pressSequentially('8961101721817', { delay: 60 });
   await page.getByLabel(/^Cost of 1/).fill('10');
   await page.getByLabel(/^Cost of 1/).press('Enter');
   await expect(page.getByText(/That quantity looks like a barcode/)).toBeVisible();
@@ -302,7 +302,7 @@ test('on Receive Stock, a barcode run into a price is refused, never a crash', a
   await search(page).fill('panadol');
   await page.getByRole('option').first().click();
 
-  await page.getByLabel(/^How many/).fill('5');
+  await page.getByLabel(/^Qty/).fill('5');
   // Typed slowly, so it is not a scan — the backstop catches it on Add.
   await page.getByLabel(/^Cost of 1/).pressSequentially('122030297825992', { delay: 60 });
   await page.getByLabel(/^Cost of 1/).press('Enter');
@@ -365,7 +365,7 @@ test('Receive Stock: a scan on arrival starts a line, not the supplier picker', 
   await page.reload();
   await expect(page.getByRole('button', { name: 'Supplier' })).toBeFocused({ timeout: 30_000 });
   await scanWherever(page, PANADOL_STRIP);
-  await expect(page.getByLabel(/^How many/)).toBeVisible();
+  await expect(page.getByLabel(/^Qty/)).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Supplier' })).toHaveCount(0);
 });
 

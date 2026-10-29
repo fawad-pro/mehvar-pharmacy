@@ -204,7 +204,7 @@ test('receiving a delivery by touch', async ({ page }) => {
 
   await page.getByLabel('Invoice no.').fill('TOUCH-1');
   await addByTouch(page, 'hydryllin', 'Hydryllin');
-  await page.getByLabel(/^How many/).fill('1');
+  await page.getByLabel(/^Qty/).fill('1');
   await page.getByLabel(/^Cost of 1/).fill('100');
   await tap(page.getByRole('button', { name: /^Add/ }));
   await expect(page.getByRole('table')).toContainText('Hydryllin');

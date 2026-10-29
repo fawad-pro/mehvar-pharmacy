@@ -23,7 +23,7 @@ async function receiveExpired(page: Page): Promise<void> {
   await expect(page).toHaveURL(/\/purchases$/);
   await search(page).fill(PRODUCT.toLowerCase());
   await page.getByRole('option').first().click();
-  await page.getByLabel(/^How many/).fill('10');
+  await page.getByLabel(/^Qty/).fill('10');
   await page.getByLabel(/^Cost of 1/).fill('5.00');
   await page.getByLabel('Expiry').fill('01/2020');
   await page.getByLabel(/^Cost of 1/).press('Enter');

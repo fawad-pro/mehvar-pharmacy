@@ -29,9 +29,9 @@ async function addLine(
   await search(page).fill(term);
   await page.getByRole('option').first().click();
 
-  await page.getByLabel(/^How many/).fill(fields.qty);
+  await page.getByLabel(/^Qty/).fill(fields.qty);
   if (fields.bonus) {
-    await page.getByLabel(/^Free/).fill(fields.bonus);
+    await page.getByLabel(/^Bonus/).fill(fields.bonus);
   }
   await page.getByLabel(/^Cost of 1/).fill(fields.cost);
   if (fields.expiry) {
@@ -83,7 +83,7 @@ test('the invoice total reflects the cost of every entered line', async ({ page 
   // zero behind a line that looks entered.
   await search(page).fill('panadol');
   await page.getByRole('option').first().click();
-  await page.getByLabel(/^How many/).fill('100');
+  await page.getByLabel(/^Qty/).fill('100');
   await page.getByRole('button', { name: /^Add/ }).click();
   await expect(page.getByText(/type 0 if it was free/i)).toBeVisible();
   await expect(invoiceTotal).toContainText(/Lines\s*0$/);
@@ -433,7 +433,7 @@ test('W7 by keyboard alone: supplier, invoice, a line, received', async ({ page 
   await page.keyboard.type('hydryllin', { delay: 60 });
   await expect(page.getByRole('option').first()).toContainText('Hydryllin');
   await page.keyboard.press('Enter');
-  await expect(page.getByLabel(/^How many/)).toBeFocused();
+  await expect(page.getByLabel(/^Qty/)).toBeFocused();
   await page.keyboard.type('2', { delay: 120 });
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');

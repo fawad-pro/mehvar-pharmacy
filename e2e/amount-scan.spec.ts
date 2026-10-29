@@ -151,7 +151,7 @@ test('Receive Stock: a code in Paid now or a supplier Pay records nothing and cr
   // Flagyl only ever receives stock in the suite (supplier-account.spec).
   await search(page).fill('flagyl');
   await page.getByRole('option').first().click();
-  await page.getByLabel(/^How many/).fill('10');
+  await page.getByLabel(/^Qty/).fill('10');
   await page.getByLabel(/^Cost of 1/).fill('150.00');
   await page.getByLabel(/^Cost of 1/).press('Enter');
 

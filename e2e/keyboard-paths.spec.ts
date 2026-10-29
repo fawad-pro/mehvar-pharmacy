@@ -99,7 +99,7 @@ test('Receive Stock: Esc in a line goes back to search, not to Sale', async ({ p
   await search(page).fill('hydryllin');
   await expect(page.getByRole('option').first()).toContainText('Hydryllin', { timeout: 30_000 });
   await page.keyboard.press('Enter');
-  await expect(page.getByLabel(/^How many/)).toBeFocused();
+  await expect(page.getByLabel(/^Qty/)).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page).toHaveURL(/\/purchases$/);
   await expect(search(page)).toBeFocused();

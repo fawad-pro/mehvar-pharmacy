@@ -23,7 +23,7 @@ and Esc in a line still returns to the search.
   invoice number, and the date behind "More details — dated today". The
   line is a card under the labelled "Search or scan a product" field: the
   product, its pack as buttons with "1 box = 10 strip", then two rows of
-  four — How many, Free, Cost of 1 box, Expiry; Batch, MRP of 1 box, Sells
+  four — Qty, Bonus, Cost of 1 box, Expiry; Batch, MRP of 1 box, Sells
   for, Add line — so batch, MRP and price are on screen, not behind a
   toggle. The lines table has Free, Cost each, "Expiry · batch", Sells for
   and Amount, with a badge only when a line needs a look: "Expires soon"
@@ -42,7 +42,7 @@ and Esc in a line still returns to the search.
   yet", and Choose / Add supplier as a button as well as Enter.
 
 Specs that found fields by a renamed label were updated to the new one
-("How many", "Free", "Cost of 1 box", "MRP of 1 box", "Sells for",
+("Cost of 1 box", "MRP of 1 box", "Sells for",
 "Batch", "Add line", "Recent deliveries", `MM/YYYY` expiries); the layout
 spec now pins the two rows of four the canvas draws.
 

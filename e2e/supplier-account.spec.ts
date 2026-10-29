@@ -28,7 +28,7 @@ test('a later payment to a supplier shows on their account and from the invoice'
 
   await search(page).fill('flagyl');
   await page.getByRole('option').first().click();
-  await page.getByLabel(/^How many/).fill('10');
+  await page.getByLabel(/^Qty/).fill('10');
   await page.getByLabel(/^Cost of 1/).fill('150.00');
   await page.getByLabel('Expiry').fill('12/2030');
   await page.getByLabel(/^Cost of 1/).press('Enter');

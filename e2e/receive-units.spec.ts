@@ -51,8 +51,8 @@ test('receive in boxes: bonus and cost per box, an exact line, and the MRP offer
   );
   await expect(page.getByLabel('Sells for')).toHaveValue('400.00');
 
-  await page.getByLabel(/^How many/).fill('2');
-  await page.getByLabel(/^Free/).fill('1');
+  await page.getByLabel(/^Qty/).fill('2');
+  await page.getByLabel(/^Bonus/).fill('1');
   await page.getByLabel(/^Cost of 1/).fill('333.33');
   await page.getByLabel('Expiry').fill('12/2030');
   // The box says Rs 420; this shop will sell at Rs 450 — above it, warned.
@@ -143,8 +143,8 @@ async function openLine(page: Page, name: string): Promise<void> {
 
 function lineControls(page: Page) {
   return [
-    page.getByLabel(/^How many/),
-    page.getByLabel(/^Free/),
+    page.getByLabel(/^Qty/),
+    page.getByLabel(/^Bonus/),
     page.getByLabel(/^Cost of 1/),
     page.getByLabel(/^Expiry/),
     page.getByLabel(/^Batch/),
@@ -188,8 +188,8 @@ test('the line is two rows of four at 1280×800 and wraps usably at 768px', asyn
   await openLine(page, name);
   const boxes = await Promise.all(lineControls(page).map((control) => control.boundingBox()));
   const bottoms = boxes.map((box) => Math.round((box?.y ?? 0) + (box?.height ?? 0)));
-  // PCN-016: two rows of four, in the order the invoice is read — how many,
-  // free, cost, expiry; then batch, MRP, sells for and Add. Each row's
+  // PCN-016: two rows of four, in the order the invoice is read — qty,
+  // bonus, cost, expiry; then batch, MRP, sells for and Add. Each row's
   // controls end on one line.
   for (const row of [bottoms.slice(0, 4), bottoms.slice(4)]) {
     expect(
@@ -219,7 +219,7 @@ test('the line is two rows of four at 1280×800 and wraps usably at 768px', asyn
   await labelsOnOneLine(page);
   await noSidewaysScroll(page);
   // Still a working form: fill and add by keyboard.
-  await page.getByLabel(/^How many/).fill('1');
+  await page.getByLabel(/^Qty/).fill('1');
   await page.getByLabel(/^Cost of 1/).fill('300');
   await page.getByLabel(/^Cost of 1/).press('Enter');
   await expect(page.getByRole('table').getByRole('row').filter({ hasText: name })).toContainText(
@@ -242,7 +242,7 @@ test('damaged strips go back from a box delivery: credit at stock cost, any diff
   await page.getByRole('button', { name: `Add “${supplier}” as a new supplier` }).click();
   await search(page).fill(name.toLowerCase());
   await page.getByRole('option').first().click({ timeout: 30_000 });
-  await page.getByLabel(/^How many/).fill('2');
+  await page.getByLabel(/^Qty/).fill('2');
   await page.getByLabel(/^Cost of 1/).fill('640');
   await page.getByLabel('Expiry').fill('12/2030');
   await page.getByLabel(/^Cost of 1/).press('Enter');

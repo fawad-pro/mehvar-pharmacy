@@ -313,7 +313,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
     }
     const bonusCount = bonus.trim() === '' ? 0 : Number(bonus.trim());
     if (!Number.isSafeInteger(bonusCount) || bonusCount < 0) {
-      setError(`Enter the free ${unit.name} as a whole number — leave it empty for none.`);
+      setError(`Enter the bonus as whole ${unit.name} — leave it empty for none.`);
       return false;
     }
     // Backstop for a barcode typed into a number field: no delivery line is a
@@ -325,7 +325,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       bonusCount > MAX_LINE_UNITS ||
       levelToBaseUnits(unitCount + bonusCount, level) > MAX_LINE_UNITS * 1_000
     ) {
-      setError('That quantity looks like a barcode, not a count. Check How many and Free.');
+      setError('That quantity looks like a barcode, not a count. Check Qty and Bonus.');
       return false;
     }
     // The unit cost must be ENTERED, not merely default to zero. "Sells for" is
@@ -669,7 +669,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
             <div className={`${cardClass} gap-3 p-4`}>
               <ProductSearch
                 label="Search or scan a product"
-                hint="Enter goes to how many"
+                hint="Enter goes to Qty"
                 onSelect={onSelectProduct}
                 inputRef={searchRef}
                 autoFocus={false}
@@ -704,7 +704,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                     <span className="text-control font-semibold">{pending.productName}</span>
 
                     {/* [PCN-012] The unit it arrived in, as buttons — largest pack
-                        first and pressed. How many, free, cost and price all follow it. */}
+                        first and pressed. Qty, bonus, cost and price all follow it. */}
                     {pending.units.length > 1 ? (
                       <div role="group" aria-label="Arrived in" className="flex">
                         {pending.units.map((unit, index) => {
@@ -744,7 +744,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                       invoice is read; two columns on a phone. */}
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                     <LineField
-                      label={`How many ${unitLabel}`}
+                      label={`Qty (${unitLabel})`}
                       ref={qtyRef}
                       value={qty}
                       inputMode="numeric"
@@ -753,7 +753,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                       }}
                     />
                     <LineField
-                      label={`Free ${unitLabel}`}
+                      label={`Bonus (${unitLabel})`}
                       value={bonus}
                       inputMode="numeric"
                       placeholder="0"
@@ -854,10 +854,8 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                 <thead className="text-label text-ink-2">
                   <tr className="border-line border-b">
                     <th className="px-4 py-2.5 font-medium">Product</th>
-                    <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
-                      How many
-                    </th>
-                    <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Free</th>
+                    <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Qty</th>
+                    <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">Bonus</th>
                     <th className="px-3 py-2.5 text-right font-medium whitespace-nowrap">
                       Cost each
                     </th>

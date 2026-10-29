@@ -30,7 +30,7 @@ test('W7/W8: correct a received invoice and return goods to the supplier', async
 
   await search(page).fill(PRODUCT.toLowerCase());
   await page.getByRole('option').first().click();
-  await page.getByLabel(/^How many/).fill('50');
+  await page.getByLabel(/^Qty/).fill('50');
   await page.getByLabel(/^Cost of 1/).fill('10.00');
   await page.getByLabel('Expiry').fill('12/2030');
   await page.getByLabel(/^Cost of 1/).press('Enter');
