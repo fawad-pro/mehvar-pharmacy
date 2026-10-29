@@ -67,6 +67,7 @@ export function PaymentOverlay({
   grossPaisa,
   itemDiscountPaisa,
   capPercent,
+  udhaarEnabled = true,
   customerName,
   customerBalancePaisa = null,
   busy,
@@ -79,6 +80,8 @@ export function PaymentOverlay({
   grossPaisa: Paisa;
   itemDiscountPaisa: Paisa;
   capPercent: number;
+  /** A shop that does not sell on udhaar must be paid in full (Settings). */
+  udhaarEnabled?: boolean;
   customerName: string | null;
   /** What the attached customer owes before this sale, to say what they will owe after it. */
   customerBalancePaisa?: number | null;
@@ -439,7 +442,9 @@ export function PaymentOverlay({
             </p>
           ) : (
             <p className="text-body-sm text-red m-0 font-medium" role="alert">
-              Attach a customer ({keyFor('udhaar')}) to put the rest on udhaar.
+              {udhaarEnabled
+                ? `Attach a customer (${keyFor('udhaar')}) to put the rest on udhaar.`
+                : 'The cash received does not cover the bill.'}
             </p>
           )
         ) : null}

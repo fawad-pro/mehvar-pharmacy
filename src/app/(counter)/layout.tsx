@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 
 import { switchableUsers } from '@/auth/actions';
 import { currentSession, type ActiveSession } from '@/auth/session';
+import { tenantSettings } from '@/db/provisioning';
 import { CatalogProvider } from '@/client/search/provider';
 import { AppShell } from '@/components/app-shell';
 import type { LicenceNotice } from '@/components/licence-banner';
@@ -22,6 +23,7 @@ export default async function CounterLayout({ children }: { children: React.Reac
   }
 
   const users = await switchableUsers();
+  const settings = await tenantSettings(session.tenantId);
 
   return (
     // The catalog index is built once per session and lives above the surfaces
@@ -36,6 +38,7 @@ export default async function CounterLayout({ children }: { children: React.Reac
         userRole={session.userRole}
         users={users}
         licence={licenceNotice(session)}
+        udhaarEnabled={settings?.udhaarEnabled ?? true}
       >
         {children}
       </AppShell>

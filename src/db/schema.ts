@@ -132,6 +132,12 @@ export interface TenantSettings {
    */
   saleStartsLoose?: boolean;
   /**
+   * Whether this shop sells on udhaar. Most pharmacies do not, so a shop that
+   * does not never sees the Attach / Settle controls or the F4 key. Optional
+   * so an existing tenant row keeps today's behaviour: absent reads as on.
+   */
+  udhaarEnabled?: boolean;
+  /**
    * [PCN-014] The most all discounts on a bill together may come to, as a
    * percentage of the bill before any discount, before a bill discount needs
    * the owner's PIN. Absent reads as 10; 0 means every bill discount does.

@@ -127,9 +127,7 @@ test('every unit on the line; buttons and keys change it; the next sale starts w
   await cart(page)
     .getByRole('button', { name: `Remove ${name}` })
     .click();
-  await expect(
-    page.getByText('Scan a barcode or type a name — Enter puts it on the bill.'),
-  ).toBeVisible();
+  await expect(cart(page).getByRole('button', { name: /^Remove / })).toHaveCount(0);
 });
 
 test('a shop that starts sales loose starts a never-sold product in tablets', async ({ page }) => {

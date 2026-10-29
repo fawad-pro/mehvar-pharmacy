@@ -132,6 +132,7 @@ export function SaleSurface() {
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const receiptContext = useReceiptContext();
+  const udhaarEnabled = receiptContext?.udhaarEnabled ?? true;
   const pressUdhaarKey = useUdhaarKeyPress();
   const { receipt, print, clear: clearPrinted } = usePrintReceipt();
   const { capture } = useSync();
@@ -140,7 +141,7 @@ export function SaleSurface() {
   // something to bill. An empty cart leaves it unregistered, so AppShell's
   // Settle Udhaar fallback runs instead.
   useRegisterUdhaarKeyHandler(
-    lines.length > 0
+    udhaarEnabled && lines.length > 0
       ? () => {
           setPickingCustomer(true);
         }
@@ -546,7 +547,7 @@ export function SaleSurface() {
         >
           <ProductSearch
             label="Search or scan"
-            hint={<>Enter adds · ↑ goes to the cart · 3*brufen for three</>}
+            hint={<>↑ goes to the cart</>}
             onSelect={onSelect}
             inputRef={searchRef}
             onEnterCart={() => {
@@ -628,11 +629,6 @@ export function SaleSurface() {
               onLeaveCart={focusSearch}
               onPay={openPayment}
             />
-            {lines.length > 0 ? (
-              <p className="text-caption text-ink-2 mt-3 px-1 max-md:hidden">
-                ↑ ↓ pick a line · + − quantity · Tab unit · % discount · Delete removes
-              </p>
-            ) : null}
           </div>
         </section>
 
@@ -653,12 +649,14 @@ export function SaleSurface() {
               <span>Items</span>
               <b className="numeral text-navy font-medium">{itemsSummary}</b>
             </p>
-            <p className="text-body-sm text-ink-2 m-0 flex justify-between">
-              <span>Discount on items</span>
-              <b className="numeral text-navy font-medium">
-                {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
-              </b>
-            </p>
+            {discountOnItems > 0 ? (
+              <p className="text-body-sm text-ink-2 m-0 flex justify-between">
+                <span>Discount on items</span>
+                <b className="numeral text-navy font-medium">
+                  {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
+                </b>
+              </p>
+            ) : null}
           </div>
 
           {customer ? (
@@ -682,7 +680,7 @@ export function SaleSurface() {
                 Remove
               </Button>
             </div>
-          ) : lines.length > 0 ? (
+          ) : !udhaarEnabled ? null : lines.length > 0 ? (
             <div className={`${cardClass} flex-row items-center gap-3 max-md:px-4 max-md:py-3`}>
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-control font-semibold">Cash walk-in</span>
@@ -853,6 +851,7 @@ export function SaleSurface() {
           grossPaisa={grossSubtotalPaisa(lines)}
           itemDiscountPaisa={totalLineDiscountPaisa(lines)}
           capPercent={receiptContext?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT}
+          udhaarEnabled={udhaarEnabled}
           customerName={customer?.name ?? null}
           customerBalancePaisa={customer?.balancePaisa ?? null}
           busy={busy}

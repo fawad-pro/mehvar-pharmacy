@@ -82,6 +82,7 @@ export async function updateReceiptSettingsAction(input: {
  */
 export async function updateSellingSettingsAction(input: {
   saleStartsLoose: boolean;
+  udhaarEnabled: boolean;
   billDiscountCapPercent: number;
 }): Promise<SettingsOutcome> {
   const session = await currentSession();
@@ -99,6 +100,7 @@ export async function updateSellingSettingsAction(input: {
   await updateTenantSettings(session.tenantId, {
     ...current,
     saleStartsLoose: input.saleStartsLoose,
+    udhaarEnabled: input.udhaarEnabled,
     billDiscountCapPercent: cap,
   });
   revalidateAfter('settings');
