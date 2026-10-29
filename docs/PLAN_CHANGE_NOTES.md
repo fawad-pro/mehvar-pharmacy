@@ -2278,6 +2278,27 @@ forward for the pilot only.
 9. **Consent clause.** A data-use/consent clause goes into the pilot and
    licence terms now, so opt-in aggregated insights remain possible later.
 
+10. **Room for online subscriptions, nothing built now.** Online subscription
+    management may be added later for cloud tenants. The offline licence
+    system (PCN-006) stays exactly as it is for local installs, and cloud mode
+    does not replace or fork it. Today's decision is only a constraint on the
+    cloud deploy: do not make subscriptions hard to add. Concretely:
+    - Entitlement is read through **one seam**, "may this tenant use the
+      product, and until when", with the licence source chosen by
+      `MEHVAR_DEPLOYMENT` (decision 2). Local reads the PCN-006 licence file;
+      cloud reads a per-tenant record. A subscription later becomes another
+      source behind the same seam, not a new check scattered through the app.
+    - A cloud tenant's entitlement lives in **its own tenant-scoped table or
+      tenant-level record**, not hardcoded in configuration or the image, so a
+      later billing system can write to it.
+    - Provisioning (`src/db/provisioning.ts`) creates a tenant with an
+      explicit entitlement, so a plan or term can be added without
+      re-provisioning.
+    - Lapsed or unpaid never blocks a sale (P2, PCN-005): any future
+      subscription state degrades the way an expired licence does.
+    - Not decided here: plans, prices, payment provider, invoicing, dunning,
+      trials. Those get their own PCN when subscriptions are scheduled.
+
 **Supersedes in part.** PCN-010 decisions 3 and 5, for Online-mode tenants
 only: they get owner access from anywhere and Railway backups plus a nightly
 dump. Local installs are unchanged.
