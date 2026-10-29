@@ -2205,3 +2205,82 @@ offline copy), and the other screens' product searches keep their
 screen-reader name until their own batch.
 
 **Applied.** Not yet; a later session takes it with W12's horizons.
+
+## PCN-019 — cloud-hosted tenants for the pilot
+
+Session: pilot and deployment roadmap · Raised: 2026-10-29 · Status: decided
+
+Source: `docs/ROADMAP_PILOT_AND_DEPLOYMENT.md` §1–§3. This note records
+decisions; it changes no code.
+
+**Plan sections in tension.** PCN-004 (local-first, optional cloud, one image,
+`scoped.ts` in every install), PCN-010 (the pilot is one local counter; remote
+owner access is LAN-only; backups are local or USB), Roadmap Phase 4
+("optionally cloud-hosted tenants, same image"), PCN-006 (one perpetual
+licence per install), Phase 12 (rewritten for the local install).
+
+**The gap.** The pilot needs an online version the owner and the pilot
+pharmacy can open from anywhere. Nothing records that Online mode is being
+pulled forward from Phase 4, how a cloud tenant is licensed, or what Online
+cannot do while the internet is down. PCN-010 decisions 3 and 5 say remote
+access and offsite backup wait for Phase 3; this brings a limited form of them
+forward for the pilot only.
+
+**Options.**
+
+- A. Pull the "same image, cloud-hosted tenants" item forward; one product,
+  three run modes. No change of direction.
+- B. A pilot-only branch or pilot-only features. Rejected: it is PCN-004's
+  Option D, already rejected, and forks the product.
+- C. Keep the pilot local-only. Rejected by the owner: the pilot is to be
+  served online without bending the product.
+
+**Decision.** 2026-10-29, the owner (Option A):
+
+1. **One product, three run modes.**
+   - Local (default): shop PC, one tenant, no internet dependency.
+   - Online: Railway, one shared Postgres, many tenants.
+   - Hybrid (later): local is the truth, with a **one-way** copy of new event
+     rows to the cloud. No two-way sync is ever planned (ADR-1 and UUIDv7 ids
+     make the one-way copy simple).
+2. **Same code, same migrations, same image.** The only difference is
+   configuration (`MEHVAR_DEPLOYMENT=local|cloud`): licence source, backup job
+   and which setup screens show. No `if (cloud)` in `domain/`. Migrations
+   stay forward-only and additive (Phase 12 §2), so an old offline install and
+   the newest cloud run against compatible schemas.
+3. **Licence per tenant in cloud mode.** One PCN-006 licence per cloud tenant,
+   issued with the existing `scripts/licence/issue.ts`; the licence source is
+   the one thing cloud mode changes about licensing.
+4. **What Online cannot do in an internet blackout**, stated to the pilot in
+   writing: the counter keeps selling (outbox, ADR-3; the receipt prints from
+   local state), but receiving stock, reports and day close wait for the
+   connection. Offline-first selling is unchanged.
+5. **Hosting.** Railway project "Mehvar Pharmacy": one Next.js service, one
+   Postgres, plus a staging environment; deploy from `main`, migrations as the
+   pre-deploy command. Pilot URL `pharmacy.getmehvar.com` (CNAME at Hostinger
+   to the Railway domain); `app.getmehvar.com` stays the hospital product.
+6. **Updates.** Cloud updates itself on merge to `main`. Offline gets a tagged
+   installer only when worth it; the offline build is frozen as v1.0 once the
+   redesign, staff accounts (Step 6) and local-product barcodes land.
+   Catalogue packs reach every install without an app update; cloud applies a
+   pack once because `global_products` has no tenant column.
+7. **Go-live gate.** Deploying early with **demo data only** is fine. The
+   pilot's real stock, sales and customers go online only after three checks
+   are done and written down: (a) authentication over the internet (device
+   pairing, PIN lockout, secure cookies, HTTPS only); (b) tenant isolation
+   (row-level security as a second wall behind `scoped.ts`, its cross-tenant
+   test seen to fail with the policy dropped); (c) backups (a nightly dump and
+   one successful restore drill into a scratch database). The demo tenant is
+   labelled demo and wiped before go-live. Row-level security touches ADR-2
+   and gets its own PCN.
+8. **Not for the pilot:** no pilot-only branch or code paths, no two-way sync,
+   no cloud dependency on the local sale path. Pilot wishes go through a PCN.
+9. **Consent clause.** A data-use/consent clause goes into the pilot and
+   licence terms now, so opt-in aggregated insights remain possible later.
+
+**Supersedes in part.** PCN-010 decisions 3 and 5, for Online-mode tenants
+only: they get owner access from anywhere and Railway backups plus a nightly
+dump. Local installs are unchanged.
+
+**Applied.** This note only. Phase 12 and Roadmap Phase 4 are updated when the
+cloud deploy (roadmap §4, item 2) lands, so the plan describes what exists.
