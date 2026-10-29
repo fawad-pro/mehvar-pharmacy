@@ -54,6 +54,8 @@ export async function purgeTenant(tenantId: string): Promise<void> {
     'purchases',
     'adjustments',
     'cash_movements',
+    // [PCN-019] References `users` (created_by) and `tenants`.
+    'tenant_entitlements',
     'batches',
     'product_barcodes',
     'products',

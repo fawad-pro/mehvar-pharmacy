@@ -369,7 +369,7 @@ exception visibility.
 - **A reported margin must never be better than the real one** — Day 6's rule,
   which the report was breaking. `commitReturn` correctly touches neither the
   sale nor its allocations (ADR-1), so refunded sales kept contributing full
-  revenue *and* full cost forever; since a sale earns more than it costs,
+  revenue _and_ full cost forever; since a sale earns more than it costs,
   dropping the returned portion removes more revenue than cost and the gross
   figure was strictly optimistic. Returns are subtracted in the range they
   happened, matching how `expectedCash` already treats them.
@@ -546,8 +546,8 @@ exception visibility.
 
 - **A hint that spells out a shortcut by hand can drift the moment the bar is
   reordered.** Udhaar moved from F8 to F4 (Day 9), and `registry.test.ts`
-  pinned that the *handler* binds by dispatch meaning, but nothing pinned
-  that on-screen *text* did — the Sale surface and payment overlay kept
+  pinned that the _handler_ binds by dispatch meaning, but nothing pinned
+  that on-screen _text_ did — the Sale surface and payment overlay kept
   saying "F8" for months after the key moved. `keyFor(dispatch)` is now the
   only way a hint may name a key; `hint-sourcing.test.ts` requires the four
   known sites to call it and sweeps the rest of the source tree for the same
@@ -725,7 +725,7 @@ exception visibility.
   list of ONE from an earlier search; build that case, then watch the
   mutation fail.
 - **A unique test name must differ in letters, not digits.** `Shelf Item
-  <timestamp>` was found by search as the previous run's item; fuzzy search
+<timestamp>` was found by search as the previous run's item; fuzzy search
   forgives a digit. Use random letters.
 - **Every modal is an `OverlayBackdrop`.** The payment and settlement screens
   had their own copies of its markup, so the focus trap would have missed
@@ -760,7 +760,7 @@ exception visibility.
   `keyboard.press` in a loop on a screen that re-renders per key measured
   80–120 ms gaps, so the guard rightly saw a person. A scanner's keys carry
   the time they were sent. Simulate a scan with `keyboard.type(code,
-  { delay: 0 })`, as `scanner.spec.ts` does, and measure the gaps when a
+{ delay: 0 })`, as `scanner.spec.ts` does, and measure the gaps when a
   scan "fails".
 
 ## Things the keyboard walks established
@@ -795,6 +795,19 @@ exception visibility.
 - **A test that passes with a pause and fails without one has found
   something.** The 300 ms waits in an instrumented run hid the race; the
   budget test, which presses keys as fast as an operator, showed it.
+
+## Things the cloud deploy established
+
+- **One seam answers "may this tenant use the product".** `resolveLicence`
+  branches once on `MEHVAR_DEPLOYMENT`: local reads the PCN-006 licence file,
+  cloud reads `tenant_entitlements`. Never add a second check elsewhere, and
+  never branch on it in `domain/`.
+- **The cloud image bundles the installer's scripts** (`build-cloud.ts` mirrors
+  `build.ts`; `tests/cloud-build.test.ts` pins the lists together). A new ops
+  script goes in both.
+- **Demo data only online until the go-live gate in `docs/DEPLOYMENT.md` is
+  signed off** — authentication, tenant isolation (RLS PCN), backup + restore
+  drill.
 
 ## Commits
 
@@ -881,4 +894,3 @@ pushing (the pre-push hook runs it; enable with `npm run hooks:install`).
 - **The position vocabulary covers paper too.** `position.ts` said the receipt
   used it; the receipt did not, and printed "New balance -50.00". Any balance a
   person reads — screen or slip — goes through `positionOf`/`BalanceInline`.
-

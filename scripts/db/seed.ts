@@ -19,6 +19,7 @@ import 'dotenv/config';
 import { eq } from 'drizzle-orm';
 
 import { hashPassword, hashPin } from '../../src/auth/pin';
+import { grantEntitlement, listEntitlements } from '../../src/db/entitlement-queries';
 import { insertLicence, listLicences } from '../../src/db/licence-queries';
 import { createTenant, findTenantBySlug } from '../../src/db/provisioning';
 import { tenantScope, type TenantScope } from '../../src/db/scoped';
@@ -59,6 +60,11 @@ const DEMO = {
     { name: 'Usman', pin: '3456' },
   ],
 } as const;
+
+/** PCN-019: a hosted deployment, where entitlement is a tenant record. */
+function isCloud(): boolean {
+  return process.env.MEHVAR_DEPLOYMENT === 'cloud';
+}
 
 /** Client schema version for seeded records (Phase 12 §2.6 / defect C4). */
 const CLIENT_SCHEMA_VERSION = 1;
@@ -136,7 +142,9 @@ async function main(): Promise<void> {
   const scope = tenantScope({ tenantId, userId: ownerId });
 
   const settings: TenantSettings = {
-    receiptHeader: `${DEMO.tenantName}\nMain Bazaar, Lahore\n0300-1234567`,
+    // PCN-019: the demo tenant is labelled as one wherever it is shown — on a
+    // cloud deployment it is the only thing there until the go-live gate passes.
+    receiptHeader: `${isCloud() ? 'DEMO — not a real pharmacy\n' : ''}${DEMO.tenantName}\nMain Bazaar, Lahore\n0300-1234567`,
     receiptFooter: 'Shukriya — phir tashreef laaiye',
     timeZone: process.env.TENANT_TIME_ZONE ?? 'Asia/Karachi',
     expiryHorizonDays: [30, 60, 90],
@@ -375,8 +383,10 @@ async function main(): Promise<void> {
  * with full functionality, so this says that plainly rather than looking like
  * a missing step.
  */
-function licenceOutcomeLines(outcome: 'issued' | 'already' | 'skipped'): string[] {
+function licenceOutcomeLines(outcome: 'issued' | 'already' | 'skipped' | 'entitled'): string[] {
   switch (outcome) {
+    case 'entitled':
+      return ['Entitlement: granted the demo tenant a demo entitlement (cloud mode).', ''];
     case 'issued':
       return ['Licence: issued a perpetual licence, bound to this machine.', ''];
     case 'already':
@@ -416,7 +426,21 @@ function licenceOutcomeLines(outcome: 'issued' | 'already' | 'skipped'): string[
  * bound to this machine. Evaluation and unauthorized states stay reachable
  * through any tenant WITHOUT a licence — every provisioned test tenant is one.
  */
-async function ensureDemoLicence(scope: TenantScope): Promise<'issued' | 'already' | 'skipped'> {
+async function ensureDemoLicence(
+  scope: TenantScope,
+): Promise<'issued' | 'already' | 'skipped' | 'entitled'> {
+  // PCN-019: on a cloud deployment the question is answered by the tenant's
+  // entitlement record, not a file bound to this machine, so there is no
+  // licence to sign and no installation to bind it to.
+  if (isCloud()) {
+    if ((await listEntitlements(scope)).length > 0) return 'already';
+    await grantEntitlement(scope, {
+      plan: 'demo',
+      note: 'Demo tenant. Wiped before the pilot’s real data goes online (PCN-019 gate).',
+    });
+    return 'entitled';
+  }
+
   const installation = ensureInstallation('db:seed');
   const existing = await listLicences(scope);
   if (existing.some((row) => row.installationId === installation.installationId)) {

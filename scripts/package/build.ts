@@ -68,6 +68,8 @@ const OPS_ENTRYPOINTS = [
   'scripts/ops/restore-drill.ts',
   'scripts/ops/restore.ts',
   'scripts/ops/support-bundle.ts',
+  // PCN-019: the cloud image provisions tenants with the same bundle.
+  'scripts/ops/provision-tenant.ts',
   // The service entry point WinSW runs. Bundled so `dotenv` is compiled in.
   'scripts/ops/serve.ts',
 ];

@@ -17,6 +17,14 @@ const serverSchema = z.object({
   /** Phase 12 §1 environments: local, staging, production. Three, no more. */
   APP_ENV: z.enum(['local', 'staging', 'production']).default('local'),
 
+  /**
+   * PCN-019: how this process is run. `local` (the default) is a shop PC with
+   * one tenant and a PCN-006 licence file; `cloud` is the shared Railway
+   * deployment, where entitlement is a per-tenant record. Configuration only —
+   * nothing in `domain/` branches on it.
+   */
+  MEHVAR_DEPLOYMENT: z.enum(['local', 'cloud']).default('local'),
+
   /** The NON-OWNING application role — see PCN-001 and .env.example. */
   DATABASE_URL: z.string().url(),
 

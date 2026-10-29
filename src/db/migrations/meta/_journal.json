@@ -134,6 +134,13 @@
       "when": 1793124103620,
       "tag": "0018_bill_discount_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793280505977,
+      "tag": "0019_tenant_entitlements",
+      "breakpoints": true
     }
   ]
 }

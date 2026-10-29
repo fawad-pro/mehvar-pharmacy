@@ -1,0 +1,9 @@
+# Nightly database backup for the cloud deployment (PCN-019, Phase 12 §3).
+#
+# Use the same PostgreSQL major as Railway's server so pg_dump can read it.
+# The official PostgreSQL image includes the matching client tools.
+FROM postgres:18-alpine
+RUN apk add --no-cache aws-cli bash coreutils
+COPY ops/cloud/backup.sh /usr/local/bin/backup.sh
+RUN chmod +x /usr/local/bin/backup.sh
+CMD ["/usr/local/bin/backup.sh"]

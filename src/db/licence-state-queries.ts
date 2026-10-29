@@ -7,7 +7,9 @@ import {
   evaluationAnchor,
   type ClockDisagreement,
 } from '@/domain/licensing/clock';
+import { evaluateEntitlement } from '@/domain/licensing/entitlement';
 import { evaluateLicence, type LicenceState } from '@/domain/licensing/state';
+import { serverEnv } from '@/env';
 import { verifyRevocation } from '@/domain/licensing/revocation';
 import { verifyToken } from '@/domain/licensing/verify';
 import { readInstallation } from '@/lib/installation';
@@ -22,6 +24,7 @@ import {
   recentObservations,
   tenantCreatedAt,
 } from './licence-queries';
+import { listEntitlements } from './entitlement-queries';
 import { findInstallation } from './installation-queries';
 import { tenantScope } from './scoped';
 
@@ -82,8 +85,29 @@ async function computeLicence(
   timeZone?: string,
 ): Promise<ResolvedLicence> {
   const systemNow = new Date();
-  const installationId = readInstallation()?.installationId;
   const scope = tenantScope({ tenantId, userId });
+
+  /*
+   * THE ENTITLEMENT SEAM (PCN-019 decision 10). "May this tenant use the
+   * product, and until when" has one answer per run mode: a local install
+   * reads its PCN-006 licence file below; a cloud-hosted tenant has no machine
+   * to bind a file to, so it reads its own entitlement record. Everything
+   * downstream sees the same `LicenceState`. A subscription later is another
+   * source behind this branch, not a new check somewhere else.
+   */
+  if (serverEnv().MEHVAR_DEPLOYMENT === 'cloud') {
+    const rows = await listEntitlements(scope);
+    return {
+      state: evaluateEntitlement({ now: systemNow, customerName: tenantSlug, rows }),
+      installationId: undefined,
+      clock: 'none',
+      rebindsUsed: 0,
+      systemNow,
+      businessNow: systemNow,
+    };
+  }
+
+  const installationId = readInstallation()?.installationId;
 
   const standing = await licenceStanding(scope, installationId ?? '', systemNow);
 

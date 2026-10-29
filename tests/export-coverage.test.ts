@@ -18,6 +18,7 @@ const NOT_EXPORTED = new Map<string, string>([
   ['licences', 'PCN-005 licensing records: the vendor relationship, not Phase 9 §2–§4 data.'],
   ['clock_observations', 'PCN-005 licensing evidence about the machine clock.'],
   ['revocations', 'Stage 2 licensing records, as licences.'],
+  ['tenant_entitlements', 'PCN-019 cloud entitlement: the vendor relationship, as licences.'],
 ]);
 
 const exportSource = readFileSync(join(process.cwd(), 'src', 'db', 'export-queries.ts'), 'utf8');
