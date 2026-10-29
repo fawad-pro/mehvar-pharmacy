@@ -42,6 +42,9 @@ const CLOUD_OPS_ENTRYPOINTS = [
   'scripts/ops/restore.ts',
   'scripts/ops/support-bundle.ts',
   'scripts/ops/provision-tenant.ts',
+  // The demo pharmacy (products, stock, sales) — run from the web shell, so the
+  // database never has to be reachable from outside Railway.
+  'scripts/db/seed.ts',
 ];
 
 /** Provably present in `app/node_modules` (see `build.ts`), nothing else. */
