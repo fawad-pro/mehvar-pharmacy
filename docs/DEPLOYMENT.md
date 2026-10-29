@@ -57,7 +57,12 @@ image includes a compatible `pg_dump`. Custom domain on `web`:
 
 ## Creating a pharmacy
 
-From the `web` service shell (`railway ssh` or `railway run`), once per tenant:
+Every `node app/bin/...` command in this document runs **inside the deployed
+container**: open it with `railway ssh --service web`. Not `railway run`, which
+executes on your own machine (with Railway's variables injected) where
+`app/bin/` does not exist and fails with `MODULE_NOT_FOUND`.
+
+Once per tenant:
 
 ```bash
 MEHVAR_SHOP_NAME="Al-Shifa Medical Store" MEHVAR_OWNER_PIN=4821 \
@@ -71,7 +76,7 @@ login name, pairing key and owner password **once** — both are stored only as
 hashes.
 
 **The demo pharmacy** (138 products, stocked batches, a sale, an udhaar
-customer) is the seed script bundled in the image. From the `web` shell:
+customer) is the seed script bundled in the image. From the `web` container (`railway ssh --service web`):
 
 ```bash
 node app/bin/db/seed.js
@@ -92,7 +97,7 @@ in cloud mode and is untouched in local mode.
 
 1. `https://pharmacy.getmehvar.com/api/health` → `{"status":"ok"}`; `/` redirects to `/login`.
 2. Log in, W1 sale by keyboard; cut the network in the browser, sell again (prints, badge says unsynced), reconnect (drains).
-3. `node app/bin/db/verify.js` from the `web` shell: clean (ADR-8).
+3. `node app/bin/db/verify.js` from the `web` container (`railway ssh`): clean (ADR-8).
 
 ## Restore drill (go-live gate c)
 
