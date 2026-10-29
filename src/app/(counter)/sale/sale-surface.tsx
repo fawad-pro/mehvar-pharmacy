@@ -204,6 +204,7 @@ export function SaleSurface() {
         lineId: uuidv7(),
         productId: hit.product.id,
         name: hit.product.name,
+        strength: hit.product.strength,
         baseUnitName: hit.product.baseUnitName,
         packLevels: hit.product.packLevels,
         units,

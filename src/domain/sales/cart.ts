@@ -21,6 +21,8 @@ export interface CartLine {
   readonly lineId: string;
   readonly productId: string;
   readonly name: string;
+  /** As the pack says it ("500mg"); shown beside the name, never priced on. */
+  readonly strength: string | null;
   readonly baseUnitName: string;
   readonly packLevels: readonly PackLevel[];
   /** [PCN-012] The product's units, smallest first, each with its own price. */
@@ -88,6 +90,7 @@ export function newCartLine(input: {
   lineId: string;
   productId: string;
   name: string;
+  strength?: string | null;
   baseUnitName: string;
   packLevels: readonly PackLevel[];
   units: readonly ProductUnit[];
@@ -99,6 +102,7 @@ export function newCartLine(input: {
     lineId: input.lineId,
     productId: input.productId,
     name: input.name,
+    strength: input.strength ?? null,
     baseUnitName: input.baseUnitName,
     packLevels: input.packLevels,
     units: input.units,
