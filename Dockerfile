@@ -8,9 +8,6 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /src
 ENV NEXT_TELEMETRY_DISABLED=1
-# `next build` type-checks in a worker that dies silently when it runs out of
-# heap; give it room rather than skip the check.
-ENV NODE_OPTIONS=--max-old-space-size=4096
 
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
