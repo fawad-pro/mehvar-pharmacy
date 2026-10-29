@@ -1235,6 +1235,41 @@ export const licences = pgTable(
 );
 
 /**
+ * [PCN-019] A cloud tenant's entitlement — "may this tenant use the product,
+ * and until when". Append-only, in `EVENT_TABLES`.
+ *
+ * Local installs answer that question with a PCN-006 licence file; a
+ * cloud-hosted tenant has no machine to bind a file to, so
+ * `MEHVAR_DEPLOYMENT=cloud` reads this table instead, through the same seam
+ * (`resolveLicence`). It is a table and not configuration so a later
+ * subscription system can write to it (PCN-019 decision 10) without a release.
+ *
+ * Nothing updates: the effective entitlement is the newest row by
+ * `granted_at`. Ending or extending one is a new row. A tenant with no row, or
+ * whose newest row has lapsed, is `restricted` — which still sells (P2).
+ */
+export const tenantEntitlements = pgTable(
+  'tenant_entitlements',
+  {
+    id: uuid('id').primaryKey(),
+    tenantId: uuid('tenant_id')
+      .notNull()
+      .references(() => tenants.id),
+    /** Free text for now (`pilot`, `demo`); plans are not decided (PCN-019). */
+    plan: text('plan').notNull(),
+    grantedAt: timestamp('granted_at', { withTimezone: true }).notNull(),
+    /** Null = no end date. A pilot may be open-ended; a subscription will not be. */
+    endsAt: timestamp('ends_at', { withTimezone: true }),
+    note: text('note'),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [index('tenant_entitlements_tenant_idx').on(table.tenantId, table.grantedAt)],
+);
+
+/**
  * [PCN-005] Machine identity — the database half of `installation.json`.
  *
  * Mutable, and deliberately not an event table: `last_version` and
@@ -1342,4 +1377,6 @@ export const EVENT_TABLES = [
   'clock_observations',
   // [Stage 2] Signed revocations — a record, never erased.
   'revocations',
+  // [PCN-019] A cloud tenant's entitlement history.
+  'tenant_entitlements',
 ] as const;

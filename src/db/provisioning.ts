@@ -16,10 +16,13 @@ import 'server-only';
 
 import { eq } from 'drizzle-orm';
 
-import type { Uuid } from '@/lib/uuid';
+import { generatePairingKey } from '@/auth/pairing-key';
+import { hashPassword, hashPin } from '@/auth/pin';
+import { uuidv7, type Uuid } from '@/lib/uuid';
 
-import { globalCatalog } from './scoped';
-import { tenants, users, type TenantSettings } from './schema';
+import { grantEntitlement } from './entitlement-queries';
+import { globalCatalog, tenantScope } from './scoped';
+import { devices, tenants, users, type TenantSettings } from './schema';
 
 export async function createTenant(input: {
   id: Uuid;
@@ -124,4 +127,62 @@ export async function updateTenantSettings(
   settings: TenantSettings,
 ): Promise<void> {
   await globalCatalog().update(tenants).set({ settings }).where(eq(tenants.id, tenantId));
+}
+
+/**
+ * A whole cloud pharmacy in one call — tenant, owner, first counter and its
+ * entitlement (PCN-019). `db:seed` and `init` each build the same shape for
+ * their own purposes; this is the one a hosted deployment provisions with, many
+ * times over, on a database that already holds other tenants.
+ *
+ * The entitlement is explicit and written here, so a plan or an end date is a
+ * value at provisioning rather than something added later by hand.
+ *
+ * Returns the two secrets exactly once: both are stored only as hashes.
+ */
+export async function provisionTenant(input: {
+  slug: string;
+  name: string;
+  settings: TenantSettings;
+  ownerName: string;
+  ownerPin: string;
+  deviceName: string;
+  devicePrefix: string;
+  plan: string;
+  entitlementEndsAt: Date | null;
+}): Promise<{ tenantId: Uuid; pairingKey: string; ownerPassword: string }> {
+  const tenantId = uuidv7();
+  const ownerId = uuidv7();
+
+  // Both ids exist before either row does — the chokepoint's one chicken-and-egg.
+  const scope = tenantScope({ tenantId, userId: ownerId });
+
+  await createTenant({
+    id: tenantId,
+    slug: input.slug,
+    name: input.name,
+    settings: input.settings,
+  });
+
+  // ADR-7: the owner logs in remotely with a password; generated, never chosen.
+  const ownerPassword = generatePairingKey();
+  await scope.insert(users, {
+    id: ownerId,
+    name: input.ownerName,
+    role: 'owner',
+    pinHash: await hashPin(input.ownerPin),
+    passwordHash: await hashPassword(ownerPassword),
+  });
+
+  const pairingKey = generatePairingKey();
+  await scope.insert(devices, {
+    id: uuidv7(),
+    name: input.deviceName,
+    receiptPrefix: input.devicePrefix,
+    pairingKeyHash: await hashPassword(pairingKey),
+  });
+
+  await grantEntitlement(scope, { plan: input.plan, endsAt: input.entitlementEndsAt });
+
+  return { tenantId, pairingKey, ownerPassword };
 }

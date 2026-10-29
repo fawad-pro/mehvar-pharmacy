@@ -1,0 +1,12 @@
+# Nightly database backup for the cloud deployment (PCN-019, Phase 12 §3).
+#
+# A separate, tiny image run on a Railway cron schedule: pg_dump the database
+# as its OWNER and upload the dump to a Railway bucket (S3-compatible).
+# Keep PG_MAJOR at or above the Railway Postgres major version — pg_dump
+# refuses a server newer than itself.
+FROM alpine:3.22
+ARG PG_MAJOR=17
+RUN apk add --no-cache postgresql${PG_MAJOR}-client aws-cli bash coreutils
+COPY ops/cloud/backup.sh /usr/local/bin/backup.sh
+RUN chmod +x /usr/local/bin/backup.sh
+CMD ["/usr/local/bin/backup.sh"]

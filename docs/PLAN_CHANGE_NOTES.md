@@ -2305,3 +2305,11 @@ dump. Local installs are unchanged.
 
 **Applied.** This note only. Phase 12 and Roadmap Phase 4 are updated when the
 cloud deploy (roadmap §4, item 2) lands, so the plan describes what exists.
+
+**Applied (cloud deploy, 2026-10-29).** Roadmap §4 item 2 landed: `Dockerfile`,
+`Dockerfile.backup`, `scripts/package/build-cloud.ts`, `/api/health`,
+`tenant:provision`, migration `0019_tenant_entitlements`, the entitlement seam
+in `resolveLicence`, and `docs/DEPLOYMENT.md`. Decision 10's three constraints
+are met: one seam chosen by `MEHVAR_DEPLOYMENT`; entitlement in its own
+append-only tenant-scoped table; provisioning writes it explicitly. Still open:
+the go-live gate (a)–(c) — nothing real goes online yet.
