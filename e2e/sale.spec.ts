@@ -46,7 +46,7 @@ test('W1: a cash sale, start to finish, without touching the mouse', async ({ pa
   await expect(cart(page)).toContainText('3 strip');
 
   // Rs 3.50 × 10 + Rs 9.00 × 30 = Rs 305.00
-  await expect(total(page)).toHaveText('305.00');
+  await expect(total(page)).toHaveText('Rs 305.00');
 
   // F12 opens the payment overlay; Enter commits the exact tendered amount
   // (Phase 10 §4's default).
@@ -58,7 +58,7 @@ test('W1: a cash sale, start to finish, without touching the mouse', async ({ pa
   await expect(lastSale(page)).toContainText('305.00');
 
   // The cart clears and focus returns for the next customer (W1).
-  await expect(total(page)).toHaveText('0.00');
+  await expect(total(page)).toHaveText('Rs 0.00');
   await expect(search(page)).toBeFocused();
 });
 
@@ -73,7 +73,7 @@ test('editing a line in place, by keyboard (Phase 10 §4)', async ({ page }) => 
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('+');
   await expect(cart(page)).toContainText('2 strip');
-  await expect(total(page)).toHaveText('70.00');
+  await expect(total(page)).toHaveText('Rs 70.00');
 
   // Tab cycles the unit level and re-expresses the same count at the new one.
   await page.keyboard.press('Tab');
@@ -83,7 +83,9 @@ test('editing a line in place, by keyboard (Phase 10 §4)', async ({ page }) => 
   await page.keyboard.press('-');
   await expect(cart(page)).toContainText('1 box');
   await page.keyboard.press('-');
-  await expect(page.getByText('Search above to start a sale.')).toBeVisible();
+  await expect(
+    page.getByText('Scan a barcode or type a name — Enter puts it on the bill.'),
+  ).toBeVisible();
   await expect(search(page)).toBeFocused();
 });
 
@@ -116,7 +118,7 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   // Either wording is the same D2 exposure: "not in stock" once earlier sales
   // have already emptied it, "more than in stock" while some remains. The suite
   // shares a database, so which one appears depends on what ran before.
-  await expect(cart(page)).toContainText(/more than in stock|not in stock/);
+  await expect(cart(page)).toContainText(/More than in stock|Not in stock/);
 
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter');
@@ -150,7 +152,7 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     const match = /A-(\d+)/.exec(text);
     expect(match, 'a receipt number was issued').not.toBeNull();
     numbers.push(match![1]!);
-    await expect(total(page)).toHaveText('0.00');
+    await expect(total(page)).toHaveText('Rs 0.00');
   }
 
   expect(new Set(numbers).size).toBe(3);
@@ -180,7 +182,7 @@ test('a fixed PKR line discount reduces that line and the total, by keyboard', a
   // that makes the arithmetic in this test readable).
   await search(page).fill('disprin');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('25.00');
+  await expect(total(page)).toHaveText('Rs 25.00');
 
   // ArrowUp out of search selects the line; '%' opens its discount field.
   await page.keyboard.press('ArrowUp');
@@ -188,8 +190,8 @@ test('a fixed PKR line discount reduces that line and the total, by keyboard', a
   await page.getByLabel('Discount for Disprin').fill('5');
   await page.keyboard.press('Enter');
 
-  await expect(cart(page)).toContainText('−5.00');
-  await expect(total(page)).toHaveText('20.00');
+  await expect(cart(page)).toContainText('Rs 5.00');
+  await expect(total(page)).toHaveText('Rs 20.00');
   // Focus returns to the row, not to search, after a line-level edit.
   await expect(search(page)).not.toBeFocused();
 
@@ -200,7 +202,7 @@ test('a fixed PKR line discount reduces that line and the total, by keyboard', a
 
   // A discount belongs to the line it was entered on; the next sale starts
   // with a fresh cart and nothing carries over.
-  await expect(total(page)).toHaveText('0.00');
+  await expect(total(page)).toHaveText('Rs 0.00');
 });
 
 test('a no-discount receipt: Subtotal equals Amount Due, with no Discount row', async ({
@@ -210,7 +212,7 @@ test('a no-discount receipt: Subtotal equals Amount Due, with no Discount row', 
 
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('35.00');
+  await expect(total(page)).toHaveText('Rs 35.00');
 
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter'); // exact tender — no change, no udhaar
@@ -235,7 +237,7 @@ test('a discounted receipt: Subtotal is the pre-discount gross, Discount is the 
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('5');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('20.00');
+  await expect(total(page)).toHaveText('Rs 20.00');
 
   await page.keyboard.press('F12');
   await page.keyboard.press('Enter'); // exact tender against the discounted total
@@ -271,7 +273,7 @@ test('a percentage line discount is computed off that line, not the cart', async
   await page.getByLabel('Discount for Brufen').fill('10%');
   await page.keyboard.press('Enter');
 
-  await expect(cart(page)).toContainText('−9.00'); // 10% of Rs 90.00
+  await expect(cart(page)).toContainText('Rs 9.00'); // 10% of Rs 90.00
   // Disprin's row must show no discount at all — the empty-state dash in its
   // Discount cell (the row's other "−" is the quantity button, PCN-012).
   const disprinDiscount = cart(page).locator('tr', { hasText: 'Disprin' }).locator('td').nth(3);
@@ -283,7 +285,7 @@ test('the Discount column is clickable, no keyboard shortcut required', async ({
 
   await search(page).fill('disprin');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('25.00');
+  await expect(total(page)).toHaveText('Rs 25.00');
 
   // A first-time salesman who has never learned '%' can still find the
   // control: the empty cell itself is a button, named for what it does.
@@ -291,8 +293,8 @@ test('the Discount column is clickable, no keyboard shortcut required', async ({
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Enter');
 
-  await expect(cart(page)).toContainText('−2.50');
-  await expect(total(page)).toHaveText('22.50');
+  await expect(cart(page)).toContainText('Rs 2.50');
+  await expect(total(page)).toHaveText('Rs 22.50');
 
   // Re-opening by clicking the now-filled cell offers the current value
   // pre-selected (auto-select on focus), so typing over it replaces rather
@@ -303,8 +305,8 @@ test('the Discount column is clickable, no keyboard shortcut required', async ({
   await field.pressSequentially('5');
   await page.keyboard.press('Enter');
 
-  await expect(cart(page)).toContainText('−5.00');
-  await expect(total(page)).toHaveText('20.00');
+  await expect(cart(page)).toContainText('Rs 5.00');
+  await expect(total(page)).toHaveText('Rs 20.00');
 });
 
 test('a re-typed percentage on the same line does not compound', async ({ page }) => {
@@ -317,7 +319,7 @@ test('a re-typed percentage on the same line does not compound', async ({ page }
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText('−2.50'); // 10% of Rs 25.00
+  await expect(cart(page)).toContainText('Rs 2.50'); // 10% of Rs 25.00
 
   // Opening the field again and re-entering the SAME "10%" must land on the
   // same Rs 2.50 — not 10% of the already-discounted Rs 22.50. The field is
@@ -326,8 +328,8 @@ test('a re-typed percentage on the same line does not compound', async ({ page }
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Enter');
-  await expect(cart(page)).toContainText('−2.50');
-  await expect(total(page)).toHaveText('22.50');
+  await expect(cart(page)).toContainText('Rs 2.50');
+  await expect(total(page)).toHaveText('Rs 22.50');
 });
 
 test('a line discount can never exceed that line, and rejects a negative entry', async ({
@@ -344,14 +346,14 @@ test('a line discount can never exceed that line, and rejects a negative entry',
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('500');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('0.00');
+  await expect(total(page)).toHaveText('Rs 0.00');
 
   // Junk or a negative entry is zero — never a price ABOVE the catalogue
   // price wearing a discount's clothes.
   await page.keyboard.press('%');
   await page.getByLabel('Discount for Disprin').fill('-5');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('25.00');
+  await expect(total(page)).toHaveText('Rs 25.00');
   await expect(cart(page)).toContainText('—');
 });
 
@@ -366,7 +368,7 @@ test('Escape cancels an in-progress discount edit without changing anything', as
   await page.getByLabel('Discount for Disprin').fill('10%');
   await page.keyboard.press('Escape');
 
-  await expect(total(page)).toHaveText('25.00');
+  await expect(total(page)).toHaveText('Rs 25.00');
   await expect(cart(page)).toContainText('—');
 
   // The row is still selected and usable — Escape closed the field, not the

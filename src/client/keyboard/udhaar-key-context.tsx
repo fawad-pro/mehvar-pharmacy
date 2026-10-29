@@ -27,6 +27,8 @@ type UdhaarKeyHandler = () => void;
 
 const UdhaarKeyContext = createContext<{
   register: (handler: UdhaarKeyHandler | null) => void;
+  /** The key's meaning, run exactly as pressing it does. */
+  press: () => void;
 } | null>(null);
 
 /** Owned by AppShell: tracks whatever handler is currently registered. */
@@ -53,12 +55,14 @@ export function useUdhaarKeyRegistry(): {
 
 export function UdhaarKeyProvider({
   register,
+  press,
   children,
 }: {
   register: (handler: UdhaarKeyHandler | null) => void;
+  press: () => void;
   children: React.ReactNode;
 }) {
-  const value = useMemo(() => ({ register }), [register]);
+  const value = useMemo(() => ({ register, press }), [register, press]);
   return <UdhaarKeyContext.Provider value={value}>{children}</UdhaarKeyContext.Provider>;
 }
 
@@ -76,3 +80,15 @@ export function useRegisterUdhaarKeyHandler(handler: UdhaarKeyHandler | null): v
     };
   }, [registry, handler]);
 }
+
+/**
+ * The udhaar key as something to tap: a screen's button that means "what the
+ * key means here" (Sale's Settle card) runs the same dispatch, so it can never
+ * disagree with the key.
+ */
+export function useUdhaarKeyPress(): () => void {
+  const registry = useContext(UdhaarKeyContext);
+  return registry?.press ?? noop;
+}
+
+function noop(): void {}

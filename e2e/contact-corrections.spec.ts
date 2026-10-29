@@ -17,9 +17,9 @@ test('a customer: fix the name by keyboard, remove, find again, restore', async 
   // Paid in full, so they owe nothing and can be removed afterwards.
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('35.00');
+  await expect(total(page)).toHaveText('Rs 35.00');
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
   await expect(picker).toBeHidden();
@@ -78,7 +78,7 @@ test('a customer who owes cannot be removed, and the screen says how much', asyn
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
   await page.keyboard.press('F12');

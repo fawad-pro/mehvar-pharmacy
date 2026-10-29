@@ -20,12 +20,17 @@ import type { CustomerHit } from '@/app/(counter)/customers/actions';
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { miniStatement } from '@/domain/udhaar/settlement';
 import { settlementEffect } from '@/domain/udhaar/position';
-import { BalanceInline } from '@/components/balance-figure';
+import { PositionInline } from '@/components/balance-figure';
+import { Banner } from '@/components/ui/banner';
+import { Button, Kbd } from '@/components/ui/button';
+import { dialogPanelClass } from '@/components/ui/dialog';
+import { FieldLabel, inputClass } from '@/components/ui/field';
 import { CustomerPicker } from '@/components/customer-picker';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
 import { ReceiptView } from '@/components/receipt-view';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
+import type { ReceiptData } from '@/client/print/receipt';
 import { useSync } from '@/client/sync/provider';
 import { needsClickToCommit } from '@/client/scan/amount-guard';
 import { formatPaisa } from '@/lib/money';
@@ -40,6 +45,8 @@ type Step =
       customer: CustomerHit;
       receiptNumber: string;
       statement: { previousBalancePaisa: number; amountPaisa: number; newBalancePaisa: number };
+      /** Kept for "Print again". */
+      slip: ReceiptData;
     };
 
 export function SettleUdhaarOverlay({
@@ -113,7 +120,7 @@ export function SettleUdhaarOverlay({
 
     // Printed before "Done" shows: the page takes no keys while printing,
     // and Done is when the next key is pressed (the Sale screen's rule).
-    await print({
+    const slip: ReceiptData = {
       receiptNumber,
       dateTime: new Date(),
       salesmanName: receiptContext.salesmanName,
@@ -121,9 +128,10 @@ export function SettleUdhaarOverlay({
       tenantFooterLine: receiptContext.tenantFooterLine,
       customerName: customer.name,
       miniStatement: statement,
-    });
+    };
+    await print(slip);
     setBusy(false);
-    setStep({ name: 'done', customer, receiptNumber, statement });
+    setStep({ name: 'done', customer, receiptNumber, statement, slip });
   }
 
   return (
@@ -138,9 +146,10 @@ export function SettleUdhaarOverlay({
         />
       ) : (
         <OverlayBackdrop label="Settle udhaar" onEscape={onClose}>
-          <div className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5">
-            <h2 className="text-navy mb-1 text-lg font-semibold">Settle udhaar</h2>
-            <p className="text-ink-2 mb-4 text-sm">{step.customer.name}</p>
+          <div className={dialogPanelClass}>
+            <h2 className="text-heading m-0">
+              {step.name === 'amount' ? 'Settle udhaar' : 'Settled'}
+            </h2>
 
             {step.name === 'amount' ? (
               <>
@@ -148,42 +157,62 @@ export function SettleUdhaarOverlay({
                     entry — which makes "half of what?" a question the screen
                     has to answer at the moment the figure is typed, not one
                     the cashier carries in their head from the picker. */}
-                <div className="bg-surface shadow-card mb-3 flex items-baseline justify-between rounded-card px-3 py-2">
-                  <span className="text-ink-2 text-xs tracking-[0.1em] uppercase">Before</span>
-                  <BalanceInline balancePaisa={step.customer.balancePaisa} />
+                <div className="bg-page flex items-center gap-3 rounded-card px-4 py-3">
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-control truncate font-semibold">
+                      {step.customer.name}
+                    </span>
+                    {step.customer.phone ? (
+                      <span className="text-body-sm text-ink-2 numeral text-left">
+                        {step.customer.phone}
+                      </span>
+                    ) : null}
+                  </span>
+                  <PositionInline
+                    balancePaisa={step.customer.balancePaisa}
+                    className="text-control"
+                  />
                 </div>
 
-                <label className="text-ink-2 mb-1 block text-xs" htmlFor="settle-amount">
-                  Amount paid
+                <label className="flex flex-col gap-1.5">
+                  <FieldLabel>Amount paid</FieldLabel>
+                  <span className="relative block">
+                    <span
+                      aria-hidden="true"
+                      className="text-body-sm text-ink-2 pointer-events-none absolute inset-y-0 left-3.5 flex items-center"
+                    >
+                      Rs
+                    </span>
+                    <input
+                      autoComplete="off"
+                      id="settle-amount"
+                      ref={amountField}
+                      value={amount}
+                      inputMode="decimal"
+                      onChange={(event) => {
+                        setAmount(event.target.value);
+                        setError(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          const typed = paisaFromRupeeInput(amount);
+                          if (needsClickToCommit(typed)) {
+                            setError(
+                              `${formatPaisa(typed, { withSymbol: true })} looks like a barcode. If it is right, click Settle.`,
+                            );
+                            return;
+                          }
+                          void commit(step.customer);
+                        }
+                        if (event.key === 'Escape') {
+                          onClose();
+                        }
+                      }}
+                      className={`${inputClass} numeral text-field-lg pl-11 text-right font-medium`}
+                      placeholder="0.00"
+                    />
+                  </span>
                 </label>
-                <input
-                  autoComplete="off"
-                  id="settle-amount"
-                  ref={amountField}
-                  value={amount}
-                  inputMode="decimal"
-                  onChange={(event) => {
-                    setAmount(event.target.value);
-                    setError(null);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      const typed = paisaFromRupeeInput(amount);
-                      if (needsClickToCommit(typed)) {
-                        setError(
-                          `${formatPaisa(typed, { withSymbol: true })} looks like a barcode. If it is right, click Settle.`,
-                        );
-                        return;
-                      }
-                      void commit(step.customer);
-                    }
-                    if (event.key === 'Escape') {
-                      onClose();
-                    }
-                  }}
-                  className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-2xl"
-                  placeholder="0"
-                />
 
                 {/* What this amount will actually do, said before it is
                     committed. Overpayment is legal (W3 caps nothing) and is
@@ -195,82 +224,110 @@ export function SettleUdhaarOverlay({
                   const typed = paisaFromRupeeInput(amount);
                   if (typed <= 0) return null;
                   const effect = settlementEffect(step.customer.balancePaisa, typed);
+                  const after = (
+                    <>
+                      After this:{' '}
+                      <PositionInline balancePaisa={step.customer.balancePaisa - typed} />
+                    </>
+                  );
                   if (effect.overpaidPaisa === 0) {
                     return (
-                      <p className="text-ink-2 mt-2 text-sm">
-                        Leaves{' '}
-                        {effect.resulting.kind === 'settled' ? (
-                          <strong className="text-navy">nothing owing</strong>
-                        ) : (
-                          <strong className="text-amber-text">
-                            {formatPaisa(paisa(effect.resulting.amountPaisa), { withSymbol: true })}{' '}
-                            still owing
-                          </strong>
-                        )}
-                        .
-                      </p>
+                      <p className="bg-page text-body-sm m-0 rounded-card px-4 py-3">{after}</p>
                     );
                   }
                   return (
-                    <p className="bg-surface shadow-card text-ink-2 mt-2 rounded-card border-dashed p-2 text-sm">
-                      That is more than is owed.{' '}
+                    <p className="bg-page text-body-sm m-0 rounded-card px-4 py-3">
+                      That is more than {step.customer.name} owes.{' '}
                       {effect.clearsPaisa > 0 ? (
                         <>
                           {formatPaisa(paisa(effect.clearsPaisa), { withSymbol: true })} clears the
-                          balance and{' '}
+                          udhaar and{' '}
                         </>
                       ) : null}
-                      <strong>
-                        {formatPaisa(paisa(effect.overpaidPaisa), { withSymbol: true })}
+                      <strong className="font-semibold">
+                        {formatPaisa(paisa(effect.overpaidPaisa), { withSymbol: true })} is kept as
+                        an advance
                       </strong>{' '}
-                      will be held as an advance against future purchases.
+                      for the next purchase.
+                      <br />
+                      {after}
                     </p>
                   );
                 })()}
 
                 {error ? (
-                  <p className="text-red mt-2 text-sm" role="alert">
+                  <p className="text-body-sm text-red m-0 font-medium" role="alert">
                     {error}
                   </p>
                 ) : null}
 
-                <div className="mt-4 flex items-center justify-between">
-                  <button type="button" onClick={onClose} className="text-ink-2 text-sm">
-                    Esc to cancel
-                  </button>
-                  <button
-                    type="button"
+                <div className="mt-1 flex flex-wrap items-center justify-end gap-2 max-md:flex-col-reverse max-md:items-stretch">
+                  <Button kind="quiet" onClick={onClose}>
+                    Cancel <Kbd>Esc</Kbd>
+                  </Button>
+                  <Button
+                    kind="primary"
                     onClick={() => void commit(step.customer)}
                     disabled={paisaFromRupeeInput(amount) <= 0 || busy || !receiptContext}
-                    className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
                   >
-                    {busy ? 'Saving…' : 'Settle — Enter'}
-                  </button>
+                    {busy ? (
+                      'Saving…'
+                    ) : (
+                      <>
+                        Settle <Kbd>Enter</Kbd>
+                      </>
+                    )}
+                  </Button>
                 </div>
               </>
             ) : (
               <>
+                <Banner tone="done" role="status" lead={`Saved — ${step.receiptNumber}.`}>
+                  The slip has printed.
+                </Banner>
                 {/* The dispute-ender (T4/T5). Balances speak the position
                     vocabulary; only "Paid" is a plain amount, because it is a
                     transaction rather than a position. */}
-                <div className="bg-page flex flex-col gap-1 rounded-card p-3 text-sm">
-                  <BalanceRow label="Before" balancePaisa={step.statement.previousBalancePaisa} />
-                  <Row label="Paid" amountPaisa={Math.abs(step.statement.amountPaisa)} />
-                  <BalanceRow label="Now" balancePaisa={step.statement.newBalancePaisa} bold />
+                <div
+                  className="bg-page text-control flex flex-col gap-1.5 rounded-card p-4"
+                  aria-label={`${step.customer.name}’s udhaar`}
+                >
+                  <p className="m-0 flex justify-between gap-3">
+                    <span>{step.customer.name}, before</span>
+                    <PositionInline balancePaisa={step.statement.previousBalancePaisa} />
+                  </p>
+                  <p className="m-0 flex justify-between gap-3">
+                    <span>Paid</span>
+                    <b className="numeral font-medium">
+                      {formatPaisa(paisa(Math.abs(step.statement.amountPaisa)), {
+                        withSymbol: true,
+                      })}
+                    </b>
+                  </p>
+                  <p className="border-line m-0 flex justify-between gap-3 border-t pt-1.5 font-semibold">
+                    <span>Now</span>
+                    <PositionInline balancePaisa={step.statement.newBalancePaisa} />
+                  </p>
                 </div>
-                <p className="text-ink-2 mt-2 text-xs">Receipt {step.receiptNumber}</p>
 
-                <div className="mt-4 flex justify-end">
-                  <button
-                    type="button"
+                <div className="mt-1 flex flex-wrap items-center justify-end gap-2 max-md:flex-col-reverse max-md:items-stretch">
+                  <Button
+                    kind="quiet"
+                    onClick={() => {
+                      void print(step.slip);
+                    }}
+                  >
+                    Print again
+                  </Button>
+                  <Button
+                    kind="primary"
                     // Focus moves here when the payment is recorded, so Esc
                     // and Enter reach the dialog rather than the page.
                     autoFocus
                     onClick={onClose}
-                    className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5"
                   >
-                    Done — Esc
-                  </button>
+                    Done <Kbd>Enter</Kbd>
+                  </Button>
                 </div>
               </>
             )}
@@ -280,39 +337,5 @@ export function SettleUdhaarOverlay({
 
       {receipt ? <ReceiptView receipt={receipt} /> : null}
     </>
-  );
-}
-
-function BalanceRow({
-  label,
-  balancePaisa,
-  bold = false,
-}: {
-  label: string;
-  balancePaisa: number;
-  bold?: boolean;
-}) {
-  return (
-    <div className={`flex justify-between ${bold ? 'font-semibold' : ''}`}>
-      <span>{label}</span>
-      <BalanceInline balancePaisa={balancePaisa} />
-    </div>
-  );
-}
-
-function Row({
-  label,
-  amountPaisa,
-  bold = false,
-}: {
-  label: string;
-  amountPaisa: number;
-  bold?: boolean;
-}) {
-  return (
-    <div className={`flex justify-between ${bold ? 'font-semibold' : ''}`}>
-      <span>{label}</span>
-      <span className="numeral">{formatPaisa(paisa(amountPaisa))}</span>
-    </div>
   );
 }

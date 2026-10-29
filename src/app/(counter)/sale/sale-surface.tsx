@@ -20,7 +20,10 @@ import { useCatalog } from '@/client/search/provider';
 import { parseQuantityQuery } from '@/client/search/quantity-grammar';
 import { lastSaleUnit, rememberSaleUnit } from '@/client/sale/last-unit';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
-import { useRegisterUdhaarKeyHandler } from '@/client/keyboard/udhaar-key-context';
+import {
+  useRegisterUdhaarKeyHandler,
+  useUdhaarKeyPress,
+} from '@/client/keyboard/udhaar-key-context';
 import { keyFor } from '@/client/keyboard/registry';
 import { usePrintReceipt } from '@/client/print/use-print-receipt';
 import type { ReceiptData } from '@/client/print/receipt';
@@ -30,6 +33,10 @@ import { ProductSearch } from '@/components/product-search';
 import { CustomerPicker } from '@/components/customer-picker';
 import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import { ReceiptView } from '@/components/receipt-view';
+import { PositionInline } from '@/components/balance-figure';
+import { Banner, BannerMark } from '@/components/ui/banner';
+import { Button, Kbd, buttonClass } from '@/components/ui/button';
+import { cardClass } from '@/components/ui/card';
 import type { CustomerHit } from '@/app/(counter)/customers/actions';
 import { barcodeOwnerAction, linkScannedCode } from '@/app/(counter)/products/actions';
 import { barcodeToStore, parseGs1 } from '@/domain/catalog/barcode';
@@ -60,6 +67,18 @@ import { uuidv7, type Uuid } from '@/lib/uuid';
 
 import { CartTable } from './cart-table';
 import { PaymentOverlay, type BillDiscount, type PaymentSplit } from './payment-overlay';
+
+/**
+ * Pay's key. Sale's own, not the global bar's, so it is not in the registry;
+ * the hint on the button and the handler read this one constant.
+ */
+const PAY_KEY = 'F12';
+
+/** PCN-017: an expiry is read as MM/YYYY everywhere. */
+function formatExpiry(isoDate: string): string {
+  const [year, month] = isoDate.split('-');
+  return year && month ? `${month}/${year}` : isoDate;
+}
 
 interface Committed {
   receiptNumber: string;
@@ -117,6 +136,7 @@ export function SaleSurface() {
   const searchRef = useRef<HTMLInputElement | null>(null);
 
   const receiptContext = useReceiptContext();
+  const pressUdhaarKey = useUdhaarKeyPress();
   const { receipt, print, clear: clearPrinted } = usePrintReceipt();
   const { capture } = useSync();
 
@@ -490,7 +510,7 @@ export function SaleSurface() {
   // F12 opens the payment overlay from anywhere on the surface (Phase 10 §4).
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
-      if (event.key === 'F12') {
+      if (event.key === PAY_KEY) {
         event.preventDefault();
         // Not over another dialog. F12 pressed while the customer picker was
         // still looking a name up opened Payment on top of it; the picker
@@ -512,145 +532,195 @@ export function SaleSurface() {
     };
   }, [openPayment, pickingCustomer]);
 
+  const payDisabled = lines.length === 0 || busy || !receiptContext;
+  const discountOnItems = totalLineDiscountPaisa(lines);
+  const itemsSummary =
+    lines.length === 0
+      ? 'Nothing on the bill'
+      : `${totals.lineCount} line${totals.lineCount === 1 ? '' : 's'} · ${totals.itemCount} unit${totals.itemCount === 1 ? '' : 's'}`;
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="border-line shrink-0 border-b p-3">
-        <ProductSearch
-          onSelect={onSelect}
-          inputRef={searchRef}
-          onEnterCart={() => {
-            const last = lines[lines.length - 1];
-            if (last) {
-              setSelectedLineId(last.lineId);
-            }
-          }}
-          onQuickAdd={(name, code) =>
-            new Promise<boolean>((settle) => {
-              // The counter's own index first (works offline); then the server,
-              // which also catches a code linked since this index was built.
-              const local = code ? (index?.resolveBarcode(code) ?? null) : null;
-              setQuickAdd({
-                name,
-                code: code ?? null,
-                owner: local ? { name: local.product.name, hit: local } : null,
-                settle,
-              });
-              if (code && !local) {
-                void barcodeOwnerAction(code)
-                  .then((found) => {
-                    if (!found) return;
-                    const hit =
-                      index?.products.find((product) => product.id === found.productId) ?? null;
-                    setQuickAdd((current) =>
-                      current && current.code === code
-                        ? {
-                            ...current,
-                            owner: {
-                              name: found.productName,
-                              hit: hit
-                                ? {
-                                    product: hit,
-                                    tier: MatchTier.Barcode,
-                                    matchedOn: 'barcode',
-                                    stockBase: index?.stockOf(hit.id) ?? null,
-                                  }
-                                : null,
-                            },
-                          }
-                        : current,
-                    );
-                  })
-                  .catch(() => {
-                    // Offline: the index check above is what there is, and the
-                    // server will still refuse to attach a code it finds taken.
-                  });
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-4 py-3 md:gap-4 md:p-6 lg:flex-row lg:gap-6 lg:overflow-hidden lg:px-8">
+        {/* Cart — Phase 10 §4's ~62%; the rail is the rest. */}
+        <section
+          aria-label="Cart"
+          className="flex min-w-0 flex-col gap-3 md:gap-4 lg:min-h-0 lg:flex-1"
+        >
+          <ProductSearch
+            label="Search or scan"
+            hint={<>Enter adds · ↑ goes to the cart · 3*brufen for three</>}
+            onSelect={onSelect}
+            inputRef={searchRef}
+            onEnterCart={() => {
+              const last = lines[lines.length - 1];
+              if (last) {
+                setSelectedLineId(last.lineId);
               }
-            })
-          }
-          // Phase 10 §5: an unknown scan links in place. On success the
-          // index is refreshed so the next scan of this code is a plain hit.
-          onLinkCode={async (code, productId, unitLevelName) => {
-            const outcome = await linkScannedCode(productId as Uuid, code, unitLevelName);
-            if (outcome.ok) {
-              refresh();
+            }}
+            onQuickAdd={(name, code) =>
+              new Promise<boolean>((settle) => {
+                // The counter's own index first (works offline); then the server,
+                // which also catches a code linked since this index was built.
+                const local = code ? (index?.resolveBarcode(code) ?? null) : null;
+                setQuickAdd({
+                  name,
+                  code: code ?? null,
+                  owner: local ? { name: local.product.name, hit: local } : null,
+                  settle,
+                });
+                if (code && !local) {
+                  void barcodeOwnerAction(code)
+                    .then((found) => {
+                      if (!found) return;
+                      const hit =
+                        index?.products.find((product) => product.id === found.productId) ?? null;
+                      setQuickAdd((current) =>
+                        current && current.code === code
+                          ? {
+                              ...current,
+                              owner: {
+                                name: found.productName,
+                                hit: hit
+                                  ? {
+                                      product: hit,
+                                      tier: MatchTier.Barcode,
+                                      matchedOn: 'barcode',
+                                      stockBase: index?.stockOf(hit.id) ?? null,
+                                    }
+                                  : null,
+                              },
+                            }
+                          : current,
+                      );
+                    })
+                    .catch(() => {
+                      // Offline: the index check above is what there is, and the
+                      // server will still refuse to attach a code it finds taken.
+                    });
+                }
+              })
             }
-            return outcome;
-          }}
-        />
-      </div>
-
-      <div className="flex min-h-0 flex-1">
-        {/* Cart — Phase 10 §4's ~62%. */}
-        <div className="min-h-0 flex-[62] overflow-auto">
-          <CartTable
-            lines={lines}
-            selectedLineId={selectedLineId}
-            stockByProduct={stockByProduct}
-            expiredByProduct={expiredByProduct}
-            onSelect={setSelectedLineId}
-            onChange={(lineId, patch) => {
-              setLines((current) => updateLine(current, lineId, patch));
+            // Phase 10 §5: an unknown scan links in place. On success the
+            // index is refreshed so the next scan of this code is a plain hit.
+            onLinkCode={async (code, productId, unitLevelName) => {
+              const outcome = await linkScannedCode(productId as Uuid, code, unitLevelName);
+              if (outcome.ok) {
+                refresh();
+              }
+              return outcome;
             }}
-            onRemove={(lineId) => {
-              setLines((current) => removeLine(current, lineId));
-              focusSearch();
-            }}
-            onLeaveCart={focusSearch}
-            onPay={openPayment}
           />
-        </div>
 
-        {/* Right rail — Phase 10 §4's ~38%. */}
-        <aside className="border-line flex flex-[38] flex-col gap-4 border-l p-4">
-          <div>
-            <p className="text-ink-2 text-xs tracking-[0.14em] uppercase">Total</p>
+          {/* The card's shadow needs room to fall inside the scroller. */}
+          <div className="lg:-mx-2 lg:min-h-0 lg:overflow-auto lg:px-2 lg:pb-2">
+            <CartTable
+              lines={lines}
+              selectedLineId={selectedLineId}
+              activeLineId={lines[lines.length - 1]?.lineId ?? null}
+              stockByProduct={stockByProduct}
+              expiredByProduct={expiredByProduct}
+              onSelect={setSelectedLineId}
+              onChange={(lineId, patch) => {
+                setLines((current) => updateLine(current, lineId, patch));
+              }}
+              onRemove={(lineId) => {
+                setLines((current) => removeLine(current, lineId));
+                focusSearch();
+              }}
+              onLeaveCart={focusSearch}
+              onPay={openPayment}
+            />
+            {lines.length > 0 ? (
+              <p className="text-caption text-ink-2 mt-3 px-1 max-md:hidden">
+                ↑ ↓ pick a line · + − quantity · Tab unit · % discount · Delete removes
+              </p>
+            ) : null}
+          </div>
+        </section>
+
+        <aside
+          aria-label="Bill"
+          className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-4 lg:flex lg:items-stretch lg:w-[340px] lg:shrink-0 lg:overflow-auto"
+        >
+          <div className={`${cardClass} gap-2 max-md:hidden`}>
+            <span className="text-label text-ink-2">Total</span>
             {/* I6: the biggest numerals on the display. */}
-            <p className="text-navy numeral text-total leading-none font-semibold">
-              {formatPaisa(totals.totalPaisa)}
+            <p
+              aria-label="Total"
+              className="text-navy numeral text-total m-0 text-right font-semibold tracking-tight whitespace-nowrap"
+            >
+              {formatPaisa(totals.totalPaisa, { withSymbol: true })}
             </p>
-            <p className="text-ink-2 mt-1 text-sm">
-              {totals.lineCount} line{totals.lineCount === 1 ? '' : 's'} · {totals.itemCount} unit
-              {totals.itemCount === 1 ? '' : 's'}
+            <p className="text-body-sm text-ink-2 m-0 flex justify-between">
+              <span>Items</span>
+              <b className="numeral text-navy font-medium">{itemsSummary}</b>
+            </p>
+            <p className="text-body-sm text-ink-2 m-0 flex justify-between">
+              <span>Discount on items</span>
+              <b className="numeral text-navy font-medium">
+                {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
+              </b>
             </p>
           </div>
 
           {customer ? (
-            <div className="bg-surface shadow-card flex items-center justify-between rounded-card p-2 text-sm">
-              <span>
-                <span className="font-medium">{customer.name}</span>
-                {customer.balancePaisa > 0 ? (
-                  <span className="text-amber-text ml-2 numeral">
-                    {formatPaisa(paisa(customer.balancePaisa))} owed
-                  </span>
-                ) : null}
-              </span>
-              <button
-                type="button"
+            <div className={`${cardClass} flex-row items-center gap-3 max-md:px-4 max-md:py-3`}>
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-control truncate font-semibold">{customer.name}</span>
+                <span className="text-body-sm text-ink-2">
+                  <PositionInline balancePaisa={customer.balancePaisa} className="font-normal" />
+                  {customer.phone ? (
+                    <span className="max-md:hidden"> · {customer.phone}</span>
+                  ) : null}
+                </span>
+              </div>
+              <Button
+                kind="quiet"
+                aria-label="Remove customer from this sale"
                 onClick={() => {
                   setCustomer(null);
                 }}
-                className="text-ink-2 text-xs"
               >
-                remove
-              </button>
+                Remove
+              </Button>
             </div>
           ) : lines.length > 0 ? (
-            // A button, not only a hint: a tablet has no udhaar key.
-            <button
-              type="button"
-              onClick={() => {
-                setPickingCustomer(true);
-              }}
-              className="border-border text-blue-600 hover:bg-mist min-h-touch rounded-control border px-3 text-left text-sm"
-            >
-              Attach a customer for udhaar — {keyFor('udhaar')}
-            </button>
+            <div className={`${cardClass} flex-row items-center gap-3 max-md:px-4 max-md:py-3`}>
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-control font-semibold">Cash walk-in</span>
+                <span className="text-body-sm text-ink-2">
+                  <span className="max-md:hidden">To put this on udhaar, attach a customer.</span>
+                  <span className="md:hidden">Attach a customer for udhaar.</span>
+                </span>
+              </div>
+              {/* A button, not only a hint: a tablet has no udhaar key. */}
+              <Button
+                onClick={() => {
+                  setPickingCustomer(true);
+                }}
+              >
+                Attach <Kbd>{keyFor('udhaar')}</Kbd>
+              </Button>
+            </div>
           ) : (
-            // With nothing to bill the key settles instead (defect C5), and
-            // the hint says so; Udhaar on the key bar is the tap for it.
-            <p className="text-ink-2 text-xs">
-              {keyFor('udhaar')} — settle a customer&rsquo;s udhaar
-            </p>
+            // With nothing to bill the key settles instead (defect C5).
+            <div
+              className={`${cardClass} flex-row items-center gap-3 max-md:order-last max-md:px-4 max-md:py-3`}
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-control font-semibold">Settle udhaar</span>
+                <span className="text-body-sm text-ink-2">
+                  <span className="max-md:hidden">
+                    With nothing on the bill, take a customer’s payment.
+                  </span>
+                  <span className="md:hidden">Take a customer’s payment.</span>
+                </span>
+              </div>
+              <Button onClick={pressUdhaarKey}>
+                Settle <Kbd>{keyFor('udhaar')}</Kbd>
+              </Button>
+            </div>
           )}
 
           {/* A counter cannot number a receipt until it has heard from the
@@ -659,97 +729,125 @@ export function SaleSurface() {
               thing that gets a shop phoning the founder. The retry behind this
               is in `receipt-context.tsx`. */}
           {!receiptContext ? (
-            <p className="text-amber-text text-xs" role="status">
+            <Banner tone="attention" role="status" className="md:col-span-2">
               Getting this counter ready…
-            </p>
+            </Banner>
           ) : null}
 
           {expiredPack ? (
-            <p
-              className="text-amber-text text-sm font-medium"
+            <Banner
+              tone="refused"
               role="status"
               aria-label="Expired pack"
+              lead={`Scanned pack of ${expiredPack.name} expired ${formatExpiry(expiredPack.expiry)}.`}
+              className="md:col-span-2"
             >
-              Scanned pack of {expiredPack.name} expired on{' '}
-              {new Date(`${expiredPack.expiry}T00:00:00`).toLocaleDateString('en-PK', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })}{' '}
-              — check before selling.
-            </p>
+              Check before selling.
+            </Banner>
           ) : null}
 
           {error ? (
-            <p className="text-red text-sm" role="alert">
+            <Banner tone="refused" role="alert" className="md:col-span-2">
               {error}
-            </p>
+            </Banner>
           ) : null}
 
           {lastSale ? (
-            <div
-              className="bg-surface shadow-card rounded-card p-3 text-sm"
-              role="status"
-              aria-label="Last sale"
-            >
-              <p className="text-navy font-medium">Saved — {lastSale.receiptNumber}</p>
-              <p className="numeral text-ink-2">
-                {formatPaisa(paisa(lastSale.totalPaisa), { withSymbol: true })}
-              </p>
-              {/* Where the money went, said where the operator looks: an
-                  udhaar sale read exactly like a cash one. */}
-              {(lastSale.receipt.creditPaisa ?? 0) > 0 && lastSale.receipt.customerName ? (
-                <p className="numeral text-ink-2">
-                  {(lastSale.receipt.cashPaisa ?? 0) > 0
-                    ? `${formatPaisa(paisa(lastSale.receipt.cashPaisa ?? 0), { withSymbol: true })} cash · `
-                    : ''}
-                  {formatPaisa(paisa(lastSale.receipt.creditPaisa ?? 0), { withSymbol: true })} on{' '}
-                  {lastSale.receipt.customerName}&rsquo;s udhaar
+            <div role="status" aria-label="Last sale" className="flex flex-col gap-3 md:col-span-2">
+              <div className="bg-green-50 text-body-sm text-navy flex flex-col gap-1 rounded-card px-4 py-3">
+                <p className="m-0 flex items-start gap-2">
+                  <BannerMark tone="done" />
+                  <span className="numeral">
+                    <strong className="font-semibold text-green-700">
+                      Saved — {lastSale.receiptNumber}
+                    </strong>{' '}
+                    · {formatPaisa(paisa(lastSale.totalPaisa), { withSymbol: true })}
+                    {/* Where the money went, said where the operator looks: an
+                      udhaar sale read exactly like a cash one. */}
+                    {(lastSale.receipt.creditPaisa ?? 0) > 0 && lastSale.receipt.customerName ? (
+                      <>
+                        {' · '}
+                        {(lastSale.receipt.cashPaisa ?? 0) > 0
+                          ? `${formatPaisa(paisa(lastSale.receipt.cashPaisa ?? 0), { withSymbol: true })} cash · `
+                          : ''}
+                        {formatPaisa(paisa(lastSale.receipt.creditPaisa ?? 0), {
+                          withSymbol: true,
+                        })}{' '}
+                        on {lastSale.receipt.customerName}&rsquo;s udhaar
+                      </>
+                    ) : (
+                      ' cash'
+                    )}
+                  </span>
                 </p>
-              ) : null}
-              {/* D2 made visible at the moment it happens, not only in the day view. */}
-              {lastSale.pendingUnits > 0 ? (
-                <p className="text-amber-text mt-1">
-                  Sold more than the system had. It is on the owner’s exception list.
-                </p>
-              ) : null}
-              {/* The two questions that follow a completed sale — "can I see
+                {/* The two questions that follow a completed sale — "can I see
                   it?" and "can I have a receipt?" — answered where they are
                   asked. Reprinting is from the same local receipt the commit
                   built, so it needs nothing from the network either. */}
-              <p className="mt-1 flex gap-4 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    print(lastSale.receipt);
-                  }}
-                  className="text-blue-600 min-h-touch font-medium underline-offset-2 hover:underline"
-                >
-                  Print receipt
-                </button>
-                {/* The sale's own page, where it is reviewed. It led to
-                    Returns, a screen that changes things, from before the
-                    receipt page existed (Day 9: a place to do, a separate
-                    place to review). */}
-                <a
-                  href={`/receipts/${encodeURIComponent(lastSale.receiptNumber)}`}
-                  className="text-blue-600 flex min-h-touch items-center font-medium underline-offset-2 hover:underline"
-                >
-                  View sale
-                </a>
-              </p>
+                <p className="-ml-3 m-0 flex gap-2">
+                  <Button
+                    kind="quiet"
+                    onClick={() => {
+                      print(lastSale.receipt);
+                    }}
+                  >
+                    Print receipt
+                  </Button>
+                  {/* The sale's own page, where it is reviewed (Day 9: a place
+                    to do, a separate place to review). */}
+                  <a
+                    href={`/receipts/${encodeURIComponent(lastSale.receiptNumber)}`}
+                    className={`${buttonClass('quiet')} underline underline-offset-2`}
+                  >
+                    View sale
+                  </a>
+                </p>
+              </div>
+              {/* D2 made visible at the moment it happens, not only in the day view. */}
+              {lastSale.pendingUnits > 0 ? (
+                <Banner tone="attention" role="note" lead="Sold more than the system had.">
+                  It is on the owner’s exception list.
+                </Banner>
+              ) : null}
             </div>
           ) : null}
-
-          <button
-            type="button"
+          <Button
+            kind="primary"
+            block
             onClick={openPayment}
-            disabled={lines.length === 0 || busy || !receiptContext}
-            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch mt-auto rounded-control text-lg disabled:opacity-40"
+            disabled={payDisabled}
+            className="h-14 text-[17px] max-md:hidden md:col-start-2 lg:mt-auto"
           >
-            {busy ? 'Saving…' : 'Pay — F12'}
-          </button>
+            {busy ? (
+              'Saving…'
+            ) : (
+              <>
+                Pay <Kbd>{PAY_KEY}</Kbd>
+              </>
+            )}
+          </Button>
         </aside>
+      </div>
+
+      {/* Phone: Pay in a bar above the tabs, the bill's figures beside it. */}
+      <div className="bg-surface shadow-bar flex shrink-0 flex-col gap-1 px-4 py-3 md:hidden">
+        <p className="text-body-sm text-ink-2 m-0 flex justify-between">
+          <span>{itemsSummary}</span>
+          {discountOnItems > 0 ? (
+            <b className="numeral text-navy font-medium">
+              {formatPaisa(paisa(discountOnItems), { withSymbol: true })} off items
+            </b>
+          ) : null}
+        </p>
+        <Button
+          kind="primary"
+          block
+          onClick={openPayment}
+          disabled={payDisabled}
+          className="h-[52px] text-[17px]"
+        >
+          {busy ? 'Saving…' : `Pay ${formatPaisa(totals.totalPaisa, { withSymbol: true })}`}
+        </Button>
       </div>
 
       {paying ? (
@@ -759,6 +857,7 @@ export function SaleSurface() {
           itemDiscountPaisa={totalLineDiscountPaisa(lines)}
           capPercent={receiptContext?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT}
           customerName={customer?.name ?? null}
+          customerBalancePaisa={customer?.balancePaisa ?? null}
           busy={busy}
           onCancel={() => {
             setPaying(false);
@@ -772,7 +871,8 @@ export function SaleSurface() {
 
       {pickingCustomer ? (
         <CustomerPicker
-          title="Attach customer"
+          title="Attach a customer"
+          verb={{ button: 'Attach', says: 'attaches' }}
           onPick={(hit) => {
             setCustomer(hit);
             setPickingCustomer(false);

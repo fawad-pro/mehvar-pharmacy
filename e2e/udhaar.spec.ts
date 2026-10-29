@@ -25,7 +25,7 @@ test('payment overlay: tendered above the total shows change (Phase 10 §4)', as
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
   // Rs 35.00 for one strip.
-  await expect(total(page)).toHaveText('35.00');
+  await expect(total(page)).toHaveText('Rs 35.00');
 
   await page.keyboard.press('F12');
   const overlay = page.getByRole('dialog', { name: 'Payment' });
@@ -53,11 +53,11 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
 
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('35.00');
+  await expect(total(page)).toHaveText('Rs 35.00');
 
   // F8 with items in the cart attaches a customer (defect C5), not Settle Udhaar.
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await expect(picker).toBeVisible();
 
   const name = `Udhaar Customer ${Date.now()}`;
@@ -74,7 +74,7 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
 
   // A modal keeps Tab inside it: from its last control Tab comes back round,
   // never out to the key bar behind, where Enter would leave mid-sale.
-  await overlay.getByRole('button', { name: 'Commit — Enter' }).focus();
+  await overlay.getByRole('button', { name: /^Commit/ }).focus();
   await page.keyboard.press('Tab');
   await expect(overlay.locator(':focus')).toHaveCount(1);
 
@@ -98,7 +98,9 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   // its own attribution); the next one starts unattached: no customer block,
   // whose control is "remove". The last sale's own line still names who it
   // went to, which is the point of it.
-  await expect(page.locator('aside').getByRole('button', { name: 'remove' })).toHaveCount(0);
+  await expect(
+    page.locator('aside').getByRole('button', { name: 'Remove customer from this sale' }),
+  ).toHaveCount(0);
 });
 
 test('the payment overlay computes Remaining the instant tendered falls short — no separate calculator', async ({
@@ -109,11 +111,11 @@ test('the payment overlay computes Remaining the instant tendered falls short �
   // Brufen: Rs 9.00/tab, strip of 10 — one strip is Rs 90.00 (Amount Due).
   await search(page).fill('brufen');
   await page.keyboard.press('Enter');
-  await expect(total(page)).toHaveText('90.00');
+  await expect(total(page)).toHaveText('Rs 90.00');
 
   await page.keyboard.press('F12');
   const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await expect(overlay).toContainText('Amount Due');
+  await expect(overlay).toContainText('Amount due');
 
   // Amount Due Rs 90.00, tendered Rs 50.00 → Remaining Rs 40.00, shown the
   // moment the figure is typed — before any customer is attached, before
@@ -141,7 +143,7 @@ test('credit with nobody attached is blocked at the overlay, not silently discou
   await expect(overlay).toContainText('Attach a customer (F4) to put the rest on udhaar.');
   await expect(overlay.getByRole('button', { name: /Commit/ })).toBeDisabled();
 
-  await overlay.getByRole('button', { name: 'Esc to cancel' }).click();
+  await overlay.getByRole('button', { name: /^Cancel/ }).click();
   await expect(overlay).toBeHidden();
 });
 
@@ -173,14 +175,14 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
    * appeared to move the wrong way after a payment. The rule is "never
    * surprise", not "never allow".
    */
-  await expect(overlay).toContainText('That is more than is owed');
-  await expect(overlay).toContainText('held as an advance');
+  await expect(overlay).toContainText('is kept as an advance');
+  await expect(overlay).toContainText('is kept as an advance');
 
   await page.keyboard.press('Enter');
 
   // The slip speaks the position vocabulary: a balance is never a signed
   // number with a minus sign, so "Previous/New balance" became "Before/Now".
-  await expect(overlay).toContainText('Before');
+  await expect(overlay).toContainText(', before');
   await expect(overlay).toContainText('Now');
   /*
    * A brand-new customer has no debt yet; paying anyway leaves them in credit.
@@ -193,7 +195,7 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
    * software having lost track of the money. The direction is now a word and
    * the amount is always positive.
    */
-  await expect(overlay).toContainText('advance');
+  await expect(overlay).toContainText('Advance Rs 50.00');
   await expect(overlay).toContainText('50.00');
   await expect(overlay).not.toContainText('-50.00');
 
@@ -204,7 +206,7 @@ test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', 
   await expect(receipt(page)).toContainText('New balance50.00 advance');
   await expect(receipt(page)).not.toContainText(/-[\d,]+\.\d{2}/);
 
-  await overlay.getByRole('button', { name: 'Done — Esc' }).click();
+  await overlay.getByRole('button', { name: /^Done/ }).click();
   await expect(overlay).toBeHidden();
 
   // Esc returned control to the counter, not to a full page reload.
@@ -218,7 +220,7 @@ test('W4: returning an udhaar sale prints a refund slip that reduces udhaar, nev
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   const name = `Return Customer ${Date.now()}`;
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();

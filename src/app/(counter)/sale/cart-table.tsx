@@ -40,6 +40,11 @@ export interface CartTableProps {
   onChange: (lineId: string, patch: Parameters<typeof updateLine>[2]) => void;
   onRemove: (lineId: string) => void;
   onLeaveCart: () => void;
+  /**
+   * The line the controls show on while nothing is selected: the last one
+   * added, so a finger changes it without first tapping to select it.
+   */
+  activeLineId?: string | null;
   /** Phase 10 §4: "Space or F12 from cart" opens the payment overlay. */
   onPay?: () => void;
 }
@@ -53,6 +58,7 @@ export function CartTable({
   onChange,
   onRemove,
   onLeaveCart,
+  activeLineId = null,
   onPay,
 }: CartTableProps) {
   const container = useRef<HTMLTableSectionElement>(null);
@@ -129,14 +135,6 @@ export function CartTable({
       event.preventDefault();
       cancelDiscount(line);
     }
-  }
-
-  if (lines.length === 0) {
-    return (
-      <div className="text-ink-2 flex h-full items-center justify-center p-8 text-sm">
-        Search above to start a sale.
-      </div>
-    );
   }
 
   function handleKey(event: React.KeyboardEvent<HTMLTableRowElement>, line: CartLine): void {
@@ -216,178 +214,282 @@ export function CartTable({
     }
   }
 
-  return (
-    <table className="text-table w-full">
-      <thead className="bg-mist text-ink-2 sticky top-0 text-xs">
-        <tr>
-          <th className="px-3 py-2 text-left font-medium">Item</th>
-          <th className="px-3 py-2 text-left font-medium">Quantity</th>
-          <th className="px-3 py-2 text-right font-medium">Price</th>
-          <th className="px-3 py-2 text-right font-medium">Discount</th>
-          <th className="px-3 py-2 text-right font-medium">Amount</th>
-        </tr>
-      </thead>
-      <tbody ref={container}>
-        {lines.map((line) => {
-          const selected = line.lineId === selectedLineId;
-          const stock = stockByProduct[line.productId] ?? null;
-          // D2: the line proceeds; the chip is exposure, not a block.
-          const short = stock !== null && stock < line.qtyBase;
-          // PCN-008: allocation reaches expired batches only after every
-          // unexpired one, so the line touches expired stock exactly when it
-          // asks for more than the unexpired part. Warned, never blocked.
-          const expired = expiredByProduct[line.productId] ?? null;
-          const fromExpired =
-            expired !== null && stock !== null && line.qtyBase > stock - expired.qtyBase;
+  /** The open discount field and its Apply, beside the cell it edits. */
+  function discountEditor(line: CartLine): React.ReactNode {
+    if (editingDiscount?.lineId !== line.lineId) return null;
+    return (
+      <span className="bg-surface shadow-pop absolute top-full right-2 z-10 mt-1 flex w-56 items-center gap-2 rounded-control p-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          aria-label={`Discount for ${line.name}`}
+          autoFocus
+          value={editingDiscount.text}
+          onFocus={(event) => {
+            event.currentTarget.select();
+          }}
+          onChange={(event) => {
+            setEditingDiscount({ lineId: line.lineId, text: event.target.value });
+          }}
+          onKeyDown={(event) => {
+            discountKeyDown(event, line);
+          }}
+          onBlur={() => {
+            cancelDiscount(line);
+          }}
+          placeholder="e.g. 50 or 10%"
+          autoComplete="off"
+          className="numeral border-border text-body-sm h-touch min-w-0 flex-1 rounded-control border px-2.5 text-right focus:border-blue-600"
+        />
+        {/* Enter applies and leaving the field cancels; a tablet's
+          natural way to finish is to tap elsewhere, which threw
+          the discount away with nothing on screen to apply it.
+          Pressing here must not blur the field first, or the
+          blur's cancel would beat the tap. */}
+        <button
+          type="button"
+          aria-label={`Apply discount on ${line.name}`}
+          onMouseDown={(event) => {
+            event.preventDefault();
+          }}
+          onClick={() => {
+            commitDiscount(line);
+          }}
+          className="bg-blue-600 text-surface text-body-sm min-h-touch min-w-touch rounded-control px-3 font-semibold hover:bg-blue-700"
+        >
+          Apply
+        </button>
+      </span>
+    );
+  }
 
-          return (
-            <tr
-              key={line.lineId}
-              data-line-id={line.lineId}
-              tabIndex={-1}
-              aria-selected={selected}
-              onFocus={() => {
-                onSelect(line.lineId);
-              }}
-              onClick={() => {
-                onSelect(line.lineId);
-              }}
-              onKeyDown={(event) => {
-                handleKey(event, line);
-              }}
-              className={['border-line border-t', selected ? 'bg-blue-50' : ''].join(' ')}
-            >
-              <td className="px-3 py-1.5">
-                <span className="font-medium">{line.name}</span>
-                {isPriceOverridden(line) ? (
-                  <span className="text-amber-text ml-2 text-xs">price changed</span>
-                ) : null}
-                {fromExpired ? (
-                  <span className="text-amber-text ml-2 text-xs font-medium" role="alert">
-                    {expired !== null && stock !== null && stock - expired.qtyBase <= 0
-                      ? 'only expired stock left'
-                      : 'part from expired stock'}{' '}
-                    — expired {expired?.expiryDate}
-                  </span>
-                ) : null}
-                {short ? (
-                  <span className="text-amber-text ml-2 text-xs">
-                    {stock !== null && stock <= 0 ? 'not in stock' : 'more than in stock'}
-                  </span>
-                ) : null}
-              </td>
-              <td className="px-3 py-1.5">
-                <QuantityControl
-                  line={line}
-                  selected={selected}
-                  onUnit={(unitKey) => {
-                    onSelect(line.lineId);
-                    onChange(line.lineId, { unitKey });
-                  }}
-                  onStep={(delta) => {
-                    onSelect(line.lineId);
-                    if (line.unitCount + delta < 1) {
-                      onRemove(line.lineId);
-                    } else {
-                      onChange(line.lineId, { unitCount: line.unitCount + delta });
-                    }
-                  }}
-                />
-              </td>
-              <td className="numeral px-3 py-1.5 text-right">
-                {formatPaisa(paisa(line.pricePerUnitPaisa))}
-              </td>
-              <td className="numeral px-3 py-1.5 text-right">
-                {editingDiscount?.lineId === line.lineId ? (
-                  <span className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      aria-label={`Discount for ${line.name}`}
-                      autoFocus
-                      value={editingDiscount.text}
-                      onFocus={(event) => {
-                        event.currentTarget.select();
+  const shownLineId = selectedLineId ?? activeLineId;
+
+  return (
+    <div className="bg-surface shadow-card overflow-x-auto rounded-card">
+      <table className="text-table w-full table-fixed border-collapse text-left">
+        <colgroup>
+          <col />
+          <col className="w-[164px] md:w-[244px] lg:w-[250px]" />
+          <col className="w-[100px] max-md:hidden" />
+          <col className="w-[112px] max-md:hidden" />
+          <col className="w-[100px] md:w-[110px]" />
+        </colgroup>
+        <thead className="bg-page text-ink-2 text-label">
+          <tr>
+            <th className="px-3.5 py-2.5 font-medium max-md:pl-2.5">Item</th>
+            <th className="px-3.5 py-2.5 font-medium max-md:px-1">
+              <span className="max-md:hidden">Quantity</span>
+              <span className="md:hidden">Qty</span>
+            </th>
+            <th className="px-3.5 py-2.5 text-right font-medium max-md:hidden">Price</th>
+            <th className="px-3.5 py-2.5 text-right font-medium max-md:hidden">Discount</th>
+            <th className="px-3.5 py-2.5 text-right font-medium max-md:pr-2.5">Amount</th>
+          </tr>
+        </thead>
+        <tbody ref={container}>
+          {lines.map((line) => {
+            const selected = line.lineId === selectedLineId;
+            // The line the controls sit on: the selected one, or while the
+            // cursor is in the search, the last one added — the line ↑ goes
+            // to. A finger changes it without a tap to select it first.
+            const shown = line.lineId === shownLineId;
+            const stock = stockByProduct[line.productId] ?? null;
+            // D2: the line proceeds; the badge is exposure, not a block.
+            const short = stock !== null && stock < line.qtyBase;
+            // PCN-008: allocation reaches expired batches only after every
+            // unexpired one, so the line touches expired stock exactly when it
+            // asks for more than the unexpired part. Warned, never blocked.
+            const expired = expiredByProduct[line.productId] ?? null;
+            const fromExpired =
+              expired !== null && stock !== null && line.qtyBase > stock - expired.qtyBase;
+            const discounted = line.lineDiscountPaisa > 0;
+            const editing = editingDiscount?.lineId === line.lineId;
+
+            return (
+              <tr
+                key={line.lineId}
+                data-line-id={line.lineId}
+                tabIndex={-1}
+                aria-selected={selected}
+                onFocus={() => {
+                  onSelect(line.lineId);
+                }}
+                onClick={() => {
+                  onSelect(line.lineId);
+                }}
+                onKeyDown={(event) => {
+                  handleKey(event, line);
+                }}
+                className={[
+                  'border-line border-t first:border-t-0 [&>td]:h-11',
+                  selected ? 'bg-blue-50' : 'hover:bg-page',
+                ].join(' ')}
+              >
+                <td className="px-3.5 max-md:pr-2 max-md:pl-2.5">
+                  {/* One line: the name and strength, never cut (it wraps in
+                      this row only), then a badge only when something needs
+                      attention (PCN-016). */}
+                  <div className="flex min-h-5 flex-wrap items-center gap-x-2 gap-y-0.5 py-1">
+                    <span className="text-body-sm lg:text-table font-medium">{line.name}</span>
+                    {fromExpired ? (
+                      <span role="alert" className={cartBadge('refused')}>
+                        {expired !== null && stock !== null && stock - expired.qtyBase <= 0
+                          ? 'Expired'
+                          : 'Part expired'}{' '}
+                        {formatExpiry(expired?.expiryDate ?? '')}
+                      </span>
+                    ) : null}
+                    {short ? (
+                      <span className={cartBadge('attention')}>
+                        {stock !== null && stock <= 0 ? 'Not in stock' : 'More than in stock'}
+                      </span>
+                    ) : null}
+                    {isPriceOverridden(line) ? (
+                      <span className={cartBadge('attention')}>Price changed</span>
+                    ) : null}
+                  </div>
+                </td>
+                <td className="px-3.5 max-md:px-1">
+                  {shown ? (
+                    <QuantityControl
+                      line={line}
+                      onUnit={(unitKey) => {
+                        onSelect(line.lineId);
+                        onChange(line.lineId, { unitKey });
                       }}
-                      onChange={(event) => {
-                        setEditingDiscount({ lineId: line.lineId, text: event.target.value });
+                      onStep={(delta) => {
+                        onSelect(line.lineId);
+                        if (line.unitCount + delta < 1) {
+                          onRemove(line.lineId);
+                        } else {
+                          onChange(line.lineId, { unitCount: line.unitCount + delta });
+                        }
                       }}
-                      onKeyDown={(event) => {
-                        discountKeyDown(event, line);
-                      }}
-                      onBlur={() => {
-                        cancelDiscount(line);
-                      }}
-                      placeholder="e.g. 50 or 10%"
-                      autoComplete="off"
-                      className="numeral border-border focus:border-blue-600 w-full rounded border px-1.5 py-0.5 text-right text-sm"
                     />
-                    {/* Enter applies and leaving the field cancels; a tablet's
-                      natural way to finish is to tap elsewhere, which threw
-                      the discount away with nothing on screen to apply it.
-                      Pressing here must not blur the field first, or the
-                      blur's cancel would beat the tap. */}
-                    <button
-                      type="button"
-                      aria-label={`Apply discount on ${line.name}`}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                      }}
-                      onClick={() => {
-                        commitDiscount(line);
-                      }}
-                      className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch min-w-touch rounded-control px-2 text-sm"
-                    >
-                      Apply
-                    </button>
+                  ) : (
+                    // W5: always natural language — "2 strip", never a bare "2".
+                    <span className="numeral text-body-sm lg:text-table whitespace-nowrap">
+                      {line.unitCount} {line.enteredUnitLevel}
+                    </span>
+                  )}
+                </td>
+                <td className="numeral text-body-sm lg:text-table px-3.5 text-right whitespace-nowrap max-md:hidden">
+                  {formatPaisa(paisa(line.pricePerUnitPaisa), { withSymbol: true })}
+                </td>
+                <td className="numeral text-body-sm lg:text-table relative px-3.5 text-right whitespace-nowrap max-md:hidden">
+                  {shown ? (
+                    <DiscountButton line={line} onOpen={openDiscountEditor} />
+                  ) : discounted ? (
+                    formatPaisa(paisa(line.lineDiscountPaisa), { withSymbol: true })
+                  ) : (
+                    <span className="text-ink-2">—</span>
+                  )}
+                </td>
+                <td className="numeral text-body-sm lg:text-table relative px-3.5 text-right font-semibold whitespace-nowrap max-md:pr-2.5 max-md:pl-1">
+                  {/* On a phone there is no Discount column: the selected
+                      line's amount is its discount's button. */}
+                  {shown ? (
+                    <span className="md:hidden">
+                      <DiscountButton line={line} onOpen={openDiscountEditor} amount />
+                    </span>
+                  ) : null}
+                  {/* One field at every width, opening beneath the line's
+                      amount — on a phone there is no Discount column. */}
+                  {editing ? discountEditor(line) : null}
+                  <span className={shown ? 'max-md:hidden' : ''}>
+                    {formatPaisa(lineTotal(line), { withSymbol: true })}
                   </span>
-                ) : (
-                  <button
-                    type="button"
-                    // Named for what it does: its text is the figure, or "—",
-                    // which is all a screen reader had to say about it.
-                    aria-label={
-                      line.lineDiscountPaisa > 0
-                        ? `Change discount on ${line.name}`
-                        : `Add a discount on ${line.name}`
-                    }
-                    onMouseDown={(event) => {
-                      // Clicking this cell must not first move focus to the
-                      // button — that fires a focus event on the row before
-                      // the click's own state update, and the two together
-                      // can race with the effect that syncs row focus,
-                      // closing the editor the same click just opened it.
-                      event.preventDefault();
-                    }}
-                    onClick={() => {
-                      openDiscountEditor(line);
-                    }}
-                    className={[
-                      'min-h-touch w-full text-right',
-                      line.lineDiscountPaisa > 0 ? 'text-navy' : 'text-ink-2',
-                    ].join(' ')}
-                  >
-                    {line.lineDiscountPaisa > 0
-                      ? `−${formatPaisa(paisa(line.lineDiscountPaisa))}`
-                      : '—'}
-                  </button>
-                )}
-              </td>
-              <td className="numeral px-3 py-1.5 font-medium">{formatPaisa(lineTotal(line))}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {/* Beneath the table, not a row in it: a cell spanning columns the
+          phone hides would set the columns' widths. */}
+      {lines.length === 0 ? (
+        <p className="text-body-sm text-ink-2 m-0 px-3.5 py-7 text-center">
+          Scan a barcode or type a name — Enter puts it on the bill.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** The cart's badges are the design system's, one size down to keep the row at 44 px. */
+function cartBadge(tone: 'attention' | 'refused'): string {
+  return [
+    'text-caption inline-flex h-5 shrink-0 items-center gap-1 rounded-pill px-2 whitespace-nowrap',
+    'before:size-[5px] before:rounded-full',
+    tone === 'refused'
+      ? 'bg-red-50 text-red before:bg-red'
+      : 'bg-amber-50 text-amber-text before:bg-amber',
+  ].join(' ');
+}
+
+/** PCN-017: an expiry is read as MM/YYYY everywhere. */
+function formatExpiry(isoDate: string): string {
+  const [year, month] = isoDate.split('-');
+  return year && month ? `${month}/${year}` : isoDate;
+}
+
+/**
+ * The selected line's discount, as something to press. Every button in the
+ * row keeps focus where it was (`onMouseDown` prevented) and is out of the
+ * tab order, so the row stays the one keyboard target.
+ */
+function DiscountButton({
+  line,
+  onOpen,
+  amount = false,
+}: {
+  line: CartLine;
+  onOpen: (line: CartLine) => void;
+  /** Phone: the button shows the line's amount, with a % mark. */
+  amount?: boolean;
+}) {
+  const discounted = line.lineDiscountPaisa > 0;
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      // Named for what it does: its text is a figure, or a mark.
+      aria-label={discounted ? `Change discount on ${line.name}` : `Add a discount on ${line.name}`}
+      onMouseDown={(event) => {
+        // Clicking must not first move focus to the button — that fires a
+        // focus event on the row before the click's own state update, and the
+        // two together can race with the effect that syncs row focus, closing
+        // the editor the same click just opened.
+        event.preventDefault();
+      }}
+      onClick={(event) => {
+        event.stopPropagation();
+        onOpen(line);
+      }}
+      className="border-border bg-surface text-navy text-body-sm hover:border-navy min-h-touch min-w-touch ml-auto inline-flex items-center justify-end gap-1 rounded-control border px-2.5 font-medium max-md:gap-0.5 max-md:px-1.5"
+    >
+      {amount ? formatPaisa(lineTotal(line), { withSymbol: true }) : null}
+      {amount ? null : discounted ? (
+        formatPaisa(paisa(line.lineDiscountPaisa), { withSymbol: true })
+      ) : (
+        <span className="text-ink-2">—</span>
+      )}
+      {amount ? (
+        <span aria-hidden="true" className="text-caption font-semibold text-blue-600">
+          %
+        </span>
+      ) : null}
+    </button>
   );
 }
 
 /**
- * The quantity cell — Phase 10 §4 as amended by PCN-012 (and the owner's
- * 2026-10-26 decision): every unit the product has as a button beside
- * − count +, because a tablet has no Tab key and no plus key. The keyboard
- * path is unchanged (the row's own keys); these are the same edits for a
- * finger or a mouse.
+ * The selected line's quantity — Phase 10 §4 as amended by PCN-012 and
+ * PCN-016: the unit toggle, − count +, because a tablet has no Tab key and
+ * no plus key. The keyboard path is unchanged (the row's own keys); these are
+ * the same edits for a finger or a mouse. On a phone the toggle folds into
+ * the count: one button, "1 box", that steps to the next unit.
  *
  * Every button keeps focus where it was (`onMouseDown` prevented) and is out
  * of the tab order, so the row stays the one keyboard target, exactly as the
@@ -395,12 +497,10 @@ export function CartTable({
  */
 function QuantityControl({
   line,
-  selected,
   onUnit,
   onStep,
 }: {
   line: CartLine;
-  selected: boolean;
   onUnit: (unitKey: string) => void;
   onStep: (delta: 1 | -1) => void;
 }) {
@@ -408,13 +508,16 @@ function QuantityControl({
   const keepFocus = (event: React.MouseEvent) => {
     event.preventDefault();
   };
-  const step =
-    'border-border text-navy h-11 w-11 shrink-0 rounded-control border text-lg leading-none hover:bg-blue-50';
+  const button =
+    'border-border bg-surface text-navy text-body-sm h-11 shrink-0 rounded-control border hover:border-navy';
+  const step = `${button} w-11 text-lg leading-none`;
+  const at = offered.findIndex((unit) => unit.key === line.unitKey);
+  const next = offered[(at + 1) % offered.length];
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex items-center gap-1">
       {offered.length > 1 ? (
-        <div role="group" aria-label={`Unit for ${line.name}`} className="flex">
+        <div role="group" aria-label={`Unit for ${line.name}`} className="flex max-md:hidden">
           {offered.map((unit, index) => {
             const chosen = unit.key === line.unitKey;
             return (
@@ -424,15 +527,16 @@ function QuantityControl({
                 tabIndex={-1}
                 aria-pressed={chosen}
                 onMouseDown={keepFocus}
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation();
                   if (!chosen) onUnit(unit.key);
                 }}
                 className={[
-                  'border-border h-11 min-w-11 border px-3 text-sm capitalize',
-                  index === 0 ? 'rounded-l' : '-ml-px',
-                  index === offered.length - 1 ? 'rounded-r' : '',
+                  'border-border text-body-sm relative h-11 min-w-11 border px-2.5',
+                  index === 0 ? 'rounded-l-control' : '-ml-px',
+                  index === offered.length - 1 ? 'rounded-r-control' : '',
                   chosen
-                    ? 'bg-blue-50 text-navy border-blue-600 font-semibold'
+                    ? 'text-navy z-[1] border-blue-600 bg-blue-50 font-semibold'
                     : 'bg-surface text-navy hover:bg-page',
                 ].join(' ')}
               >
@@ -442,49 +546,62 @@ function QuantityControl({
           })}
         </div>
       ) : null}
-      <div className="flex items-center gap-1.5">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={
+          line.unitCount <= 1 ? `Remove ${line.name}` : `One ${line.enteredUnitLevel} less`
+        }
+        onMouseDown={keepFocus}
+        onClick={(event) => {
+          event.stopPropagation();
+          onStep(-1);
+        }}
+        className={step}
+      >
+        −
+      </button>
+      {/* W5: always natural language. Where the pressed unit already says it,
+          the unit beside the count is said only to a screen reader. */}
+      <span className="numeral text-body-sm min-w-[22px] text-center max-md:hidden">
+        {line.unitCount}
+        <span className={offered.length > 1 ? 'sr-only' : 'text-ink-2'}>
+          {' '}
+          {line.enteredUnitLevel}
+        </span>
+      </span>
+      {offered.length > 1 && next ? (
         <button
           type="button"
           tabIndex={-1}
-          aria-label={
-            line.unitCount <= 1 ? `Remove ${line.name}` : `One ${line.enteredUnitLevel} less`
-          }
+          aria-label={`${line.unitCount} ${line.enteredUnitLevel}. Change to ${next.name}`}
           onMouseDown={keepFocus}
-          onClick={() => {
-            onStep(-1);
+          onClick={(event) => {
+            event.stopPropagation();
+            onUnit(next.key);
           }}
-          className={step}
+          className={`${button} numeral px-2.5 md:hidden`}
         >
-          −
+          {line.unitCount} {line.enteredUnitLevel}
         </button>
-        {/* W5: always natural language. The pressed button already says the
-            unit, so beside the buttons it is said only to a screen reader —
-            "2 strip", never a bare "2". */}
-        <span className="min-w-8 text-center">
-          <span className="numeral">{line.unitCount}</span>
-          <span className={offered.length > 1 ? 'sr-only' : 'text-ink-2'}>
-            {' '}
-            {line.enteredUnitLevel}
-          </span>
+      ) : (
+        <span className="numeral text-body-sm px-1 md:hidden">
+          {line.unitCount} {line.enteredUnitLevel}
         </span>
-        <button
-          type="button"
-          tabIndex={-1}
-          aria-label={`One ${line.enteredUnitLevel} more`}
-          onMouseDown={keepFocus}
-          onClick={() => {
-            onStep(1);
-          }}
-          className={step}
-        >
-          +
-        </button>
-      </div>
-      {selected ? (
-        <span className="text-ink-2 text-xs">
-          {offered.length > 1 ? '+/− · Tab unit · % disc · Del' : '+/− · % disc · Del'}
-        </span>
-      ) : null}
+      )}
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label={`One ${line.enteredUnitLevel} more`}
+        onMouseDown={keepFocus}
+        onClick={(event) => {
+          event.stopPropagation();
+          onStep(1);
+        }}
+        className={step}
+      >
+        +
+      </button>
     </div>
   );
 }

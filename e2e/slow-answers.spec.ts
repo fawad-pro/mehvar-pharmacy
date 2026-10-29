@@ -31,7 +31,7 @@ test('the customer picker: a name and Enter pick that customer, however slow the
 
   await slowServerActions(page, 1_500);
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await expect(picker.getByPlaceholder('Name or phone…')).toBeFocused();
   await page.keyboard.type('Rashid', { delay: 100 });
   await page.keyboard.press('Enter');
@@ -144,7 +144,7 @@ test('F12 while the customer picker is still finding: nothing lands on the bill'
 
   await slowServerActions(page, 1_500);
   await page.keyboard.press('F4');
-  const picker = page.getByRole('dialog', { name: 'Attach customer' });
+  const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await expect(picker.getByPlaceholder('Name or phone…')).toBeFocused();
   await page.keyboard.type(name, { delay: 100 });
   await page.keyboard.press('Enter');

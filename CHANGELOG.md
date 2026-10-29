@@ -3,6 +3,57 @@
 All approved plan changes and implementation milestones will be recorded here.
 
 
+## Redesign batch 2: Sale, Payment and the Sale dialogs (PCN-016)
+
+The screen used all day, redrawn to the canvas at laptop, tablet and phone.
+No key changed meaning and no task takes an extra press; the key-budget,
+touch, scanner, slow-answer and keyboard-path specs pass unchanged in what
+they ask.
+
+- **Sale.** A labelled "Search or scan" field with its keys beside it; the
+  cart is a card of one-line rows, 44 px at every width: name and strength,
+  never cut, and a badge only when something needs a look ("More than in
+  stock", "Not in stock", "Expired 03/2026", "Price changed"). The selected
+  line, or the last one added while the cursor is in search, carries its unit
+  toggle, − and + and its discount; the other rows are plain text, so a
+  finger still changes the line just added without selecting it first. The
+  rail is a Total card (with items and discount on items), a customer card
+  ("Cash walk-in · Attach", the attached customer with "Owes Rs …" in words,
+  or "Settle udhaar" with nothing on the bill) and Pay. The last sale is a
+  done banner with Print receipt and View sale; selling more than the system
+  had is an attention banner beside it. Prices, discounts and amounts carry
+  "Rs" and no minus sign.
+- **Tablet** stacks the rail under the cart in two columns; **phone** shows
+  item, quantity and amount, folds the unit into the quantity button and the
+  discount into the amount, and puts "Pay Rs …" in a bar above the tabs. No
+  key hints on a phone.
+- **Payment.** "Amount due" (or "Collect") large and right-aligned; the bill
+  discount field says how it works; the owner's PIN for an over-limit
+  discount sits in its own panel; Change is the largest figure once change is
+  owed. Short with a customer attached it says "On udhaar" and what they will
+  owe after this sale.
+- **Attach a customer.** Labelled field, customers with their position in
+  words, "Add “…” as a new customer" with "Nobody by that name yet", and an
+  optional phone number behind "More details". Attach is a button as well as
+  Enter.
+- **Settle udhaar.** Who is paying and what they owe, "After this: Owes
+  Rs 700.00" before Settle (or how much becomes an advance), then a
+  "Settled" slip with before, paid and now, and Print again.
+- **Quick item.** "Not in the list — sell it now": name and price, with
+  "Sold as" behind More details. Enter on a button now presses that button.
+- **Switch user.** The PIN field names the person; a lockout is a refused
+  banner above the names.
+- An expiry shown on the counter reads MM/YYYY (PCN-017).
+- Field primitives keep their help and error text out of the field's name:
+  "Discount on the bill" also answered to "Cash tendered".
+
+Specs that found elements by a renamed label or format were updated to the
+new one ("Attach a customer", "Amount due", "Rs 35.00", "Expired 01/2020");
+a Day-list lookup now finds its row by the receipt link, exactly, because
+A-4's row also matched A-41.
+
+Satisfies PCN-016 batch 2; W1, W2, W3, W5, W6; P2, D2; I1, I6, I7; T4.
+
 ## Redesign batch 1: the foundation (PCN-016)
 
 Every screen now wears the new look before its own layout changes: navy text

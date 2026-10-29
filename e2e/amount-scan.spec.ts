@@ -73,7 +73,7 @@ test('an implausible tendered amount commits only by a click, never by Enter', a
   await expect(payment).toBeVisible();
 
   // Nothing is refused: the button still takes it.
-  await payment.getByRole('button', { name: 'Commit — Enter' }).click();
+  await payment.getByRole('button', { name: /^Commit/ }).click();
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 });
 
@@ -93,8 +93,8 @@ test('a code scanned into a settlement amount records no payment', async ({ page
   await expect(guardNotice(page)).toBeVisible();
   await expect(amount).toHaveValue('');
   // Still asking for the amount: a committed payment shows its slip and Done.
-  await expect(overlay.getByRole('button', { name: 'Settle — Enter' })).toBeVisible();
-  await expect(overlay.getByRole('button', { name: 'Done — Esc' })).toHaveCount(0);
+  await expect(overlay.getByRole('button', { name: /^Settle/ })).toBeVisible();
+  await expect(overlay.getByRole('button', { name: /^Done/ })).toHaveCount(0);
 });
 
 test('a code scanned into the quick item form saves nothing — name or price', async ({ page }) => {

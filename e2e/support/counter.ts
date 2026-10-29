@@ -89,7 +89,13 @@ export async function openCounter(page: Page): Promise<void> {
   });
 }
 
-export const search = (page: Page) => page.getByRole('combobox', { name: 'Search products' });
+/**
+ * The product search on every screen that has one. Sale's is labelled on
+ * screen, "Search or scan" (PCN-016); the screens not yet redrawn keep the
+ * screen-reader name "Search products" until their own batch.
+ */
+export const search = (page: Page) =>
+  page.getByRole('combobox', { name: /^Search (or scan|products)$/ });
 export const cart = (page: Page) => page.getByRole('table');
 export const total = (page: Page) => page.locator('aside p.text-total');
 export const printedReceipt = (page: Page) => page.locator('#printable-receipt');

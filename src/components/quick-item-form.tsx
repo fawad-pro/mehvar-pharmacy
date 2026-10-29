@@ -23,6 +23,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import { paisaFromRupeeInput } from '@/domain/sales/cart';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
+import { Banner } from '@/components/ui/banner';
+import { Button, Kbd } from '@/components/ui/button';
+import { dialogPanelClass } from '@/components/ui/dialog';
+import { AmountField, Field } from '@/components/ui/field';
 import { needsClickToCommit } from '@/client/scan/amount-guard';
 
 export interface QuickItemDraft {
@@ -62,6 +66,14 @@ export function QuickItemForm({
   const [unit, setUnit] = useState(DEFAULT_BASE_UNIT);
   const priceField = useRef<HTMLInputElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
+  const unitField = useRef<HTMLInputElement>(null);
+  const [showUnit, setShowUnit] = useState(false);
+  const unitName = unit.trim() === '' ? DEFAULT_BASE_UNIT : unit.trim();
+
+  // Focus from an effect, once the field has rendered (the keyboard walks).
+  useEffect(() => {
+    if (showUnit) unitField.current?.focus();
+  }, [showUnit]);
   /** Why Enter did not save: a price too large to be real (see amount-guard). */
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -91,6 +103,8 @@ export function QuickItemForm({
   }
 
   function onKeyDown(event: React.KeyboardEvent): void {
+    // A button's own Enter presses that button (More details, Sell instead).
+    if (event.key === 'Enter' && event.target instanceof HTMLButtonElement) return;
     if (event.key === 'Enter') {
       event.preventDefault();
       if (needsClickToCommit(pricePaisa)) {
@@ -107,105 +121,99 @@ export function QuickItemForm({
 
   return (
     <OverlayBackdrop label="Quick item" onDismiss={onCancel}>
-      <div
-        className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5"
-        onKeyDown={onKeyDown}
-      >
-        <h2 className="text-navy mb-1 text-lg font-semibold">Add it now</h2>
-        <p className="text-ink-2 mb-4 text-sm">
-          Name and price is enough. The owner completes the rest later.
-        </p>
+      <div className={dialogPanelClass} onKeyDown={onKeyDown}>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-heading m-0">Not in the list — sell it now</h2>
+          <p className="text-body-sm text-ink-2 m-0">
+            Name and price are enough. The owner fills in the rest later.
+          </p>
+        </div>
 
         {barcode && owner ? (
-          <div className="border-amber mb-3 rounded border px-3 py-2 text-sm" role="alert">
-            <p className="font-medium">This barcode is already on {owner.name}.</p>
-            <p className="text-ink-2 mt-0.5 text-xs">It will not be added to a second product.</p>
+          <Banner tone="attention" role="alert" lead={`This barcode is already on ${owner.name}.`}>
+            It will not be added to a second product.
             {onSellOwner ? (
-              <button
-                type="button"
-                onClick={onSellOwner}
-                className="text-blue-600 mt-1 text-sm font-medium underline-offset-2 hover:underline"
-              >
-                Sell {owner.name} instead
-              </button>
+              <>
+                {' '}
+                <button
+                  type="button"
+                  onClick={onSellOwner}
+                  className="min-h-touch font-medium text-blue-600 underline underline-offset-2"
+                >
+                  Sell {owner.name} instead
+                </button>
+              </>
             ) : null}
-          </div>
+          </Banner>
         ) : barcode ? (
-          <p className="text-ink-2 mb-3 text-xs">
+          <p className="text-body-sm text-ink-2 m-0">
             Barcode <span className="numeral text-navy">{barcode}</span> — saved with this product,
             so the next scan adds it directly.
           </p>
         ) : null}
 
-        <label className="text-ink-2 mb-1 block text-xs" htmlFor="quick-name">
-          Name
-        </label>
-        <input
+        <Field
           ref={nameField}
           id="quick-name"
+          label="Name"
           value={name}
           onChange={(event) => {
             setName(event.target.value);
             setNotice(null);
           }}
           autoComplete="off"
-          className="border-border focus:border-blue-600 h-touch mb-3 w-full rounded-control border px-3 text-lg"
         />
 
-        <div className="mb-4 flex gap-2">
-          <div className="flex-1">
-            <label className="text-ink-2 mb-1 block text-xs" htmlFor="quick-price">
-              Price
-            </label>
-            <input
-              autoComplete="off"
-              id="quick-price"
-              ref={priceField}
-              value={price}
-              inputMode="decimal"
-              onChange={(event) => {
-                setPrice(event.target.value);
-                setNotice(null);
-              }}
-              placeholder="0"
-              className="border-border focus:border-blue-600 numeral h-touch w-full rounded-control border px-3 text-lg"
-            />
-          </div>
-          <div className="w-28">
-            <label className="text-ink-2 mb-1 block text-xs" htmlFor="quick-unit">
-              Sold as
-            </label>
-            <input
-              id="quick-unit"
-              value={unit}
-              onChange={(event) => {
-                setUnit(event.target.value);
-                setNotice(null);
-              }}
-              autoComplete="off"
-              className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3"
-            />
-          </div>
-        </div>
+        <AmountField
+          autoComplete="off"
+          id="quick-price"
+          ref={priceField}
+          label="Price"
+          value={price}
+          onChange={(event) => {
+            setPrice(event.target.value);
+            setNotice(null);
+          }}
+          placeholder="0.00"
+          className="[&_input]:text-right"
+          help={`Type the price for one ${unitName} to add it.`}
+          error={notice ? <span role="alert">{notice}</span> : null}
+        />
 
-        {notice ? (
-          <p className="text-red mb-3 text-sm" role="alert">
-            {notice}
-          </p>
-        ) : null}
-
-        <div className="flex items-center justify-between">
-          <button type="button" onClick={onCancel} className="text-ink-2 text-sm">
-            Esc to cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!ready}
-            className="bg-blue-600 text-surface hover:bg-blue-700 font-semibold min-h-touch rounded-control px-5 disabled:opacity-40"
+        {/* The unit is almost always "item"; it is there to change, out of
+            the way of the two fields that matter. */}
+        {showUnit ? (
+          <Field
+            ref={unitField}
+            id="quick-unit"
+            label="Sold as"
+            value={unit}
+            onChange={(event) => {
+              setUnit(event.target.value);
+              setNotice(null);
+            }}
+            autoComplete="off"
+          />
+        ) : (
+          <Button
+            kind="quiet"
+            aria-expanded={false}
+            className="-ml-3 self-start"
+            onClick={() => {
+              setShowUnit(true);
+            }}
           >
-            {barcode && owner ? 'Save without the barcode — Enter' : 'Add to sale — Enter'}
-          </button>
+            More details — sold as “{unitName}”
+          </Button>
+        )}
+
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 max-md:flex-col-reverse max-md:items-stretch">
+          <Button kind="quiet" onClick={onCancel}>
+            Cancel <Kbd>Esc</Kbd>
+          </Button>
+          <Button kind="primary" onClick={submit} disabled={!ready}>
+            {barcode && owner ? 'Save without the barcode' : 'Add to bill'} <Kbd>Enter</Kbd>
+          </Button>
         </div>
       </div>
     </OverlayBackdrop>

@@ -21,18 +21,24 @@ import { CaptureBlockedError, useSync } from '@/client/sync/provider';
 import { validateCustomerDraft } from '@/domain/udhaar/customer';
 import { uuidv7 } from '@/lib/uuid';
 import { OverlayBackdrop } from '@/components/overlay-backdrop';
-import { BalanceInline } from '@/components/balance-figure';
+import { PositionInline } from '@/components/balance-figure';
+import { Button, Kbd } from '@/components/ui/button';
+import { dialogPanelClass } from '@/components/ui/dialog';
+import { FieldLabel, inputClass } from '@/components/ui/field';
 
 /** How long typing must pause before the customer book is searched. */
 const SEARCH_PAUSE_MS = 200;
 
 export function CustomerPicker({
   title = 'Customer',
+  verb = { button: 'Choose', says: 'chooses' },
   onPick,
   onCancel,
 }: {
   /** Distinguishes the attach-to-sale (W2) and settle (W3) contexts on screen. */
   title?: string;
+  /** What Enter does with the customer: Attach / attaches from Sale. */
+  verb?: { button: string; says: string };
   onPick: (customer: CustomerHit) => void;
   onCancel: () => void;
 }) {
@@ -56,6 +62,15 @@ export function CustomerPicker({
   const [error, setError] = useState<string | null>(null);
   const { capture } = useSync();
   const field = useRef<HTMLInputElement>(null);
+  /** A new customer's optional phone, behind "More details" (PCN-016). */
+  const [addingPhone, setAddingPhone] = useState(false);
+  const [phone, setPhone] = useState('');
+  const phoneField = useRef<HTMLInputElement>(null);
+
+  // Focus from an effect, once the field has rendered (the keyboard walks).
+  useEffect(() => {
+    if (addingPhone) phoneField.current?.focus();
+  }, [addingPhone]);
 
   useEffect(() => {
     field.current?.focus();
@@ -129,9 +144,16 @@ export function CustomerPicker({
       return;
     }
 
-    const validated = validateCustomerDraft({ name, phone: null });
+    const validated = validateCustomerDraft({
+      name,
+      phone: addingPhone && phone.trim() !== '' ? phone.trim() : null,
+    });
     if (!validated.ok) {
-      setError('A name is needed.');
+      setError(
+        validated.rejections[0]?.reason === 'phone_invalid'
+          ? 'That phone number has letters in it. Fix it or leave it empty.'
+          : 'A name is needed.',
+      );
       return;
     }
 
@@ -190,88 +212,174 @@ export function CustomerPicker({
     }
   }
 
+  const trimmedTerm = term.trim();
+  /** With no one by that name, Enter adds them: the Add row is the one chosen. */
+  const addChosen = trimmedTerm !== '' && answered.term === trimmedTerm && visibleHits.length === 0;
+
   return (
     <OverlayBackdrop label={title} onDismiss={onCancel}>
-      <div className="bg-surface w-full max-w-[400px] rounded-dialog p-6 shadow-dialog max-md:max-w-none max-md:rounded-b-none max-md:px-4 max-md:pt-5">
-        <h2 className="text-navy mb-4 text-lg font-semibold">{title}</h2>
+      <div className={dialogPanelClass}>
+        <h2 className="text-heading m-0">{title}</h2>
 
-        <input
-          ref={field}
-          value={term}
-          onChange={(event) => {
-            setTerm(event.target.value);
-          }}
-          // Once Enter is given the question is settled: keys typed while it
-          // is being answered (the cash, by a quick operator) must not turn
-          // the name into another customer's. Esc still cancels.
-          readOnly={finding !== null}
-          onKeyDown={onKeyDown}
-          autoComplete="off"
-          placeholder="Name or phone…"
-          className="border-border focus:border-blue-600 h-touch w-full rounded-control border px-3 text-lg"
-        />
+        <label className="flex flex-col gap-1.5">
+          <FieldLabel>Name or phone</FieldLabel>
+          <input
+            ref={field}
+            value={term}
+            onChange={(event) => {
+              setTerm(event.target.value);
+            }}
+            // Once Enter is given the question is settled: keys typed while it
+            // is being answered (the cash, by a quick operator) must not turn
+            // the name into another customer's. Esc still cancels.
+            readOnly={finding !== null}
+            onKeyDown={onKeyDown}
+            autoComplete="off"
+            placeholder="Name or phone…"
+            className={inputClass}
+          />
+        </label>
 
         {finding ? (
-          <p className="text-ink-2 mt-2 text-sm" role="status">
+          <p className="text-body-sm text-ink-2 m-0" role="status">
             Finding &ldquo;{finding}&rdquo;…
           </p>
         ) : null}
 
-        <ul className="mt-3 flex max-h-64 flex-col gap-1 overflow-auto" role="listbox">
-          {visibleHits.map((hit, index) => (
-            <li key={hit.id} role="option" aria-selected={index === active}>
-              <button
-                type="button"
-                onClick={() => {
-                  onPick(hit);
-                }}
-                onMouseEnter={() => {
-                  setActive(index);
-                }}
-                className={[
-                  'flex min-h-touch w-full items-center justify-between rounded-control px-3 text-left',
-                  index === active ? 'bg-blue-50' : 'hover:bg-mist',
-                ].join(' ')}
-              >
-                <span>
-                  <span className="font-medium">{hit.name}</span>
-                  {hit.phone ? <span className="text-ink-2 ml-2 text-xs">{hit.phone}</span> : null}
-                </span>
-                {/* T4 — the balance is shown before more credit gets extended. */}
-                {/* Position, never a signed number: an advance reads "advance". */}
-                <span className="text-sm">
-                  <BalanceInline balancePaisa={hit.balancePaisa} />
-                </span>
-              </button>
-            </li>
-          ))}
+        {visibleHits.length > 0 || trimmedTerm !== '' ? (
+          <ul
+            className="bg-page m-0 flex max-h-60 list-none flex-col overflow-auto rounded-card p-0"
+            role="listbox"
+            aria-label="Customers"
+          >
+            {visibleHits.map((hit, index) => (
+              <li key={hit.id} role="option" aria-selected={index === active}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onPick(hit);
+                  }}
+                  onMouseEnter={() => {
+                    setActive(index);
+                  }}
+                  className={[
+                    'border-line flex min-h-touch w-full items-center gap-3 px-4 py-2 text-left',
+                    index === 0 ? '' : 'border-t',
+                    index === active ? 'bg-blue-50' : 'hover:bg-mist',
+                  ].join(' ')}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-control truncate font-medium">{hit.name}</span>
+                    {hit.phone ? (
+                      <span className="text-label text-ink-2 numeral truncate text-left font-normal">
+                        {hit.phone}
+                      </span>
+                    ) : null}
+                  </span>
+                  {/* T4 — the balance is shown before more credit gets extended,
+                      as a position in words, never a signed number. */}
+                  <PositionInline balancePaisa={hit.balancePaisa} className="text-body-sm" />
+                </button>
+              </li>
+            ))}
 
-          {term.trim() !== '' ? (
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  void createInline();
+            {trimmedTerm !== '' ? (
+              // Not an option: the options are customers, and a tap meant for
+              // a customer must never land on adding a second one by that name.
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void createInline();
+                  }}
+                  disabled={busy}
+                  className={[
+                    'border-line flex min-h-touch w-full flex-col justify-center px-4 py-2 text-left disabled:opacity-40',
+                    visibleHits.length > 0 ? 'border-t' : '',
+                    addChosen ? 'bg-blue-50' : 'hover:bg-mist',
+                  ].join(' ')}
+                >
+                  <span className="text-control font-medium text-blue-600">
+                    {busy ? 'Adding…' : `Add “${trimmedTerm}” as a new customer`}
+                  </span>
+                  {addChosen && !busy ? (
+                    <span className="text-label text-ink-2 font-normal">
+                      Nobody by that name yet. Starts settled up.
+                    </span>
+                  ) : null}
+                </button>
+              </li>
+            ) : null}
+          </ul>
+        ) : null}
+
+        {/* PCN-016: an optional phone number for a new customer, out of the
+            way of the fast path — Enter in the name still adds at once. */}
+        {addChosen ? (
+          addingPhone ? (
+            <label className="flex flex-col gap-1.5">
+              <FieldLabel>Phone</FieldLabel>
+              <input
+                ref={phoneField}
+                value={phone}
+                inputMode="tel"
+                autoComplete="off"
+                onChange={(event) => {
+                  setPhone(event.target.value);
                 }}
-                disabled={busy}
-                className="text-blue-600 hover:bg-mist min-h-touch w-full rounded-control px-3 text-left font-medium disabled:opacity-40"
-              >
-                {busy ? 'Adding…' : `+ Add “${term.trim()}” as a new customer`}
-              </button>
-            </li>
-          ) : null}
-        </ul>
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    void createInline();
+                  }
+                  if (event.key === 'Escape') {
+                    onCancel();
+                  }
+                }}
+                className={`${inputClass} numeral`}
+              />
+            </label>
+          ) : (
+            <Button
+              kind="quiet"
+              aria-expanded={false}
+              className="-ml-3 self-start"
+              onClick={() => {
+                setAddingPhone(true);
+              }}
+            >
+              More details — phone number
+            </Button>
+          )
+        ) : null}
 
         {error ? (
-          <p className="text-red mt-2 text-sm" role="alert">
+          <p className="text-body-sm text-red m-0 font-medium" role="alert">
             {error}
           </p>
         ) : null}
 
-        <div className="mt-4 flex items-center justify-between">
-          <button type="button" onClick={onCancel} className="text-ink-2 text-sm">
-            Esc to cancel
-          </button>
+        <p className="text-body-sm text-ink-2 m-0 max-md:hidden">
+          <Kbd>↑</Kbd> <Kbd>↓</Kbd> choose · <Kbd>Enter</Kbd>{' '}
+          {addChosen ? `adds and ${verb.says}` : verb.says}
+        </p>
+
+        <div className="mt-1 flex flex-wrap items-center justify-end gap-2 max-md:flex-col-reverse max-md:items-stretch">
+          <Button kind="quiet" onClick={onCancel}>
+            Cancel <Kbd>Esc</Kbd>
+          </Button>
+          <Button
+            kind="primary"
+            disabled={
+              trimmedTerm === '' || finding !== null || busy || answered.term !== trimmedTerm
+            }
+            onClick={() => {
+              if (addChosen) void createInline();
+              else choose(visibleHits[active], trimmedTerm);
+            }}
+          >
+            {addChosen ? `Add and ${verb.button.toLowerCase()}` : verb.button} <Kbd>Enter</Kbd>
+          </Button>
         </div>
       </div>
     </OverlayBackdrop>
