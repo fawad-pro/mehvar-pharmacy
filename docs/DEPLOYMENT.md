@@ -70,17 +70,17 @@ Optional: `MEHVAR_SHOP_SLUG`, `MEHVAR_OWNER_NAME`, `MEHVAR_DEVICE_NAME`,
 login name, pairing key and owner password **once** — both are stored only as
 hashes.
 
-**The demo pharmacy** (products, stock, sales) is `db:seed`, which lives in a
-checkout, not the image. From a laptop with the repo, point it at the Railway
-database through its public TCP proxy and run it as the app role:
+**The demo pharmacy** (138 products, stocked batches, a sale, an udhaar
+customer) is the seed script bundled in the image. From the `web` shell:
 
 ```bash
-MEHVAR_DEPLOYMENT=cloud DATABASE_URL=<app-role URL via the public proxy> \
-SESSION_SECRET=<any 32+ chars> npm run db:seed
+node app/bin/db/seed.js
 ```
 
-It labels itself "DEMO — not a real pharmacy" on every receipt and gets a `demo`
-entitlement. It is wiped before go-live.
+Safe to run again: it only tops up missing catalogue products. It labels itself
+"DEMO — not a real pharmacy" on every receipt and gets a `demo` entitlement. Its
+login is the one `seed.ts` prints (tenant `demo`, a published pairing key and
+PINs), so treat it as public: demo data only, wiped before go-live.
 
 **Entitlement.** In cloud mode "may this tenant use the product" is the tenant's
 newest `tenant_entitlements` row (append-only). No row, or an `ends_at` in the
