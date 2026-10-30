@@ -37,8 +37,6 @@ async function sellOnePanadol(page: Page): Promise<void> {
   await expect(page.getByRole('option').first()).toContainText('Panadol');
   await page.keyboard.press('Enter');
   await page.keyboard.press('F12');
-  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 }
 

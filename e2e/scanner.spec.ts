@@ -340,14 +340,10 @@ test('Sale: a scan while paying commits nothing, whatever button has focus', asy
   await openCounter(page);
   await scan(page, PANADOL_STRIP);
   await expect(cart(page)).toContainText('Panadol');
-  await page.keyboard.press('F12');
-  const payment = page.getByRole('dialog', { name: 'Payment' });
-  await payment.getByRole('button', { name: /^Commit/ }).focus();
+  await page.getByRole('button', { name: /^Pay/ }).focus();
   await scanWherever(page, PANADOL_STRIP);
   await expect(guardNotice(page)).toBeVisible();
-  await expect(payment).toBeVisible();
   await expect(page.getByText(/Saved — /)).toHaveCount(0);
-  await page.keyboard.press('Escape');
 });
 
 test('Receive Stock: a scan on arrival starts a line, not the supplier picker', async ({

@@ -44,7 +44,7 @@ describe('the four known hint sites source their key from keyFor()', () => {
   // luck, because Switch user has not moved off F10 — yet).
   const sites: { file: string; dispatch: string }[] = [
     { file: 'app/(counter)/sale/sale-surface.tsx', dispatch: 'udhaar' },
-    { file: 'app/(counter)/sale/payment-overlay.tsx', dispatch: 'udhaar' },
+    
     { file: 'components/top-bar.tsx', dispatch: 'switch-user' },
     { file: 'app/(counter)/products/actions.ts', dispatch: 'switch-user' },
   ];

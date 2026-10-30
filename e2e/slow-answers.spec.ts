@@ -69,7 +69,6 @@ test('Returns: a receipt number and Enter open that sale, however slow the answe
     await expect(page.getByRole('option').first()).toContainText('Disprin', { timeout: 30_000 });
     await page.keyboard.press('Enter');
     await page.keyboard.press('F12');
-    await page.keyboard.press('Enter');
     const lastSale = page.getByRole('status', { name: 'Last sale' });
     await expect(lastSale).toContainText(/Saved — /);
     return (await lastSale.textContent())?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
@@ -107,7 +106,6 @@ test('Receipts: Enter opens the receipt typed, not the top of the list before it
     await expect(page.getByRole('option').first()).toContainText('Disprin', { timeout: 30_000 });
     await page.keyboard.press('Enter');
     await page.keyboard.press('F12');
-    await page.keyboard.press('Enter');
     const lastSale = page.getByRole('status', { name: 'Last sale' });
     await expect(lastSale).toContainText(/Saved — /);
     return (await lastSale.textContent())?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1];
@@ -159,21 +157,19 @@ test('F12 while the customer picker is still finding: nothing lands on the bill'
   await page.keyboard.type('0', { delay: 100 });
   await page.keyboard.press('Enter');
 
-  // The F12 waited for the customer, then opened Payment, with the full
-  // amount still tendered: the "0" and Enter typed while the picker was
+  // The F12 waited for the customer, then focused Cash received, with the full
+  // amount still in it: the "0" and Enter typed while the picker was
   // finding changed nothing. No other product is on the bill.
   await expect(picker).toBeHidden({ timeout: 15_000 });
-  const payment = page.getByRole('dialog', { name: 'Payment' });
-  await expect(payment).toBeVisible();
-  await expect(payment).toContainText(`Billing to ${name}`);
-  await expect(payment.getByLabel('Cash tendered')).toHaveValue('25.00');
+  await expect(page.locator('aside')).toContainText(`${name}`);
+  await expect(page.getByLabel('Cash received')).toHaveValue('25.00');
   const lines = page.getByRole('table').getByRole('row');
   await expect(lines).toHaveCount(2); // the header and Disprin
   await expect(page.getByRole('status', { name: 'Last sale' })).toHaveCount(0);
 
   // Now the cash, as intended.
-  await payment.getByLabel('Cash tendered').fill('0');
-  await page.keyboard.press('Enter');
+  await page.getByLabel('Cash received').fill('0');
+  await page.keyboard.press('F12');
   await expect(page.getByRole('status', { name: 'Last sale' })).toContainText(
     `Rs 25.00 on ${name}’s udhaar`,
   );

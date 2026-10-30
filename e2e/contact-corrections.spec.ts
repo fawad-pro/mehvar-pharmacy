@@ -23,10 +23,8 @@ test('a customer: fix the name by keyboard, remove, find again, restore', async 
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
   await expect(picker).toBeHidden();
+  await page.getByLabel('Cash received').fill('35');
   await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await overlay.getByLabel('Cash tendered').fill('35');
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Saved');
   // The customer's page reads the server; the sale must have reached it, and
   // the refresh that follows delivery must not land on the next navigation.
@@ -81,10 +79,8 @@ test('a customer who owes cannot be removed, and the screen says how much', asyn
   const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
+  await page.getByLabel('Cash received').fill('15');
   await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await overlay.getByLabel('Cash tendered').fill('15');
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Saved');
   // The customer's page reads the server; the sale must have reached it, and
   // the refresh that follows delivery must not land on the next navigation.

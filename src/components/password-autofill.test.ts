@@ -39,7 +39,7 @@ const PASSWORD_FIELDS = [
   { file: 'src/app/login/page.tsx', what: 'the device pairing screen' },
   { file: 'src/app/(counter)/settings/settings-surface.tsx', what: 'a new salesman’s PIN' },
   {
-    file: 'src/app/(counter)/sale/payment-overlay.tsx',
+    file: 'src/app/(counter)/sale/sale-surface.tsx',
     what: 'the owner’s PIN for a bill discount (PCN-014)',
   },
 ];
@@ -65,7 +65,7 @@ function filesWithPasswordInputs(dir = join(process.cwd(), 'src')): string[] {
     if (entry.isDirectory()) return filesWithPasswordInputs(path);
     if (!/\.tsx$/.test(entry.name) || /\.test\./.test(entry.name)) return [];
     return /type=["'{]?["']?password/.test(readFileSync(path, 'utf8'))
-      ? [relative(process.cwd(), path)]
+      ? [relative(process.cwd(), path).replace(/\\/g, '/')]
       : [];
   });
 }
@@ -133,7 +133,7 @@ describe('every text field declares autoComplete', () => {
           if (/type="(checkbox|radio|hidden|date|file|button|submit)"/.test(attributes)) continue;
           if (!attributes.includes('autoComplete')) {
             const line = source.slice(0, match.index).split('\n').length;
-            undeclared.push(`${relative(process.cwd(), path)}:${line}`);
+            undeclared.push(`${relative(process.cwd(), path).replace(/\\/g, '/')}:${line}`);
           }
         }
       }

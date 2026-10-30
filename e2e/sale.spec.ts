@@ -48,11 +48,8 @@ test('W1: a cash sale, start to finish, without touching the mouse', async ({ pa
   // Rs 3.50 × 10 + Rs 9.00 × 30 = Rs 305.00
   await expect(total(page)).toHaveText('Rs 305.00');
 
-  // F12 opens the payment overlay; Enter commits the exact tendered amount
-  // (Phase 10 §4's default).
+  // F12 commits the exact amount directly (Phase 10 §4).
   await page.keyboard.press('F12');
-  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
-  await page.keyboard.press('Enter');
 
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
   await expect(lastSale(page)).toContainText('305.00');
@@ -119,7 +116,6 @@ test('selling more than the system has proceeds, and says so (D2, P2)', async ({
   await expect(cart(page)).toContainText(/More than in stock|Not in stock/);
 
   await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
 
   // The sale is not refused; the shortfall is surfaced (D2).
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
@@ -137,7 +133,6 @@ test('receipt numbers advance per device and never repeat', async ({ page }) => 
     await search(page).fill('disprin');
     await page.keyboard.press('Enter');
     await page.keyboard.press('F12');
-    await page.keyboard.press('Enter');
 
     // Wait for THIS sale's number. Reading the status straight after Enter can
     // catch the previous sale's text, which read as a repeated number.
@@ -194,8 +189,6 @@ test('a fixed PKR line discount reduces that line and the total, by keyboard', a
   await expect(search(page)).not.toBeFocused();
 
   await page.keyboard.press('F12');
-  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('20.00');
 
   // A discount belongs to the line it was entered on; the next sale starts
@@ -212,8 +205,7 @@ test('a no-discount receipt: Subtotal equals Amount Due, with no Discount row', 
   await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('Rs 35.00');
 
-  await page.keyboard.press('F12');
-  await page.keyboard.press('Enter'); // exact tender — no change, no udhaar
+  await page.keyboard.press('F12'); // exact tender — no change, no udhaar
 
   await expect(receipt(page)).toContainText('Subtotal');
   await expect(receipt(page)).toContainText('Amount Due');
@@ -237,8 +229,7 @@ test('a discounted receipt: Subtotal is the pre-discount gross, Discount is the 
   await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('Rs 20.00');
 
-  await page.keyboard.press('F12');
-  await page.keyboard.press('Enter'); // exact tender against the discounted total
+  await page.keyboard.press('F12'); // exact tender against the discounted total
 
   // This is the bug this guards: before the fix, Subtotal was built from the
   // already-discounted line total, so it read the same as Amount Due (20.00)
@@ -394,8 +385,6 @@ test('the receipt names whoever is selling, after a PIN switch', async ({ page }
   await expect(page.getByRole('option').first()).toContainText('Panadol');
   await page.keyboard.press('Enter');
   await page.keyboard.press('F12');
-  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
   await expect(receipt(page)).toContainText(DEMO.salesman.name);

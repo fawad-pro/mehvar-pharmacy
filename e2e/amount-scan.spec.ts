@@ -31,7 +31,7 @@ function watchCrashes(page: Page): string[] {
   return crashes;
 }
 
-test('a code scanned into Cash tendered commits nothing and puts the amount back', async ({
+test('a code scanned into Cash received commits nothing and puts the amount back', async ({
   page,
 }) => {
   await openCounter(page);
@@ -39,41 +39,34 @@ test('a code scanned into Cash tendered commits nothing and puts the amount back
   await page.keyboard.press('Enter');
   await expect(cart(page)).toContainText('Panadol');
 
-  await page.keyboard.press('F12');
-  const payment = page.getByRole('dialog', { name: 'Payment' });
-  await expect(payment).toBeVisible();
-  const tendered = payment.getByLabel('Cash tendered');
-  const exact = await tendered.inputValue();
+  const received = page.getByLabel('Cash received');
+  const exact = await received.inputValue();
 
   // Over the selected exact amount, as a real scan would land.
   await scan(page, EAN);
   await expect(guardNotice(page)).toBeVisible();
-  await expect(payment).toBeVisible();
-  await expect(tendered).toHaveValue(exact);
+  await expect(received).toHaveValue(exact);
 
   // The ordinary Enter still commits, at the real amount.
-  await tendered.press('Enter');
+  await received.press('Enter');
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
   await expect(printedReceipt(page)).not.toContainText(EAN.slice(0, 7));
 });
 
-test('an implausible tendered amount commits only by a click, never by Enter', async ({ page }) => {
+test('an implausible received amount commits only by a click, never by Enter', async ({ page }) => {
   await openCounter(page);
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
-  await page.keyboard.press('F12');
-  const payment = page.getByRole('dialog', { name: 'Payment' });
-  const tendered = payment.getByLabel('Cash tendered');
+  const received = page.getByLabel('Cash received');
 
   // Typed like a person — not a scan — but a crore or more.
-  await tendered.fill('');
-  await tendered.pressSequentially('10000000', { delay: 120 });
-  await tendered.press('Enter');
-  await expect(payment.getByRole('alert')).toContainText('looks like a barcode');
-  await expect(payment).toBeVisible();
+  await received.fill('');
+  await received.pressSequentially('10000000', { delay: 120 });
+  await received.press('Enter');
+  await expect(page.locator('aside').getByRole('alert')).toContainText('looks like a barcode');
 
   // Nothing is refused: the button still takes it.
-  await payment.getByRole('button', { name: /^Commit/ }).click();
+  await page.getByRole('button', { name: /^Pay/ }).click();
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 });
 

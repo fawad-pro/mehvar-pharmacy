@@ -1,6 +1,6 @@
 import { devices, expect, test, type Locator, type Page } from '@playwright/test';
 
-import { openCounter, search } from './support/counter';
+import { openCounter, search, total } from './support/counter';
 
 /**
  * The counter on a tablet: every workflow by touch alone.
@@ -21,7 +21,6 @@ const { defaultBrowserType: _browser, ...tablet } = devices['Galaxy Tab S9 lands
 test.use({ ...tablet });
 
 const keyBar = (page: Page) => page.getByRole('navigation', { name: 'Function keys' });
-const payment = (page: Page) => page.getByRole('dialog', { name: 'Payment' });
 const lastSale = (page: Page) => page.getByRole('status', { name: 'Last sale' });
 
 /** Taps the search box, types as an on-screen keyboard does, taps the first match. */
@@ -45,8 +44,6 @@ test('a cash sale by touch', async ({ page }) => {
   await expect(page.getByRole('table')).toContainText('Panadol');
 
   await tap(page.getByRole('button', { name: /^Pay/ }));
-  await expect(payment(page)).toBeVisible();
-  await tap(payment(page).getByRole('button', { name: /^Commit/ }));
   await expect(lastSale(page)).toContainText(/Saved — [A-Z]+-\d+/);
 });
 
@@ -83,10 +80,9 @@ test('an udhaar sale by touch, then the customer settles it', async ({ page }) =
   await tap(picker.getByRole('button', { name: `Add “${name}” as a new customer` }));
   await expect(picker).toBeHidden();
 
+  await page.getByLabel('Cash received').fill('0');
+  await expect(page.locator('aside')).toContainText(`goes on ${name}’s udhaar`);
   await tap(page.getByRole('button', { name: /^Pay/ }));
-  await payment(page).getByLabel('Cash tendered').fill('0');
-  await expect(payment(page)).toContainText(`goes on ${name}’s udhaar`);
-  await tap(payment(page).getByRole('button', { name: /^Commit/ }));
   await expect(lastSale(page)).toContainText(`on ${name}’s udhaar`);
 
   // The cart is empty, so the key bar's Udhaar settles — and it is a button.
@@ -100,19 +96,18 @@ test('an udhaar sale by touch, then the customer settles it', async ({ page }) =
   await expect(settle).toContainText('Saved — ');
 });
 
-test('a bill discount by touch: tap the field, type what comes off, Commit', async ({ page }) => {
+test('a bill discount by touch: tap the field, type what comes off, Pay', async ({ page }) => {
   await openCounter(page);
   await addByTouch(page, 'panadol', 'Panadol');
-  await tap(page.getByRole('button', { name: /^Pay/ }));
-  await expect(payment(page).getByLabel('Amount due')).toHaveText('Rs 35.00');
+  await expect(total(page)).toHaveText('Rs 35.00');
 
   // No button to find and no Apply to remember: the field is there, and the
   // figure to collect follows what is typed into it.
-  await tap(payment(page).getByLabel('Discount on the bill'));
-  await payment(page).getByLabel('Discount on the bill').fill('4%');
-  await expect(payment(page).getByLabel('Collect', { exact: true })).toHaveText('Rs 33.60');
-  await expect(payment(page).getByLabel('Cash tendered')).toHaveValue('33.60');
-  await tap(payment(page).getByRole('button', { name: /^Commit/ }));
+  await tap(page.locator('#bill-discount'));
+  await page.locator('#bill-discount').fill('4%');
+  await expect(total(page)).toHaveText('Rs 33.60');
+  await expect(page.getByLabel('Cash received')).toHaveValue('33.60');
+  await tap(page.getByRole('button', { name: /^Pay/ }));
   await expect(lastSale(page)).toContainText('Rs 33.60');
 });
 
@@ -173,8 +168,6 @@ test('every control on the counter screens is big enough to tap', async ({ page 
   expect(await undersized(page), 'Sale, with a line').toEqual([]);
 
   await tap(page.getByRole('button', { name: /^Pay/ }));
-  expect(await undersized(page), 'Payment').toEqual([]);
-  await tap(payment(page).getByRole('button', { name: /^Commit/ }));
   await expect(lastSale(page)).toContainText(/Saved — /);
   expect(await undersized(page), 'Sale, after a sale').toEqual([]);
 
@@ -217,7 +210,6 @@ test('a return by touch, from the sale just made', async ({ page }) => {
   await openCounter(page);
   await addByTouch(page, 'disprin', 'Disprin');
   await tap(page.getByRole('button', { name: /^Pay/ }));
-  await tap(payment(page).getByRole('button', { name: /^Commit/ }));
   const saved = await lastSale(page).textContent();
   const receiptNumber = saved?.match(/Saved — ([A-Z]+-\d+)/)?.[1];
   expect(receiptNumber).toBeTruthy();

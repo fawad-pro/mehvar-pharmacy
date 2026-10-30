@@ -66,8 +66,31 @@ import { formatPaisa } from '@/lib/money';
 import { nominalPricePerBase } from '@/lib/quantity';
 import { uuidv7, type Uuid } from '@/lib/uuid';
 
+import { PIN_LENGTH } from '@/auth/pin-policy';
+import { positionPhrase } from '@/components/balance-figure';
+import { FieldLabel, inputClass } from '@/components/ui/field';
+import { needsClickToCommit } from '@/client/scan/amount-guard';
+import { ZERO_PAISA, type Paisa } from '@/lib/branded';
+import {
+  billDiscountFromInput,
+  billDiscountNeedsApproval,
+  paisaFromRupeeInput,
+  splitPayment,
+} from '@/domain/sales/cart';
+import { approveBillDiscountAction } from './actions';
 import { CartTable } from './cart-table';
-import { PaymentOverlay, type BillDiscount, type PaymentSplit } from './payment-overlay';
+export interface PaymentSplit {
+  cashPaisa: Paisa;
+  creditPaisa: Paisa;
+  changePaisa: Paisa;
+  tenderedPaisa: Paisa;
+}
+
+/** [PCN-014] The bill discount the sale is committed with, and who approved it. */
+export interface BillDiscount {
+  discountPaisa: Paisa;
+  approvedBy: { id: string; name: string } | null;
+}
 
 /**
  * Pay's key. Sale's own, not the global bar's, so it is not in the registry;
@@ -111,12 +134,30 @@ export function SaleSurface() {
   const [error, setError] = useState<string | null>(null);
   const [lastSale, setLastSale] = useState<Committed | null>(null);
   const [customer, setCustomer] = useState<CustomerHit | null>(null);
-  const [paying, setPaying] = useState(false);
   const [pickingCustomer, setPickingCustomer] = useState(false);
   /** F12 pressed while the customer was still being found: pay once attached. */
   const payAfterPick = useRef(false);
   /** The last scanned pack, when its own 2D code says it has expired. */
   const [expiredPack, setExpiredPack] = useState<{ name: string; expiry: string } | null>(null);
+
+  // Bill discount and cash received state
+  const [discountInput, setDiscountInput] = useState('');
+  const [approval, setApproval] = useState<{
+    discountPaisa: Paisa;
+    by: { id: string; name: string };
+  } | null>(null);
+  const [pinEntry, setPinEntry] = useState<{ pin: string; message: string | null; busy: boolean }>({
+    pin: '',
+    message: null,
+    busy: false,
+  });
+  const [cashReceivedInput, setCashReceivedInput] = useState('');
+  const [cashReceivedTyped, setCashReceivedTyped] = useState(false);
+  const [amountNotice, setAmountNotice] = useState<string | null>(null);
+
+  const discountField = useRef<HTMLInputElement>(null);
+  const cashReceivedField = useRef<HTMLInputElement>(null);
+  const pinField = useRef<HTMLInputElement>(null);
   /**
    * W6's pending mini-form: the typed name, plus the resolver the search awaits.
    * From an unknown scan it also carries the code, and — if another product
@@ -148,10 +189,49 @@ export function SaleSurface() {
       : null,
   );
 
-  // The cart's figures before payment: the subtotal is already net of every
-  // line's own discount (`lineTotal` subtracts it). [PCN-014] A bill discount
-  // is given on the payment screen, which owns it until the sale commits.
-  const totals = useMemo(() => cartTotals(lines), [lines]);
+  // The cart's figures before payment: subtotal is net of line discounts.
+  const grossPaisa = useMemo(() => grossSubtotalPaisa(lines), [lines]);
+  const discountOnItems = useMemo(() => totalLineDiscountPaisa(lines), [lines]);
+  const baseTotals = useMemo(() => cartTotals(lines), [lines]);
+  const subtotalPaisa = baseTotals.subtotalPaisa;
+
+  // Bill discount calculation
+  const parsedDiscount = useMemo(
+    () => billDiscountFromInput(subtotalPaisa, discountInput),
+    [subtotalPaisa, discountInput],
+  );
+  const billDiscountPaisa = parsedDiscount.ok ? parsedDiscount.discountPaisa : ZERO_PAISA;
+  const totals = useMemo(() => cartTotals(lines, billDiscountPaisa), [lines, billDiscountPaisa]);
+
+  const capPercent = receiptContext?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT;
+  const needsOwner = billDiscountNeedsApproval({
+    grossPaisa,
+    itemDiscountPaisa: discountOnItems,
+    billDiscountPaisa,
+    capPercent,
+  });
+  const approvedBy =
+    approval !== null && approval.discountPaisa === billDiscountPaisa ? approval.by : null;
+  const waitingForOwner = needsOwner && approvedBy === null;
+
+  // Cash received & Split calculation
+  const cashReceivedText = cashReceivedTyped
+    ? cashReceivedInput
+    : lines.length === 0
+      ? ''
+      : (totals.totalPaisa / 100).toFixed(2);
+  const cashReceivedPaisa = paisaFromRupeeInput(cashReceivedText);
+  const split = splitPayment(totals.totalPaisa, cashReceivedPaisa);
+  const short = split.creditPaisa > 0;
+
+  const canCommit =
+    lines.length === 0
+      ? false
+      : !busy &&
+        receiptContext !== null &&
+        parsedDiscount.ok &&
+        !waitingForOwner &&
+        (!short || customer !== null);
 
   const stockByProduct = useMemo(() => {
     const stock: Record<string, number | null> = {};
@@ -389,7 +469,6 @@ export function SaleSurface() {
       setLines((current) => current.filter((line) => !sold.has(line.lineId)));
       setExpiredPack(null);
       setCustomer(null);
-      setPaying(false);
       setLastSale({
         receiptNumber,
         totalPaisa: soldTotals.totalPaisa,
@@ -498,40 +577,126 @@ export function SaleSurface() {
     [capture, addLocalProduct],
   );
 
-  const openPayment = useCallback(() => {
-    if (lines.length === 0 || busy || paying) {
+  async function submitPin(): Promise<void> {
+    if (pinEntry.pin.length !== PIN_LENGTH || pinEntry.busy) return;
+    const asked = billDiscountPaisa;
+    setPinEntry((current) => ({ ...current, busy: true, message: null }));
+    const answer = await approveBillDiscountAction(pinEntry.pin).catch(() => null);
+    if (answer === null) {
+      setPinEntry({
+        pin: '',
+        busy: false,
+        message:
+          'The owner’s PIN needs a connection to the shop’s computer. Sell at the full amount, or within the limit.',
+      });
       return;
     }
-    setPaying(true);
-  }, [lines, busy, paying]);
+    if (!answer.ok) {
+      setPinEntry({ pin: '', busy: false, message: answer.message });
+      return;
+    }
+    setApproval({ discountPaisa: asked, by: { id: answer.ownerId, name: answer.ownerName } });
+    setPinEntry({ pin: '', message: null, busy: false });
+    cashReceivedField.current?.focus();
+    cashReceivedField.current?.select();
+  }
 
-  // F12 opens the payment overlay from anywhere on the surface (Phase 10 §4).
+  function clearDiscount(): void {
+    setDiscountInput('');
+    setPinEntry({ pin: '', message: null, busy: false });
+    cashReceivedField.current?.focus();
+    cashReceivedField.current?.select();
+  }
+
+  const executeSale = useCallback(
+    async (isClick = false) => {
+      if (lines.length === 0 || busy || !receiptContext) {
+        return;
+      }
+      if (!parsedDiscount.ok) {
+        discountField.current?.focus();
+        discountField.current?.select();
+        return;
+      }
+      if (waitingForOwner) {
+        pinField.current?.focus();
+        return;
+      }
+      if (!isClick && needsClickToCommit(cashReceivedPaisa)) {
+        setAmountNotice(
+          `${formatPaisa(cashReceivedPaisa, { withSymbol: true })} received looks like a barcode. If it is right, click Pay.`,
+        );
+        return;
+      }
+      if (short && customer === null) {
+        cashReceivedField.current?.focus();
+        cashReceivedField.current?.select();
+        return;
+      }
+      if (!canCommit) {
+        return;
+      }
+
+      const bill: BillDiscount = {
+        discountPaisa: billDiscountPaisa,
+        approvedBy,
+      };
+      const paymentSplit: PaymentSplit = {
+        ...split,
+        tenderedPaisa: cashReceivedPaisa,
+      };
+
+      await commitWithSplit(paymentSplit, bill);
+      setDiscountInput('');
+      setCashReceivedInput('');
+      setCashReceivedTyped(false);
+      setApproval(null);
+      setPinEntry({ pin: '', message: null, busy: false });
+      setAmountNotice(null);
+    },
+    [
+      lines,
+      busy,
+      receiptContext,
+      parsedDiscount,
+      waitingForOwner,
+      cashReceivedPaisa,
+      short,
+      customer,
+      canCommit,
+      billDiscountPaisa,
+      approvedBy,
+      split,
+      commitWithSplit,
+    ],
+  );
+
+  // F12 commits the sale directly from anywhere on the surface (no popup modal).
   useEffect(() => {
     function onKey(event: KeyboardEvent): void {
       if (event.key === PAY_KEY) {
         event.preventDefault();
-        // Not over another dialog. F12 pressed while the customer picker was
-        // still looking a name up opened Payment on top of it; the picker
-        // then closed and put focus back in the product search, behind
-        // Payment, so the cash typed next searched for a product and Enter
-        // added it to the bill. Over the picker it means "pay once the
-        // customer is attached", so it waits for that; over anything else
-        // it does nothing.
         if (document.querySelector('[aria-modal="true"]')) {
           if (pickingCustomer) payAfterPick.current = true;
           return;
         }
-        openPayment();
+        void executeSale(false);
       }
     }
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
     };
-  }, [openPayment, pickingCustomer]);
+  }, [executeSale, pickingCustomer]);
 
-  const payDisabled = lines.length === 0 || busy || !receiptContext;
-  const discountOnItems = totalLineDiscountPaisa(lines);
+  const payDisabled =
+    lines.length === 0 ||
+    busy ||
+    !receiptContext ||
+    !parsedDiscount.ok ||
+    waitingForOwner ||
+    (short && customer === null);
+
   const itemsSummary =
     lines.length === 0
       ? 'Nothing on the bill'
@@ -627,7 +792,7 @@ export function SaleSurface() {
                 focusSearch();
               }}
               onLeaveCart={focusSearch}
-              onPay={openPayment}
+              onPay={() => void executeSale(false)}
             />
           </div>
         </section>
@@ -636,7 +801,7 @@ export function SaleSurface() {
           aria-label="Bill"
           className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-4 lg:flex lg:items-stretch lg:w-[340px] lg:shrink-0 lg:overflow-auto"
         >
-          <div className={`${cardClass} gap-2 max-md:hidden`}>
+          <div className="${cardClass} gap-3">
             <span className="text-label text-ink-2">Total</span>
             {/* I6: the biggest numerals on the display. */}
             <p
@@ -645,18 +810,277 @@ export function SaleSurface() {
             >
               {formatPaisa(totals.totalPaisa, { withSymbol: true })}
             </p>
-            <p className="text-body-sm text-ink-2 m-0 flex justify-between">
-              <span>Items</span>
-              <b className="numeral text-navy font-medium">{itemsSummary}</b>
-            </p>
-            {discountOnItems > 0 ? (
+            <div className="flex flex-col gap-1 border-b border-border pb-3">
               <p className="text-body-sm text-ink-2 m-0 flex justify-between">
-                <span>Discount on items</span>
-                <b className="numeral text-navy font-medium">
-                  {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
-                </b>
+                <span>Items</span>
+                <b className="numeral text-navy font-medium">{itemsSummary}</b>
+              </p>
+              {discountOnItems > 0 ? (
+                <p className="text-body-sm text-ink-2 m-0 flex justify-between">
+                  <span>Discount on items</span>
+                  <b className="numeral text-navy font-medium">
+                    {formatPaisa(paisa(discountOnItems), { withSymbol: true })}
+                  </b>
+                </p>
+              ) : null}
+              {billDiscountPaisa > 0 ? (
+                <p className="text-body-sm text-ink-2 m-0 flex justify-between" aria-label="Bill discount">
+                  <span>Bill discount</span>
+                  <b className="numeral text-navy font-medium">
+                    -{formatPaisa(billDiscountPaisa, { withSymbol: true })}
+                    {approvedBy ? ` (by ${approvedBy.name})` : ''}
+                  </b>
+                </p>
+              ) : null}
+            </div>
+
+            {/* Side-by-side Discount & Cash received */}
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="bill-discount" className="flex flex-col gap-1">
+                  <FieldLabel>Discount</FieldLabel>
+                  <input
+                    id="bill-discount"
+                    ref={discountField}
+                    autoComplete="off"
+                    value={discountInput}
+                    inputMode="decimal"
+                    placeholder="e.g. 50 or 10%"
+                    aria-label="Discount"
+                    aria-invalid={parsedDiscount.ok ? undefined : true}
+                    onFocus={(event) => event.target.select()}
+                    onChange={(event) => {
+                      setDiscountInput(event.target.value);
+                      setPinEntry({ pin: '', message: null, busy: false });
+                      setAmountNotice(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        if (parsedDiscount.ok && waitingForOwner) {
+                          pinField.current?.focus();
+                        } else if (parsedDiscount.ok) {
+                          cashReceivedField.current?.focus();
+                          cashReceivedField.current?.select();
+                        }
+                      }
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        setDiscountInput('');
+                        setPinEntry({ pin: '', message: null, busy: false });
+                        focusSearch();
+                      }
+                    }}
+                    className={`${inputClass} numeral text-field-lg text-right font-medium`}
+                  />
+                </label>
+                {!parsedDiscount.ok ? (
+                  <span className="text-body-sm text-red font-medium" role="alert">
+                    {parsedDiscount.reason === 'above_bill'
+                      ? `More than bill (${formatPaisa(subtotalPaisa, { withSymbol: true })})`
+                      : 'e.g. 50 or 10%'}
+                  </span>
+                ) : null}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="cash-received" className="flex flex-col gap-1">
+                  <FieldLabel>Cash received</FieldLabel>
+                  <span className="relative block">
+                    <span
+                      aria-hidden="true"
+                      className="text-body-sm text-ink-2 pointer-events-none absolute inset-y-0 left-3 flex items-center"
+                    >
+                      Rs
+                    </span>
+                    <input
+                      id="cash-received"
+                      ref={cashReceivedField}
+                      autoComplete="off"
+                      value={cashReceivedText}
+                      inputMode="decimal"
+                      aria-label="Cash received"
+                      onFocus={(event) => event.target.select()}
+                      onChange={(event) => {
+                        setCashReceivedInput(event.target.value);
+                        setCashReceivedTyped(true);
+                        setAmountNotice(null);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === '%') {
+                          event.preventDefault();
+                          discountField.current?.focus();
+                          discountField.current?.select();
+                          return;
+                        }
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          if (needsClickToCommit(cashReceivedPaisa)) {
+                            setAmountNotice(
+                              `${formatPaisa(cashReceivedPaisa, { withSymbol: true })} received looks like a barcode. If it is right, click Pay.`,
+                            );
+                            return;
+                          }
+                          void executeSale(false);
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          if (cashReceivedTyped) {
+                            setCashReceivedTyped(false);
+                            setCashReceivedInput('');
+                          }
+                          focusSearch();
+                        }
+                      }}
+                      className={`${inputClass} numeral pl-9 text-right text-lg font-medium`}
+                    />
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            {/* Change display */}
+            {split.changePaisa > 0 ? (
+              <div
+                className="flex items-baseline justify-between rounded-control bg-blue-50/60 px-3 py-2"
+                role="status"
+              >
+                <span className="text-label text-ink-2 font-medium">Change</span>
+                <span
+                  className="text-navy numeral text-xl font-bold tracking-tight"
+                  aria-label={`Change ${formatPaisa(split.changePaisa, { withSymbol: true })}`}
+                >
+                  {formatPaisa(split.changePaisa, { withSymbol: true })}
+                </span>
+              </div>
+            ) : null}
+
+            {/* Shortfall / Udhaar display */}
+            {short ? (
+              <div className="flex flex-col gap-1.5">
+                <div
+                  className="flex items-baseline justify-between rounded-control bg-amber-50/60 px-3 py-2"
+                  role="status"
+                >
+                  <span className="text-label text-ink-2 font-medium">
+                    {customer ? 'On udhaar' : 'Remaining'}
+                  </span>
+                  <span
+                    className="text-amber-text numeral text-xl font-bold tracking-tight"
+                    aria-label={`${customer ? 'On udhaar' : 'Remaining'} ${formatPaisa(split.creditPaisa, { withSymbol: true })}`}
+                  >
+                    {formatPaisa(split.creditPaisa, { withSymbol: true })}
+                  </span>
+                </div>
+                {customer ? (
+                  <p className="text-body-sm m-0">
+                    <strong className="text-amber-text font-medium">
+                      {formatPaisa(split.creditPaisa, { withSymbol: true })} goes on {customer.name}’s udhaar.
+                    </strong>
+                    {customer.balancePaisa !== null
+                      ? ` ${positionPhrase(customer.balancePaisa + split.creditPaisa)} after this.`
+                      : null}
+                  </p>
+                ) : (
+                  <p className="text-body-sm text-red m-0 font-medium" role="alert">
+                    {udhaarEnabled
+                      ? `Attach a customer (${keyFor('udhaar')}) to put the rest on udhaar.`
+                      : 'The cash received does not cover the bill.'}
+                  </p>
+                )}
+              </div>
+            ) : null}
+
+            {/* Owner PIN approval box */}
+            {waitingForOwner ? (
+              <div className="bg-page flex flex-col gap-2 rounded-card p-3 border border-border">
+                <p className="text-body-sm m-0">
+                  <strong className="text-amber-text font-medium">
+                    Over the shop’s limit of {capPercent}%.
+                  </strong>{' '}
+                  The owner enters their PIN to approve it.
+                </p>
+                <div className="flex flex-col gap-1">
+                  <label className="flex flex-col gap-1" htmlFor="owner-pin">
+                    <FieldLabel>Owner’s PIN</FieldLabel>
+                    <input
+                      id="owner-pin"
+                      ref={pinField}
+                      autoComplete="one-time-code"
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={PIN_LENGTH}
+                      value={pinEntry.pin}
+                      aria-label="Owner’s PIN"
+                      aria-invalid={pinEntry.message ? true : undefined}
+                      readOnly={pinEntry.busy}
+                      onChange={(event) =>
+                        setPinEntry({
+                          ...pinEntry,
+                          pin: event.target.value.replace(/\D/g, ''),
+                          message: null,
+                        })
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void submitPin();
+                        }
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          clearDiscount();
+                        }
+                      }}
+                      className={`${inputClass} numeral text-center text-xl tracking-[0.4em]`}
+                    />
+                  </label>
+                  {pinEntry.message ? (
+                    <span className="text-body-sm text-red font-medium" role="alert">
+                      {pinEntry.message}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <Button kind="quiet" onClick={clearDiscount}>
+                    No discount <Kbd>Esc</Kbd>
+                  </Button>
+                  <Button
+                    onClick={() => void submitPin()}
+                    disabled={pinEntry.pin.length !== PIN_LENGTH || pinEntry.busy}
+                  >
+                    {pinEntry.busy ? (
+                      'Checking…'
+                    ) : (
+                      <>
+                        Approve <Kbd>Enter</Kbd>
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {amountNotice ? (
+              <p className="text-body-sm text-red m-0 font-medium" role="alert">
+                {amountNotice}
               </p>
             ) : null}
+
+            <Button
+              kind="primary"
+              block
+              onClick={() => void executeSale(true)}
+              disabled={payDisabled}
+              className="h-14 text-[17px] font-semibold mt-1 max-md:hidden"
+            >
+              {busy ? (
+                'Saving…'
+              ) : (
+                <>
+                  Pay <Kbd>{PAY_KEY}</Kbd>
+                </>
+              )}
+            </Button>
           </div>
 
           {customer ? (
@@ -806,21 +1230,7 @@ export function SaleSurface() {
               ) : null}
             </div>
           ) : null}
-          <Button
-            kind="primary"
-            block
-            onClick={openPayment}
-            disabled={payDisabled}
-            className="h-14 text-[17px] max-md:hidden md:col-start-2 lg:mt-auto"
-          >
-            {busy ? (
-              'Saving…'
-            ) : (
-              <>
-                Pay <Kbd>{PAY_KEY}</Kbd>
-              </>
-            )}
-          </Button>
+
         </aside>
       </div>
 
@@ -837,7 +1247,7 @@ export function SaleSurface() {
         <Button
           kind="primary"
           block
-          onClick={openPayment}
+          onClick={() => void executeSale(true)}
           disabled={payDisabled}
           className="h-[52px] text-[17px]"
         >
@@ -845,25 +1255,7 @@ export function SaleSurface() {
         </Button>
       </div>
 
-      {paying ? (
-        <PaymentOverlay
-          subtotalPaisa={totals.subtotalPaisa}
-          grossPaisa={grossSubtotalPaisa(lines)}
-          itemDiscountPaisa={totalLineDiscountPaisa(lines)}
-          capPercent={receiptContext?.billDiscountCapPercent ?? DEFAULT_BILL_DISCOUNT_CAP_PERCENT}
-          udhaarEnabled={udhaarEnabled}
-          customerName={customer?.name ?? null}
-          customerBalancePaisa={customer?.balancePaisa ?? null}
-          busy={busy}
-          onCancel={() => {
-            setPaying(false);
-            focusSearch();
-          }}
-          onCommit={(split, bill) => {
-            void commitWithSplit(split, bill);
-          }}
-        />
-      ) : null}
+
 
       {pickingCustomer ? (
         <CustomerPicker
@@ -874,10 +1266,11 @@ export function SaleSurface() {
             setPickingCustomer(false);
             if (payAfterPick.current) {
               payAfterPick.current = false;
-              setPaying(true);
-              return;
+              cashReceivedField.current?.focus();
+              cashReceivedField.current?.select();
+            } else {
+              focusSearch();
             }
-            focusSearch();
           }}
           onCancel={() => {
             payAfterPick.current = false;

@@ -118,7 +118,6 @@ export async function payAndSettle(page: Page): Promise<string | null> {
     timeout: 30_000,
   });
   await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText(/Saved — /);
   const saved = await lastSale(page).textContent();
   await expect(unsynced(page)).toHaveCount(0, { timeout: 30_000 });

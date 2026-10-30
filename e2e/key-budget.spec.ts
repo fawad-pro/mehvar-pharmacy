@@ -51,7 +51,7 @@ test('sell one item: Enter, F12, Enter — or a scan, F12, Enter', async ({ page
   await page.keyboard.type('8964000101018', { delay: 0 });
   await page.keyboard.press('Enter');
   await expect(page.getByRole('table')).toContainText('Panadol');
-  await keys(page, ['F12', 'Enter']);
+  await keys(page, ['F12']);
   await expect(lastSale(page)).toContainText(/Saved — /);
 });
 
@@ -80,11 +80,10 @@ test('an udhaar sale: the screen says how, and it takes five keys', async ({ pag
   // A customer of this test's own, so nobody's balance is left changed.
   await keys(page, ['type:disprin']);
   await seen(page, 'Disprin');
-  await keys(page, ['Enter', 'F4', `type:${name}`, 'Enter', 'F12']);
-  const payment = page.getByRole('dialog', { name: 'Payment' });
-  // How to put it on udhaar, said before anything is typed.
-  await expect(payment).toContainText(`For udhaar, type what ${name} pays now — 0 puts it all`);
-  await keys(page, ['type:0', 'Enter']);
+  await keys(page, ['Enter', 'F4', `type:${name}`, 'Enter']);
+  await expect(page.locator('aside')).toContainText(name);
+  await page.getByLabel('Cash received').fill('0');
+  await keys(page, ['F12']);
   await expect(lastSale(page)).toContainText(`on ${name}’s udhaar`);
 });
 

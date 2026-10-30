@@ -49,9 +49,8 @@ test('a payment recorded on the customer page: Esc closes it and stays there', a
   const picker = page.getByRole('dialog', { name: 'Attach a customer' });
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
+  await page.getByLabel('Cash received').fill('0');
   await page.keyboard.press('F12');
-  await page.getByRole('dialog', { name: 'Payment' }).getByLabel('Cash tendered').fill('0');
-  await page.keyboard.press('Enter');
   await expect(page.getByRole('status', { name: 'Last sale' })).toContainText('udhaar');
   await expect(page.getByRole('status', { name: /waiting to sync/ })).toHaveCount(0, {
     timeout: 30_000,

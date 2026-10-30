@@ -26,8 +26,6 @@ test('a link or a function key right after a sale always navigates', async ({ pa
     });
     await page.keyboard.press('Enter');
     await page.keyboard.press('F12');
-    await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
-    await page.keyboard.press('Enter');
     await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
     if (sale % 2 === 0) {

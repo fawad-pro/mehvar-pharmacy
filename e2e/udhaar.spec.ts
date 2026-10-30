@@ -19,7 +19,7 @@ import { lastSale, openCounter, printedReceipt as receipt, search, total } from 
  * receipt was assembled correctly.
  */
 
-test('payment overlay: tendered above the total shows change (Phase 10 §4)', async ({ page }) => {
+test('tendered above the total shows change (Phase 10 §4)', async ({ page }) => {
   await openCounter(page);
 
   await search(page).fill('panadol');
@@ -27,15 +27,11 @@ test('payment overlay: tendered above the total shows change (Phase 10 §4)', as
   // Rs 35.00 for one strip.
   await expect(total(page)).toHaveText('Rs 35.00');
 
+  const received = page.getByLabel('Cash received');
+  await received.fill('100');
+  await expect(page.locator('aside')).toContainText('65.00');
+
   await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await expect(overlay).toBeVisible();
-
-  const tendered = overlay.getByLabel('Cash tendered');
-  await tendered.fill('100');
-  await expect(overlay).toContainText('65.00');
-
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText('Saved');
 
   // The change calculation is the payment screen's job (already proven above,
@@ -68,21 +64,13 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   // The right rail shows who the sale is billed to.
   await expect(page.locator('aside')).toContainText(name);
 
-  await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await expect(overlay).toContainText(`Billing to ${name}`);
-
-  // A modal keeps Tab inside it: from its last control Tab comes back round,
-  // never out to the key bar behind, where Enter would leave mid-sale.
-  await overlay.getByRole('button', { name: /^Commit/ }).focus();
-  await page.keyboard.press('Tab');
-  await expect(overlay.locator(':focus')).toHaveCount(1);
+  await expect(page.locator('aside')).toContainText(name);
 
   // Half in cash, the rest goes on the customer's account.
-  await overlay.getByLabel('Cash tendered').fill('15');
-  await expect(overlay).toContainText('udhaar');
+  await page.getByLabel('Cash received').fill('15');
+  await expect(page.locator('aside')).toContainText('udhaar');
 
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('F12');
   await expect(lastSale(page)).toContainText('Saved');
   // And the confirmation says where the money went.
   await expect(lastSale(page)).toContainText(`Rs 15.00 cash · Rs 20.00 on ${name}’s udhaar`);
@@ -103,7 +91,7 @@ test('W2: attaching a customer mid-sale splits cash and credit, with a mini-stat
   ).toHaveCount(0);
 });
 
-test('the payment overlay computes Remaining the instant tendered falls short — no separate calculator', async ({
+test('remaining is computed the instant cash received falls short — no separate calculator', async ({
   page,
 }) => {
   await openCounter(page);
@@ -113,20 +101,16 @@ test('the payment overlay computes Remaining the instant tendered falls short �
   await page.keyboard.press('Enter');
   await expect(total(page)).toHaveText('Rs 90.00');
 
-  await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await expect(overlay).toContainText('Amount due');
-
-  // Amount Due Rs 90.00, tendered Rs 50.00 → Remaining Rs 40.00, shown the
+  // Amount Due Rs 90.00, received Rs 50.00 → Remaining Rs 40.00, shown the
   // moment the figure is typed — before any customer is attached, before
   // anything is committed.
-  await overlay.getByLabel('Cash tendered').fill('50');
-  await expect(overlay).toContainText('Remaining');
-  await expect(overlay).toContainText('40.00');
-  await expect(overlay).not.toContainText('Change');
+  await page.getByLabel('Cash received').fill('50');
+  await expect(page.locator('aside')).toContainText('Remaining');
+  await expect(page.locator('aside')).toContainText('40.00');
+  await expect(page.locator('aside')).not.toContainText('Change');
 });
 
-test('credit with nobody attached is blocked at the overlay, not silently discounted', async ({
+test('credit with nobody attached is blocked, not silently discounted', async ({
   page,
 }) => {
   await openCounter(page);
@@ -134,17 +118,11 @@ test('credit with nobody attached is blocked at the overlay, not silently discou
   await search(page).fill('panadol');
   await page.keyboard.press('Enter');
 
-  await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-
-  // Tendering less than the total, with nobody attached, has nowhere to put
-  // the shortfall — the overlay says so and will not commit it silently.
-  await overlay.getByLabel('Cash tendered').fill('10');
-  await expect(overlay).toContainText('Attach a customer (F4) to put the rest on udhaar.');
-  await expect(overlay.getByRole('button', { name: /Commit/ })).toBeDisabled();
-
-  await overlay.getByRole('button', { name: /^Cancel/ }).click();
-  await expect(overlay).toBeHidden();
+  // Receiving less than the total, with nobody attached, has nowhere to put
+  // the shortfall — the screen says so and will not commit it silently.
+  await page.getByLabel('Cash received').fill('10');
+  await expect(page.locator('aside')).toContainText('Attach a customer (F4) to put the rest on udhaar.');
+  await expect(page.getByRole('button', { name: /^Pay/ })).toBeDisabled();
 });
 
 test('W3: F8 on an empty cart opens Settle Udhaar and prints a mini-statement', async ({
@@ -225,10 +203,8 @@ test('W4: returning an udhaar sale prints a refund slip that reduces udhaar, nev
   await picker.getByPlaceholder('Name or phone…').fill(name);
   await picker.getByRole('button', { name: `Add “${name}” as a new customer` }).click();
   await expect(picker).toBeHidden();
+  await page.locator('#cash-received').fill('0');
   await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await overlay.getByLabel('Cash tendered').fill('0');
-  await page.keyboard.press('Enter');
   const saved = await lastSale(page).textContent();
   const receiptNumber = saved?.match(/Saved — ([A-Za-z]+-\d+)/)?.[1] ?? '';
   expect(receiptNumber).toBeTruthy();

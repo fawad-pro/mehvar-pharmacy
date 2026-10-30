@@ -31,10 +31,6 @@ async function sellOne(page: Page, term = 'panadol'): Promise<void> {
   await search(page).fill(term);
   await page.keyboard.press('Enter');
   await page.keyboard.press('F12');
-  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeVisible();
-  await page.keyboard.press('Enter');
-  // A person starts the next sale when this one says it is done.
-  await expect(page.getByRole('dialog', { name: 'Payment' })).toBeHidden();
 }
 
 test('W1 through a disruption: sell, print, reconnect, reconcile — no user action', async ({
@@ -93,7 +89,6 @@ test('a disruption mid-cart does not disturb the cart', async ({ page, context }
   await expect(total(page)).toHaveText('Rs 215.00');
 
   await page.keyboard.press('F12');
-  await page.keyboard.press('Enter');
   await expect(lastSale(page)).toContainText(/Saved — A-\d+/);
 
   await context.setOffline(false);
@@ -121,11 +116,9 @@ test('W2 offline: a new customer and an udhaar sale both queue, and land in orde
   await expect(picker).toBeHidden();
   await expect(page.locator('aside')).toContainText(name);
 
+  await page.getByLabel('Cash received').fill('0');
+  await expect(page.locator('aside')).toContainText('udhaar');
   await page.keyboard.press('F12');
-  const overlay = page.getByRole('dialog', { name: 'Payment' });
-  await overlay.getByLabel('Cash tendered').fill('0');
-  await expect(overlay).toContainText('udhaar');
-  await page.keyboard.press('Enter');
 
   await expect(receipt(page)).toContainText(name);
   await expect(receipt(page)).toContainText('New balance');
