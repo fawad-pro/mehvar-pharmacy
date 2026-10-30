@@ -16,7 +16,14 @@ export const metadata: Metadata = {
   // ADR-3: the counter is a PWA. Installing it is what gives the shop a
   // window with no address bar and its own icon (Phase 12 §6's kiosk setup).
   manifest: '/manifest.webmanifest',
-  icons: { icon: '/icon.svg', apple: '/icon.svg' },
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
   appleWebApp: { capable: true, title: 'Mehvar', statusBarStyle: 'black-translucent' },
 };
 
