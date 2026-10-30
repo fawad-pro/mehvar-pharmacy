@@ -6,7 +6,7 @@
 
 import Link from 'next/link';
 
-export type TabIcon = 'sale' | 'receive' | 'customers' | 'day' | 'more';
+export type TabIcon = 'sale' | 'receive' | 'stock' | 'customers' | 'day' | 'more';
 
 const PATHS: Record<TabIcon, React.ReactNode> = {
   sale: (
@@ -20,6 +20,13 @@ const PATHS: Record<TabIcon, React.ReactNode> = {
     <>
       <path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
       <path d="M3.5 7.5L12 12l8.5-4.5M12 12v9" />
+    </>
+  ),
+  stock: (
+    <>
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
     </>
   ),
   customers: (

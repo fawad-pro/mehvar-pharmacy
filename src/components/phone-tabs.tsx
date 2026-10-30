@@ -2,7 +2,7 @@
 
 /**
  * The phone's tab bar (PCN-016): below 768px of screen the key bar gives way
- * to five tabs — Sale, Receive, Customers, Day, More — and More opens every
+ * to five tabs — Sale, Receive, Stock, Day, More — and More opens every
  * other key, in the registry's order, as a bottom sheet.
  *
  * Every entry comes from the registry, so a tab and its key cannot disagree
@@ -23,7 +23,7 @@ import { TabBar, TabButton, TabLink, type TabIcon } from './ui/tab-bar';
 const TABS: ReadonlyArray<{ href: string; label: string; icon: TabIcon }> = [
   { href: '/sale', label: 'Sale', icon: 'sale' },
   { href: '/purchases', label: 'Receive', icon: 'receive' },
-  { href: '/customers', label: 'Customers', icon: 'customers' },
+  { href: '/stock', label: 'Stock', icon: 'stock' },
   { href: '/day', label: 'Day', icon: 'day' },
 ];
 
