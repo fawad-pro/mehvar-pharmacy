@@ -16,7 +16,8 @@ test.describe('Favicon & PWA Icons', () => {
     expect(manifest.icons).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ src: '/icon-192.png', sizes: '192x192', type: 'image/png' }),
-        expect.objectContaining({ src: '/icon-512.png', sizes: '512x512', type: 'image/png' }),
+        expect.objectContaining({ src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' }),
+        expect.objectContaining({ src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }),
       ]),
     );
 
@@ -36,7 +37,15 @@ test.describe('Favicon & PWA Icons', () => {
     expect(iconLinks.some((l) => l.href?.includes('icon.svg'))).toBe(false);
 
     // 4. Verify all icon endpoints respond 200 OK with valid images
-    const urls = ['/favicon.ico', '/favicon-32.png', '/icon-192.png', '/icon-512.png', '/apple-icon.png', '/icon.png'];
+    const urls = [
+      '/favicon.ico',
+      '/favicon-32.png',
+      '/icon-192.png',
+      '/icon-512.png',
+      '/icon-512-maskable.png',
+      '/apple-icon.png',
+      '/icon.png',
+    ];
     for (const url of urls) {
       const res = await request.get(url);
       expect(res.status(), `${url} should return 200`).toBe(200);
