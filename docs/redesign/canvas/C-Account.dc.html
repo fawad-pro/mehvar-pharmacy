@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Customer account</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="customers.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Customer account</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main" aria-label="Account">
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to all customers</a>
+          <h1 class="mv-title">{{s.name}}</h1>
+          <p class="sp-meta">{{s.phone}} · every udhaar sale, payment and return, oldest first</p>
+        </div>
+
+        <sc-if value="{{s.removed}}" hint-placeholder-val="{{false}}">
+          <div class="mv-card cu-removed">
+            <p class="cu-removed__text"><b>Removed.</b> Not offered when picking a customer. Their account stays here.</p>
+            <button type="button" class="mv-btn mv-btn--secondary">Restore</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+          <div class="sp-rail">
+            <div class="mv-card" style="gap: 6px;">
+              <span class="mv-label">{{s.label}}</span>
+              <p class="{{s.figClass}}">{{s.fig}}</p>
+              <span class="mv-help" style="text-align: right;">The rows below add up to this.</span>
+            </div>
+            <div class="sp-actions" style="justify-content: space-between;">
+              <sc-if value="{{s.active}}" hint-placeholder-val="{{true}}">
+                <div class="sp-quiet" style="margin-left: 0;">
+                  <button type="button" class="mv-btn mv-btn--quiet">Edit name or phone</button>
+                  <button type="button" class="mv-btn mv-btn--quiet">Remove customer</button>
+                </div>
+              </sc-if>
+              <button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay" style="margin-top: 0;">Record a payment</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <div class="mv-table-wrap sp-tablewrap">
+          <table class="mv-table mv-cart sv-cart44">
+            <colgroup><col style="width: {{cWhen}}px"><col style="width: auto"><col style="width: {{cMoney}}px"><col style="width: {{cMoney}}px"><col style="width: {{cBal}}px"></colgroup>
+            <thead><tr><th>When</th><th>What</th><th class="mv-num">Owes more</th><th class="mv-num">Owes less</th><th class="mv-num">Balance</th></tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="row" hint-placeholder-count="8">
+                <tr>
+                  <td class="sp-when"><div class="sp-what"><span>{{row.date}}</span><span class="sp-what__sub">{{row.time}}</span></div></td>
+                  <td>
+                    <div class="sp-what">
+                      <span class="sp-what__main">
+                        <a class="sp-link" href="#">{{row.what}}</a>
+                        <sc-if value="{{row.cancelled}}" hint-placeholder-val="{{false}}"><span class="mv-badge">Cancelled</span></sc-if>
+                        <sc-if value="{{row.canCancel}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet sp-rowbtn" aria-label="{{row.cancelLabel}}">Cancel payment</button></sc-if>
+                      </span>
+                      <sc-if value="{{row.hasSub}}" hint-placeholder-val="{{true}}"><span class="sp-what__sub">{{row.sub}}</span></sc-if>
+                    </div>
+                  </td>
+                  <td class="mv-num">{{row.more}}</td>
+                  <td class="mv-num">{{row.less}}</td>
+                  <td class="mv-num"><span class="{{row.balClass}}">{{row.bal}}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+            <tfoot><tr><td colspan="4">Balance now — the same as the figure at the top</td><td class="mv-num"><span class="{{s.posClass}}">{{s.pos}}</span></td></tr></tfoot>
+          </table>
+        </div>
+      </section>
+
+      <sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <aside class="sv-rail sp-rail-l" aria-label="Balance">
+          <div class="mv-card" style="gap: 6px;">
+            <span class="mv-label">{{s.label}}</span>
+            <p class="{{s.figClass}}">{{s.fig}}</p>
+            <span class="mv-help" style="text-align: right;">The rows add up to this.</span>
+          </div>
+          <div class="mv-card" style="gap: 8px;">
+            <span class="mv-label">From this account</span>
+            <div class="sp-kv"><span>Sold on udhaar</span><b>{{s.sold}}</b></div>
+            <div class="sp-kv"><span>Paid</span><b>{{s.paid}}</b></div>
+            <div class="sp-kv"><span>Returned</span><b>{{s.returned}}</b></div>
+            <span class="mv-help">Cancelled payments are left out.</span>
+          </div>
+          <sc-if value="{{s.active}}" hint-placeholder-val="{{true}}">
+            <div class="sp-quiet">
+              <button type="button" class="mv-btn mv-btn--quiet">Edit name or phone</button>
+              <button type="button" class="mv-btn mv-btn--quiet">Remove customer</button>
+            </div>
+          </sc-if>
+          <button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay">Record a payment</button>
+        </aside>
+      </sc-if>
+    </div>
+
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" aria-current="page" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+      <div class="sp-head">
+        <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to customers</a>
+        <h1 class="mv-title" style="font-size: 20px; line-height: 28px;">{{s.name}}</h1>
+        <p class="sp-meta">{{s.phone}}</p>
+      </div>
+      <sc-if value="{{s.removed}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card cu-removed">
+          <p class="cu-removed__text"><b>Removed.</b> Not offered when picking a customer. Their account stays here.</p>
+          <button type="button" class="mv-btn mv-btn--secondary">Restore</button>
+        </div>
+      </sc-if>
+      <div class="mv-card" style="gap: 4px; padding: 16px;">
+        <span class="mv-label">{{s.label}}</span>
+        <p class="{{s.figClass}}" style="font-size: 36px; line-height: 44px;">{{s.fig}}</p>
+        <span class="mv-help" style="text-align: right;">The rows below add up to this.</span>
+      </div>
+      <ul class="sp-mlist" aria-label="Account, oldest first">
+        <sc-for list="{{rows}}" as="row" hint-placeholder-count="8">
+          <li class="sp-mrow">
+            <div class="sp-mrow__main">
+              <span class="sp-mrow__nm"><a class="sp-link" href="#">{{row.what}}</a><sc-if value="{{row.cancelled}}" hint-placeholder-val="{{false}}"><span class="mv-badge">Cancelled</span></sc-if></span>
+              <span class="sp-mrow__meta">{{row.date}}, {{row.time}}</span>
+              <sc-if value="{{row.hasSub}}" hint-placeholder-val="{{true}}"><span class="sp-mrow__meta">{{row.sub}}</span></sc-if>
+              <span class="sp-mrow__meta" style="color: var(--navy);">{{row.effect}}</span>
+              <sc-if value="{{row.canCancel}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet" style="align-self: flex-start; margin-left: -12px;" aria-label="{{row.cancelLabel}}">Cancel this payment</button></sc-if>
+            </div>
+            <div class="sp-mrow__end"><span class="sp-mrow__cap">after</span><span class="{{row.balClass}}" style="font-size: 14px;">{{row.bal}}</span></div>
+          </li>
+        </sc-for>
+        <li class="sp-mrow">
+          <div class="sp-mrow__main"><span class="sp-mrow__nm">Balance now</span><span class="sp-mrow__meta">The same as the figure above.</span></div>
+          <div class="sp-mrow__end"><span class="{{s.posClass}}" style="font-size: 14px;">{{s.pos}}</span></div>
+        </li>
+      </ul>
+      <sc-if value="{{s.active}}" hint-placeholder-val="{{true}}">
+        <div class="sp-quiet">
+          <button type="button" class="mv-btn mv-btn--quiet">Edit name or phone</button>
+          <button type="button" class="mv-btn mv-btn--quiet">Remove customer</button>
+        </div>
+      </sc-if>
+    </div>
+
+    <div class="sv-paybar">
+      <div class="sp-paybar__row"><span>{{s.label}}</span><b class="{{s.barClass}}">{{s.fig}}</b></div>
+      <button type="button" class="mv-btn mv-btn--primary mv-btn--block">Record a payment</button>
+    </div>
+
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" aria-current="page" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["owes","advance","removed","restored"],"default":"owes"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'owes';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const owes = 'sp-pos sp-pos--owes', ok = 'sp-pos sp-pos--settled', adv = 'sp-pos sp-pos--advance';
+    const r = (o) => Object.assign({ cancelled: false, canCancel: false, sub: '', more: '', less: '' }, o, {
+      hasSub: !!o.sub,
+      effect: o.more ? 'Owes ' + o.more + ' more' : 'Owes ' + o.less + ' less',
+      cancelLabel: 'Cancel the ' + o.less + ' payment'
+    });
+    let rows, s;
+    if (view === 'advance') {
+      rows = [
+        r({ date: '19 Oct 2026', time: '12:10', what: 'Udhaar sale AS-1006', more: 'Rs 600.00', bal: 'Owes Rs 600.00', balClass: owes }),
+        r({ date: '25 Oct', time: '17:45', what: 'Payment AS-1029', canCancel: true, less: 'Rs 800.00', bal: 'Advance Rs 200.00', balClass: adv })
+      ];
+      s = { name: 'Zubair Hussain', phone: '0322 1740096', label: 'Advance paid', fig: 'Rs 200.00', figClass: 'sp-fig sp-fig--advance', barClass: 'sp-pos--advance', pos: 'Advance Rs 200.00', posClass: adv, sold: 'Rs 600.00', paid: 'Rs 800.00', returned: '—', active: true, removed: false };
+    } else if (view === 'removed' || view === 'restored') {
+      rows = [
+        r({ date: '12 Oct 2026', time: '10:30', what: 'Udhaar sale AS-0979', more: 'Rs 900.00', bal: 'Owes Rs 900.00', balClass: owes }),
+        r({ date: '16 Oct', time: '14:05', what: 'Payment AS-0996', canCancel: true, less: 'Rs 900.00', bal: 'Settled up', balClass: ok })
+      ];
+      s = { name: 'Gul Zaman', phone: '0302 7712340', label: 'Balance', fig: 'Settled up', figClass: 'sp-fig sp-fig--settled', barClass: 'sp-pos--settled', pos: 'Settled up', posClass: ok, sold: 'Rs 900.00', paid: 'Rs 900.00', returned: '—', active: view === 'restored', removed: view === 'removed' };
+    } else {
+      rows = [
+        r({ date: '04 Oct 2026', time: '10:12', what: 'Udhaar sale AS-0962', more: 'Rs 1,850.00', bal: 'Owes Rs 1,850.00', balClass: owes }),
+        r({ date: '09 Oct', time: '15:40', what: 'Payment AS-0974', canCancel: true, less: 'Rs 500.00', bal: 'Owes Rs 1,350.00', balClass: owes }),
+        r({ date: '14 Oct', time: '11:05', what: 'Udhaar sale AS-0991', more: 'Rs 1,240.00', bal: 'Owes Rs 2,590.00', balClass: owes }),
+        r({ date: '17 Oct', time: '12:30', what: 'Return AS-1003', sub: 'against AS-0991', less: 'Rs 340.00', bal: 'Owes Rs 2,250.00', balClass: owes }),
+        r({ date: '21 Oct', time: '17:02', what: 'Payment AS-1017', cancelled: true, less: 'Rs 1,000.00', bal: 'Owes Rs 1,250.00', balClass: owes }),
+        r({ date: '21 Oct', time: '17:04', what: 'Payment cancelled AS-1018', sub: 'undoes AS-1017', more: 'Rs 1,000.00', bal: 'Owes Rs 2,250.00', balClass: owes }),
+        r({ date: '27 Oct', time: '16:20', what: 'Udhaar sale AS-1038', more: 'Rs 760.00', bal: 'Owes Rs 3,010.00', balClass: owes }),
+        r({ date: '28 Oct', time: '09:15', what: 'Payment AS-1041', canCancel: true, less: 'Rs 1,000.00', bal: 'Owes Rs 2,010.00', balClass: owes })
+      ];
+      s = { name: 'Tariq Mehmood', phone: '0321 5550142', label: 'Owes you', fig: 'Rs 2,010.00', figClass: 'sp-fig sp-fig--owes', barClass: 'sp-pos--owes', pos: 'Owes Rs 2,010.00', posClass: owes, sold: 'Rs 3,850.00', paid: 'Rs 1,500.00', returned: 'Rs 340.00', active: true, removed: false };
+    }
+    // The cancelled-payment pair sits in the rows but not in "Paid".
+    rows.forEach((row) => { row.more = row.more || '—'; row.less = row.less || '—'; });
+    return {
+      rows, s, phone, tablet,
+      laptop: device === 'laptop',
+      wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv',
+      cWhen: tablet ? 108 : 120, cMoney: tablet ? 104 : 112, cBal: tablet ? 164 : 184
+    };
+  }
+}
+</script>
+</body>
+</html>

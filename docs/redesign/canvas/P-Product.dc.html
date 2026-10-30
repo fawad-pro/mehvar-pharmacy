@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Product</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="products.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Product</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Product">
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to products</a>
+          <h1 class="mv-title pr-title">{{p.title}}</h1>
+          <p class="sp-meta">{{p.meta}}</p>
+        </div>
+        <sc-if value="{{p.replaced}}" hint-placeholder-val="{{false}}">
+          <div class="mv-banner mv-banner--done" role="status" aria-label="Replaced">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="mv-banner__text"><strong>Replaced.</strong> 2 batches moved here with their cost. Link these barcodes again — their unit is not on this pack: <b>8961100200120</b> (was on box).</span>
+          </div>
+        </sc-if>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">What it is</h2>
+          <div class="pr-grid">
+            <label class="mv-field pr-s4"><span class="mv-label">Name</span><input class="{{f.nameCls}}" autocomplete="off" value="{{f.name}}" placeholder="As printed on the pack"></label>
+            <label class="mv-field pr-s2"><span class="mv-label">Strength</span><input class="mv-input" autocomplete="off" value="{{f.strength}}" placeholder="500mg"></label>
+            <label class="mv-field pr-s2"><span class="mv-label">Form</span><input class="mv-input" autocomplete="off" value="{{f.form}}" placeholder="Tablet, syrup"></label>
+            <label class="mv-field pr-s2 pr-p2"><span class="mv-label">Manufacturer</span><input class="mv-input" autocomplete="off" value="{{f.maker}}"></label>
+            <label class="mv-field pr-s2 pr-p2"><span class="mv-label">Salt / formula</span><input class="mv-input" autocomplete="off" value="{{f.salt}}" placeholder="paracetamol"></label>
+          </div>
+          <sc-if value="{{f.dup}}" hint-placeholder-val="{{false}}">
+            <div class="mv-banner mv-banner--attention" role="status">
+              <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span class="mv-banner__text"><strong>You already have this medicine.</strong> Saving it again would split its stock across two entries. <a href="#">Open Panadol 500mg · Tablet · GSK</a> instead.</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{f.similar}}" hint-placeholder-val="{{false}}">
+            <div class="mv-banner mv-banner--attention" role="status">
+              <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span class="mv-banner__text"><strong>Check the strength.</strong> You already stock Panadol 500mg · Tablet · GSK. If this really is a different strength, carry on — if it is a typing slip, fix it before saving.</span>
+            </div>
+          </sc-if>
+        </div>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Packs</h2>
+          <label class="mv-field pr-base">
+            <span class="mv-label">Smallest unit</span>
+            <input class="mv-input" autocomplete="off" value="{{f.base}}">
+            <span class="mv-help">The one thing you can sell on its own — tab, bottle, piece.</span>
+          </label>
+          <div class="pr-packs">
+            <sc-for list="{{f.packs}}" as="p" hint-placeholder-count="2">
+              <div class="pr-pack">
+                <span class="pr-pack__t">1</span>
+                <input class="mv-input" autocomplete="off" aria-label="Name of the pack" value="{{p.name}}">
+                <span class="pr-pack__t">=</span>
+                <input class="mv-input pr-pack__n" inputmode="numeric" aria-label="{{p.aria}}" value="{{p.count}}" disabled="{{p.locked}}">
+                <span class="pr-pack__t">{{p.below}}</span>
+                <sc-if value="{{p.removable}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet pr-x" aria-label="{{p.removeLabel}}">×</button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{f.locked}}" hint-placeholder-val="{{false}}">
+            <p class="mv-help" role="note">This product already has stock or sales, so its pack sizes stay as they are. You can rename a unit or add a bigger pack at the end, like a carton.</p>
+          </sc-if>
+          <p class="pr-says" aria-live="polite">{{f.wordsLead}} <b>{{f.words}}</b>{{f.wordsTail}}</p>
+          <button type="button" class="mv-btn mv-btn--quiet pr-addpack">Add a bigger pack</button>
+        </div>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Price</h2>
+          <div class="pr-prices">
+            <sc-for list="{{f.prices}}" as="pr" hint-placeholder-count="3">
+              <label class="mv-field"><span class="mv-label">{{pr.label}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="{{pr.cls}}" inputmode="decimal" autocomplete="off" value="{{pr.value}}" placeholder="{{pr.ph}}"></span></label>
+            </sc-for>
+          </div>
+          <div class="pr-mrp">
+            <sc-if value="{{f.manyUnits}}" hint-placeholder-val="{{true}}"><div class="mv-field"><span class="mv-label" id="mrp-on">MRP printed on</span>
+              <div class="sv-seg" role="group" aria-labelledby="mrp-on">
+                <sc-for list="{{f.units}}" as="u" hint-placeholder-count="2"><button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{u.pressed}}">{{u.name}}</button></sc-for>
+              </div>
+            </div></sc-if>
+            <label class="mv-field pr-mrp__amt"><span class="mv-label">{{f.mrpLabel}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" autocomplete="off" value="{{f.mrp}}" placeholder="Optional"></span></label>
+          </div>
+          <div class="pr-opt">
+            <label class="mv-field pr-low"><span class="mv-label">Low-stock level</span><input class="mv-input" inputmode="numeric" autocomplete="off" value="{{f.low}}" placeholder="Optional"></label>
+            <label class="pr-check"><input type="checkbox" class="pr-check__box"> <span>Still needs completing</span></label>
+          </div>
+        </div>
+        <sc-if value="{{p.hasAlts}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Same medicine, other brands</h2>
+          <ul class="pr-alts">
+            <sc-for list="{{p.alts}}" as="a" hint-placeholder-count="2">
+              <li class="pr-alt"><span class="pr-alt__main"><a class="sp-link" href="#">{{a.title}}</a><span class="sp-what__sub">{{a.meta}}</span></span><span class="{{a.cls}}">{{a.stock}}</span></li>
+            </sc-for>
+          </ul>
+        </div>
+        </sc-if>
+
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 320px;" aria-label="Summary and actions">
+        <div class="mv-card pr-hand">
+          <span class="mv-label">On hand</span>
+          <p class="{{p.handCls}}">{{p.hand}}</p>
+          <span class="mv-help">{{p.handHelp}}</span>
+        </div>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Barcodes</h2>
+          <sc-if value="{{p.hasCodes}}" hint-placeholder-val="{{true}}">
+            <ul class="pr-codes" aria-label="Barcodes">
+              <sc-for list="{{p.codes}}" as="c" hint-placeholder-count="2">
+                <li class="pr-code"><span class="pr-code__n">{{c.code}}</span><span class="pr-code__for">{{c.forUnit}}</span><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{c.rm}}">Remove</button></li>
+              </sc-for>
+            </ul>
+          </sc-if>
+          <sc-if value="{{p.noCodes}}" hint-placeholder-val="{{false}}"><p class="mv-help">None yet. Scan a pack below — codes also build up as you sell.</p></sc-if>
+          <form class="pr-scan" action="#">
+            <label class="mv-field pr-scan__code" data-scan-target=""><span class="mv-label">Scan a barcode</span><input class="{{p.scanCls}}" autocomplete="off" value="{{p.scanned}}" placeholder="Scan the pack"></label>
+            <label class="mv-field"><span class="mv-label">This code is for one</span>
+              <select class="mv-select" aria-label="This code is for one">
+                <sc-for list="{{p.opts}}" as="o" hint-placeholder-count="3"><option selected="{{o.sel}}">{{o.text}}</option></sc-for>
+              </select>
+            </label>
+            <button type="submit" class="mv-btn mv-btn--secondary">Add</button>
+          </form>
+          <sc-if value="{{p.scanning}}" hint-placeholder-val="{{false}}"><p class="mv-help">A scanner types the code and presses Enter by itself. Nothing else to do.</p></sc-if>
+        </div>
+        <div class="sp-quiet">
+          <button type="button" class="mv-btn mv-btn--quiet">Replace this product</button>
+          <button type="button" class="mv-btn mv-btn--quiet">Remove product</button>
+        </div>
+        <button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay">Save product <span class="mv-kbd">Enter</span></button>
+
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" aria-current="page" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to products</a>
+          <h1 class="mv-title pr-title">{{p.title}}</h1>
+          <p class="sp-meta">{{p.meta}}</p>
+        </div>
+        <sc-if value="{{p.replaced}}" hint-placeholder-val="{{false}}">
+          <div class="mv-banner mv-banner--done" role="status" aria-label="Replaced">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="mv-banner__text"><strong>Replaced.</strong> 2 batches moved here with their cost. Link these barcodes again — their unit is not on this pack: <b>8961100200120</b> (was on box).</span>
+          </div>
+        </sc-if>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">What it is</h2>
+          <div class="pr-grid">
+            <label class="mv-field pr-s4"><span class="mv-label">Name</span><input class="{{f.nameCls}}" autocomplete="off" value="{{f.name}}" placeholder="As printed on the pack"></label>
+            <label class="mv-field pr-s2"><span class="mv-label">Strength</span><input class="mv-input" autocomplete="off" value="{{f.strength}}" placeholder="500mg"></label>
+            <label class="mv-field pr-s2"><span class="mv-label">Form</span><input class="mv-input" autocomplete="off" value="{{f.form}}" placeholder="Tablet, syrup"></label>
+            <label class="mv-field pr-s2 pr-p2"><span class="mv-label">Manufacturer</span><input class="mv-input" autocomplete="off" value="{{f.maker}}"></label>
+            <label class="mv-field pr-s2 pr-p2"><span class="mv-label">Salt / formula</span><input class="mv-input" autocomplete="off" value="{{f.salt}}" placeholder="paracetamol"></label>
+          </div>
+          <sc-if value="{{f.dup}}" hint-placeholder-val="{{false}}">
+            <div class="mv-banner mv-banner--attention" role="status">
+              <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span class="mv-banner__text"><strong>You already have this medicine.</strong> Saving it again would split its stock across two entries. <a href="#">Open Panadol 500mg · Tablet · GSK</a> instead.</span>
+            </div>
+          </sc-if>
+          <sc-if value="{{f.similar}}" hint-placeholder-val="{{false}}">
+            <div class="mv-banner mv-banner--attention" role="status">
+              <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span class="mv-banner__text"><strong>Check the strength.</strong> You already stock Panadol 500mg · Tablet · GSK. If this really is a different strength, carry on — if it is a typing slip, fix it before saving.</span>
+            </div>
+          </sc-if>
+        </div>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Packs</h2>
+          <label class="mv-field pr-base">
+            <span class="mv-label">Smallest unit</span>
+            <input class="mv-input" autocomplete="off" value="{{f.base}}">
+            <span class="mv-help">The one thing you can sell on its own — tab, bottle, piece.</span>
+          </label>
+          <div class="pr-packs">
+            <sc-for list="{{f.packs}}" as="p" hint-placeholder-count="2">
+              <div class="pr-pack">
+                <span class="pr-pack__t">1</span>
+                <input class="mv-input" autocomplete="off" aria-label="Name of the pack" value="{{p.name}}">
+                <span class="pr-pack__t">=</span>
+                <input class="mv-input pr-pack__n" inputmode="numeric" aria-label="{{p.aria}}" value="{{p.count}}" disabled="{{p.locked}}">
+                <span class="pr-pack__t">{{p.below}}</span>
+                <sc-if value="{{p.removable}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet pr-x" aria-label="{{p.removeLabel}}">×</button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{f.locked}}" hint-placeholder-val="{{false}}">
+            <p class="mv-help" role="note">This product already has stock or sales, so its pack sizes stay as they are. You can rename a unit or add a bigger pack at the end, like a carton.</p>
+          </sc-if>
+          <p class="pr-says" aria-live="polite">{{f.wordsLead}} <b>{{f.words}}</b>{{f.wordsTail}}</p>
+          <button type="button" class="mv-btn mv-btn--quiet pr-addpack">Add a bigger pack</button>
+        </div>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Price</h2>
+          <div class="pr-prices">
+            <sc-for list="{{f.prices}}" as="pr" hint-placeholder-count="3">
+              <label class="mv-field"><span class="mv-label">{{pr.label}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="{{pr.cls}}" inputmode="decimal" autocomplete="off" value="{{pr.value}}" placeholder="{{pr.ph}}"></span></label>
+            </sc-for>
+          </div>
+          <div class="pr-mrp">
+            <sc-if value="{{f.manyUnits}}" hint-placeholder-val="{{true}}"><div class="mv-field"><span class="mv-label" id="mrp-on">MRP printed on</span>
+              <div class="sv-seg" role="group" aria-labelledby="mrp-on">
+                <sc-for list="{{f.units}}" as="u" hint-placeholder-count="2"><button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{u.pressed}}">{{u.name}}</button></sc-for>
+              </div>
+            </div></sc-if>
+            <label class="mv-field pr-mrp__amt"><span class="mv-label">{{f.mrpLabel}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" autocomplete="off" value="{{f.mrp}}" placeholder="Optional"></span></label>
+          </div>
+          <div class="pr-opt">
+            <label class="mv-field pr-low"><span class="mv-label">Low-stock level</span><input class="mv-input" inputmode="numeric" autocomplete="off" value="{{f.low}}" placeholder="Optional"></label>
+            <label class="pr-check"><input type="checkbox" class="pr-check__box"> <span>Still needs completing</span></label>
+          </div>
+        </div>
+        <sc-if value="{{p.hasAlts}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Same medicine, other brands</h2>
+          <ul class="pr-alts">
+            <sc-for list="{{p.alts}}" as="a" hint-placeholder-count="2">
+              <li class="pr-alt"><span class="pr-alt__main"><a class="sp-link" href="#">{{a.title}}</a><span class="sp-what__sub">{{a.meta}}</span></span><span class="{{a.cls}}">{{a.stock}}</span></li>
+            </sc-for>
+          </ul>
+        </div>
+        </sc-if>
+        <div class="mv-card pr-hand">
+          <span class="mv-label">On hand</span>
+          <p class="{{p.handCls}}">{{p.hand}}</p>
+          <span class="mv-help">{{p.handHelp}}</span>
+        </div>
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Barcodes</h2>
+          <sc-if value="{{p.hasCodes}}" hint-placeholder-val="{{true}}">
+            <ul class="pr-codes" aria-label="Barcodes">
+              <sc-for list="{{p.codes}}" as="c" hint-placeholder-count="2">
+                <li class="pr-code"><span class="pr-code__n">{{c.code}}</span><span class="pr-code__for">{{c.forUnit}}</span><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{c.rm}}">Remove</button></li>
+              </sc-for>
+            </ul>
+          </sc-if>
+          <sc-if value="{{p.noCodes}}" hint-placeholder-val="{{false}}"><p class="mv-help">None yet. Scan a pack below — codes also build up as you sell.</p></sc-if>
+          <form class="pr-scan" action="#">
+            <label class="mv-field pr-scan__code" data-scan-target=""><span class="mv-label">Scan a barcode</span><input class="{{p.scanCls}}" autocomplete="off" value="{{p.scanned}}" placeholder="Scan the pack"></label>
+            <label class="mv-field"><span class="mv-label">This code is for one</span>
+              <select class="mv-select" aria-label="This code is for one">
+                <sc-for list="{{p.opts}}" as="o" hint-placeholder-count="3"><option selected="{{o.sel}}">{{o.text}}</option></sc-for>
+              </select>
+            </label>
+            <button type="submit" class="mv-btn mv-btn--secondary">Add</button>
+          </form>
+          <sc-if value="{{p.scanning}}" hint-placeholder-val="{{false}}"><p class="mv-help">A scanner types the code and presses Enter by itself. Nothing else to do.</p></sc-if>
+        </div>
+        <div class="sp-quiet">
+          <button type="button" class="mv-btn mv-btn--quiet">Replace this product</button>
+          <button type="button" class="mv-btn mv-btn--quiet">Remove product</button>
+        </div>
+
+    </div>
+    <div class="sv-paybar"><button type="button" class="mv-btn mv-btn--primary mv-btn--block">Save product</button></div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["product","scan","replaced"],"default":"product"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'product';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const pack = (name, count, below) => ({ name, count, below, locked: true, aria: 'How many ' + below + ' in 1 ' + name, removable: false, removeLabel: '' });
+    const price = (unit, value, ph) => ({ label: unit[0].toUpperCase() + unit.slice(1) + ' price', value, ph, cls: 'mv-input' });
+    const code = (c, forUnit) => ({ code: c, forUnit, rm: 'Remove barcode ' + c });
+    let f, p;
+    if (view === 'replaced') {
+      f = { fields: true, dup: false, similar: false, nameCls: 'mv-input', name: 'Risek', strength: '20mg', form: 'Capsule', maker: 'Getz', salt: 'omeprazole', base: 'cap', locked: true,
+        packs: [pack('strip', '14', 'cap')], wordsLead: 'In words:', words: '1 strip = 14 cap', wordsTail: '',
+        prices: [price('strip', '85.00', ''), price('cap', '', '6.08')], manyUnits: true, units: [{ name: 'strip', pressed: true }, { name: 'cap', pressed: false }], mrpLabel: 'MRP of 1 strip', mrp: '', low: '' };
+      p = { title: 'Risek 20mg', meta: 'Capsule · Getz · omeprazole', replaced: true, hand: '23 strip, 8 cap', handCls: 'pr-handfig', handHelp: 'Counted in this product’s own packs.',
+        hasCodes: true, noCodes: false, codes: [code('8961100200113', 'for 1 strip')], scanCls: 'mv-input', scanned: '', scanning: false,
+        opts: [{ text: 'strip (14 cap)', sel: true }, { text: 'cap', sel: false }], hasAlts: false, alts: [] };
+    } else {
+      f = { fields: true, dup: false, similar: false, nameCls: 'mv-input', name: 'Flagyl', strength: '400mg', form: 'Tablet', maker: 'Sanofi', salt: 'metronidazole', base: 'tab', locked: true,
+        packs: [pack('strip', '10', 'tab'), pack('box', '10', 'strip')], wordsLead: 'In words:', words: '1 box = 10 strip, 1 strip = 10 tab', wordsTail: ' (a box is 100 tab)',
+        prices: [price('box', '450.00', ''), price('strip', '45.00', ''), price('tab', '', '4.50')], manyUnits: true,
+        units: [{ name: 'box', pressed: true }, { name: 'strip', pressed: false }, { name: 'tab', pressed: false }], mrpLabel: 'MRP of 1 box', mrp: '480.00', low: '200' };
+      p = { title: 'Flagyl 400mg', meta: 'Tablet · Sanofi · metronidazole', replaced: false, hand: '3 box, 6 strip', handCls: 'pr-handfig', handHelp: 'Counted in this product’s own packs.',
+        hasCodes: true, noCodes: false, codes: [code('8961100100119', 'for 1 box'), code('8961100100126', 'for 1 strip')],
+        scanCls: view === 'scan' ? 'mv-input is-focus' : 'mv-input', scanned: view === 'scan' ? '8961100100133' : '', scanning: view === 'scan',
+        opts: [{ text: 'box (100 tab)', sel: true }, { text: 'strip (10 tab)', sel: false }, { text: 'tab', sel: false }],
+        hasAlts: true, alts: [
+          { title: 'Metrozine 400mg', meta: 'Tablet · Getz', stock: '12 strip on hand', cls: 'pr-alt__stock' },
+          { title: 'Flazol 400mg', meta: 'Tablet · Hilton', stock: 'None on hand', cls: 'pr-alt__stock pr-alt__stock--none' }
+        ] };
+    }
+    return Object.assign({}, common, { f, p });
+  }
+}
+</script>
+</body>
+</html>

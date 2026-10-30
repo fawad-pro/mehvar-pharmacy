@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+  <div class="gl">
+    <div class="gl-col">
+      <sc-if value="{{splash}}" hint-placeholder-val="{{false}}">
+        <div class="gl-splash"><img class="gl-logo gl-logo--big" src="/_blob/03aee1571535e85161cc5aaab15906e0" alt="Mehvar"><p class="gl-shop">Al-Shifa Pharmacy</p><p class="mv-help">Opening the counter…</p></div>
+      </sc-if>
+      <sc-if value="{{formShown}}" hint-placeholder-val="{{true}}">
+        <img class="gl-logo" src="/_blob/03aee1571535e85161cc5aaab15906e0" alt="Mehvar">
+        <h1 class="mv-title gl-title">{{title}}</h1>
+        <p class="gl-lead">{{lead}}</p>
+        <sc-if value="{{isDevice}}" hint-placeholder-val="{{true}}">
+          <div class="mv-card gl-sheet"><b>All three are on your setup sheet from Mehvar.</b><span class="mv-help">Don’t have it? Ask the owner — or message us on WhatsApp.</span></div>
+        </sc-if>
+        <form class="mv-card gl-form" action="#">
+          <sc-if value="{{isDevice}}" hint-placeholder-val="{{true}}">
+          <label class="{{okField}}"><span class="mv-label">Pharmacy code</span><input class="mv-input" name="tenantSlug" type="text" autocomplete="off" value="al-shifa"><span class="mv-help">Your pharmacy’s short name in Mehvar, like al-shifa.</span><sc-if value="{{noErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert"></span></sc-if></label>
+          <label class="{{okField}}"><span class="mv-label">Counter name</span><input class="mv-input" name="deviceName" type="text" autocomplete="off" value="Counter 1"><span class="mv-help">Names this machine in reports, like Counter 1.</span><sc-if value="{{noErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert"></span></sc-if></label>
+          <label class="{{keyField}}"><span class="mv-label">Setup key</span><input class="mv-input" name="pairingKey" type="password" autocomplete="one-time-code" value="••••••••" aria-invalid="{{keyErr}}"><span class="mv-help">The one-time key on the sheet — not anyone’s PIN.</span><sc-if value="{{keyErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert">That setup key is not right. Copy it again from your setup sheet.</span></sc-if></label>
+          </sc-if>
+          <sc-if value="{{isOwner}}" hint-placeholder-val="{{false}}">
+          <label class="{{okField}}"><span class="mv-label">Pharmacy code</span><input class="mv-input" name="tenantSlug" type="text" autocomplete="off" value="al-shifa"><sc-if value="{{noErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert"></span></sc-if></label>
+          <label class="{{pwField}}"><span class="mv-label">Password</span><input class="mv-input" name="password" type="password" autocomplete="current-password" value="••••••••••" aria-invalid="{{pwErr}}"><sc-if value="{{pwErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert">That password is not right. Try again.</span></sc-if></label>
+          </sc-if>
+          <button type="submit" class="mv-btn mv-btn--primary mv-btn--block">{{verb}} <span class="mv-kbd">Enter</span></button>
+        </form>
+        <sc-if value="{{isDevice}}" hint-placeholder-val="{{true}}"><p class="mv-help gl-foot">After this, the counter stays signed in. Every day you tap your name and type your 4-digit PIN.</p></sc-if>
+      </sc-if>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["device","devicewrong","owner","ownerwrong","splash"],"default":"device"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'device';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const isDevice = view === 'device' || view === 'devicewrong';
+    const keyErr = view === 'devicewrong', pwErr = view === 'ownerwrong';
+    return {
+      w: phone ? 375 : tablet ? 768 : 1280, h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv',
+      splash: view === 'splash', formShown: view !== 'splash', isDevice, isOwner: !isDevice,
+      title: isDevice ? 'Set up this counter' : 'Check your shop',
+      lead: isDevice ? 'This links this machine to your pharmacy. You do this once, on this machine.' : 'Today’s numbers, exceptions, and stock — from anywhere.',
+      verb: isDevice ? 'Set up counter' : 'Sign in',
+      okField: 'mv-field', noErr: false,
+      keyErr, keyField: keyErr ? 'mv-field is-error' : 'mv-field', pwErr, pwField: pwErr ? 'mv-field is-error' : 'mv-field'
+    };
+  }
+}
+</script>
+</body>
+</html>

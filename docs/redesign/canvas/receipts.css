@@ -1,0 +1,54 @@
+/* Receipts & returns. Every value is a Mehvar token; layout from sale.css and suppliers.css, primitives from ds/mehvar/components/bundle.css. */
+
+/* Head with the one action beside the title: "Start a return" is the second
+   thing Tab reaches on a receipt (key-budget.spec.ts), so it sits right after
+   the way back in the page's order. */
+.rc-headrow { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.rc-headrow .mv-btn--primary { flex: none; height: 48px; padding: 0 var(--space-5); font-size: 16px; }
+
+/* Rows. */
+.rc-num { font-weight: 600; font-variant-numeric: tabular-nums; }
+.rc-off { font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; }
+.rc-back { font-size: 12px; line-height: 16px; color: var(--navy); font-weight: 500; }
+.rc-money { display: flex; flex-direction: column; align-items: flex-end; padding: 4px 0; }
+.mv-table tr.rc-done td { color: var(--ink-2); }
+
+/* How many back: the count, then the unit it is counted in. */
+.rc-qty { display: flex; align-items: center; gap: 6px; }
+.rc-qty .mv-input { width: 64px; text-align: right; font-variant-numeric: tabular-nums; padding: 0 10px; }
+.rc-qty .mv-select { width: 92px; }
+.rc-shelf .mv-select { width: 100%; }
+.mv-table.rc-ret td { padding-top: 4px; padding-bottom: 4px; }
+
+/* Refund card: the largest figure on the screen, and the word for where it goes. */
+.rc-refund { gap: var(--space-2); }
+.rc-where { margin: 0; font: var(--text-control); font-weight: 600; color: var(--navy); text-align: right; }
+.rc-where--udhaar { color: var(--amber-text); }
+.rc-seg { display: flex; }
+.rc-seg .mv-btn { flex: 1; border-radius: 0; }
+.rc-seg .mv-btn:first-child { border-radius: var(--radius-control) 0 0 var(--radius-control); }
+.rc-seg .mv-btn:last-child { border-radius: 0 var(--radius-control) var(--radius-control) 0; margin-left: -1px; }
+.rc-seg .mv-btn[aria-pressed='true'] { background: var(--blue-50); border-color: var(--blue-600); color: var(--navy); font-weight: 600; position: relative; z-index: 1; }
+
+/* Phone return rows. */
+.rc-mret { display: flex; flex-direction: column; gap: var(--space-2); padding: 12px 14px; border-top: 1px solid var(--line); }
+.rc-mret:first-child { border-top: 0; }
+.rc-mret__top { display: flex; justify-content: space-between; gap: var(--space-3); }
+.rc-mret__ctl { display: flex; align-items: center; gap: var(--space-2); }
+.rc-mret__ctl .rc-qty { flex: none; }
+.rc-mret__ctl .mv-select { flex: 1; min-width: 0; }
+
+/* The printed slip: 80 mm thermal, black only, dashed black rules. */
+.rc-slip { width: 302px; box-sizing: border-box; padding: 16px 14px 18px; background: #ffffff; color: #000000; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 13px; line-height: 18px; font-weight: 500; box-shadow: var(--shadow-card); }
+.rc-slip p { margin: 0; }
+.rc-slip__c { text-align: center; }
+.rc-slip__shop { font-size: 18px; line-height: 24px; font-weight: 700; }
+.rc-slip__small { font-size: 12px; line-height: 16px; }
+.rc-slip__rule { border: 0; border-top: 1px dashed #000000; margin: 8px 0; }
+.rc-slip__grid { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; }
+.rc-slip__h { font-size: 12px; font-weight: 700; }
+.rc-slip__row { display: flex; justify-content: space-between; gap: 8px; font-variant-numeric: tabular-nums; }
+.rc-slip__row--big { font-size: 16px; line-height: 22px; font-weight: 700; }
+.rc-slip__b { font-weight: 700; }
+.rc-slip__r { text-align: right; font-variant-numeric: tabular-nums; }
+.rc-slip__powered { font-size: 10px; line-height: 14px; }

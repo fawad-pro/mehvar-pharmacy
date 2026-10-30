@@ -1,0 +1,109 @@
+/* Settings, sign-in and the owner's view. Every value is a Mehvar token; layout comes from sale.css and suppliers.css, primitives from ds/mehvar/components/bundle.css. */
+.pr-main { min-height: 0; overflow: hidden; }
+.pr-title { overflow-wrap: anywhere; }
+.sv--phone .pr-title { font-size: 20px; line-height: 28px; }
+.pr-h { margin: 0; font: var(--text-heading); color: var(--navy); }
+.pr-card { gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.sv--phone .pr-card { padding: 16px; }
+.sv-seg a.mv-btn { text-decoration: none; }
+.sv-seg .mv-btn[aria-current='page'] { background: var(--blue-50); border-color: var(--blue-600); color: var(--navy); font-weight: 600; position: relative; z-index: 1; }
+
+/* A group's card. */
+.gs-card { gap: var(--space-3); }
+.gs-area { height: auto; min-height: 88px; padding: 10px 14px; resize: none; line-height: 22px; }
+.gs-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.gs-id { margin: 0; color: var(--ink-2); }
+.gs-line { margin: 0; font: var(--text-control); color: var(--navy); }
+.gs-line b { font-weight: 600; }
+.gs-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.gs-row .sv-more { margin-left: 0; }
+.gs-save { display: flex; align-items: center; gap: var(--space-3); }
+.gs-done { font: var(--text-body-sm); font-weight: 500; color: var(--green-700); }
+.sv--phone .gs-save .mv-btn { width: 100%; }
+.gs-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.gs-block--line { border-top: 1px solid var(--line); padding-top: var(--space-4); }
+.gs-status { margin: 0; display: flex; align-items: center; gap: var(--space-2); font: var(--text-body-sm); color: var(--navy); flex-wrap: wrap; }
+.gs-about { align-items: flex-start; }
+.gs-logo { width: 200px; height: 100px; object-fit: contain; margin: 0 0 var(--space-3); display: block; }
+
+/* On/off: a real switch, 44px to tap, with a word beside the colour. */
+.gs-switch { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.gs-switch__t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.gs-switch__l { font: var(--text-control); font-weight: 500; color: var(--navy); }
+.gs-sw { flex: none; display: inline-flex; align-items: center; gap: 10px; min-height: 44px; min-width: 88px; padding: 0 6px 0 0; border: 0; background: transparent; cursor: pointer; font: inherit; font-size: 14px; font-weight: 600; color: var(--navy); }
+.gs-sw__knob { position: relative; width: 48px; height: 28px; border-radius: 999px; background: var(--border); transition: background-color .12s; flex: none; }
+.gs-sw__knob::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(1,32,73,.3); transition: transform .12s; }
+.gs-sw[aria-checked='true'] .gs-sw__knob { background: var(--blue-600); }
+.gs-sw[aria-checked='true'] .gs-sw__knob::after { transform: translateX(20px); }
+.gs-sw__w { min-width: 26px; text-align: left; }
+.gs-pct { max-width: 520px; }
+.gs-pctbox { position: relative; display: block; max-width: 120px; }
+.gs-pctbox .mv-input { text-align: right; padding-left: 14px; padding-right: 34px; font-size: 18px; font-weight: 500; }
+.gs-pct__unit { position: absolute; right: 14px; top: 0; height: 44px; display: flex; align-items: center; color: var(--ink-2); font-size: 14px; pointer-events: none; }
+
+/* Users. */
+.gs-users { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-radius: var(--radius-card); background: var(--page); }
+.gs-user { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; min-height: 56px; padding: 6px 16px; border-top: 1px solid var(--line); }
+.gs-user:first-child { border-top: 0; }
+.gs-user__who { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.gs-user__nm { font: var(--text-control); font-weight: 600; }
+.gs-user__btns { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-right: -8px; }
+.gs-add { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto; gap: var(--space-3); align-items: end; }
+.sv--phone .gs-add { grid-template-columns: minmax(0, 1fr) 110px; }
+.sv--phone .gs-add .mv-btn { grid-column: 1 / -1; }
+.gs-pin { letter-spacing: 0.4em; text-align: center; font-variant-numeric: tabular-nums; }
+.gs-pinhelp { margin: -4px 0 0; }
+
+/* Group list: the rail on a laptop, chips on a tablet, the first page on a phone. */
+.gs-menu { padding: 0; }
+.gs-menu .mv-row { border-top: 1px solid var(--line); min-height: 56px; }
+.gs-menu .mv-row:first-child { border-top: 0; }
+.gs-menu .mv-row[aria-current='page'] { background: var(--blue-50); }
+.gs-menu .mv-row__name { font-weight: 600; }
+.gs-chev { flex: none; width: 8px; height: 8px; border-right: 2px solid var(--ink-2); border-top: 2px solid var(--ink-2); transform: rotate(45deg); margin-right: 4px; }
+.sv--tablet .gs-chev, .sv:not(.sv--phone):not(.sv--tablet) .gs-chev { display: none; }
+.gs-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.gs-chips .mv-btn { text-decoration: none; }
+.gs-chips .mv-btn[aria-current='page'] { background: var(--blue-50); border-color: var(--blue-600); font-weight: 600; }
+
+/* Sign-in and splash: the Mehvar mark, a calm column, nothing from the counter. */
+.gl { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: var(--page); overflow: hidden; }
+.sv--phone .gl { align-items: flex-start; padding: 32px 16px; }
+.gl-col { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: var(--space-4); }
+.gl-logo { width: 200px; height: 100px; object-fit: contain; display: block; margin: 0 auto var(--space-2); }
+.sv--phone .gl-logo { width: 180px; height: 90px; }
+.gl-logo--big { width: 280px; height: 140px; margin-bottom: var(--space-5); }
+.gl-title { text-align: center; }
+.gl-lead { margin: -8px 0 0; text-align: center; font: var(--text-body-sm); color: var(--ink-2); }
+.gl-sheet { gap: 2px; padding: var(--space-3) var(--space-4); }
+.gl-sheet b { font-weight: 600; color: var(--navy); font-size: 14px; }
+.gl-form { gap: var(--space-4); }
+.gl-foot { text-align: center; }
+.gl-splash { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-height: 480px; }
+.sv--phone .gl-splash { min-height: 640px; }
+.gl-shop { margin: 0; font: var(--text-heading); color: var(--navy); }
+
+/* The owner's view: read only, with huge figures. */
+.go-main { overflow: auto; max-width: 960px; margin: 0 auto; width: 100%; }
+.go-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.go-tiles--one { grid-template-columns: minmax(0, 1fr); }
+.go-tile { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: var(--space-4) var(--space-5); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.go-fig { font: var(--text-total); letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--navy); }
+.go-meta { font: var(--text-body-sm); color: var(--ink-2); text-align: right; }
+.go-tile--owed .go-fig { color: var(--amber-text); }
+.sv--phone .go-tiles, .sv--tablet .go-tiles { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+.sv--tablet .go-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sv--tablet .go-fig { font-size: 32px; line-height: 40px; }
+.sv--phone .go-tile { padding: 14px 16px; }
+.go-h { display: flex; align-items: center; gap: var(--space-3); }
+.go-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.go-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 52px; padding: 6px 0; border-top: 1px solid var(--line); }
+.go-row:first-child { border-top: 0; }
+.go-row__main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.go-row__nm { font: var(--text-control); font-weight: 600; overflow-wrap: anywhere; flex: 1; min-width: 0; }
+.go-row__main .go-row__nm { flex: none; }
+.go-row__sub { font: var(--text-body-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.go-row__v { font: var(--text-control); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; flex: none; }
+.go-warn { color: var(--amber-text); }
+.go-ok { color: var(--green-700); }
+.go-tabs { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); }

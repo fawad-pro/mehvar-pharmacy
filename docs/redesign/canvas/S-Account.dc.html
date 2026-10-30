@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Supplier account</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Supplier account</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main" aria-label="Account">
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to all suppliers</a>
+          <h1 class="mv-title">{{s.name}}</h1>
+          <p class="sp-meta">{{s.phone}} · every invoice, payment and return, oldest first</p>
+        </div>
+
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+          <div class="sp-rail">
+            <div class="mv-card" style="gap: 6px;">
+              <span class="mv-label">{{s.label}}</span>
+              <p class="{{s.figClass}}">{{s.fig}}</p>
+              <span class="mv-help" style="text-align: right;">The rows below add up to this.</span>
+            </div>
+            <div class="sp-actions" style="justify-content: space-between;">
+              <div class="sp-quiet" style="margin-left: 0;">
+                <button type="button" class="mv-btn mv-btn--quiet">Edit name or phone</button>
+                <button type="button" class="mv-btn mv-btn--quiet">Remove supplier</button>
+              </div>
+              <sc-if value="{{s.canPay}}" hint-placeholder-val="{{true}}"><button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay" style="margin-top: 0;">Pay</button></sc-if>
+            </div>
+          </div>
+        </sc-if>
+
+        <div class="mv-table-wrap sp-tablewrap">
+          <table class="mv-table mv-cart sv-cart44">
+            <colgroup><col style="width: {{cWhen}}px"><col style="width: auto"><col style="width: {{cMoney}}px"><col style="width: {{cMoney}}px"><col style="width: {{cBal}}px"></colgroup>
+            <thead><tr><th>When · by</th><th>What</th><th class="mv-num">You owe more</th><th class="mv-num">You owe less</th><th class="mv-num">Balance</th></tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+                <tr>
+                  <td class="sp-when"><div class="sp-what"><span>{{row.when}}</span><span class="sp-what__sub">{{row.by}}</span></div></td>
+                  <td>
+                    <div class="sp-what">
+                      <span class="sp-what__main">
+                        <sc-if value="{{row.link}}" hint-placeholder-val="{{false}}"><a class="sp-link" href="#">{{row.what}}</a></sc-if>
+                        <sc-if value="{{row.plain}}" hint-placeholder-val="{{true}}"><span>{{row.what}}</span></sc-if>
+                        <sc-if value="{{row.cancelled}}" hint-placeholder-val="{{false}}"><span class="mv-badge">Cancelled</span></sc-if>
+                        <sc-if value="{{row.canCancel}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet sp-rowbtn" aria-label="Cancel the Rs 2,000.00 payment">Cancel</button></sc-if>
+                      </span>
+                      <sc-if value="{{row.hasSub}}" hint-placeholder-val="{{true}}"><span class="sp-what__sub">{{row.sub}}</span></sc-if>
+                    </div>
+                  </td>
+                  <td class="mv-num">{{row.more}}</td>
+                  <td class="mv-num">{{row.less}}</td>
+                  <td class="mv-num"><span class="{{row.balClass}}">{{row.bal}}</span></td>
+                </tr>
+              </sc-for>
+            </tbody>
+            <tfoot><tr><td colspan="4">Balance now — the same as the figure at the top</td><td class="mv-num"><span class="{{s.posClass}}">{{s.pos}}</span></td></tr></tfoot>
+          </table>
+        </div>
+        <p class="sp-note">Invoices entered before Mehvar kept supplier accounts are not part of this one.</p>
+      </section>
+
+      <sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <aside class="sv-rail sp-rail-l" aria-label="Balance">
+          <div class="mv-card" style="gap: 6px;">
+            <span class="mv-label">{{s.label}}</span>
+            <p class="{{s.figClass}}">{{s.fig}}</p>
+            <span class="mv-help" style="text-align: right;">The rows add up to this.</span>
+          </div>
+          <div class="mv-card" style="gap: 8px;">
+            <span class="mv-label">From this account</span>
+            <div class="sp-kv"><span>Invoices</span><b>{{s.invoices}}</b></div>
+            <div class="sp-kv"><span>Paid</span><b>{{s.paid}}</b></div>
+            <div class="sp-kv"><span>Returned for credit</span><b>{{s.returned}}</b></div>
+          </div>
+          <div class="sp-quiet">
+            <button type="button" class="mv-btn mv-btn--quiet">Edit name or phone</button>
+            <button type="button" class="mv-btn mv-btn--quiet">Remove supplier</button>
+          </div>
+          <sc-if value="{{s.canPay}}" hint-placeholder-val="{{true}}"><button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay">Pay</button></sc-if>
+        </aside>
+      </sc-if>
+    </div>
+
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" aria-current="page" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+      <div class="sp-head">
+        <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to suppliers</a>
+        <h1 class="mv-title" style="font-size: 20px; line-height: 28px;">{{s.name}}</h1>
+        <p class="sp-meta">{{s.phone}}</p>
+      </div>
+      <div class="mv-card" style="gap: 4px; padding: 16px;">
+        <span class="mv-label">{{s.label}}</span>
+        <p class="{{s.figClass}}" style="font-size: 36px; line-height: 44px;">{{s.fig}}</p>
+        <span class="mv-help" style="text-align: right;">The rows below add up to this.</span>
+      </div>
+      <ul class="sp-mlist" aria-label="Account, oldest first">
+        <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+          <li class="sp-mrow">
+            <div class="sp-mrow__main">
+              <span class="sp-mrow__nm">
+                <sc-if value="{{row.link}}" hint-placeholder-val="{{false}}"><a class="sp-link" href="#">{{row.what}}</a></sc-if>
+                <sc-if value="{{row.plain}}" hint-placeholder-val="{{true}}"><span>{{row.what}}</span></sc-if>
+                <sc-if value="{{row.cancelled}}" hint-placeholder-val="{{false}}"><span class="mv-badge">Cancelled</span></sc-if>
+              </span>
+              <span class="sp-mrow__meta">{{row.when}} · {{row.by}}</span>
+              <span class="sp-mrow__meta" style="color: var(--navy);">{{row.effect}}</span>
+              <sc-if value="{{row.canCancel}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet" style="align-self: flex-start; margin-left: -12px;" aria-label="Cancel the Rs 2,000.00 payment">Cancel this payment</button></sc-if>
+            </div>
+            <div class="sp-mrow__end"><span class="sp-mrow__cap">after</span><span class="{{row.balClass}}" style="font-size: 14px;">{{row.balShort}}</span></div>
+          </li>
+        </sc-for>
+      </ul>
+      <div class="sp-quiet">
+        <button type="button" class="mv-btn mv-btn--quiet">Edit name or phone</button>
+        <button type="button" class="mv-btn mv-btn--quiet">Remove supplier</button>
+      </div>
+    </div>
+
+    <div class="sv-paybar">
+      <div class="sp-paybar__row"><span>{{s.label}}</span><b class="sp-pos--owes">{{s.fig}}</b></div>
+      <button type="button" class="mv-btn mv-btn--primary mv-btn--block">Pay</button>
+    </div>
+
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" aria-current="page" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["owes","settled"],"default":"owes"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const settled = (this.props.view ?? 'owes') === 'settled';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const owes = 'sp-pos sp-pos--owes', ok = 'sp-pos sp-pos--settled', adv = 'sp-pos sp-pos--advance';
+    const r = (o) => Object.assign({ link: false, cancelled: false, canCancel: false, sub: '', more: '', less: '' }, o, {
+      plain: !o.link, hasSub: !!o.sub,
+      effect: o.more && o.more !== '—' ? 'Adds ' + o.more : o.less ? 'Takes off ' + o.less : 'Adds nothing',
+      balShort: o.bal.replace('They owe you ', 'Owes you ')
+    });
+    const rows = settled ? [
+      r({ when: '11 Aug 2026, 12:30', by: 'Bilal', what: 'Invoice ZZ-118', link: true, sub: 'Rs 3,200.00 bill · paid in full on receiving', more: '—', bal: 'Settled up', balClass: ok }),
+      r({ when: '09 Sep, 15:02', by: 'Bilal', what: 'Invoice ZZ-131', link: true, sub: 'Rs 1,850.00 bill · Rs 850.00 paid on receiving', more: 'Rs 1,000.00', bal: 'You owe Rs 1,000.00', balClass: owes }),
+      r({ when: '20 Sep, 10:40', by: 'Imran', what: 'Payment', less: 'Rs 1,000.00', bal: 'Settled up', balClass: ok })
+    ] : [
+      r({ when: '02 Sep 2026, 09:40', by: 'Bilal', what: 'Invoice ZD-4102', link: true, sub: 'Rs 11,540.00 bill · Rs 4,000.00 paid on receiving', more: 'Rs 7,540.00', bal: 'You owe Rs 7,540.00', balClass: owes }),
+      r({ when: '15 Sep, 10:12', by: 'Imran', what: 'Payment', cancelled: true, less: 'Rs 20,000.00', bal: 'They owe you Rs 12,460.00', balClass: adv }),
+      r({ when: '15 Sep, 10:14', by: 'Imran', what: 'Payment cancelled', sub: 'Undoes the Rs 20,000.00 of 15 Sep, 10:12', more: 'Rs 20,000.00', bal: 'You owe Rs 7,540.00', balClass: owes }),
+      r({ when: '15 Sep, 10:15', by: 'Imran', what: 'Payment', canCancel: true, less: 'Rs 2,000.00', bal: 'You owe Rs 5,540.00', balClass: owes }),
+      r({ when: '06 Oct, 16:20', by: 'Imran', what: 'Returned 2 box Risek 20mg', sub: 'Stock cost Rs 1,040.00, credited in full · “near expiry”', less: 'Rs 1,040.00', bal: 'You owe Rs 4,500.00', balClass: owes }),
+      r({ when: '28 Oct, 11:05', by: 'Bilal', what: 'Invoice ZD-4417', link: true, sub: 'Rs 18,130.00 bill · Rs 10,000.00 paid on receiving', more: 'Rs 8,130.00', bal: 'You owe Rs 12,630.00', balClass: owes })
+    ];
+    const s = settled
+      ? { name: 'Zam Zam Pharma', phone: '042 3571 9044', label: 'Balance', fig: 'Settled up', figClass: 'sp-fig sp-fig--settled', pos: 'Settled up', posClass: ok, canPay: false, invoices: 'Rs 5,050.00', paid: 'Rs 5,050.00', returned: '—' }
+      : { name: 'Zafar Distributors', phone: '0300 8452210', label: 'You owe', fig: 'Rs 12,630.00', figClass: 'sp-fig sp-fig--owes', pos: 'You owe Rs 12,630.00', posClass: owes, canPay: true, invoices: 'Rs 29,670.00', paid: 'Rs 16,000.00', returned: 'Rs 1,040.00' };
+    return {
+      rows, s, phone, tablet,
+      laptop: device === 'laptop',
+      wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv',
+      cWhen: tablet ? 112 : 128, cMoney: tablet ? 100 : 112, cBal: tablet ? 168 : 184
+    };
+  }
+}
+</script>
+</body>
+</html>

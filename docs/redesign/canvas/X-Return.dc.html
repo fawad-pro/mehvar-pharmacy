@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Return</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="receipts.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Return</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Bilal <span class="sv-user__role">· salesman</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main" aria-label="What is coming back">
+        <sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+          <div class="mv-banner mv-banner--done" role="status" aria-label="Returned">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="mv-banner__text"><strong>Returned — Rs 290.00 cash back.</strong> The refund slip AS-1063 has printed. 1 strip Augmentin 625mg is back on the shelf.</span>
+            <button type="button" class="mv-btn mv-btn--secondary">Print again</button>
+          </div>
+        </sc-if>
+
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to receipt {{s.no}}</a>
+          <div class="sp-titlerow">
+            <h1 class="mv-title">Return from {{s.no}}</h1>
+            <sc-if value="{{s.hasBadge}}" hint-placeholder-val="{{false}}"><span class="mv-badge">{{s.badge}}</span></sc-if>
+          </div>
+          <p class="sp-meta">{{s.meta}}</p>
+        </div>
+
+        <sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+          <div class="mv-table-wrap sp-tablewrap">
+            <table class="mv-table mv-cart sv-cart44 rc-ret">
+              <colgroup><col style="width: auto"><col style="width: 132px"><col style="width: 92px"><col style="width: 172px"><col style="width: 176px"><col style="width: 104px"></colgroup>
+              <thead><tr><th>Product</th><th class="mv-num">Sold</th><th class="mv-num">Already back</th><th>How many back</th><th>Back on shelf</th><th class="mv-num">Refund</th></tr></thead>
+              <tbody>
+                <sc-for list="{{lines}}" as="line" hint-placeholder-count="5">
+                  <tr>
+                    <td><div class="sp-what"><span class="mv-cart__nm" style="font-weight: 500;">{{line.name}}</span></div></td>
+                    <td class="mv-num"><div class="rc-money"><span>{{line.sold}}</span><span class="rc-off">{{line.each}}</span></div></td>
+                    <td class="mv-num">{{line.back}}</td>
+                    <td>
+                      <sc-if value="{{line.open}}" hint-placeholder-val="{{true}}">
+                        <div class="rc-qty">
+                          <input class="{{line.qtyClass}}" inputmode="numeric" autocomplete="off" value="{{line.qty}}" aria-label="Return quantity for {{line.name}}">
+                          <select class="mv-select" aria-label="Counted in"><option>{{line.unit}}</option><option>{{line.unit2}}</option></select>
+                        </div>
+                      </sc-if>
+                      <sc-if value="{{line.closed}}" hint-placeholder-val="{{false}}"><span class="sp-sub">All back already</span></sc-if>
+                    </td>
+                    <td class="rc-shelf"><select class="mv-select" aria-label="Back on shelf for {{line.name}}"><option>{{line.batch}}</option><option>Throw away — not back on the shelf</option></select></td>
+                    <td class="mv-num" style="font-weight: 600;">{{line.refund}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+          <ul class="sp-lines" aria-label="Lines">
+            <sc-for list="{{lines}}" as="line" hint-placeholder-count="5">
+              <li class="rc-mret">
+                <div class="rc-mret__top">
+                  <div class="sp-line__main"><span class="sp-line__nm">{{line.name}}</span><span class="sp-line__meta">Sold {{line.sold}} {{line.each}} · already back: {{line.back}}</span></div>
+                  <span class="sp-mrow__fig">{{line.refund}}</span>
+                </div>
+                <sc-if value="{{line.open}}" hint-placeholder-val="{{true}}">
+                  <div class="rc-mret__ctl">
+                    <div class="rc-qty">
+                      <input class="{{line.qtyClass}}" inputmode="numeric" autocomplete="off" value="{{line.qty}}" aria-label="Return quantity for {{line.name}}">
+                      <select class="mv-select" aria-label="Counted in"><option>{{line.unit}}</option><option>{{line.unit2}}</option></select>
+                    </div>
+                    <select class="mv-select" aria-label="Back on shelf for {{line.name}}"><option>Back on shelf: {{line.batch}}</option><option>Throw away — not back on the shelf</option></select>
+                  </div>
+                </sc-if>
+              </li>
+            </sc-for>
+          </ul>
+        </sc-if>
+        <p class="sv-carthint">{{hint}}</p>
+      </section>
+
+      <aside class="{{railClass}}" aria-label="Refund">
+        <div class="mv-card rc-refund">
+          <span class="mv-label">{{refundLabel}}</span>
+          <p class="sp-fig">{{refund}}</p>
+          <p class="{{whereClass}}">{{where}}</p>
+          <sc-if value="{{showSeg}}" hint-placeholder-val="{{true}}">
+            <div class="rc-seg" role="group" aria-label="Refund as">
+              <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{cashPressed}}">Cash back</button>
+              <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{udhaarPressed}}" disabled="{{noCustomer}}">Off udhaar</button>
+            </div>
+            <sc-if value="{{noCustomer}}" hint-placeholder-val="{{true}}"><span class="mv-help">No customer on this sale, so it can only be cash back.</span></sc-if>
+          </sc-if>
+          <sc-if value="{{isUdhaar}}" hint-placeholder-val="{{false}}">
+            <div class="sv-stmt" aria-label="Rashid Khan’s udhaar">
+              <div class="sv-kv"><span>Rashid Khan, before</span><span class="sv-pos sv-pos--owes">Owes Rs 2,380.00</span></div>
+              <div class="sv-kv"><span>Returned</span><b>Rs 1,450.00</b></div>
+              <div class="sv-kv sv-kv--now"><span>After this</span><span class="sv-pos sv-pos--owes">Owes Rs 930.00</span></div>
+            </div>
+          </sc-if>
+        </div>
+        <sc-if value="{{notDone}}" hint-placeholder-val="{{true}}">
+          <label class="mv-field">
+            <span class="mv-label">Reason</span>
+            <input class="mv-input" autocomplete="off" value="{{reason}}" placeholder="Optional — for example, wrong medicine">
+          </label>
+        </sc-if>
+        <p class="mv-help" style="margin: 0;">The sale is never changed. The return is saved against it and prints its own slip.</p>
+        <button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay" disabled="{{cannotConfirm}}">Confirm return <span class="mv-kbd">Enter</span></button>
+      </aside>
+    </div>
+
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" aria-current="page" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" aria-disabled="true" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 160px;">
+      <sc-if value="{{done}}" hint-placeholder-val="{{false}}">
+        <div class="mv-banner mv-banner--done sv-saved" role="status" aria-label="Returned">
+          <div class="sv-saved__head">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="mv-banner__text"><strong>Returned — Rs 290.00 cash back.</strong> Slip AS-1063 has printed.</span>
+          </div>
+          <div class="sv-saved__actions"><button type="button" class="mv-btn mv-btn--quiet">Print again</button></div>
+        </div>
+      </sc-if>
+      <div class="sp-head">
+        <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to {{s.no}}</a>
+        <h1 class="mv-title" style="font-size: 20px; line-height: 28px;">Return from {{s.no}}</h1>
+        <p class="sp-meta">{{s.metaShort}}</p>
+      </div>
+      <ul class="sp-lines" aria-label="Lines">
+        <sc-for list="{{lines}}" as="line" hint-placeholder-count="5">
+          <li class="rc-mret">
+            <div class="rc-mret__top">
+              <div class="sp-line__main"><span class="sp-line__nm">{{line.name}}</span><span class="sp-line__meta">Sold {{line.sold}} {{line.each}}</span><span class="sp-line__meta">Already back: {{line.back}}</span></div>
+              <span class="sp-mrow__fig">{{line.refund}}</span>
+            </div>
+            <sc-if value="{{line.open}}" hint-placeholder-val="{{true}}">
+              <div class="rc-mret__ctl">
+                <div class="rc-qty">
+                  <input class="{{line.qtyClass}}" inputmode="numeric" autocomplete="off" value="{{line.qty}}" aria-label="Return quantity for {{line.name}}">
+                  <select class="mv-select" aria-label="Counted in"><option>{{line.unit}}</option><option>{{line.unit2}}</option></select>
+                </div>
+                <select class="mv-select" aria-label="Back on shelf for {{line.name}}"><option>Shelf: {{line.batch}}</option><option>Throw away</option></select>
+              </div>
+            </sc-if>
+          </li>
+        </sc-for>
+      </ul>
+      <div class="mv-card" style="gap: 10px; padding: 16px;">
+        <p class="{{whereClass}}" style="text-align: left;">{{where}}</p>
+        <sc-if value="{{showSeg}}" hint-placeholder-val="{{true}}">
+          <div class="rc-seg" role="group" aria-label="Refund as">
+            <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{cashPressed}}">Cash back</button>
+            <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{udhaarPressed}}" disabled="{{noCustomer}}">Off udhaar</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{isUdhaar}}" hint-placeholder-val="{{false}}">
+          <div class="sv-stmt" aria-label="Rashid Khan’s udhaar">
+            <div class="sv-kv"><span>Before</span><span class="sv-pos sv-pos--owes">Owes Rs 2,380.00</span></div>
+            <div class="sv-kv sv-kv--now"><span>After this</span><span class="sv-pos sv-pos--owes">Owes Rs 930.00</span></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{notDone}}" hint-placeholder-val="{{true}}">
+          <label class="mv-field"><span class="mv-label">Reason</span><input class="mv-input" autocomplete="off" value="{{reason}}" placeholder="Optional"></label>
+        </sc-if>
+      </div>
+    </div>
+
+    <div class="sv-paybar">
+      <div class="sp-paybar__row"><span>{{refundLabel}} · {{whereShort}}</span><b>{{refund}}</b></div>
+      <button type="button" class="mv-btn mv-btn--primary mv-btn--block" disabled="{{cannotConfirm}}">Confirm return</button>
+    </div>
+
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" aria-disabled="true" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["part","whole","udhaar","partly","done"],"default":"part"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'part';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const L = (name, sold, each, back, qty, unit, unit2, batch, refund, focus, closed) => ({
+      name, sold, each, back: back || '—', qty: qty || '', unit, unit2, batch, refund: refund || '—',
+      qtyClass: focus ? 'mv-input is-focus' : 'mv-input', open: !closed, closed: !!closed
+    });
+    const ag = (q, back, focus, refund) => L('Augmentin 625mg', '2 strip', 'at Rs 290.00', back, q, 'strip', 'box', 'A0913 · exp 03/2028', refund, focus);
+    const sale1062 = (q, back, focus, refund) => [
+      ag(q, back, focus, refund),
+      L('Brufen 400mg', '4 strip', 'at Rs 45.00', '', '', 'strip', 'box', 'BR551 · exp 01/2027'),
+      L('Panadol 500mg', '6 strip', 'at Rs 30.00', '', '', 'strip', 'box', 'B2417 · exp 08/2028'),
+      L('Hydryllin syrup 120ml', '2 bottle', 'at Rs 98.00', '', '', 'bottle', 'carton', 'HY330 · exp 11/2027'),
+      L('Calpol syrup 120ml', '1 bottle', 'at Rs 104.00', '', '', 'bottle', 'carton', 'CP112 · exp 05/2027')
+    ];
+    const meta1062 = 'Sold today, 3:42 pm by Bilal · Rs 1,240.00 paid in cash · no customer';
+    const V = {
+      part: { s: { no: 'AS-1062', meta: meta1062, metaShort: 'Today, 3:42 pm · Rs 1,240.00 cash' }, lines: sale1062('1', '', true, 'Rs 290.00'),
+        refund: 'Rs 290.00', mode: 'cash', noCustomer: true, reason: '', hint: 'Type how many came back, then Enter. The slip prints, then it says Returned.' },
+      whole: { s: { no: 'AS-1056', meta: 'Sold today, 10:48 am by Ayesha · Rs 640.00 paid in cash · no customer', metaShort: 'Today, 10:48 am · Rs 640.00 cash' }, lines: [
+          L('Arinac Forte', '2 strip', 'at Rs 120.00', '', '2', 'strip', 'box', 'AF201 · exp 09/2027', 'Rs 240.00'),
+          L('Flagyl 400mg', '2 strip', 'at Rs 85.00', '', '2', 'strip', 'box', 'FG118 · exp 02/2028', 'Rs 170.00'),
+          L('Gaviscon syrup 120ml', '1 bottle', 'at Rs 230.00', '', '1', 'bottle', 'carton', 'GV077 · exp 07/2027', 'Rs 230.00', true)
+        ], refund: 'Rs 640.00', mode: 'cash', noCustomer: true, reason: 'Doctor changed the prescription', hint: 'Everything on this sale is coming back. Enter confirms.' },
+      udhaar: { s: { no: 'AS-1061', badge: 'Udhaar', meta: 'Sold today, 2:15 pm by Bilal · Rashid Khan · Rs 1,680.00 of Rs 2,180.00 on udhaar', metaShort: 'Today · Rashid Khan · Rs 1,680.00 on udhaar' }, lines: [
+          L('Glucophage 500mg', '2 strip', 'at Rs 120.00', '', '', 'strip', 'box', 'GL410 · exp 12/2027'),
+          L('Concor 5mg', '1 box', 'at Rs 1,450.00', '', '1', 'box', 'strip', 'CN552 · exp 04/2028', 'Rs 1,450.00', true),
+          L('Lipiget 10mg', '1 strip', 'at Rs 490.00', '', '', 'strip', 'box', 'LP090 · exp 10/2027')
+        ], refund: 'Rs 1,450.00', mode: 'udhaar', noCustomer: false, reason: 'Wrong strength', hint: 'Off udhaar is chosen because this sale went on Rashid Khan’s udhaar. Press Cash back to hand over cash instead.' },
+      partly: { s: { no: 'AS-1052', badge: 'Part returned', meta: 'Sold yesterday, 6:10 pm by Ayesha · Rs 1,350.00 paid in cash · Rs 450.00 already returned on AS-1060', metaShort: 'Yesterday · Rs 450.00 already back on AS-1060' }, lines: [
+          L('Ventolin inhaler 100mcg', '1 inhaler', 'at Rs 650.00', '', '', 'inhaler', 'box', 'VT330 · exp 06/2027', '', true),
+          L('Panadol 500mg', '10 strip', 'at Rs 30.00', '5 strip', '', 'strip', 'box', 'B2417 · exp 08/2028'),
+          L('Softin 10mg', '4 strip', 'at Rs 100.00', '3 strip', '', 'strip', 'box', 'SF061 · exp 03/2028')
+        ], refund: 'Rs 0.00', mode: 'cash', noCustomer: true, reason: '', hint: 'Up to 1 inhaler, 5 strip Panadol and 1 strip Softin can still come back.' },
+      done: { s: { no: 'AS-1062', meta: meta1062, metaShort: 'Today, 3:42 pm · Rs 1,240.00 cash' }, lines: sale1062('', '1 strip', false, ''),
+        refund: 'Rs 290.00', mode: 'cash', noCustomer: true, reason: '', hint: 'F2 finds the next receipt.' }
+    };
+    const v = V[view] || V.part;
+    v.s.hasBadge = !!v.s.badge;
+    const done = view === 'done', udh = v.mode === 'udhaar';
+    return {
+      s: v.s, lines: v.lines, phone, tablet,
+      laptop: device === 'laptop',
+      wide: !phone,
+      done, notDone: !done,
+      refund: v.refund,
+      refundLabel: done ? 'Refunded' : 'Refund',
+      where: done ? 'Cash back · slip AS-1063' : udh ? 'Off Rashid Khan’s udhaar — no cash changes hands' : view === 'partly' ? 'Type how many came back' : 'Cash back to the customer',
+      whereShort: udh ? 'off udhaar' : 'cash back',
+      whereClass: udh ? 'rc-where rc-where--udhaar' : 'rc-where',
+      showSeg: !done,
+      cashPressed: udh ? 'false' : 'true',
+      udhaarPressed: udh ? 'true' : 'false',
+      noCustomer: v.noCustomer,
+      isUdhaar: udh,
+      reason: v.reason,
+      hint: v.hint,
+      cannotConfirm: done || view === 'partly',
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv',
+      railClass: tablet ? 'sp-rail' : 'sv-rail sp-rail-l'
+    };
+  }
+}
+</script>
+</body>
+</html>

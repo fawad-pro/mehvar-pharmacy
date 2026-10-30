@@ -1,0 +1,169 @@
+/* Sale screen layout. Every value is a Mehvar token; primitives come from ds/mehvar/components/bundle.css. */
+.sv { position: relative; display: flex; flex-direction: column; overflow: hidden; background: var(--page); }
+
+/* Top bar: the pharmacy's name, then the screen's, then state and the user. */
+.sv-top { flex: none; display: flex; align-items: center; gap: var(--space-3); height: 60px; padding: 0 var(--space-8); background: var(--surface); box-shadow: 0 1px 0 var(--line); }
+.sv-logo { flex: none; width: 32px; height: 32px; }
+.sv-shop { margin: 0; font: var(--text-heading); color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sv-sep { flex: none; width: 1px; height: 20px; background: var(--line); }
+.sv-where { font: var(--text-control); color: var(--ink-2); font-weight: 400; }
+.sv-top__end { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); flex: none; }
+.sv-user__role { color: var(--ink-2); font-weight: 400; }
+
+/* Body: cart left (~62%), rail right (~38%). */
+.sv-body { flex: 1; min-height: 0; display: flex; gap: var(--space-6); padding: var(--space-6) var(--space-8); }
+.sv-main { flex: 62 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+.sv-rail { flex: 38 1 0; min-width: 0; display: flex; flex-direction: column; gap: var(--space-4); }
+
+/* The scan field: the search, labelled, large. */
+.sv-search .mv-input { height: 52px; font: var(--text-field-lg); font-weight: 400; padding: 0 var(--space-4); }
+.sv-search__row { display: flex; align-items: center; justify-content: space-between; }
+.sv-hint { font: var(--text-caption); color: var(--ink-2); white-space: nowrap; }
+
+/* Cart quantity cell. */
+.sv-qty { font-variant-numeric: tabular-nums; }
+.sv-off { color: var(--navy); }
+.sv-none { color: var(--ink-2); }
+
+/* The selected line's controls — every touch target 44px, the row stays one height. */
+.sv-line { flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding: var(--space-3) var(--space-4); }
+.sv-line__name { flex: 1 1 160px; min-width: 0; display: flex; flex-direction: column; }
+.sv-line__nm { font: var(--text-control); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv-line__keys { font: var(--text-caption); color: var(--ink-2); white-space: nowrap; }
+.sv-group { display: flex; align-items: center; gap: var(--space-2); }
+.sv-seg { display: flex; gap: 0; }
+.sv-seg .mv-btn { border-radius: 0; padding: 0 var(--space-4); }
+.sv-seg .mv-btn:first-child { border-radius: var(--radius-control) 0 0 var(--radius-control); }
+.sv-seg .mv-btn:last-child { border-radius: 0 var(--radius-control) var(--radius-control) 0; margin-left: -1px; }
+.sv-seg .mv-btn[aria-pressed='true'] { background: var(--blue-50); border-color: var(--blue-600); color: var(--navy); font-weight: 600; position: relative; z-index: 1; }
+.sv-count { min-width: 64px; text-align: center; font: var(--text-control); font-variant-numeric: tabular-nums; }
+.sv-step { width: 44px; padding: 0; font-size: 20px; }
+
+/* Rail cards. */
+.sv-total { gap: var(--space-2); }
+.sv-total__fig { margin: 0; font: var(--text-total); letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--navy); }
+.sv-kv { display: flex; justify-content: space-between; align-items: baseline; font: var(--text-body-sm); color: var(--ink-2); }
+.sv-kv b { font-weight: 500; color: var(--navy); font-variant-numeric: tabular-nums; }
+.sv-cust { flex-direction: row; align-items: center; gap: var(--space-3); }
+.sv-cust__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sv-cust__nm { font: var(--text-control); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sv-cust__meta { font: var(--text-body-sm); color: var(--ink-2); }
+.sv-saved { flex-direction: column; align-items: stretch; gap: var(--space-1); padding: var(--space-3) var(--space-4); }
+.sv-saved__head { display: flex; align-items: center; gap: var(--space-2); }
+.sv-saved__actions { display: flex; gap: var(--space-2); margin-left: -12px; }
+.sv-pay { margin-top: auto; height: 56px; font-size: 17px; }
+
+/* Payment dialog figures. */
+.sv-fig { display: flex; flex-direction: column; gap: var(--space-1); }
+.sv-fig__big { margin: 0; font: var(--text-total); letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--navy); }
+.sv-fig__sub { margin: 0; font: var(--text-body-sm); color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+.sv-change { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-2) 0; }
+.sv-change__fig { margin: 0; font: var(--text-change); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--navy); display: flex; align-items: baseline; gap: var(--space-2); }
+.sv-change__fig small { font: var(--text-stat); color: var(--ink-2); }
+.sv-change--short .sv-change__fig { color: var(--amber-text); }
+.sv-pin { background: var(--page); border-radius: var(--radius-card); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); }
+.sv-pin .mv-input { font-size: 24px; letter-spacing: 0.5em; text-align: center; }
+.sv-pin__actions { display: flex; justify-content: space-between; gap: var(--space-2); flex-wrap: wrap; }
+.sv-right .mv-input { text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 500; }
+.sv-note { margin: 0; font: var(--text-body-sm); color: var(--navy); }
+.sv-note--attention { color: var(--amber-text); font-weight: 500; }
+.sv-note--refused { color: var(--red); font-weight: 500; }
+
+/* Overlays drawn inside an artboard. */
+.sv-scrim { position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: var(--space-4); }
+.sv-scrim--sheet { align-items: flex-end; padding: 0; }
+.sv-dialog-slot { width: 400px; }
+.sv-sheet-slot { width: 100%; }
+
+/* Tablet: one column — cart full width, rail beneath in two columns. */
+.sv--tablet .sv-body { flex-direction: column; padding: var(--space-6); gap: var(--space-4); }
+.sv--tablet .sv-top { padding: 0 var(--space-6); }
+.sv--tablet .sv-main { flex: none; }
+.sv--tablet .sv-rail { flex: 1 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto 1fr auto; align-content: start; }
+.sv--tablet .sv-rail > .sv-wide { grid-column: 1 / -1; }
+.sv--tablet .sv-pay { grid-column: 2; justify-self: stretch; align-self: end; }
+
+/* Phone: a scrolling page, Pay in a bar above the tab bar. */
+.sv--phone .sv-top { height: 52px; padding: 0 var(--space-4); }
+.sv--phone .sv-shop { font-size: 16px; }
+.sv-scroll { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-3) var(--space-4) 88px; }
+.sv-paybar { position: absolute; left: 0; right: 0; bottom: 66px; padding: var(--space-3) var(--space-4); background: var(--surface); box-shadow: 0 -1px 0 var(--line), 0 -4px 16px rgba(1, 32, 73, 0.04); display: flex; flex-direction: column; gap: var(--space-1); }
+.sv-paybar .mv-btn { height: 52px; font-size: 17px; }
+.sv-paybar__meta { display: flex; justify-content: space-between; font: var(--text-body-sm); color: var(--ink-2); }
+.sv-paybar__meta b { color: var(--navy); font-weight: 500; font-variant-numeric: tabular-nums; }
+.sv-tabs { position: absolute; left: 0; right: 0; bottom: 0; }
+.sv-tabs .mv-tab[aria-disabled='true'] { opacity: 0.45; }
+
+/* Cart rows: 44px at every width, one line, controls only on the selected row. */
+.mv-table.sv-cart44 td { height: 44px; padding-top: 0; padding-bottom: 0; }
+.sv-cart44 .mv-cart__name { height: 20px; }
+.sv-rowctl { display: flex; align-items: center; gap: 4px; }
+.sv-rowctl .mv-btn { height: 44px; min-height: 44px; padding: 0 10px; font-size: 14px; }
+.sv-rowctl .sv-step { width: 44px; padding: 0; font-size: 18px; }
+.sv-rowctl .sv-seg .mv-btn { padding: 0 10px; }
+.sv-cnt { min-width: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+.sv-disc { height: 44px; min-height: 44px; padding: 0 10px; font-size: 14px; margin-left: auto; }
+.sv-carthint { margin: 0; padding: 0 4px; font: var(--text-caption); color: var(--ink-2); }
+.sv--phone .sv-carthint { display: none; }
+
+/* Never cut a medicine's name or strength: it wraps, in that row only. */
+.mv-table.sv-cart44 td:first-child { white-space: normal; }
+.sv-cart44 .mv-cart__name { height: auto; min-height: 20px; flex-wrap: wrap; row-gap: 2px; padding: 4px 0; }
+.sv-cart44 .mv-cart__nm { white-space: normal; overflow: visible; text-overflow: clip; }
+.sv-pct { font-size: 12px; font-weight: 600; color: var(--blue-600); }
+
+/* Dialogs opened from Sale: Settle udhaar, Attach a customer, Quick item, Switch user. */
+.sv-nokbd .mv-kbd { display: none; }
+.sv-sheet { max-width: none; border-radius: var(--radius-dialog) var(--radius-dialog) 0 0; padding: 20px 16px 24px; gap: 14px; }
+.sv-sheet .mv-dialog__actions { flex-direction: column; align-items: stretch; }
+.sv-sheet .mv-dialog__actions .mv-btn--primary { width: 100%; }
+.sv-who { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--page); border-radius: var(--radius-card); }
+.sv-who__main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sv-who__nm { font: var(--text-control); font-weight: 600; }
+.sv-who__meta { font: var(--text-body-sm); color: var(--ink-2); }
+.sv-pos { font: var(--text-control); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sv-pos--owes { color: var(--amber-text); }
+.sv-pos--settled { color: var(--green-700); }
+.sv-pos--advance { color: var(--navy); }
+.sv-stmt { display: flex; flex-direction: column; gap: 6px; padding: var(--space-4); background: var(--page); border-radius: var(--radius-card); }
+.sv-stmt .sv-kv { font: var(--text-control); font-weight: 400; color: var(--navy); }
+.sv-stmt .sv-kv--now { font-weight: 600; padding-top: 6px; border-top: 1px solid var(--line); }
+.sv-effect { margin: 0; padding: var(--space-3) var(--space-4); background: var(--page); border-radius: var(--radius-card); font: var(--text-body-sm); color: var(--navy); }
+.sv-more { align-self: flex-start; margin-left: -12px; }
+.sv-more::after { content: ''; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(45deg) translateY(-2px); margin-left: 4px; }
+.sv-pinbox .mv-input { font-size: 24px; letter-spacing: 0.5em; text-align: center; }
+.sv-list { max-height: 240px; overflow: auto; box-shadow: none; padding: 0; border-radius: var(--radius-card); background: var(--page); }
+.sv-list .mv-row { border-top-color: var(--line); }
+.sv-add { color: var(--blue-600); font-weight: 500; }
+
+/* Receive stock. */
+.rv-head { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: var(--space-3); align-items: end; }
+.rv-pickbtn { justify-content: space-between; width: 100%; font-weight: 400; }
+.rv-pickbtn b { font-weight: 600; }
+.rv-pickbtn .rv-ph { color: var(--ink-2); }
+.rv-pickbtn::after { content: ''; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(45deg) translateY(-2px); }
+.rv-entry { gap: var(--space-3); padding: var(--space-4); }
+.rv-line { display: flex; flex-direction: column; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--line); }
+.rv-line__top { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.rv-line__nm { font: var(--text-control); font-weight: 600; }
+.rv-fields { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); }
+.rv-fields .mv-input { text-align: right; font-variant-numeric: tabular-nums; }
+.rv-fields .rv-date .mv-input { text-align: left; }
+.rv-line__end { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.rv-free { color: var(--ink-2); }
+.rv-totalcard { gap: var(--space-2); }
+.rv-match { margin: 0; font: var(--text-body-sm); }
+.rv-links { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-left: -12px; }
+.sv--tablet .rv-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-content: start; }
+.sv--tablet .rv-rail .sv-pay { grid-column: 2; }
+.sv--tablet .rv-rail .rv-links { grid-column: 1; grid-row: 2; align-self: center; }
+.sv--phone .rv-head { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.sv--phone .rv-head .rv-sup { grid-column: 1 / -1; }
+.sv--phone .rv-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rv-paybar__total { display: flex; justify-content: space-between; align-items: baseline; font: var(--text-body-sm); color: var(--ink-2); }
+.rv-paybar__total b { font: var(--text-stat); color: var(--navy); font-variant-numeric: tabular-nums; }
+.rv-fields .rv-add { align-self: end; }
+.rv-tablewrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.rv-tablewrap thead th { position: sticky; top: 0; background: var(--page); z-index: 1; }
+.rv-batch { color: var(--ink-2); }
+.sv--phone .rv-fields .rv-add { grid-column: 1 / -1; }

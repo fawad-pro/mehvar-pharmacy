@@ -1,0 +1,15 @@
+/* Customers. Every value is a Mehvar token; layout comes from sale.css and suppliers.css, primitives from ds/mehvar/components/bundle.css. */
+
+/* Search row: the labelled field, its one primary action, and the quiet toggle. */
+.cu-search { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; margin: 0; }
+.cu-search .mv-field { min-width: 0; }
+.sv--phone .cu-search { flex-wrap: nowrap; }
+
+/* A removed customer's page: one card with the way back. */
+.cu-removed { flex-direction: row; align-items: center; gap: var(--space-4); padding: var(--space-3) var(--space-4); flex-wrap: wrap; }
+.cu-removed__text { margin: 0; flex: 1 1 220px; font: var(--text-body-sm); color: var(--navy); }
+.cu-removed__text b { font-weight: 600; }
+.sv--phone .cu-removed .mv-btn { width: 100%; }
+
+/* An advance is neither a problem nor an achievement: navy, like the Receive pages. */
+.sp-fig--advance { color: var(--navy); }
