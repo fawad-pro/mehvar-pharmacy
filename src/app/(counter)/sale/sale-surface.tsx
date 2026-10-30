@@ -845,7 +845,7 @@ export function SaleSurface() {
                     autoComplete="off"
                     value={discountInput}
                     inputMode="decimal"
-                    placeholder="e.g. 50 or 10%"
+                    placeholder="Amount or %"
                     aria-label="Discount"
                     aria-invalid={parsedDiscount.ok ? undefined : true}
                     onFocus={(event) => event.target.select()}

@@ -39,7 +39,7 @@ test('within the limit: what comes off, Pay — by keyboard', async ({ page }) =
 
   // In view and empty before anything is pressed, saying what to type.
   await expect(discount(page)).toHaveValue('');
-  await expect(discount(page)).toHaveAttribute('placeholder', 'e.g. 50 or 10%');
+  await expect(discount(page)).toHaveAttribute('placeholder', 'Amount or %');
   await discount(page).fill('5');
   // Applied as typed: the screen never shows one price while Pay charges another.
   await expect(total(page)).toHaveText('Rs 100.00');
