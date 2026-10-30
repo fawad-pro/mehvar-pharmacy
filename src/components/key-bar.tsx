@@ -50,7 +50,7 @@ export function KeyBar({
     // blue. A phone has no function keys; below 768px the tab bar takes over.
     <nav
       aria-label="Function keys"
-      className="bg-surface text-navy shadow-bar flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1.5 max-md:hidden"
+      className="bg-surface text-navy shadow-bar flex shrink-0 items-center gap-1.5 overflow-x-auto px-2 py-1 max-md:hidden"
     >
       {keys.map((binding, index) => {
         const active = binding.href !== null && pathname.startsWith(binding.href);

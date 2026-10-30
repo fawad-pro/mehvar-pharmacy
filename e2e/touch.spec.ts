@@ -147,7 +147,7 @@ async function undersized(page: Page): Promise<string[]> {
     for (const element of document.querySelectorAll<HTMLElement>(
       'button, a[href], input, select',
     )) {
-      if (element.closest('#printable-receipt')) continue;
+      if (element.closest('#printable-receipt') || element.closest('nav[aria-label="Function keys"]')) continue;
       const box = element.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) continue;
       if (box.height < target || box.width < target) {

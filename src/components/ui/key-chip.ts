@@ -15,13 +15,13 @@ export function keyChipClass({
   startsBand: boolean;
 }): string {
   return [
-    'relative flex min-h-touch min-w-touch shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control px-3 text-[13px] transition-colors',
+    'relative flex h-10 min-w-touch shrink-0 items-center gap-1.5 whitespace-nowrap rounded-control px-3 py-1 text-[13px] transition-colors',
     active ? 'bg-blue-600 text-surface' : 'bg-mist',
     active || !permitted ? '' : 'hover:bg-blue-50',
     permitted ? '' : 'cursor-not-allowed opacity-45',
     // A short hairline between the registry's bands (counter / goods / owner).
     startsBand
-      ? 'ml-2.5 before:absolute before:inset-y-2.5 before:-left-[9px] before:w-px before:bg-line'
+      ? 'ml-2.5 before:absolute before:inset-y-2 before:-left-[9px] before:w-px before:bg-line'
       : '',
   ].join(' ');
 }

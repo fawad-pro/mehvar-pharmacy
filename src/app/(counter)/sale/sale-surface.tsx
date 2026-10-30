@@ -801,7 +801,7 @@ export function SaleSurface() {
           aria-label="Bill"
           className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-4 lg:flex lg:items-stretch lg:w-[340px] lg:shrink-0 lg:overflow-auto"
         >
-          <div className="${cardClass} gap-3">
+          <div className={`${cardClass} gap-3`}>
             <span className="text-label text-ink-2">Total</span>
             {/* I6: the biggest numerals on the display. */}
             <p
@@ -835,7 +835,7 @@ export function SaleSurface() {
             </div>
 
             {/* Side-by-side Discount & Cash received */}
-            <div className="grid grid-cols-2 gap-2 pt-1">
+            <div className="grid grid-cols-2 gap-3 pt-3.5 px-1.5">
               <div className="flex flex-col gap-1">
                 <label htmlFor="bill-discount" className="flex flex-col gap-1">
                   <FieldLabel>Discount</FieldLabel>
@@ -871,7 +871,7 @@ export function SaleSurface() {
                         focusSearch();
                       }
                     }}
-                    className={`${inputClass} numeral text-field-lg text-right font-medium`}
+                    className={`${inputClass} numeral text-field-lg text-right font-medium pr-3 pl-2.5`}
                   />
                 </label>
                 {!parsedDiscount.ok ? (
@@ -889,7 +889,7 @@ export function SaleSurface() {
                   <span className="relative block">
                     <span
                       aria-hidden="true"
-                      className="text-body-sm text-ink-2 pointer-events-none absolute inset-y-0 left-3 flex items-center"
+                      className="text-body-sm text-ink-2 pointer-events-none absolute inset-y-0 left-2.5 flex items-center font-medium"
                     >
                       Rs
                     </span>
@@ -932,7 +932,7 @@ export function SaleSurface() {
                           focusSearch();
                         }
                       }}
-                      className={`${inputClass} numeral pl-9 text-right text-lg font-medium`}
+                      className={`${inputClass} numeral pl-8 pr-3 text-right text-field-lg font-medium`}
                     />
                   </span>
                 </label>
@@ -1071,7 +1071,7 @@ export function SaleSurface() {
               block
               onClick={() => void executeSale(true)}
               disabled={payDisabled}
-              className="h-14 text-[17px] font-semibold mt-1 max-md:hidden"
+              className="h-14 text-[17px] font-semibold mt-4 max-md:hidden"
             >
               {busy ? (
                 'Saving…'
