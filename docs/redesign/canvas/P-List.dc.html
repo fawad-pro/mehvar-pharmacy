@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Products</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="products.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Products</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Products">
+        <div class="sp-head">
+          <div class="sp-titlerow"><h1 class="mv-title pr-title">Products</h1><span class="sp-meta">{{meta}}</span></div>
+        </div>
+
+        <sc-if value="{{tabphone}}" hint-placeholder-val="{{false}}">
+          <div class="mv-tiles sp-tiles2">
+            <div class="mv-tile"><span class="mv-label">You stock</span><span class="mv-tile__value">{{t.stock}}</span><span class="mv-tile__meta">{{t.stockMeta}}</span></div>
+            <a class="mv-tile mv-tile--attention" href="#"><span class="mv-label">To complete</span><span class="mv-tile__value">{{t.todo}}</span><span class="mv-tile__meta">{{t.todoMeta}}</span></a>
+          </div>
+        </sc-if>
+
+        <form class="cu-search" action="#">
+          <label class="mv-field" style="flex: 1;" data-scan-home="" data-scan-target="">
+            <span class="mv-label">Search the catalog</span>
+            <input class="{{fieldCls}}" autocomplete="off" placeholder="Name, salt or maker — or scan" value="{{term}}">
+          </label>
+          <button type="submit" class="mv-btn mv-btn--secondary">Search <span class="mv-kbd">Enter</span></button>
+          <a class="mv-btn mv-btn--quiet" href="#">Show removed products</a>
+        </form>
+
+        <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+        <div class="mv-table-wrap sp-tablewrap">
+          <table class="mv-table mv-cart sv-cart44 pr-table">
+            <colgroup><col style="width: auto"><col style="width: {{cPack}}px"><col style="width: {{cHand}}px"><col style="width: {{cPrice}}px"><col style="width: 64px"></colgroup>
+            <thead><tr><th>Product</th><th>Sold as</th><th>On hand</th><th class="mv-num">Price</th><th class="mv-num">Codes</th></tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="row" hint-placeholder-count="9">
+                <tr>
+                  <td><div class="sp-what"><span class="sp-what__main"><a class="sp-link pr-nm" href="#">{{row.title}}</a><sc-if value="{{row.todo}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--attention">Needs completing</span></sc-if></span><span class="sp-what__sub">{{row.sub}}</span></div></td>
+                  <td class="sp-sub">{{row.pack}}</td>
+                  <td><span class="{{row.handCls}}">{{row.hand}}</span></td>
+                  <td class="mv-num">{{row.price}}<span class="pr-per">{{row.unit}}</span></td>
+                  <td class="mv-num sp-sub">{{row.codes}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+          <div class="pr-endbar"><a class="mv-btn mv-btn--primary" href="#">Add product</a></div>
+        </sc-if>
+        </sc-if>
+
+        <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+        <ul class="sp-mlist" aria-label="Products">
+          <sc-for list="{{rows}}" as="row" hint-placeholder-count="9">
+            <li><a class="sp-mrow" href="#">
+              <span class="sp-mrow__main">
+                <span class="sp-mrow__nm">{{row.title}}<sc-if value="{{row.todo}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--attention">Needs completing</span></sc-if></span>
+                <span class="sp-mrow__meta">{{row.sub}}</span>
+                <span class="sp-mrow__meta">{{row.pack}}</span>
+              </span>
+              <span class="sp-mrow__end"><span class="{{row.handCls}}" style="font-size: 14px;">{{row.hand}}</span><span class="sp-mrow__cap">{{row.price}}{{row.unit}}</span></span>
+            </a></li>
+          </sc-for>
+        </ul>
+        </sc-if>
+
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 300px;" aria-label="Summary and actions">
+<sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <div class="mv-tile"><span class="mv-label">You stock</span><span class="mv-tile__value">{{t.stock}}</span><span class="mv-tile__meta">{{t.stockMeta}}</span></div>
+        <a class="mv-tile mv-tile--attention" href="#"><span class="mv-label">To complete</span><span class="mv-tile__value">{{t.todo}}</span><span class="mv-tile__meta">{{t.todoMeta}}</span></a>
+        <p class="mv-help" style="margin: 0; padding: 0 4px;">“On hand” counts in the shop’s own packs. “Never stocked” means nothing has been received yet — it is not the same as none left.</p>
+        <p class="mv-help" style="margin: 0; padding: 0 4px;">Search finds a name, a salt or a maker. A scan finds its product by barcode.</p>
+
+</sc-if><sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <a class="mv-btn mv-btn--primary mv-btn--block sv-pay" href="#">Add product</a>
+
+</sc-if>
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" aria-current="page" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+        <div class="sp-head">
+          <div class="sp-titlerow"><h1 class="mv-title pr-title">Products</h1><span class="sp-meta">{{meta}}</span></div>
+        </div>
+
+        <sc-if value="{{tabphone}}" hint-placeholder-val="{{false}}">
+          <div class="mv-tiles sp-tiles2">
+            <div class="mv-tile"><span class="mv-label">You stock</span><span class="mv-tile__value">{{t.stock}}</span><span class="mv-tile__meta">{{t.stockMeta}}</span></div>
+            <a class="mv-tile mv-tile--attention" href="#"><span class="mv-label">To complete</span><span class="mv-tile__value">{{t.todo}}</span><span class="mv-tile__meta">{{t.todoMeta}}</span></a>
+          </div>
+        </sc-if>
+
+        <form class="cu-search" action="#">
+          <label class="mv-field" style="flex: 1;" data-scan-home="" data-scan-target="">
+            <span class="mv-label">Search the catalog</span>
+            <input class="{{fieldCls}}" autocomplete="off" placeholder="Name, salt or maker — or scan" value="{{term}}">
+          </label>
+          <button type="submit" class="mv-btn mv-btn--secondary">Search <span class="mv-kbd">Enter</span></button>
+          <a class="mv-btn mv-btn--quiet" href="#">Show removed products</a>
+        </form>
+
+        <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+        <div class="mv-table-wrap sp-tablewrap">
+          <table class="mv-table mv-cart sv-cart44 pr-table">
+            <colgroup><col style="width: auto"><col style="width: {{cPack}}px"><col style="width: {{cHand}}px"><col style="width: {{cPrice}}px"><col style="width: 64px"></colgroup>
+            <thead><tr><th>Product</th><th>Sold as</th><th>On hand</th><th class="mv-num">Price</th><th class="mv-num">Codes</th></tr></thead>
+            <tbody>
+              <sc-for list="{{rows}}" as="row" hint-placeholder-count="9">
+                <tr>
+                  <td><div class="sp-what"><span class="sp-what__main"><a class="sp-link pr-nm" href="#">{{row.title}}</a><sc-if value="{{row.todo}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--attention">Needs completing</span></sc-if></span><span class="sp-what__sub">{{row.sub}}</span></div></td>
+                  <td class="sp-sub">{{row.pack}}</td>
+                  <td><span class="{{row.handCls}}">{{row.hand}}</span></td>
+                  <td class="mv-num">{{row.price}}<span class="pr-per">{{row.unit}}</span></td>
+                  <td class="mv-num sp-sub">{{row.codes}}</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+          <div class="pr-endbar"><a class="mv-btn mv-btn--primary" href="#">Add product</a></div>
+        </sc-if>
+        </sc-if>
+
+        <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+        <ul class="sp-mlist" aria-label="Products">
+          <sc-for list="{{rows}}" as="row" hint-placeholder-count="9">
+            <li><a class="sp-mrow" href="#">
+              <span class="sp-mrow__main">
+                <span class="sp-mrow__nm">{{row.title}}<sc-if value="{{row.todo}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--attention">Needs completing</span></sc-if></span>
+                <span class="sp-mrow__meta">{{row.sub}}</span>
+                <span class="sp-mrow__meta">{{row.pack}}</span>
+              </span>
+              <span class="sp-mrow__end"><span class="{{row.handCls}}" style="font-size: 14px;">{{row.hand}}</span><span class="sp-mrow__cap">{{row.price}}{{row.unit}}</span></span>
+            </a></li>
+          </sc-for>
+        </ul>
+        </sc-if>
+
+    </div>
+    <div class="sv-paybar"><a class="mv-btn mv-btn--primary mv-btn--block" href="#">Add product</a></div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["list","search"],"default":"list"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'list';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const amber = 'pr-hand--short', none = 'pr-hand--none', ok = 'pr-hand';
+    const r = (title, sub, pack, hand, handCls, price, unit, codes, todo) => ({ title, sub, pack, hand, handCls, price, unit: ' ' + unit, codes, todo: !!todo });
+    let rows = [
+      r('Augmentin 625mg', 'Tablet · GSK · amoxicillin + clavulanic acid', '1 box = 2 strip, 1 strip = 6 tab', '11 box', ok, 'Rs 1,450.00', 'a box', '2'),
+      r('Brufen 400mg', 'Tablet · Abbott · ibuprofen', '1 strip = 10 tab', '42 strip, 3 tab', ok, 'Rs 45.00', 'a strip', '1'),
+      r('Calpol syrup 120ml', 'Syrup · GSK · paracetamol', 'By the bottle', 'Never stocked', none, 'Rs 120.00', 'a bottle', 'None', true),
+      r('Flagyl 400mg', 'Tablet · Sanofi · metronidazole', '1 box = 10 strip, 1 strip = 10 tab', '3 box, 6 strip', ok, 'Rs 450.00', 'a box', '2'),
+      r('Hydryllin syrup 120ml', 'Syrup · Searle · diphenhydramine', 'By the bottle', '12 bottle', ok, 'Rs 98.00', 'a bottle', '1'),
+      r('Lifebuoy soap 100g', 'Soap · Unilever', 'By the piece', '36 piece', ok, 'Rs 95.00', 'a piece', 'None'),
+      r('Panadol 500mg', 'Tablet · GSK · paracetamol', '1 strip = 12 tab', '50 strip, 4 tab', ok, 'Rs 30.00', 'a strip', '3'),
+      r('Panadol Extra 500mg + 65mg', 'Tablet · GSK · paracetamol + caffeine', '1 box = 10 strip, 1 strip = 12 tab', '6 box, 2 strip', ok, 'Rs 360.00', 'a box', 'None'),
+      r('Risek 20mg', 'Capsule · Getz · omeprazole', '1 box = 2 strip, 1 strip = 14 cap', 'Short by 2 strip', amber, 'Rs 560.00', 'a box', '1')
+    ];
+    let meta = '9 products you stock', term = '';
+    if (view === 'search') {
+      term = 'paracetamol';
+      rows = [rows[2], rows[6], rows[7]];
+      meta = '3 found';
+    }
+    return Object.assign({}, common, {
+      rows, meta, term, tabphone: phone || tablet,
+      fieldCls: 'mv-input is-focus',
+      t: { stock: '9', stockMeta: 'products on the list', todo: '1', todoMeta: 'set up at the counter' },
+      cPack: tablet ? 190 : 230, cHand: tablet ? 128 : 150, cPrice: tablet ? 118 : 128
+    });
+  }
+}
+</script>
+</body>
+</html>

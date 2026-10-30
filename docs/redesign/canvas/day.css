@@ -1,0 +1,65 @@
+/* Day. Every value is a Mehvar token; layout comes from sale.css and suppliers.css, primitives from ds/mehvar/components/bundle.css. */
+.pr-main { min-height: 0; overflow: hidden; }
+.pr-title { overflow-wrap: anywhere; }
+.sv--phone .pr-title { font-size: 20px; line-height: 28px; }
+.pr-h { margin: 0; font: var(--text-heading); color: var(--navy); }
+.pr-card { gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.sv--phone .pr-card { padding: 16px; }
+.sv--tablet .pr-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: var(--space-4); flex: none !important; }
+.sv-seg a.mv-btn { text-decoration: none; }
+.sv-seg .mv-btn[aria-current='page'] { background: var(--blue-50); border-color: var(--blue-600); color: var(--navy); font-weight: 600; position: relative; z-index: 1; }
+
+/* Head: the screen's name and scope on the left, the range and the day on the right. */
+.dy-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.dy-ctl { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.dy-pick { display: flex; align-items: center; gap: var(--space-2); }
+.dy-pick .mv-label { height: auto; white-space: nowrap; }
+.dy-pick .mv-input { width: 150px; }
+.sv--phone .dy-head { flex-direction: column; align-items: stretch; }
+.sv--phone .dy-ctl { justify-content: space-between; }
+.sv--phone .dy-ctl .sv-seg { flex: 1 1 100%; }
+.sv--phone .dy-ctl .sv-seg .mv-btn { flex: 1; }
+.sv--phone .dy-pick { flex: 1 1 100%; }
+.sv--phone .dy-pick .mv-input { flex: 1; width: auto; }
+
+/* Three numbers: three on a laptop, two and one on a phone. */
+.dy-tiles { gap: var(--space-4); }
+.sv--phone .dy-tiles { gap: var(--space-3); }
+.sv--phone .dy-tiles .mv-tile { padding: 14px 16px; }
+.sv--phone .dy-tiles .mv-tile__value { font-size: 20px; }
+.sv--phone .dy-tiles .mv-tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+
+/* Figures: one card, each figure with its own words and scope. */
+.dy-figs { gap: 2px; padding: var(--space-3) var(--space-4); }
+.dy-figs__in { display: flex; flex-wrap: wrap; gap: 2px var(--space-5); font: var(--text-body-sm); color: var(--ink-2); }
+.dy-fig { white-space: nowrap; }
+.dy-fig b { font-weight: 600; color: var(--navy); font-variant-numeric: tabular-nums; }
+.dy-fig b.dy-warn { color: var(--amber-text); }
+.dy-fig__s { font-size: 12px; color: var(--ink-2); white-space: normal; }
+.dy-warn { color: var(--amber-text); font-weight: 600; }
+.sv--phone .dy-fig { white-space: normal; }
+
+/* What needs a look: groups as headings inside one list. */
+.dy-exc { padding: 0; }
+.dy-exc > li { list-style: none; }
+.dy-exc__h { display: block; padding: 8px 16px; font-size: 13px; line-height: 18px; font-weight: 600; color: var(--ink-2); background: var(--page); }
+.dy-exc__h span { font-weight: 400; }
+.dy-exc li:first-child .dy-exc__h { border-radius: var(--radius-card) var(--radius-card) 0 0; }
+.dy-row { border-top: 1px solid var(--line); min-height: 52px; }
+.dy-row .mv-row__name, .dy-row .mv-row__meta { white-space: normal; overflow: visible; text-overflow: clip; }
+.dy-row .mv-row__end { font-weight: 600; }
+.dy-row .mv-row__end.dy-warn { color: var(--amber-text); }
+.dy-row .mv-btn { margin-right: -8px; }
+.dy-bmark { display: contents; }
+
+/* Count the drawer, and the cash form. */
+.dy-count, .dy-cash { gap: var(--space-3); }
+.dy-diff { display: flex; flex-direction: column; gap: 2px; min-height: 40px; }
+.dy-diff__k { margin: 0; font: var(--text-body-sm); color: var(--ink-2); }
+.dy-diff__k b { color: var(--navy); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dy-diff__v { margin: 0; font: var(--text-control); }
+.dy-act { display: flex; justify-content: flex-end; }
+.sv--phone .dy-act .mv-btn { width: 100%; }
+.dy-cashrow { display: grid; grid-template-columns: minmax(0, 1fr) 130px; gap: var(--space-3); align-items: end; }
+.sv--phone .dy-cashrow { grid-template-columns: minmax(0, 1fr) 120px; }
+.dy-dir { margin: -4px 0 0; }

@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Replace product</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="products.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Replace product</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Replace product">
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to Rissek 20mg</a>
+          <h1 class="mv-title pr-title">Replace this product</h1>
+                  </div>
+        <div class="mv-field pr-with">
+          <span class="mv-label" id="rw">Replace with</span>
+          <div class="sv-seg pr-seg" role="group" aria-labelledby="rw">
+            <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{newMode}}">A new product with the right pack</button>
+            <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{existing}}">A product I already have</button>
+          </div>
+        </div>
+<sc-if value="{{newMode}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">The right pack</h2>
+          <div class="pr-split">
+            <div class="pr-split__l">
+              <div class="pr-grid">
+                <label class="mv-field pr-s4"><span class="mv-label">Name</span><input class="mv-input" autocomplete="off" value="Risek 20mg"></label>
+                <label class="mv-field pr-s2"><span class="mv-label">Smallest unit</span><input class="mv-input" autocomplete="off" value="cap"></label>
+              </div>
+              <div class="pr-packs">
+                <div class="pr-pack">
+                  <span class="pr-pack__t">1</span>
+                  <input class="mv-input" autocomplete="off" aria-label="Name of the pack" value="strip">
+                  <span class="pr-pack__t">=</span>
+                  <input class="mv-input pr-pack__n" inputmode="numeric" aria-label="How many cap in 1 strip" value="14">
+                  <span class="pr-pack__t">cap</span>
+                  <button type="button" class="mv-btn mv-btn--quiet pr-x" aria-label="Remove the strip pack">×</button>
+                </div>
+              </div>
+              <p class="pr-says" aria-live="polite">In words: <b>1 strip = 14 cap</b></p>
+            </div>
+            <div class="pr-split__r">
+              <label class="mv-field"><span class="mv-label">Strip price</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" value="85.00"></span></label>
+              <label class="mv-field"><span class="mv-label">Cap price</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" placeholder="6.08"></span></label>
+              <span class="mv-help">The cap price is worked out from the strip price until you type your own.</span>
+            </div>
+          </div>
+        </div>
+
+</sc-if><sc-if value="{{existing}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Move the stock to</h2>
+          <div class="sv-who">
+            <div class="sv-who__main"><span class="sv-who__nm">Risek 20mg</span><span class="sv-who__meta">Capsule · Getz · counted in cap</span></div>
+            <button type="button" class="mv-btn mv-btn--quiet">Choose another</button>
+          </div>
+          <p class="mv-help" style="margin: 0;">Only a product counted in the same smallest unit can take this stock.</p>
+        </div>
+
+</sc-if><sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">{{countTitle}}</h2>
+          <div class="mv-table-wrap pr-batches">
+            <table class="mv-table mv-cart sv-cart44 pr-table">
+              <colgroup><col style="width: auto"><col style="width: 122px"><col style="width: 84px"><col style="width: 84px"><col style="width: 96px"></colgroup>
+              <thead><tr><th>Batch</th><th>Recorded</th><th class="mv-num">strip</th><th class="mv-num">cap</th><th class="mv-num">Total</th></tr></thead>
+              <tbody>
+                <sc-for list="{{batches}}" as="b" hint-placeholder-count="2">
+                  <tr role="group" aria-label="{{b.aria}}">
+                    <td><div class="sp-what"><span class="sp-what__main">{{b.name}}</span><span class="sp-what__sub">{{b.exp}}</span></div></td>
+                    <td class="sp-sub">{{b.rec}}</td>
+                    <td class="mv-num"><input class="mv-input pr-cnt" inputmode="numeric" autocomplete="off" aria-label="strip" value="{{b.strip}}"></td>
+                    <td class="mv-num"><input class="mv-input pr-cnt" inputmode="numeric" autocomplete="off" aria-label="cap" value="{{b.cap}}"></td>
+                    <td class="mv-num" style="font-weight: 600;">{{b.total}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+</sc-if><sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">{{countTitle}}</h2>
+          <sc-for list="{{batches}}" as="b" hint-placeholder-count="2">
+            <div class="pr-batch" role="group" aria-label="{{b.aria}}">
+              <div class="sp-what"><span class="sp-what__main">{{b.name}} · {{b.exp}}</span><span class="sp-what__sub">Recorded: {{b.rec}}</span></div>
+              <div class="pr-batch__in">
+                <label class="mv-field"><span class="mv-label">strip</span><input class="mv-input pr-cnt" inputmode="numeric" value="{{b.strip}}"></label>
+                <label class="mv-field"><span class="mv-label">cap</span><input class="mv-input pr-cnt" inputmode="numeric" value="{{b.cap}}"></label>
+                <span class="pr-batch__tot">{{b.total}}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+</sc-if>
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 320px;" aria-label="Summary and actions">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Replacing Rissek 20mg</h2>
+          <p class="mv-help">Set up as 1 box = 10 strip, 1 strip = 10 cap. 330 cap are on hand in 2 batches.</p>
+          <p class="mv-help">Mehvar moves the stock at the count you confirm, with its cost. Past sales stay on Rissek 20mg, which stops being sold.</p>
+        </div>
+        <sc-if value="{{unlink}}" hint-placeholder-val="{{true}}">
+          <div class="mv-banner mv-banner--attention" role="status">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+            <span class="mv-banner__text"><strong>One barcode will be unlinked.</strong> It is on a box, and the new pack has no box. It will be listed so you can link it again.</span>
+          </div>
+        </sc-if>
+        <label class="mv-field"><span class="mv-label">Why</span><input class="mv-input" autocomplete="off" value="Strips hold 14, not 10" placeholder="e.g. strips hold 14, not 10"></label>
+        <button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay">{{verb}} <span class="mv-kbd">Enter</span></button>
+
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" aria-current="page" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+        <div class="sp-head">
+          <a class="mv-btn mv-btn--quiet sp-back" href="#">Back to Rissek 20mg</a>
+          <h1 class="mv-title pr-title">Replace this product</h1>
+                  </div>
+        <div class="mv-field pr-with">
+          <span class="mv-label" id="rw">Replace with</span>
+          <div class="sv-seg pr-seg" role="group" aria-labelledby="rw">
+            <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{newMode}}">A new product with the right pack</button>
+            <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{existing}}">A product I already have</button>
+          </div>
+        </div>
+<sc-if value="{{newMode}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">The right pack</h2>
+          <div class="pr-split">
+            <div class="pr-split__l">
+              <div class="pr-grid">
+                <label class="mv-field pr-s4"><span class="mv-label">Name</span><input class="mv-input" autocomplete="off" value="Risek 20mg"></label>
+                <label class="mv-field pr-s2"><span class="mv-label">Smallest unit</span><input class="mv-input" autocomplete="off" value="cap"></label>
+              </div>
+              <div class="pr-packs">
+                <div class="pr-pack">
+                  <span class="pr-pack__t">1</span>
+                  <input class="mv-input" autocomplete="off" aria-label="Name of the pack" value="strip">
+                  <span class="pr-pack__t">=</span>
+                  <input class="mv-input pr-pack__n" inputmode="numeric" aria-label="How many cap in 1 strip" value="14">
+                  <span class="pr-pack__t">cap</span>
+                  <button type="button" class="mv-btn mv-btn--quiet pr-x" aria-label="Remove the strip pack">×</button>
+                </div>
+              </div>
+              <p class="pr-says" aria-live="polite">In words: <b>1 strip = 14 cap</b></p>
+            </div>
+            <div class="pr-split__r">
+              <label class="mv-field"><span class="mv-label">Strip price</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" value="85.00"></span></label>
+              <label class="mv-field"><span class="mv-label">Cap price</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" placeholder="6.08"></span></label>
+              <span class="mv-help">The cap price is worked out from the strip price until you type your own.</span>
+            </div>
+          </div>
+        </div>
+
+</sc-if><sc-if value="{{existing}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">Move the stock to</h2>
+          <div class="sv-who">
+            <div class="sv-who__main"><span class="sv-who__nm">Risek 20mg</span><span class="sv-who__meta">Capsule · Getz · counted in cap</span></div>
+            <button type="button" class="mv-btn mv-btn--quiet">Choose another</button>
+          </div>
+          <p class="mv-help" style="margin: 0;">Only a product counted in the same smallest unit can take this stock.</p>
+        </div>
+
+</sc-if><sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">{{countTitle}}</h2>
+          <div class="mv-table-wrap pr-batches">
+            <table class="mv-table mv-cart sv-cart44 pr-table">
+              <colgroup><col style="width: auto"><col style="width: 122px"><col style="width: 84px"><col style="width: 84px"><col style="width: 96px"></colgroup>
+              <thead><tr><th>Batch</th><th>Recorded</th><th class="mv-num">strip</th><th class="mv-num">cap</th><th class="mv-num">Total</th></tr></thead>
+              <tbody>
+                <sc-for list="{{batches}}" as="b" hint-placeholder-count="2">
+                  <tr role="group" aria-label="{{b.aria}}">
+                    <td><div class="sp-what"><span class="sp-what__main">{{b.name}}</span><span class="sp-what__sub">{{b.exp}}</span></div></td>
+                    <td class="sp-sub">{{b.rec}}</td>
+                    <td class="mv-num"><input class="mv-input pr-cnt" inputmode="numeric" autocomplete="off" aria-label="strip" value="{{b.strip}}"></td>
+                    <td class="mv-num"><input class="mv-input pr-cnt" inputmode="numeric" autocomplete="off" aria-label="cap" value="{{b.cap}}"></td>
+                    <td class="mv-num" style="font-weight: 600;">{{b.total}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+</sc-if><sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">{{countTitle}}</h2>
+          <sc-for list="{{batches}}" as="b" hint-placeholder-count="2">
+            <div class="pr-batch" role="group" aria-label="{{b.aria}}">
+              <div class="sp-what"><span class="sp-what__main">{{b.name}} · {{b.exp}}</span><span class="sp-what__sub">Recorded: {{b.rec}}</span></div>
+              <div class="pr-batch__in">
+                <label class="mv-field"><span class="mv-label">strip</span><input class="mv-input pr-cnt" inputmode="numeric" value="{{b.strip}}"></label>
+                <label class="mv-field"><span class="mv-label">cap</span><input class="mv-input pr-cnt" inputmode="numeric" value="{{b.cap}}"></label>
+                <span class="pr-batch__tot">{{b.total}}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+</sc-if>        <div class="mv-card pr-card">
+          <h2 class="pr-h">Replacing Rissek 20mg</h2>
+          <p class="mv-help">Set up as 1 box = 10 strip, 1 strip = 10 cap. 330 cap are on hand in 2 batches.</p>
+          <p class="mv-help">Mehvar moves the stock at the count you confirm, with its cost. Past sales stay on Rissek 20mg, which stops being sold.</p>
+        </div>
+        <sc-if value="{{unlink}}" hint-placeholder-val="{{true}}">
+          <div class="mv-banner mv-banner--attention" role="status">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+            <span class="mv-banner__text"><strong>One barcode will be unlinked.</strong> It is on a box, and the new pack has no box. It will be listed so you can link it again.</span>
+          </div>
+        </sc-if>
+        <label class="mv-field"><span class="mv-label">Why</span><input class="mv-input" autocomplete="off" value="Strips hold 14, not 10" placeholder="e.g. strips hold 14, not 10"></label>
+
+    </div>
+    <div class="sv-paybar"><button type="button" class="mv-btn mv-btn--primary mv-btn--block">{{verb}}</button></div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["new","existing"],"default":"new"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'new';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const existing = view === 'existing';
+    const batches = [
+      { aria: 'Batch RK208 expiring 06/2028', name: 'Batch RK208', exp: 'exp 06/2028', rec: '2 box, 3 strip', strip: existing ? '3' : '16', cap: existing ? '200' : '6', total: existing ? '= 242 cap' : '= 230 cap' },
+      { aria: 'Batch RK311 expiring 02/2027', name: 'Batch RK311', exp: 'exp 02/2027', rec: '1 box', strip: '0', cap: '100', total: '= 100 cap' }
+    ];
+    return Object.assign({}, common, {
+      newMode: !existing, existing, batches, unlink: true,
+      countTitle: existing ? 'Count each batch in Risek 20mg’s packs' : 'Count each batch in the new pack',
+      verb: existing ? 'Move the stock to Risek 20mg' : 'Replace and move the stock'
+    });
+  }
+}
+</script>
+</body>
+</html>

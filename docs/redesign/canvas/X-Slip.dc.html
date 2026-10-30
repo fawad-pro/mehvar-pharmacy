@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Refund slips</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="receipts.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>body{margin:0}</style>
+</helmet>
+<div class="mv" style="width: 700px; height: 660px; box-sizing: border-box; padding: 24px 32px; background: var(--page); display: flex; gap: 32px; align-items: flex-start; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <!-- ============ Cash back ============ -->
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <span class="mv-label">Cash back · AS-1063</span>
+    <div class="rc-slip" role="img" aria-label="Refund slip AS-1063, cash back">
+      <div class="rc-slip__c">
+        <p class="rc-slip__shop">Al-Shifa Pharmacy</p>
+        <p class="rc-slip__small">12 Main Boulevard, Gulberg, Lahore</p>
+        <p class="rc-slip__small">042 3571 2200 · DSL 04-352-0117</p>
+        <p class="rc-slip__small">28/10/2026 3:58 pm</p>
+      </div>
+      <hr class="rc-slip__rule">
+      <p class="rc-slip__c rc-slip__b">Refund — against receipt AS-1062</p>
+      <div class="rc-slip__grid" style="margin-top: 6px;">
+        <span class="rc-slip__h">QTY</span><span class="rc-slip__h">ITEM</span><span class="rc-slip__h rc-slip__r">AMT</span>
+        <span>1 strip</span><span class="rc-slip__b">Augmentin 625mg</span><span class="rc-slip__r">290.00</span>
+      </div>
+      <hr class="rc-slip__rule">
+      <div class="rc-slip__row rc-slip__row--big"><span>Refund</span><span>290.00</span></div>
+      <div class="rc-slip__row"><span>Cash given back</span><span>290.00</span></div>
+      <hr class="rc-slip__rule">
+      <div class="rc-slip__c rc-slip__small">
+        <p>Receipt AS-1063 · Served by Bilal</p>
+        <p style="margin-top: 4px;">Thank you. Get well soon.</p>
+        <p class="rc-slip__powered" style="margin-top: 6px;">Powered by Mehvar</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Off udhaar ============ -->
+  <div style="display: flex; flex-direction: column; gap: 8px;">
+    <span class="mv-label">Off udhaar · AS-1064</span>
+    <div class="rc-slip" role="img" aria-label="Refund slip AS-1064, off udhaar">
+      <div class="rc-slip__c">
+        <p class="rc-slip__shop">Al-Shifa Pharmacy</p>
+        <p class="rc-slip__small">12 Main Boulevard, Gulberg, Lahore</p>
+        <p class="rc-slip__small">042 3571 2200 · DSL 04-352-0117</p>
+        <p class="rc-slip__small">28/10/2026 4:20 pm</p>
+      </div>
+      <hr class="rc-slip__rule">
+      <p class="rc-slip__c rc-slip__b">Refund — against receipt AS-1061</p>
+      <p style="margin-top: 4px;">Customer: Rashid Khan</p>
+      <div class="rc-slip__grid" style="margin-top: 6px;">
+        <span class="rc-slip__h">QTY</span><span class="rc-slip__h">ITEM</span><span class="rc-slip__h rc-slip__r">AMT</span>
+        <span>1 box</span><span class="rc-slip__b">Concor 5mg</span><span class="rc-slip__r">1,450.00</span>
+      </div>
+      <hr class="rc-slip__rule">
+      <div class="rc-slip__row rc-slip__row--big"><span>Refund</span><span>1,450.00</span></div>
+      <div class="rc-slip__row"><span>Taken off udhaar</span><span>1,450.00</span></div>
+      <hr class="rc-slip__rule">
+      <div class="rc-slip__row"><span>Before</span><span>Owes 2,380.00</span></div>
+      <div class="rc-slip__row"><span>Returned</span><span>1,450.00</span></div>
+      <div class="rc-slip__row rc-slip__b"><span>Now</span><span>Owes 930.00</span></div>
+      <hr class="rc-slip__rule">
+      <div class="rc-slip__c rc-slip__small">
+        <p>Receipt AS-1064 · Served by Bilal</p>
+        <p style="margin-top: 4px;">Thank you. Get well soon.</p>
+        <p class="rc-slip__powered" style="margin-top: 6px;">Powered by Mehvar</p>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":700,"height":660}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

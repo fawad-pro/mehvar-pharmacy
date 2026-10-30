@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stock</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="stock.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Stock</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Stock">
+        <div class="sp-head">
+          <h1 class="mv-title pr-title">Stock</h1>
+          <p class="sp-meta">What is running out, what is expiring, and what was sold before it arrived.</p>
+        </div>
+        <sc-if value="{{hasPending}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card" role="region" aria-label="Sold before it was received">
+          <div class="st-h"><h2 class="pr-h">Sold before it was received</h2><span class="mv-badge mv-badge--attention">{{pendingCount}}</span></div>
+          <p class="mv-help">These went out before the stock was entered. Receiving the delivery or correcting the count clears them.</p>
+          <ul class="st-rows">
+            <sc-for list="{{pending}}" as="row" hint-placeholder-count="2">
+              <li class="st-row">
+                <span class="st-row__main"><span class="st-row__nm">{{row.name}}</span><span class="st-row__sub"><b class="st-short">{{row.short}}</b> · since {{row.since}}</span></span>
+                <span class="st-row__btns"><a class="mv-btn mv-btn--secondary" href="#">Receive delivery</a><a class="mv-btn mv-btn--quiet" href="#">Correct the count</a></span>
+              </li>
+            </sc-for>
+          </ul>
+        </div>
+        </sc-if>
+        <div class="mv-card pr-card" role="region" aria-label="Expiring soon">
+          <div class="st-h">
+            <h2 class="pr-h">Expiring soon</h2>
+            <div class="sv-seg" role="group" aria-label="Expiry horizon">
+              <sc-for list="{{horizons}}" as="h" hint-placeholder-count="3"><a class="mv-btn mv-btn--secondary" href="#" aria-current="{{h.cur}}">{{h.text}}</a></sc-for>
+            </div>
+          </div>
+          <sc-if value="{{hasExpiring}}" hint-placeholder-val="{{true}}">
+          <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+          <div class="mv-table-wrap st-wrap">
+            <table class="mv-table mv-cart sv-cart44 pr-table">
+              <colgroup><col style="width: auto"><col style="width: 84px"><col style="width: {{cExp}}px"><col style="width: {{cHand}}px"><col style="width: 100px"></colgroup>
+              <thead><tr><th>Product</th><th>Batch</th><th>Expires</th><th>On hand</th><th class="mv-num">Value</th></tr></thead>
+              <tbody>
+                <sc-for list="{{expiring}}" as="row" hint-placeholder-count="3">
+                  <tr>
+                    <td><span class="pr-nm" style="font-weight: 500;">{{row.name}}</span></td>
+                    <td class="sp-sub">{{row.batch}}</td>
+                    <td><div class="sp-what"><span class="sp-what__main">{{row.date}}<sc-if value="{{row.expired}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if></span><span class="{{row.subCls}}">{{row.when}}</span></div></td>
+                    <td>{{row.hand}}</td>
+                    <td class="mv-num">{{row.value}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          </sc-if>
+          <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+          <ul class="sp-mlist st-mlist" aria-label="Expiring batches">
+            <sc-for list="{{expiring}}" as="row" hint-placeholder-count="3">
+              <li class="sp-mrow">
+                <span class="sp-mrow__main"><span class="sp-mrow__nm">{{row.name}}<sc-if value="{{row.expired}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if></span><span class="sp-mrow__meta">Batch {{row.batch}} · {{row.date}}</span><span class="{{row.subCls}}">{{row.when}}</span></span>
+                <span class="sp-mrow__end"><span class="sp-mrow__fig" style="font-size: 14px;">{{row.hand}}</span><span class="sp-mrow__cap">{{row.value}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <p class="mv-help" style="margin: 0;">Value is at the selling price.</p>
+          </sc-if>
+          <sc-if value="{{noExpiring}}" hint-placeholder-val="{{false}}"><p class="st-ok">Nothing expires within {{within}} days.</p></sc-if>
+        </div>
+<sc-if value="{{tabphone}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card" role="region" aria-label="Running low">
+          <div class="st-h"><h2 class="pr-h">Running low</h2><sc-if value="{{hasLow}}" hint-placeholder-val="{{true}}"><span class="mv-badge mv-badge--attention">{{lowCount}}</span></sc-if></div>
+          <sc-if value="{{hasLow}}" hint-placeholder-val="{{true}}">
+          <ul class="st-rows">
+            <sc-for list="{{low}}" as="row" hint-placeholder-count="3">
+              <li class="st-row">
+                <span class="st-row__main"><span class="st-row__nm">{{row.name}}</span><span class="st-row__sub">On hand <b>{{row.hand}}</b> · wants {{row.min}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <sc-if value="{{noLow}}" hint-placeholder-val="{{false}}"><p class="st-ok">Nothing is below its low-stock level. Set one on a product to see it here — Products <span class="mv-kbd">{{productsKey}}</span>.</p></sc-if>
+        </div>
+
+</sc-if><sc-if value="{{tabphone}}" hint-placeholder-val="{{false}}">
+        <p class="mv-help" style="margin: 0;">To see everything you have, open Products <span class="mv-kbd">F5</span>.</p>
+</sc-if><sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+        <div class="pr-endbar"><a class="mv-btn mv-btn--quiet" href="#">Enter opening stock</a><a class="mv-btn mv-btn--primary" href="#">Adjust stock <span class="mv-kbd">F8</span></a></div>
+</sc-if><sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+        <a class="mv-btn mv-btn--quiet" href="#" style="align-self: flex-start; margin-left: -12px;">Enter opening stock</a>
+</sc-if>
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 340px;" aria-label="Summary and actions">
+<sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card" role="region" aria-label="Running low">
+          <div class="st-h"><h2 class="pr-h">Running low</h2><sc-if value="{{hasLow}}" hint-placeholder-val="{{true}}"><span class="mv-badge mv-badge--attention">{{lowCount}}</span></sc-if></div>
+          <sc-if value="{{hasLow}}" hint-placeholder-val="{{true}}">
+          <ul class="st-rows">
+            <sc-for list="{{low}}" as="row" hint-placeholder-count="3">
+              <li class="st-row">
+                <span class="st-row__main"><span class="st-row__nm">{{row.name}}</span><span class="st-row__sub">On hand <b>{{row.hand}}</b> · wants {{row.min}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <sc-if value="{{noLow}}" hint-placeholder-val="{{false}}"><p class="st-ok">Nothing is below its low-stock level. Set one on a product to see it here — Products <span class="mv-kbd">{{productsKey}}</span>.</p></sc-if>
+        </div>
+        <p class="mv-help" style="margin: 0; padding: 0 4px;">To see everything you have, open Products <span class="mv-kbd">F5</span>.</p>
+</sc-if><sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <div class="sp-quiet"><a class="mv-btn mv-btn--quiet" href="#">Enter opening stock</a></div>
+        <a class="mv-btn mv-btn--primary mv-btn--block sv-pay" href="#">Adjust stock <span class="mv-kbd">F8</span></a>
+</sc-if>
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" aria-current="page" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+        <div class="sp-head">
+          <h1 class="mv-title pr-title">Stock</h1>
+          <p class="sp-meta">What is running out, what is expiring, and what was sold before it arrived.</p>
+        </div>
+        <sc-if value="{{hasPending}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card" role="region" aria-label="Sold before it was received">
+          <div class="st-h"><h2 class="pr-h">Sold before it was received</h2><span class="mv-badge mv-badge--attention">{{pendingCount}}</span></div>
+          <p class="mv-help">These went out before the stock was entered. Receiving the delivery or correcting the count clears them.</p>
+          <ul class="st-rows">
+            <sc-for list="{{pending}}" as="row" hint-placeholder-count="2">
+              <li class="st-row">
+                <span class="st-row__main"><span class="st-row__nm">{{row.name}}</span><span class="st-row__sub"><b class="st-short">{{row.short}}</b> · since {{row.since}}</span></span>
+                <span class="st-row__btns"><a class="mv-btn mv-btn--secondary" href="#">Receive delivery</a><a class="mv-btn mv-btn--quiet" href="#">Correct the count</a></span>
+              </li>
+            </sc-for>
+          </ul>
+        </div>
+        </sc-if>
+        <div class="mv-card pr-card" role="region" aria-label="Expiring soon">
+          <div class="st-h">
+            <h2 class="pr-h">Expiring soon</h2>
+            <div class="sv-seg" role="group" aria-label="Expiry horizon">
+              <sc-for list="{{horizons}}" as="h" hint-placeholder-count="3"><a class="mv-btn mv-btn--secondary" href="#" aria-current="{{h.cur}}">{{h.text}}</a></sc-for>
+            </div>
+          </div>
+          <sc-if value="{{hasExpiring}}" hint-placeholder-val="{{true}}">
+          <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+          <div class="mv-table-wrap st-wrap">
+            <table class="mv-table mv-cart sv-cart44 pr-table">
+              <colgroup><col style="width: auto"><col style="width: 84px"><col style="width: {{cExp}}px"><col style="width: {{cHand}}px"><col style="width: 100px"></colgroup>
+              <thead><tr><th>Product</th><th>Batch</th><th>Expires</th><th>On hand</th><th class="mv-num">Value</th></tr></thead>
+              <tbody>
+                <sc-for list="{{expiring}}" as="row" hint-placeholder-count="3">
+                  <tr>
+                    <td><span class="pr-nm" style="font-weight: 500;">{{row.name}}</span></td>
+                    <td class="sp-sub">{{row.batch}}</td>
+                    <td><div class="sp-what"><span class="sp-what__main">{{row.date}}<sc-if value="{{row.expired}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if></span><span class="{{row.subCls}}">{{row.when}}</span></div></td>
+                    <td>{{row.hand}}</td>
+                    <td class="mv-num">{{row.value}}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          </sc-if>
+          <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+          <ul class="sp-mlist st-mlist" aria-label="Expiring batches">
+            <sc-for list="{{expiring}}" as="row" hint-placeholder-count="3">
+              <li class="sp-mrow">
+                <span class="sp-mrow__main"><span class="sp-mrow__nm">{{row.name}}<sc-if value="{{row.expired}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if></span><span class="sp-mrow__meta">Batch {{row.batch}} · {{row.date}}</span><span class="{{row.subCls}}">{{row.when}}</span></span>
+                <span class="sp-mrow__end"><span class="sp-mrow__fig" style="font-size: 14px;">{{row.hand}}</span><span class="sp-mrow__cap">{{row.value}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <p class="mv-help" style="margin: 0;">Value is at the selling price.</p>
+          </sc-if>
+          <sc-if value="{{noExpiring}}" hint-placeholder-val="{{false}}"><p class="st-ok">Nothing expires within {{within}} days.</p></sc-if>
+        </div>
+<sc-if value="{{tabphone}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card" role="region" aria-label="Running low">
+          <div class="st-h"><h2 class="pr-h">Running low</h2><sc-if value="{{hasLow}}" hint-placeholder-val="{{true}}"><span class="mv-badge mv-badge--attention">{{lowCount}}</span></sc-if></div>
+          <sc-if value="{{hasLow}}" hint-placeholder-val="{{true}}">
+          <ul class="st-rows">
+            <sc-for list="{{low}}" as="row" hint-placeholder-count="3">
+              <li class="st-row">
+                <span class="st-row__main"><span class="st-row__nm">{{row.name}}</span><span class="st-row__sub">On hand <b>{{row.hand}}</b> · wants {{row.min}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <sc-if value="{{noLow}}" hint-placeholder-val="{{false}}"><p class="st-ok">Nothing is below its low-stock level. Set one on a product to see it here — Products <span class="mv-kbd">{{productsKey}}</span>.</p></sc-if>
+        </div>
+
+</sc-if><sc-if value="{{tabphone}}" hint-placeholder-val="{{false}}">
+        <p class="mv-help" style="margin: 0;">To see everything you have, open Products <span class="mv-kbd">F5</span>.</p>
+</sc-if><sc-if value="{{tablet}}" hint-placeholder-val="{{false}}">
+        <div class="pr-endbar"><a class="mv-btn mv-btn--quiet" href="#">Enter opening stock</a><a class="mv-btn mv-btn--primary" href="#">Adjust stock <span class="mv-kbd">F8</span></a></div>
+</sc-if><sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+        <a class="mv-btn mv-btn--quiet" href="#" style="align-self: flex-start; margin-left: -12px;">Enter opening stock</a>
+</sc-if>
+    </div>
+    <div class="sv-paybar"><a class="mv-btn mv-btn--primary mv-btn--block" href="#">Adjust stock</a></div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["s30","s60","s90","quiet"],"default":"s30"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 's30';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const quiet = view === 'quiet';
+    const within = view === 's60' ? 60 : view === 's90' ? 90 : 30;
+    const e = (name, batch, date, when, sub, hand, value, expired) => ({ name, batch, date, when, subCls: sub, hand, value, expired: !!expired });
+    const dim = 'sp-what__sub', warn = 'sp-what__sub st-soon';
+    const all = [
+      e('Hydryllin syrup 120ml', 'HY218', '20 Oct 2026', 'expired 8 days ago', dim, '3 bottle', 'Rs 294.00', true),
+      e('Panadol 500mg', 'B2201', '12 Nov 2026', 'in 15 days', warn, '6 strip', 'Rs 180.00'),
+      e('Augmentin 625mg', 'A0766', '25 Nov 2026', 'in 28 days', warn, '2 box', 'Rs 2,900.00'),
+      e('Flagyl 400mg', 'F1187', '20 Dec 2026', 'in 53 days', dim, '1 box, 4 strip', 'Rs 630.00'),
+      e('Brufen 400mg', 'BR551', '15 Jan 2027', 'in 79 days', dim, '20 strip', 'Rs 900.00')
+    ];
+    const expiring = quiet ? [] : all.slice(0, within === 30 ? 3 : within === 60 ? 4 : 5);
+    return Object.assign({}, common, {
+      tabphone: phone || tablet, productsKey: 'F5', within,
+      hasPending: !quiet, pendingCount: '2', lowCount: '3',
+      pending: [
+        { name: 'Risek 20mg', short: 'Short by 2 strip', since: '26 Oct' },
+        { name: 'Brufen 400mg', short: 'Short by 5 tab', since: '27 Oct' }
+      ],
+      horizons: [30, 60, 90].map((d) => ({ text: d + ' days', on: d === within, cur: d === within ? 'page' : 'false' })),
+      expiring, hasExpiring: expiring.length > 0, noExpiring: expiring.length === 0,
+      low: quiet ? [] : [
+        { name: 'Flagyl 400mg', hand: '3 box, 6 strip', min: '5 box' },
+        { name: 'Augmentin 625mg', hand: '11 box', min: '12 box' },
+        { name: 'Hydryllin syrup 120ml', hand: '12 bottle', min: '24 bottle' }
+      ],
+      hasLow: !quiet, noLow: quiet,
+      cExp: tablet ? 150 : 170, cHand: tablet ? 120 : 140
+    });
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Day</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="day.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Day</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Day">
+        <div class="dy-head">
+          <div class="sp-head"><h1 class="mv-title pr-title">{{title}}</h1><p class="sp-meta">{{meta}}</p></div>
+          <div class="dy-ctl">
+            <nav class="sv-seg" aria-label="Report range">
+              <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{curDaily}}">Daily</a>
+              <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{curOverall}}">Overall</a>
+            </nav>
+            <sc-if value="{{daily}}" hint-placeholder-val="{{true}}"><label class="dy-pick"><span class="mv-label">Business day</span><input class="mv-input" autocomplete="off" aria-label="Business day" value="{{dayValue}}"></label></sc-if>
+          </div>
+        </div>
+        <div class="mv-tiles dy-tiles" style="--mv-tiles: {{tileCols}};">
+          <div class="mv-tile"><span class="mv-label">{{t.salesLabel}}</span><span class="mv-tile__value">{{t.sales}}</span><span class="mv-tile__meta">{{t.salesMeta}}</span></div>
+          <sc-if value="{{daily}}" hint-placeholder-val="{{true}}"><div class="{{t.cashCls}}"><span class="mv-label">Expected cash</span><span class="mv-tile__value">{{t.cash}}</span><span class="mv-tile__meta">{{t.cashMeta}}</span></div></sc-if>
+          <div class="mv-tile mv-tile--attention"><span class="mv-label">Owed to you</span><span class="mv-tile__value">{{t.owed}}</span><span class="mv-tile__meta">{{t.owedMeta}}</span></div>
+        </div>
+        <div class="mv-card dy-figs" role="region" aria-label="{{figsTitle}}">
+          <span class="mv-label">{{figsTitle}}</span>
+          <div class="dy-figs__in">
+            <sc-for list="{{figs}}" as="f" hint-placeholder-count="5">
+              <span class="dy-fig"><span class="dy-fig__k">{{f.k}}</span> <sc-if value="{{f.link}}" hint-placeholder-val="{{false}}"><a class="sp-link" href="#">{{f.v}}</a></sc-if><sc-if value="{{f.plain}}" hint-placeholder-val="{{true}}"><b class="{{f.cls}}">{{f.v}}</b></sc-if><sc-if value="{{f.hasSub}}" hint-placeholder-val="{{false}}"> <span class="dy-fig__s">{{f.sub}}</span></sc-if></span>
+            </sc-for>
+          </div>
+        </div>
+        <div class="{{bannerCls}}" role="note">
+          <sc-if value="{{hasThings}}" hint-placeholder-val="{{true}}"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg></sc-if><sc-if value="{{noThings}}" hint-placeholder-val="{{false}}"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+          <span class="mv-banner__text"><strong>{{bannerHead}}</strong> {{bannerTail}}</span>
+        </div>
+        <sc-if value="{{hasThings}}" hint-placeholder-val="{{true}}">
+        <ul class="mv-list dy-exc" aria-label="What needs a look">
+          <sc-for list="{{items}}" as="it" hint-placeholder-count="8">
+            <li>
+              <sc-if value="{{it.head}}" hint-placeholder-val="{{false}}"><span class="dy-exc__h">{{it.title}} <span>({{it.count}})</span></span></sc-if>
+              <sc-if value="{{it.row}}" hint-placeholder-val="{{true}}"><div class="mv-row dy-row">
+                <span class="mv-row__main"><span class="mv-row__name">{{it.name}}</span><span class="mv-row__meta">{{it.meta}}</span></span>
+                <sc-if value="{{it.badge}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if>
+                <sc-if value="{{it.hasEnd}}" hint-placeholder-val="{{true}}"><span class="{{it.endCls}}">{{it.end}}</span></sc-if>
+                <sc-if value="{{it.cancel}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{it.cancelLabel}}">Cancel entry</button></sc-if>
+              </div></sc-if>
+            </li>
+          </sc-for>
+        </ul>
+        </sc-if>
+
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 340px;" aria-label="Summary and actions">
+<sc-if value="{{drawerDay}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card dy-count" id="count">
+          <h2 class="pr-h">Count the drawer</h2>
+          <label class="mv-field"><span class="mv-label">Counted cash</span>
+            <span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="{{countCls}}" id="drawer-counted" inputmode="decimal" autocomplete="off" placeholder="What is in the drawer" value="{{counted}}"></span>
+          </label>
+          <div class="dy-diff" role="status">
+            <p class="dy-diff__k">Expected <b>{{expected}}</b> in the drawer</p>
+            <sc-if value="{{hasCount}}" hint-placeholder-val="{{false}}"><p class="{{diffCls}}">{{diffText}}</p></sc-if>
+          </div>
+          <div class="dy-act"><button type="button" class="mv-btn mv-btn--primary" disabled="{{noRecord}}">Record over/short</button></div>
+        </div>
+        <div class="mv-card pr-card dy-cash" id="cash">
+          <h2 class="pr-h">Record a cash movement</h2>
+          <sc-if value="{{noFloat}}" hint-placeholder-val="{{false}}">
+            <div class="mv-banner mv-banner--attention" role="note">
+              <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span class="mv-banner__text"><strong>No opening float recorded today.</strong> The expected cash above assumes the drawer started empty.</span>
+            </div>
+          </sc-if>
+          <div class="dy-cashrow">
+            <label class="mv-field"><span class="mv-label">Reason</span>
+              <select class="mv-select" id="movement-reason">
+                <sc-for list="{{reasons}}" as="r" hint-placeholder-count="3"><option selected="{{r.sel}}">{{r.text}}</option></sc-for>
+              </select>
+            </label>
+            <label class="mv-field"><span class="mv-label">Amount</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="{{amountCls}}" id="movement-amount" inputmode="decimal" autocomplete="off" value="{{amount}}"></span></label>
+          </div>
+          <p class="mv-help dy-dir">{{dirHelp}}</p>
+          <label class="mv-field"><span class="mv-label">Note (optional)</span><input class="mv-input" id="movement-note" autocomplete="off" value="{{note}}"></label>
+          <div class="dy-act"><button type="button" class="mv-btn mv-btn--secondary" disabled="{{noSave}}">Save</button></div>
+        </div>
+
+</sc-if><sc-if value="{{notDrawer}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">{{sideTitle}}</h2>
+          <p class="mv-help">{{sideText}}</p>
+          <div class="sp-quiet"><a class="mv-btn mv-btn--quiet" href="#">{{sideLink}}</a></div>
+        </div>
+
+</sc-if>
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" aria-current="page" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 82px;">
+        <div class="dy-head">
+          <div class="sp-head"><h1 class="mv-title pr-title">{{title}}</h1><p class="sp-meta">{{meta}}</p></div>
+          <div class="dy-ctl">
+            <nav class="sv-seg" aria-label="Report range">
+              <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{curDaily}}">Daily</a>
+              <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{curOverall}}">Overall</a>
+            </nav>
+            <sc-if value="{{daily}}" hint-placeholder-val="{{true}}"><label class="dy-pick"><span class="mv-label">Business day</span><input class="mv-input" autocomplete="off" aria-label="Business day" value="{{dayValue}}"></label></sc-if>
+          </div>
+        </div>
+        <div class="mv-tiles dy-tiles" style="--mv-tiles: {{tileCols}};">
+          <div class="mv-tile"><span class="mv-label">{{t.salesLabel}}</span><span class="mv-tile__value">{{t.sales}}</span><span class="mv-tile__meta">{{t.salesMeta}}</span></div>
+          <sc-if value="{{daily}}" hint-placeholder-val="{{true}}"><div class="{{t.cashCls}}"><span class="mv-label">Expected cash</span><span class="mv-tile__value">{{t.cash}}</span><span class="mv-tile__meta">{{t.cashMeta}}</span></div></sc-if>
+          <div class="mv-tile mv-tile--attention"><span class="mv-label">Owed to you</span><span class="mv-tile__value">{{t.owed}}</span><span class="mv-tile__meta">{{t.owedMeta}}</span></div>
+        </div>
+        <div class="mv-card dy-figs" role="region" aria-label="{{figsTitle}}">
+          <span class="mv-label">{{figsTitle}}</span>
+          <div class="dy-figs__in">
+            <sc-for list="{{figs}}" as="f" hint-placeholder-count="5">
+              <span class="dy-fig"><span class="dy-fig__k">{{f.k}}</span> <sc-if value="{{f.link}}" hint-placeholder-val="{{false}}"><a class="sp-link" href="#">{{f.v}}</a></sc-if><sc-if value="{{f.plain}}" hint-placeholder-val="{{true}}"><b class="{{f.cls}}">{{f.v}}</b></sc-if><sc-if value="{{f.hasSub}}" hint-placeholder-val="{{false}}"> <span class="dy-fig__s">{{f.sub}}</span></sc-if></span>
+            </sc-for>
+          </div>
+        </div>
+        <div class="{{bannerCls}}" role="note">
+          <sc-if value="{{hasThings}}" hint-placeholder-val="{{true}}"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg></sc-if><sc-if value="{{noThings}}" hint-placeholder-val="{{false}}"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+          <span class="mv-banner__text"><strong>{{bannerHead}}</strong> {{bannerTail}}</span>
+        </div>
+        <sc-if value="{{hasThings}}" hint-placeholder-val="{{true}}">
+        <ul class="mv-list dy-exc" aria-label="What needs a look">
+          <sc-for list="{{items}}" as="it" hint-placeholder-count="8">
+            <li>
+              <sc-if value="{{it.head}}" hint-placeholder-val="{{false}}"><span class="dy-exc__h">{{it.title}} <span>({{it.count}})</span></span></sc-if>
+              <sc-if value="{{it.row}}" hint-placeholder-val="{{true}}"><div class="mv-row dy-row">
+                <span class="mv-row__main"><span class="mv-row__name">{{it.name}}</span><span class="mv-row__meta">{{it.meta}}</span></span>
+                <sc-if value="{{it.badge}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if>
+                <sc-if value="{{it.hasEnd}}" hint-placeholder-val="{{true}}"><span class="{{it.endCls}}">{{it.end}}</span></sc-if>
+                <sc-if value="{{it.cancel}}" hint-placeholder-val="{{false}}"><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{it.cancelLabel}}">Cancel entry</button></sc-if>
+              </div></sc-if>
+            </li>
+          </sc-for>
+        </ul>
+        </sc-if>
+<sc-if value="{{drawerDay}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card dy-count" id="count">
+          <h2 class="pr-h">Count the drawer</h2>
+          <label class="mv-field"><span class="mv-label">Counted cash</span>
+            <span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="{{countCls}}" id="drawer-counted" inputmode="decimal" autocomplete="off" placeholder="What is in the drawer" value="{{counted}}"></span>
+          </label>
+          <div class="dy-diff" role="status">
+            <p class="dy-diff__k">Expected <b>{{expected}}</b> in the drawer</p>
+            <sc-if value="{{hasCount}}" hint-placeholder-val="{{false}}"><p class="{{diffCls}}">{{diffText}}</p></sc-if>
+          </div>
+          <div class="dy-act"><button type="button" class="mv-btn mv-btn--primary" disabled="{{noRecord}}">Record over/short</button></div>
+        </div>
+        <div class="mv-card pr-card dy-cash" id="cash">
+          <h2 class="pr-h">Record a cash movement</h2>
+          <sc-if value="{{noFloat}}" hint-placeholder-val="{{false}}">
+            <div class="mv-banner mv-banner--attention" role="note">
+              <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+              <span class="mv-banner__text"><strong>No opening float recorded today.</strong> The expected cash above assumes the drawer started empty.</span>
+            </div>
+          </sc-if>
+          <div class="dy-cashrow">
+            <label class="mv-field"><span class="mv-label">Reason</span>
+              <select class="mv-select" id="movement-reason">
+                <sc-for list="{{reasons}}" as="r" hint-placeholder-count="3"><option selected="{{r.sel}}">{{r.text}}</option></sc-for>
+              </select>
+            </label>
+            <label class="mv-field"><span class="mv-label">Amount</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="{{amountCls}}" id="movement-amount" inputmode="decimal" autocomplete="off" value="{{amount}}"></span></label>
+          </div>
+          <p class="mv-help dy-dir">{{dirHelp}}</p>
+          <label class="mv-field"><span class="mv-label">Note (optional)</span><input class="mv-input" id="movement-note" autocomplete="off" value="{{note}}"></label>
+          <div class="dy-act"><button type="button" class="mv-btn mv-btn--secondary" disabled="{{noSave}}">Save</button></div>
+        </div>
+
+</sc-if><sc-if value="{{notDrawer}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card">
+          <h2 class="pr-h">{{sideTitle}}</h2>
+          <p class="mv-help">{{sideText}}</p>
+          <div class="sp-quiet"><a class="mv-btn mv-btn--quiet" href="#">{{sideLink}}</a></div>
+        </div>
+
+</sc-if>
+    </div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["today","quiet","nofloat","short","expense","overall","past"],"default":"today"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'today';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const overall = view === 'overall', past = view === 'past';
+    const quiet = view === 'quiet' || view === 'nofloat';
+    const drawerDay = !overall && !past;
+    const short = view === 'short', expense = view === 'expense', nofloat = view === 'nofloat';
+    const row = (name, meta, end, endCls, extra) => Object.assign({ row: true, head: false, name, meta, end, endCls: 'mv-row__end' + (endCls ? ' ' + endCls : ''), hasEnd: !!end, badge: false, cancel: false, cancelLabel: '' }, extra || {});
+    const head = (title, count) => ({ row: false, head: true, title, count: String(count) });
+    const amber = 'dy-warn';
+    let items = [], thingsHead = '', thingsTail = '', figs = [];
+    const fig = (k, v, o) => Object.assign({ k, v, cls: '', link: false, plain: true, hasSub: false, sub: '' }, o || {});
+    if (overall) {
+      items = [
+        head('Expired stock sold', 1), row('Hydryllin syrup 120ml', '3 bottle · batch HY218, expired 20 Oct 2026 · Bilal, 21 Oct 17:20', '', '', { badge: true }),
+        head('Discounts and overrides', 3),
+        row('Bill discount', 'Receipt AS-0912 · Rs 2,400.00 → Rs 2,200.00 · approved by Imran · Ali, 14 Oct', 'Rs 200.00 off', amber),
+        row('Bill discount', 'Receipt AS-0877 · Rs 980.00 → Rs 930.00 · Bilal, 9 Oct', 'Rs 50.00 off', amber),
+        row('Brufen 400mg', 'Receipt AS-0866 · price changed · Bilal, 8 Oct', 'Rs 5.00 off', amber),
+        head('Returns', 2), row('Return AS-1041', 'for receipt AS-1012 · Ali, 28 Oct 11:12', 'Rs 45.50 back', amber), row('Return AS-0990', 'for receipt AS-0975 · Bilal, 19 Oct', 'Rs 312.00 back', amber),
+        head('Quick items', 1), row('Calpol syrup 120ml', 'Needs completing · added 27 Oct', ''),
+        head('Adjustments', 1), row('Flagyl 400mg', 'Took off 2 tab · Damaged · Imran, 28 Oct', ''),
+        head('Cash movements', 1), row('Expense', '“Tea and cleaning” · Imran, 28 Oct 10:20', 'Rs 300.00 out', amber, { cancel: true, cancelLabel: 'Cancel the Rs 300.00 expense' })
+      ];
+      thingsHead = '9 things need a look.'; thingsTail = '1 expired sale · 3 discounts · 2 returns · 1 quick item · 1 adjustment · 1 cash movement';
+      figs = [
+        fig('Margin', 'Rs 214,300.00'),
+        fig('Discounts', 'Rs 18,420.00', { cls: amber, hasSub: true, sub: '(Rs 11,100.00 on items, Rs 7,320.00 on bills)' }),
+        fig('Written off', 'Rs 3,150.00', { cls: amber, hasSub: true, sub: 'at cost' }),
+        fig('Paid in advance', 'Rs 200.00', { hasSub: true, sub: '1 customer' }),
+        fig('', '3,412 sales →', { link: true, plain: false }),
+        fig('Units sold', '41,280'),
+        fig('Owed to suppliers', 'Rs 21,260.00', { cls: amber, hasSub: true, sub: 'right now' }),
+        fig('Credit with suppliers', 'Rs 300.00', { hasSub: true, sub: '1 supplier, right now' })
+      ];
+    } else if (!quiet) {
+      items = [
+        head('Expired stock sold', 1), row('Panadol 500mg', '1 strip · batch K221, expired 12 Oct 2026 · Ali, 14:05 · receipt AS-1034', '', '', { badge: true }),
+        head('Discounts and overrides', 1), row('Bill discount', 'Receipt AS-1036 · Rs 1,675.00 → Rs 1,625.00 · approved by Imran · Ali, 15:40', 'Rs 50.00 off', amber),
+        head('Returns', 1), row('Return AS-1041', 'for receipt AS-1012 · “wrong strength” · Ali, 11:12', 'Rs 45.50 back', amber),
+        head('Cash movements', 1), row('Expense', '“Tea and cleaning” · Imran, 10:20', 'Rs 300.00 out', amber, { cancel: true, cancelLabel: 'Cancel the Rs 300.00 expense' })
+      ];
+      thingsHead = '4 things need a look.'; thingsTail = '1 expired sale · 1 discount · 1 return · 1 cash movement';
+    }
+    if (!overall) {
+      figs = quiet
+        ? [fig('Margin', 'Rs 1,020.00'), fig('', '9 sales →', { link: true, plain: false }), fig('Units sold', '31'), fig('Owed to suppliers', 'Rs 21,260.00', { cls: amber, hasSub: true, sub: 'right now' })]
+        : [fig('Margin', 'Rs 6,180.00'), fig('Discounts', 'Rs 50.00', { cls: amber, hasSub: true, sub: '(Rs 50.00 on bills)' }), fig('', '62 sales →', { link: true, plain: false }), fig('Units sold', '214'), fig('Owed to suppliers', 'Rs 21,260.00', { cls: amber, hasSub: true, sub: 'right now' })];
+    }
+    const noThings = quiet;
+    const title = overall ? 'All time' : past ? 'Tuesday 27 October' : 'Today';
+    const meta = overall ? 'Everything since you started. The drawer is counted on a single day, so it is only offered on Daily.'
+      : past ? 'An earlier business day. Nothing is locked.' : 'Wednesday 28 October · the day never closes or locks';
+    const counted = short ? '41,750.00' : '';
+    const t = overall
+      ? { salesLabel: 'Sales', sales: 'Rs 1,284,500', salesMeta: 'all time, net of returns', owed: 'Rs 18,350', owedMeta: 'all time, 23 customers' }
+      : past
+      ? { salesLabel: 'Sales that day', sales: 'Rs 39,870', salesMeta: '51 receipts, net of returns', cash: 'Rs 33,420', cashMeta: 'at close of that day', cashCls: 'mv-tile', owed: 'Rs 18,350', owedMeta: 'all time, 23 customers' }
+      : quiet
+      ? { salesLabel: 'Sales today', sales: 'Rs 6,900', salesMeta: '9 receipts, net of returns', cash: nofloat ? 'Rs 6,900' : 'Rs 36,900', cashMeta: nofloat ? 'no opening float yet' : 'today, in the drawer', cashCls: nofloat ? 'mv-tile mv-tile--attention' : 'mv-tile', owed: 'Rs 18,350', owedMeta: 'all time, 23 customers' }
+      : { salesLabel: 'Sales today', sales: 'Rs 48,210', salesMeta: '62 receipts, net of returns', cash: 'Rs 41,900', cashMeta: 'today, in the drawer', cashCls: 'mv-tile', owed: 'Rs 18,350', owedMeta: 'all time, 23 customers' };
+    const reasonSel = expense ? 'Expense' : 'Opening float';
+    const dirHelp = expense ? 'Money out of the drawer.' : 'Money into the drawer at the start of the day.';
+    return Object.assign({}, common, {
+      title, meta, daily: !overall, curDaily: overall ? 'false' : 'page', curOverall: overall ? 'page' : 'false',
+      dayValue: past ? '27/10/2026' : '28/10/2026', tileCols: overall ? (phone ? 1 : 2) : (phone ? 2 : 3), t,
+      figsTitle: overall ? 'All-time figures' : past ? 'That day’s figures' : 'Today’s figures', figs,
+      hasThings: !noThings, noThings,
+      bannerCls: noThings ? 'mv-banner mv-banner--done' : 'mv-banner mv-banner--attention',
+      bannerHead: noThings ? 'Nothing needs a look today.' : thingsHead, bannerTail: noThings ? '' : thingsTail,
+      items,
+      drawerDay, notDrawer: !drawerDay,
+      sideTitle: overall ? 'Overall has no drawer' : 'Another day',
+      sideText: overall ? 'The drawer is counted for one day, so Count the drawer and cash movements are only offered on Daily, for today.' : 'You are looking at an earlier day. The drawer is counted, and cash is recorded, for today only.',
+      sideLink: overall ? 'Back to Daily' : 'Back to today',
+      counted, countCls: short ? 'mv-input is-focus' : 'mv-input', expected: 'Rs ' + (nofloat ? '6,900.00' : quiet ? '36,900.00' : '41,900.00'),
+      hasCount: short, diffText: 'Short by Rs 150.00', diffCls: 'dy-diff__v dy-warn', noRecord: !short,
+      noFloat: nofloat, reasons: [{ text: 'Opening float', sel: reasonSel === 'Opening float' }, { text: 'Owner withdrawal', sel: false }, { text: 'Expense', sel: reasonSel === 'Expense' }],
+      amount: expense ? '300.00' : '', amountCls: (expense || nofloat) ? 'mv-input is-focus' : 'mv-input', note: expense ? 'Tea and cleaning' : '', dirHelp, noSave: !expense
+    });
+  }
+}
+</script>
+</body>
+</html>

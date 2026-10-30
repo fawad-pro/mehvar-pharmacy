@@ -1,0 +1,97 @@
+/* Invoices & suppliers. Every value is a Mehvar token; layout comes from sale.css, primitives from ds/mehvar/components/bundle.css. */
+
+/* Page head inside the main column: a way back, the title, one meta line. */
+.sp-head { display: flex; flex-direction: column; gap: 2px; }
+.sp-back { align-self: flex-start; margin-left: -12px; color: var(--blue-600); font-weight: 500; }
+.sp-titlerow { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.sp-meta { margin: 0; font: var(--text-body-sm); color: var(--ink-2); }
+.sp-meta b { font-weight: 500; color: var(--navy); font-variant-numeric: tabular-nums; }
+.sp-note { margin: 0; padding: 0 4px; font: var(--text-caption); color: var(--ink-2); }
+
+/* Tables that scroll inside their card, header pinned. */
+.sp-tablewrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.sp-tablewrap thead th { position: sticky; top: 0; background: var(--page); z-index: 1; }
+.sp-sub { color: var(--ink-2); }
+.sp-what { display: flex; flex-direction: column; padding: 4px 0; }
+.sp-what__main { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; font-weight: 500; }
+.sp-what__sub { font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.sp-link { color: var(--blue-600); font-weight: 500; text-decoration: none; }
+.sp-link:hover { text-decoration: underline; }
+.mv-table td.sp-when { white-space: nowrap; color: var(--ink-2); }
+.mv-table tfoot td { border-top: 1px solid var(--line); height: 44px; font-weight: 600; background: var(--page); }
+.sp-rowbtn { height: 44px; min-height: 44px; padding: 0 10px; font-size: 13px; }
+.sp-tight td { padding-top: 0; padding-bottom: 0; }
+
+/* Rail figures. */
+.sp-fig { margin: 0; font: var(--text-total); letter-spacing: -0.02em; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--navy); }
+.sp-fig--owes { color: var(--amber-text); }
+.sp-fig--settled { color: var(--green-700); }
+.sp-kv { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); font: var(--text-body-sm); color: var(--ink-2); }
+.sp-kv b { font-weight: 500; color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-kv--total { padding-top: 8px; border-top: 1px solid var(--line); }
+.sp-kv--total b { font-weight: 600; }
+.sp-pos { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-pos--owes { color: var(--amber-text); }
+.sp-pos--settled { color: var(--green-700); }
+.sp-pos--advance { color: var(--navy); }
+.sp-actions { display: flex; flex-direction: column; gap: var(--space-2); }
+.sp-quiet { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-left: -12px; }
+
+/* Correct page: one card per invoice line, its two actions at the end. */
+.sp-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0; border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); overflow: hidden; }
+.sp-line { display: flex; align-items: center; gap: var(--space-4); padding: 12px 16px; border-top: 1px solid var(--line); }
+.sp-line:first-child { border-top: 0; }
+.sp-line[aria-current='true'] { background: var(--blue-50); }
+.sp-line__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sp-line__nm { font: var(--text-control); font-weight: 600; }
+.sp-line__fig { font: var(--text-body-sm); color: var(--navy); font-variant-numeric: tabular-nums; }
+.sp-line__meta { font: var(--text-body-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sp-line__btns { flex: none; display: flex; gap: var(--space-2); }
+
+/* Phone rows: a name that wraps, every figure shown, the amount at the right. */
+.sp-mlist { list-style: none; margin: 0; padding: 0; border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-card); overflow: hidden; }
+.sp-mrow { display: flex; gap: var(--space-3); padding: 10px 14px; border-top: 1px solid var(--line); min-height: 44px; box-sizing: border-box; }
+.sp-mrow:first-child { border-top: 0; }
+.sp-mrow__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sp-mrow__nm { font: var(--text-control); font-weight: 600; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sp-mrow__meta { font: var(--text-body-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.sp-mrow__end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
+.sp-mrow__fig { font: var(--text-control); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-mrow__cap { font-size: 12px; line-height: 16px; color: var(--ink-2); white-space: nowrap; }
+a.sp-mrow { color: inherit; text-decoration: none; }
+.sp-mrow .mv-btn { margin-top: 4px; }
+
+/* Dialog pieces: old beside new. */
+.sp-was { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px var(--space-4); padding: var(--space-4); background: var(--page); border-radius: var(--radius-card); font: var(--text-body-sm); align-items: baseline; }
+.sp-was__h { font-size: 12px; font-weight: 500; color: var(--ink-2); text-align: right; }
+.sp-was__h:first-child { text-align: left; }
+.sp-was__k { color: var(--navy); }
+.sp-was__old { color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-was__new { color: var(--navy); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sp-fields3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.sp-fields3 .mv-input { text-align: right; font-variant-numeric: tabular-nums; }
+.sp-onpaper { margin: -8px 0 0; font: var(--text-body-sm); color: var(--ink-2); }
+.sp-onpaper b { color: var(--navy); font-weight: 500; font-variant-numeric: tabular-nums; }
+.sp-dialog-slot { width: 440px; }
+.sp-dialog-slot .mv-dialog { max-width: 440px; }
+.sp-sheet-scroll { max-height: 700px; overflow: hidden; }
+
+/* Tablet. */
+.sv--tablet .sp-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-content: start; flex: none; }
+.sv--tablet .sp-rail .sp-actions { grid-column: 2; }
+.sv--tablet .sp-tiles { --mv-tiles: 2; }
+
+/* Phone. */
+.sv--phone .sp-fields3 { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2); }
+.sv--phone .sp-line { flex-direction: column; align-items: stretch; gap: var(--space-2); }
+.sv--phone .sp-line__btns .mv-btn { flex: 1; }
+.sp-tiles2 { --mv-tiles: 2; gap: var(--space-3); }
+.sp-tiles2 .mv-tile { padding: 14px 16px; }
+.sp-tiles2 .mv-tile__value { font-size: 20px; }
+.sp-paybar__row { display: flex; justify-content: space-between; align-items: baseline; font: var(--text-body-sm); color: var(--ink-2); }
+.sp-paybar__row b { font: var(--text-stat); color: var(--navy); font-variant-numeric: tabular-nums; }
+.sp-paybar__row b.sp-pos--owes { color: var(--amber-text); }
+.sp-rail-l { flex: 0 0 340px; }
+.sv-sheet .sp-fields3 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.sv-sheet .sp-fields3 .sp-cost { grid-column: 1 / -1; }
+.sv-sheet .sp-was { padding: var(--space-3); }

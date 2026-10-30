@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Adjust stock</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="stock.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Adjust stock</span>
+      <div class="sv-top__end">
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Adjust stock">
+        <div class="sp-head">
+          <h1 class="mv-title pr-title">{{title}}</h1>
+          <p class="sp-meta">{{meta}}</p>
+        </div>
+        <sc-if value="{{saved}}" hint-placeholder-val="{{false}}">
+          <div class="mv-banner mv-banner--done" role="status">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="mv-banner__text"><strong>Saved.</strong> 28 cap already sold are now accounted for.</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{showDir}}" hint-placeholder-val="{{true}}">
+        <div class="sv-seg" role="group" aria-label="Direction">
+          <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{dirRemove}}">Remove stock</button>
+          <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{dirAdd}}">Add stock</button>
+        </div>
+        </sc-if>
+        <label class="mv-field sv-search" data-scan-home="" data-scan-target="">
+          <span class="sv-search__row"><span class="mv-label">Search or scan a product</span><sc-if value="{{keys}}" hint-placeholder-val="{{true}}"><span class="sv-hint">Enter goes to how many</span></sc-if></span>
+          <input class="{{searchCls}}" placeholder="Type a name or scan the pack" autocomplete="off" value="{{term}}">
+        </label>
+        <sc-if value="{{chosen}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card ad-card">
+          <h2 class="pr-h pr-nm">{{p.name}}</h2>
+
+          <sc-if value="{{removing}}" hint-placeholder-val="{{true}}">
+          <div class="ad-row ad-row--remove">
+            <div class="mv-field"><span class="mv-label" id="rin">Remove in</span>
+              <div class="sv-seg" role="group" aria-labelledby="rin">
+                <sc-for list="{{p.units}}" as="u" hint-placeholder-count="3"><button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{u.on}}">{{u.name}}</button></sc-for>
+              </div>
+            </div>
+            <label class="mv-field"><span class="mv-label">{{p.howMany}}</span><input class="mv-input ad-num is-focus" id="adjust-qty" inputmode="numeric" autocomplete="off" value="{{p.qty}}"></label>
+            <label class="{{reasonField}}"><span class="mv-label">Reason</span>
+              <select class="{{reasonCls}}" id="adjust-reason" aria-invalid="{{pickErr}}">
+                <sc-for list="{{reasons}}" as="r" hint-placeholder-count="5"><option disabled="{{r.dis}}" selected="{{r.sel}}">{{r.text}}</option></sc-for>
+              </select>
+              <sc-if value="{{pickErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert">Pick a reason.</span></sc-if>
+            </label>
+          </div>
+          <label class="mv-field"><span class="mv-label">From batch</span>
+            <select class="mv-select" id="adjust-batch">
+              <sc-for list="{{p.batches}}" as="b" hint-placeholder-count="2"><option selected="{{b.sel}}">{{b.text}}</option></sc-for>
+            </select>
+          </label>
+          </sc-if>
+
+          <sc-if value="{{adding}}" hint-placeholder-val="{{false}}">
+          <div class="ad-row ad-row--add">
+            <fieldset class="ad-counts">
+              <legend class="mv-label">{{p.countsLegend}}</legend>
+              <div class="ad-counts__in">
+                <sc-for list="{{p.counts}}" as="c" hint-placeholder-count="3"><label class="mv-field"><span class="mv-label">{{c.name}}</span><input class="{{c.cls}}" inputmode="numeric" autocomplete="off" placeholder="0" value="{{c.value}}"></label></sc-for>
+              </div>
+            </fieldset>
+            <label class="{{reasonField}}"><span class="mv-label">Reason</span>
+              <select class="{{reasonCls}}" id="adjust-reason" aria-invalid="{{pickErr}}">
+                <sc-for list="{{reasons}}" as="r" hint-placeholder-count="5"><option disabled="{{r.dis}}" selected="{{r.sel}}">{{r.text}}</option></sc-for>
+              </select>
+              <sc-if value="{{pickErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert">Pick a reason.</span></sc-if>
+            </label>
+          </div>
+          <div class="ad-row ad-row--money">
+            <label class="mv-field"><span class="mv-label">{{p.costLabel}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" id="adjust-cost" inputmode="decimal" autocomplete="off" value="{{p.cost}}"></span></label>
+            <label class="mv-field"><span class="mv-label">{{p.priceLabel}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" id="adjust-price" inputmode="decimal" autocomplete="off" value="{{p.price}}"></span></label>
+            <label class="mv-field"><span class="mv-label">Expiry</span><input class="mv-input" id="adjust-expiry" placeholder="dd/mm/yyyy" value="{{p.expiry}}"></label>
+          </div>
+          <p class="ad-inall" role="status">{{p.inAll}}</p>
+          </sc-if>
+
+          <label class="mv-field"><span class="mv-label">Note (optional)</span><input class="mv-input" id="adjust-note" autocomplete="off" value="{{p.note}}"></label>
+        </div>
+        </sc-if>
+        <div class="mv-card pr-card" role="region" aria-label="Recently adjusted">
+          <div class="st-h"><h2 class="pr-h">Recently adjusted</h2><span class="sp-meta">what changed, and why</span></div>
+          <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+          <div class="mv-table-wrap st-wrap">
+            <table class="mv-table mv-cart sv-cart44 pr-table">
+              <colgroup><col style="width: 124px"><col style="width: auto"><col style="width: {{cChange}}px"><col style="width: {{cWhy}}px"></colgroup>
+              <thead><tr><th>When · by</th><th>Product</th><th>What changed</th><th>Why</th></tr></thead>
+              <tbody>
+                <sc-for list="{{history}}" as="row" hint-placeholder-count="7">
+                  <tr>
+                    <td><div class="sp-what"><span>{{row.date}}</span><span class="sp-what__sub">{{row.by}}</span></div></td>
+                    <td><span class="pr-nm" style="font-weight: 500;">{{row.name}}</span></td>
+                    <td><span class="{{row.cls}}">{{row.what}}</span></td>
+                    <td><div class="sp-what"><span>{{row.reason}}</span><sc-if value="{{row.hasNote}}" hint-placeholder-val="{{false}}"><span class="sp-what__sub">“{{row.note}}”</span></sc-if></div></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          </sc-if>
+          <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+          <ul class="sp-mlist st-mlist" aria-label="Recently adjusted">
+            <sc-for list="{{history}}" as="row" hint-placeholder-count="7">
+              <li class="sp-mrow">
+                <span class="sp-mrow__main"><span class="sp-mrow__nm">{{row.name}}</span><span class="{{row.cls}}">{{row.what}}</span><span class="sp-mrow__meta">{{row.reason}}<sc-if value="{{row.hasNote}}" hint-placeholder-val="{{false}}"> · “{{row.note}}”</sc-if></span><span class="sp-mrow__meta">{{row.by}} · {{row.date}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+        </div>
+
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 340px;" aria-label="Summary and actions">
+        <div class="mv-card pr-card ad-sum">
+          <span class="mv-label">{{sum.label}}</span>
+          <p class="ad-sum__fig">{{sum.fig}}</p>
+          <p class="ad-sum__sub">{{sum.sub}}</p>
+          <sc-if value="{{sum.hasLines}}" hint-placeholder-val="{{true}}">
+            <div class="sp-kv"><span>{{sum.k1}}</span><b>{{sum.v1}}</b></div>
+            <div class="sp-kv"><span>{{sum.k2}}</span><b class="{{sum.v2cls}}">{{sum.v2}}</b></div>
+          </sc-if>
+        </div>
+        <p class="mv-help" style="margin: 0; padding: 0 4px;">Recorded against your name and shown in the owner’s day view.</p>
+        <button type="button" class="mv-btn mv-btn--primary mv-btn--block sv-pay" disabled="{{noSave}}">Save <span class="mv-kbd">Enter</span></button>
+
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" aria-current="page" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 150px;">
+        <div class="sp-head">
+          <h1 class="mv-title pr-title">{{title}}</h1>
+          <p class="sp-meta">{{meta}}</p>
+        </div>
+        <sc-if value="{{saved}}" hint-placeholder-val="{{false}}">
+          <div class="mv-banner mv-banner--done" role="status">
+            <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            <span class="mv-banner__text"><strong>Saved.</strong> 28 cap already sold are now accounted for.</span>
+          </div>
+        </sc-if>
+        <sc-if value="{{showDir}}" hint-placeholder-val="{{true}}">
+        <div class="sv-seg" role="group" aria-label="Direction">
+          <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{dirRemove}}">Remove stock</button>
+          <button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{dirAdd}}">Add stock</button>
+        </div>
+        </sc-if>
+        <label class="mv-field sv-search" data-scan-home="" data-scan-target="">
+          <span class="sv-search__row"><span class="mv-label">Search or scan a product</span><sc-if value="{{keys}}" hint-placeholder-val="{{true}}"><span class="sv-hint">Enter goes to how many</span></sc-if></span>
+          <input class="{{searchCls}}" placeholder="Type a name or scan the pack" autocomplete="off" value="{{term}}">
+        </label>
+        <sc-if value="{{chosen}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card ad-card">
+          <h2 class="pr-h pr-nm">{{p.name}}</h2>
+
+          <sc-if value="{{removing}}" hint-placeholder-val="{{true}}">
+          <div class="ad-row ad-row--remove">
+            <div class="mv-field"><span class="mv-label" id="rin">Remove in</span>
+              <div class="sv-seg" role="group" aria-labelledby="rin">
+                <sc-for list="{{p.units}}" as="u" hint-placeholder-count="3"><button type="button" class="mv-btn mv-btn--secondary" aria-pressed="{{u.on}}">{{u.name}}</button></sc-for>
+              </div>
+            </div>
+            <label class="mv-field"><span class="mv-label">{{p.howMany}}</span><input class="mv-input ad-num is-focus" id="adjust-qty" inputmode="numeric" autocomplete="off" value="{{p.qty}}"></label>
+            <label class="{{reasonField}}"><span class="mv-label">Reason</span>
+              <select class="{{reasonCls}}" id="adjust-reason" aria-invalid="{{pickErr}}">
+                <sc-for list="{{reasons}}" as="r" hint-placeholder-count="5"><option disabled="{{r.dis}}" selected="{{r.sel}}">{{r.text}}</option></sc-for>
+              </select>
+              <sc-if value="{{pickErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert">Pick a reason.</span></sc-if>
+            </label>
+          </div>
+          <label class="mv-field"><span class="mv-label">From batch</span>
+            <select class="mv-select" id="adjust-batch">
+              <sc-for list="{{p.batches}}" as="b" hint-placeholder-count="2"><option selected="{{b.sel}}">{{b.text}}</option></sc-for>
+            </select>
+          </label>
+          </sc-if>
+
+          <sc-if value="{{adding}}" hint-placeholder-val="{{false}}">
+          <div class="ad-row ad-row--add">
+            <fieldset class="ad-counts">
+              <legend class="mv-label">{{p.countsLegend}}</legend>
+              <div class="ad-counts__in">
+                <sc-for list="{{p.counts}}" as="c" hint-placeholder-count="3"><label class="mv-field"><span class="mv-label">{{c.name}}</span><input class="{{c.cls}}" inputmode="numeric" autocomplete="off" placeholder="0" value="{{c.value}}"></label></sc-for>
+              </div>
+            </fieldset>
+            <label class="{{reasonField}}"><span class="mv-label">Reason</span>
+              <select class="{{reasonCls}}" id="adjust-reason" aria-invalid="{{pickErr}}">
+                <sc-for list="{{reasons}}" as="r" hint-placeholder-count="5"><option disabled="{{r.dis}}" selected="{{r.sel}}">{{r.text}}</option></sc-for>
+              </select>
+              <sc-if value="{{pickErr}}" hint-placeholder-val="{{false}}"><span class="mv-msg-error" role="alert">Pick a reason.</span></sc-if>
+            </label>
+          </div>
+          <div class="ad-row ad-row--money">
+            <label class="mv-field"><span class="mv-label">{{p.costLabel}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" id="adjust-cost" inputmode="decimal" autocomplete="off" value="{{p.cost}}"></span></label>
+            <label class="mv-field"><span class="mv-label">{{p.priceLabel}}</span><span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" id="adjust-price" inputmode="decimal" autocomplete="off" value="{{p.price}}"></span></label>
+            <label class="mv-field"><span class="mv-label">Expiry</span><input class="mv-input" id="adjust-expiry" placeholder="dd/mm/yyyy" value="{{p.expiry}}"></label>
+          </div>
+          <p class="ad-inall" role="status">{{p.inAll}}</p>
+          </sc-if>
+
+          <label class="mv-field"><span class="mv-label">Note (optional)</span><input class="mv-input" id="adjust-note" autocomplete="off" value="{{p.note}}"></label>
+        </div>
+        </sc-if>
+        <div class="mv-card pr-card" role="region" aria-label="Recently adjusted">
+          <div class="st-h"><h2 class="pr-h">Recently adjusted</h2><span class="sp-meta">what changed, and why</span></div>
+          <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+          <div class="mv-table-wrap st-wrap">
+            <table class="mv-table mv-cart sv-cart44 pr-table">
+              <colgroup><col style="width: 124px"><col style="width: auto"><col style="width: {{cChange}}px"><col style="width: {{cWhy}}px"></colgroup>
+              <thead><tr><th>When · by</th><th>Product</th><th>What changed</th><th>Why</th></tr></thead>
+              <tbody>
+                <sc-for list="{{history}}" as="row" hint-placeholder-count="7">
+                  <tr>
+                    <td><div class="sp-what"><span>{{row.date}}</span><span class="sp-what__sub">{{row.by}}</span></div></td>
+                    <td><span class="pr-nm" style="font-weight: 500;">{{row.name}}</span></td>
+                    <td><span class="{{row.cls}}">{{row.what}}</span></td>
+                    <td><div class="sp-what"><span>{{row.reason}}</span><sc-if value="{{row.hasNote}}" hint-placeholder-val="{{false}}"><span class="sp-what__sub">“{{row.note}}”</span></sc-if></div></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          </sc-if>
+          <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+          <ul class="sp-mlist st-mlist" aria-label="Recently adjusted">
+            <sc-for list="{{history}}" as="row" hint-placeholder-count="7">
+              <li class="sp-mrow">
+                <span class="sp-mrow__main"><span class="sp-mrow__nm">{{row.name}}</span><span class="{{row.cls}}">{{row.what}}</span><span class="sp-mrow__meta">{{row.reason}}<sc-if value="{{row.hasNote}}" hint-placeholder-val="{{false}}"> · “{{row.note}}”</sc-if></span><span class="sp-mrow__meta">{{row.by}} · {{row.date}}</span></span>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+        </div>
+
+    </div>
+    <div class="sv-paybar">
+      <div class="rv-paybar__total"><span>{{sum.label}}</span><b>{{sum.fig}}</b></div>
+      <button type="button" class="mv-btn mv-btn--primary mv-btn--block" disabled="{{noSave}}">Save</button>
+    </div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["start","remove","reason","add","opening","saved"],"default":"start"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'start';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const chosen = view !== 'start';
+    const opening = view === 'opening';
+    const adding = view === 'add' || view === 'opening' || view === 'saved';
+    const removing = !adding;
+    const reasonList = (kind, picked) => {
+      const labels = kind === 'remove'
+        ? ['Count correction', 'Damaged', 'Expired — written off', 'Returned to distributor']
+        : ['Count correction', 'Opening stock'];
+      const out = [{ text: 'Pick a reason…', dis: true, sel: picked === null }];
+      labels.forEach((t) => out.push({ text: t, dis: false, sel: t === picked }));
+      return out;
+    };
+    const hist = (date, by, name, what, out, reason, note) => ({ date, by, name, what, cls: out ? 'ad-out' : 'ad-in', reason, hasNote: !!note, note: note || '' });
+    const history = [
+      hist('28 Oct', 'Imran', 'Flagyl 400mg', 'Took off 2 tab', true, 'Damaged', 'Fell off the shelf'),
+      hist('27 Oct', 'Bilal', 'Hydryllin syrup 120ml', 'Took off 1 bottle', true, 'Damaged', 'Cap leaked'),
+      hist('27 Oct', 'Imran', 'Panadol 500mg', 'Added 3 strip', false, 'Count correction', 'Found behind the counter'),
+      hist('26 Oct', 'Imran', 'Brufen 400mg', 'Took off 5 strip', true, 'Returned to distributor', ''),
+      hist('25 Oct', 'Ayesha', 'Risek 20mg', 'Added 2 box', false, 'Opening stock', ''),
+      hist('24 Oct', 'Imran', 'Augmentin 625mg', 'Took off 1 box', true, 'Expired — written off', ''),
+      hist('22 Oct', 'Imran', 'Rissek 20mg', 'Took off 10 cap', true, 'Entered by mistake — never there', 'Typed under the wrong name')
+    ];
+    let p = {}, sum = {}, term = '', title = 'Adjust stock', meta = 'What changed, and why. The reason is always picked, never assumed.';
+    let reasons = reasonList('remove', null), pickErr = false, noSave = false;
+    if (view === 'start') {
+      sum = { label: 'This will', fig: 'Nothing yet', sub: 'Search for a product to begin. Stock coming off names its batch. Stock coming in makes its own batch.', hasLines: false };
+      noSave = true;
+    } else if (view === 'remove' || view === 'reason') {
+      term = 'flagyl';
+      reasons = reasonList('remove', view === 'remove' ? 'Damaged' : null);
+      pickErr = view === 'reason';
+      p = { name: 'Flagyl 400mg', howMany: 'How many strip', qty: '2', note: '',
+        units: [{ name: 'box', on: false }, { name: 'strip', on: true }, { name: 'tab', on: false }],
+        batches: [{ text: 'F1187 · expires 20 Dec 2026 · 1 box, 4 strip left', sel: false }, { text: 'F0933 · expires 18 Mar 2028 · 2 box, 2 strip left', sel: true }] };
+      sum = { label: 'This takes off', fig: '2 strip', sub: 'from batch F0933, expires 18 Mar 2028', hasLines: true, k1: 'Left in that batch', v1: '2 box', k2: 'Reason', v2: view === 'remove' ? 'Damaged' : 'Not picked yet', v2cls: view === 'remove' ? '' : 'ad-warn' };
+    } else if (view === 'add' || view === 'saved') {
+      term = view === 'add' ? 'panadol' : '';
+      reasons = reasonList('add', 'Count correction');
+      p = { name: 'Panadol 500mg', countsLegend: 'Units to add', note: 'Found behind the counter', costLabel: 'Cost of 1 strip', priceLabel: 'Price of 1 strip', cost: '27.00', price: '30.00', expiry: '30/04/2028',
+        counts: [{ name: 'Strip', value: '3', cls: 'mv-input ad-num is-focus' }, { name: 'Tab', value: '', cls: 'mv-input ad-num' }], inAll: '3 strip in all · costs Rs 81.00' };
+      sum = { label: 'This adds', fig: '3 strip', sub: 'as a new batch, expires 30 Apr 2028', hasLines: true, k1: 'Costs', v1: 'Rs 81.00', k2: 'Reason', v2: 'Count correction', v2cls: '' };
+          } else if (view === 'opening') {
+      term = 'flazol';
+      title = 'Opening stock';
+      meta = 'Walk the shelves and enter what is there. Each entry becomes a batch with its own expiry and price.';
+      reasons = reasonList('add', 'Opening stock');
+      p = { name: 'Flazol 400mg', countsLegend: 'On the shelf', note: '', costLabel: 'Cost of 1 box', priceLabel: 'Price of 1 box', cost: '380.00', price: '450.00', expiry: '31/08/2028',
+        counts: [{ name: 'Box', value: '2', cls: 'mv-input ad-num is-focus' }, { name: 'Strip', value: '3', cls: 'mv-input ad-num' }, { name: 'Tab', value: '4', cls: 'mv-input ad-num' }], inAll: '2 box, 3 strip, 4 tab in all · costs Rs 889.20' };
+      sum = { label: 'This adds', fig: '2 box, 3 strip, 4 tab', sub: 'as a new batch, expires 31 Aug 2028', hasLines: true, k1: 'Costs', v1: 'Rs 889.20', k2: 'Reason', v2: 'Opening stock', v2cls: '' };
+    }
+    const savedView = view === 'saved';
+    if (savedView) { sum = { label: 'This will', fig: 'Nothing yet', sub: 'Search for the next product to carry on.', hasLines: false }; }
+    return Object.assign({}, common, {
+      chosen: chosen && !savedView, adding: adding && !savedView, removing: removing && !savedView && chosen, saved: savedView,
+      showDir: !opening, dirRemove: !adding, dirAdd: adding,
+      keys: !phone, term, title, meta, p, sum, reasons, pickErr, noSave: noSave || savedView,
+      searchCls: 'mv-input is-focus',
+      reasonField: pickErr ? 'mv-field is-error' : 'mv-field', reasonCls: pickErr ? 'mv-select is-focus' : 'mv-select',
+      history, cChange: tablet ? 140 : 160, cWhy: tablet ? 190 : 240
+    });
+  }
+}
+</script>
+</body>
+</html>

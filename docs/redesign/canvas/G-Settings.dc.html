@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Settings</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+      <span class="sv-sep" aria-hidden="true"></span>
+      <span class="sv-where">Settings</span>
+      <div class="sv-top__end">
+        <a class="mv-btn mv-btn--quiet" aria-current="page" href="#">Settings</a>
+        <button type="button" class="mv-btn mv-btn--quiet">Imran <span class="sv-user__role">· owner</span> <span class="mv-kbd">F10</span></button>
+      </div>
+    </sc-if>
+  </header>
+
+  <!-- ============ Laptop and tablet ============ -->
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body">
+      <section class="sv-main pr-main" aria-label="Settings">
+        <sc-if value="{{phoneGroup}}" hint-placeholder-val="{{false}}"><a class="mv-btn mv-btn--quiet sp-back" href="#">Back to settings</a></sc-if>
+        <div class="sp-head"><h1 class="mv-title pr-title">{{title}}</h1><p class="sp-meta">{{meta}}</p></div>
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}"><nav class="gs-chips" aria-label="Settings">
+          <sc-for list="{{nav}}" as="n" hint-placeholder-count="6"><a class="mv-btn mv-btn--secondary" href="#" aria-current="{{n.cur}}">{{n.name}}</a></sc-for>
+        </nav></sc-if>
+<sc-if value="{{showMenu}}" hint-placeholder-val="{{false}}">
+        <div class="mv-list gs-menu" role="navigation" aria-label="Settings">
+          <sc-for list="{{nav}}" as="n" hint-placeholder-count="6">
+            <a class="mv-row" href="#" aria-current="{{n.cur}}"><span class="mv-row__main"><span class="mv-row__name">{{n.name}}</span><span class="mv-row__meta">{{n.meta}}</span></span><span class="gs-chev" aria-hidden="true"></span></a>
+          </sc-for>
+        </div>
+
+</sc-if><sc-if value="{{showGroup}}" hint-placeholder-val="{{true}}">
+        <sc-if value="{{g.receipt}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Receipt</h2>
+          <label class="mv-field"><span class="mv-label">Header</span><textarea class="mv-input gs-area" rows="3" autocomplete="off">Al-Shifa Pharmacy
+Shop 14, Main Bazaar, Lahore
+Tel 042 3571 9044</textarea><span class="mv-help">Printed at the top, one line per row.</span></label>
+          <label class="mv-field"><span class="mv-label">Footer</span><input class="mv-input" autocomplete="off" value="Thank you. Get well soon."><span class="mv-help">The thank-you line at the bottom.</span></label>
+            <div class="gs-switch">
+              <span class="gs-switch__t"><span class="gs-switch__l" id="sw-print">Print a receipt for every sale</span><span class="mv-help">Off: nothing prints unless you press Print receipt.</span></span>
+              <button type="button" role="switch" class="gs-sw" aria-checked="{{swPrint}}" aria-labelledby="sw-print"><span class="gs-sw__knob"></span><span class="gs-sw__w">{{swPrintWord}}</span></button>
+            </div>
+            <div class="gs-switch">
+              <span class="gs-switch__t"><span class="gs-switch__l" id="sw-powered">Powered by Mehvar</span><span class="mv-help">A small line at the very bottom of the receipt. On by default.</span></span>
+              <button type="button" role="switch" class="gs-sw" aria-checked="{{swPowered}}" aria-labelledby="sw-powered"><span class="gs-sw__knob"></span><span class="gs-sw__w">{{swPoweredWord}}</span></button>
+            </div>
+          <div class="gs-row"><button type="button" class="mv-btn mv-btn--secondary">Print a test receipt</button><button type="button" class="mv-btn mv-btn--quiet sv-more" aria-expanded="false">How to set up the printer</button></div>
+            <sc-if value="{{notSaved}}" hint-placeholder-val="{{false}}"><div class="mv-banner mv-banner--refused" role="alert"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>That did not save.</strong> The shop’s computer did not answer. Try again.</span></div></sc-if>
+            <div class="gs-save"><button type="button" class="mv-btn mv-btn--secondary" aria-label="Save receipt settings">Save</button><sc-if value="{{saved}}" hint-placeholder-val="{{false}}"><span class="gs-done" role="status">Saved.</span></sc-if></div>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.selling}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Selling</h2>
+            <div class="gs-switch">
+              <span class="gs-switch__t"><span class="gs-switch__l" id="sw-loose">Start sales in loose tablets and capsules</span><span class="mv-help">Off: a sale starts in the strip. Either way every unit is one tap away on the line, and each product starts in the unit it was last sold in.</span></span>
+              <button type="button" role="switch" class="gs-sw" aria-checked="{{swLoose}}" aria-labelledby="sw-loose"><span class="gs-sw__knob"></span><span class="gs-sw__w">{{swLooseWord}}</span></button>
+            </div>
+          <label class="mv-field gs-pct"><span class="mv-label">Discount limit</span><span class="mv-amount gs-pctbox"><input class="mv-input" id="bill-discount-cap" inputmode="numeric" autocomplete="off" aria-describedby="cap-help" value="10"><span class="gs-pct__unit">%</span></span>
+            <span class="mv-help" id="cap-help">All discounts on a bill together, as a share of the bill before any discount. Over this, a bill discount needs the owner’s PIN. 0 means every one does.</span></label>
+            <div class="gs-save"><button type="button" class="mv-btn mv-btn--secondary" aria-label="Save selling setting">Save</button><sc-if value="{{saved}}" hint-placeholder-val="{{false}}"><span class="gs-done" role="status">Saved.</span></sc-if></div>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.users}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Users and PINs</h2>
+          <sc-if value="{{usersFailed}}" hint-placeholder-val="{{false}}"><div class="mv-banner mv-banner--refused" role="alert"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>The list of users did not load.</strong> The shop’s computer did not answer.</span><button type="button" class="mv-btn mv-btn--secondary">Try again</button></div></sc-if>
+          <sc-if value="{{usersLoaded}}" hint-placeholder-val="{{true}}">
+          <ul class="gs-users" aria-label="Users">
+            <sc-for list="{{users}}" as="u" hint-placeholder-count="4">
+              <li class="gs-user">
+                <span class="gs-user__who"><span class="gs-user__nm">{{u.name}}</span><span class="mv-badge">{{u.role}}</span><sc-if value="{{u.inactive}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--attention">Inactive</span></sc-if></span>
+                <sc-if value="{{u.salesman}}" hint-placeholder-val="{{true}}"><span class="gs-user__btns"><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{u.resetLabel}}">Reset PIN</button><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{u.toggleLabel}}">{{u.toggle}}</button></span></sc-if>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <div class="gs-add">
+            <label class="mv-field"><span class="mv-label">New salesman</span><input class="{{nameCls}}" id="new-user-name" autocomplete="off" placeholder="Name" value="{{newName}}"></label>
+            <label class="mv-field"><span class="mv-label">PIN</span><input class="mv-input gs-pin" id="new-user-pin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="4" value="{{newPin}}"></label>
+            <button type="button" class="mv-btn mv-btn--secondary" disabled="{{noAdd}}">Add <span class="mv-kbd">Enter</span></button>
+          </div>
+          <p class="mv-help gs-pinhelp">The PIN is 4 digits. The browser never offers to save it.</p>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.backup}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Backup and export</h2>
+          <div class="gs-block">
+            <span class="mv-label">Backup</span>
+            <p class="mv-help">Mehvar backs up this computer every night and keeps the last 30 days.</p>
+            <p class="gs-status"><span class="mv-badge mv-badge--done">Done</span> Last backup 28 Oct 2026, 02:00</p>
+          </div>
+          <div class="gs-block gs-block--line">
+            <span class="mv-label">Export your data</span>
+            <p class="mv-help">Everything in your pharmacy, one spreadsheet file for each kind of record, in one zip. It is always available, even if the account is on hold.</p>
+            <div class="gs-row"><a class="mv-btn mv-btn--secondary" href="#">Download export</a></div>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.licence}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Licence</h2>
+          <div class="mv-banner mv-banner--attention" role="note"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>Evaluation.</strong> 12 days left, until 9 Nov 2026. Activate a licence any time.</span></div>
+          <p class="gs-line">Licensed to <b>Al-Shifa Pharmacy</b></p>
+          <p class="mv-help">Settling udhaar, printing receipts and exporting your data always keep working.</p>
+          <label class="mv-field"><span class="mv-label">Licence line</span><textarea class="mv-input gs-area gs-mono" rows="3" spellcheck="false" placeholder="MEHVAR1.…"></textarea><span class="mv-help">Paste the whole line from Mehvar, in one go.</span></label>
+          <div class="gs-save"><button type="button" class="mv-btn mv-btn--secondary" disabled="{{true}}">Install licence</button></div>
+          <p class="gs-mono gs-id">This computer: 7F3A-91C2-04DE-B6A1</p>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.about}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card gs-about">
+          <img class="gs-logo" src="/_blob/03aee1571535e85161cc5aaab15906e0" alt="Mehvar">
+          <h2 class="pr-h">Mehvar Pharmacy Software</h2>
+          <p class="gs-line">Version 1.0.0</p>
+          <p class="gs-mono gs-id">This computer: 7F3A-91C2-04DE-B6A1</p>
+        </div>
+        </sc-if>
+
+</sc-if>
+      </section>
+      <aside class="sv-rail pr-rail" style="flex: 0 0 340px;" aria-label="Summary and actions">
+<sc-if value="{{laptop}}" hint-placeholder-val="{{true}}">
+        <p class="mv-label" style="height: auto;">Settings</p>
+        <div class="mv-list gs-menu" role="navigation" aria-label="Settings">
+          <sc-for list="{{nav}}" as="n" hint-placeholder-count="6">
+            <a class="mv-row" href="#" aria-current="{{n.cur}}"><span class="mv-row__main"><span class="mv-row__name">{{n.name}}</span><span class="mv-row__meta">{{n.meta}}</span></span><span class="gs-chev" aria-hidden="true"></span></a>
+          </sc-for>
+        </div>
+
+</sc-if>
+      </aside>
+    </div>
+    <nav class="mv-keybar" aria-label="Function keys">
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F1</kbd><span class="mv-key__label">Sale</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F2</kbd><span class="mv-key__label">Receipts</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F3</kbd><span class="mv-key__label">Customers</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F4</kbd><span class="mv-key__label">Udhaar</span></button>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F5</kbd><span class="mv-key__label">Products</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F6</kbd><span class="mv-key__label">Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F7</kbd><span class="mv-key__label">Receive Stock</span></a>
+      <a class="mv-key" href="#"><kbd class="mv-kbd">F8</kbd><span class="mv-key__label">Adjust</span></a>
+      <a class="mv-key is-band" href="#"><kbd class="mv-kbd">F9</kbd><span class="mv-key__label">Day</span></a>
+      <button type="button" class="mv-key"><kbd class="mv-kbd">F10</kbd><span class="mv-key__label">Switch user</span></button>
+    </nav>
+  </sc-if>
+
+  <!-- ============ Phone ============ -->
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 88px;">
+        <sc-if value="{{phoneGroup}}" hint-placeholder-val="{{false}}"><a class="mv-btn mv-btn--quiet sp-back" href="#">Back to settings</a></sc-if>
+        <div class="sp-head"><h1 class="mv-title pr-title">{{title}}</h1><p class="sp-meta">{{meta}}</p></div>
+        <sc-if value="{{tablet}}" hint-placeholder-val="{{false}}"><nav class="gs-chips" aria-label="Settings">
+          <sc-for list="{{nav}}" as="n" hint-placeholder-count="6"><a class="mv-btn mv-btn--secondary" href="#" aria-current="{{n.cur}}">{{n.name}}</a></sc-for>
+        </nav></sc-if>
+<sc-if value="{{showMenu}}" hint-placeholder-val="{{false}}">
+        <div class="mv-list gs-menu" role="navigation" aria-label="Settings">
+          <sc-for list="{{nav}}" as="n" hint-placeholder-count="6">
+            <a class="mv-row" href="#" aria-current="{{n.cur}}"><span class="mv-row__main"><span class="mv-row__name">{{n.name}}</span><span class="mv-row__meta">{{n.meta}}</span></span><span class="gs-chev" aria-hidden="true"></span></a>
+          </sc-for>
+        </div>
+
+</sc-if><sc-if value="{{showGroup}}" hint-placeholder-val="{{true}}">
+        <sc-if value="{{g.receipt}}" hint-placeholder-val="{{true}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Receipt</h2>
+          <label class="mv-field"><span class="mv-label">Header</span><textarea class="mv-input gs-area" rows="3" autocomplete="off">Al-Shifa Pharmacy
+Shop 14, Main Bazaar, Lahore
+Tel 042 3571 9044</textarea><span class="mv-help">Printed at the top, one line per row.</span></label>
+          <label class="mv-field"><span class="mv-label">Footer</span><input class="mv-input" autocomplete="off" value="Thank you. Get well soon."><span class="mv-help">The thank-you line at the bottom.</span></label>
+            <div class="gs-switch">
+              <span class="gs-switch__t"><span class="gs-switch__l" id="sw-print">Print a receipt for every sale</span><span class="mv-help">Off: nothing prints unless you press Print receipt.</span></span>
+              <button type="button" role="switch" class="gs-sw" aria-checked="{{swPrint}}" aria-labelledby="sw-print"><span class="gs-sw__knob"></span><span class="gs-sw__w">{{swPrintWord}}</span></button>
+            </div>
+            <div class="gs-switch">
+              <span class="gs-switch__t"><span class="gs-switch__l" id="sw-powered">Powered by Mehvar</span><span class="mv-help">A small line at the very bottom of the receipt. On by default.</span></span>
+              <button type="button" role="switch" class="gs-sw" aria-checked="{{swPowered}}" aria-labelledby="sw-powered"><span class="gs-sw__knob"></span><span class="gs-sw__w">{{swPoweredWord}}</span></button>
+            </div>
+          <div class="gs-row"><button type="button" class="mv-btn mv-btn--secondary">Print a test receipt</button><button type="button" class="mv-btn mv-btn--quiet sv-more" aria-expanded="false">How to set up the printer</button></div>
+            <sc-if value="{{notSaved}}" hint-placeholder-val="{{false}}"><div class="mv-banner mv-banner--refused" role="alert"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>That did not save.</strong> The shop’s computer did not answer. Try again.</span></div></sc-if>
+            <div class="gs-save"><button type="button" class="mv-btn mv-btn--secondary" aria-label="Save receipt settings">Save</button><sc-if value="{{saved}}" hint-placeholder-val="{{false}}"><span class="gs-done" role="status">Saved.</span></sc-if></div>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.selling}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Selling</h2>
+            <div class="gs-switch">
+              <span class="gs-switch__t"><span class="gs-switch__l" id="sw-loose">Start sales in loose tablets and capsules</span><span class="mv-help">Off: a sale starts in the strip. Either way every unit is one tap away on the line, and each product starts in the unit it was last sold in.</span></span>
+              <button type="button" role="switch" class="gs-sw" aria-checked="{{swLoose}}" aria-labelledby="sw-loose"><span class="gs-sw__knob"></span><span class="gs-sw__w">{{swLooseWord}}</span></button>
+            </div>
+          <label class="mv-field gs-pct"><span class="mv-label">Discount limit</span><span class="mv-amount gs-pctbox"><input class="mv-input" id="bill-discount-cap" inputmode="numeric" autocomplete="off" aria-describedby="cap-help" value="10"><span class="gs-pct__unit">%</span></span>
+            <span class="mv-help" id="cap-help">All discounts on a bill together, as a share of the bill before any discount. Over this, a bill discount needs the owner’s PIN. 0 means every one does.</span></label>
+            <div class="gs-save"><button type="button" class="mv-btn mv-btn--secondary" aria-label="Save selling setting">Save</button><sc-if value="{{saved}}" hint-placeholder-val="{{false}}"><span class="gs-done" role="status">Saved.</span></sc-if></div>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.users}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Users and PINs</h2>
+          <sc-if value="{{usersFailed}}" hint-placeholder-val="{{false}}"><div class="mv-banner mv-banner--refused" role="alert"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>The list of users did not load.</strong> The shop’s computer did not answer.</span><button type="button" class="mv-btn mv-btn--secondary">Try again</button></div></sc-if>
+          <sc-if value="{{usersLoaded}}" hint-placeholder-val="{{true}}">
+          <ul class="gs-users" aria-label="Users">
+            <sc-for list="{{users}}" as="u" hint-placeholder-count="4">
+              <li class="gs-user">
+                <span class="gs-user__who"><span class="gs-user__nm">{{u.name}}</span><span class="mv-badge">{{u.role}}</span><sc-if value="{{u.inactive}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--attention">Inactive</span></sc-if></span>
+                <sc-if value="{{u.salesman}}" hint-placeholder-val="{{true}}"><span class="gs-user__btns"><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{u.resetLabel}}">Reset PIN</button><button type="button" class="mv-btn mv-btn--quiet" aria-label="{{u.toggleLabel}}">{{u.toggle}}</button></span></sc-if>
+              </li>
+            </sc-for>
+          </ul>
+          </sc-if>
+          <div class="gs-add">
+            <label class="mv-field"><span class="mv-label">New salesman</span><input class="{{nameCls}}" id="new-user-name" autocomplete="off" placeholder="Name" value="{{newName}}"></label>
+            <label class="mv-field"><span class="mv-label">PIN</span><input class="mv-input gs-pin" id="new-user-pin" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="4" value="{{newPin}}"></label>
+            <button type="button" class="mv-btn mv-btn--secondary" disabled="{{noAdd}}">Add <span class="mv-kbd">Enter</span></button>
+          </div>
+          <p class="mv-help gs-pinhelp">The PIN is 4 digits. The browser never offers to save it.</p>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.backup}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Backup and export</h2>
+          <div class="gs-block">
+            <span class="mv-label">Backup</span>
+            <p class="mv-help">Mehvar backs up this computer every night and keeps the last 30 days.</p>
+            <p class="gs-status"><span class="mv-badge mv-badge--done">Done</span> Last backup 28 Oct 2026, 02:00</p>
+          </div>
+          <div class="gs-block gs-block--line">
+            <span class="mv-label">Export your data</span>
+            <p class="mv-help">Everything in your pharmacy, one spreadsheet file for each kind of record, in one zip. It is always available, even if the account is on hold.</p>
+            <div class="gs-row"><a class="mv-btn mv-btn--secondary" href="#">Download export</a></div>
+          </div>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.licence}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card">
+          <h2 class="pr-h">Licence</h2>
+          <div class="mv-banner mv-banner--attention" role="note"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>Evaluation.</strong> 12 days left, until 9 Nov 2026. Activate a licence any time.</span></div>
+          <p class="gs-line">Licensed to <b>Al-Shifa Pharmacy</b></p>
+          <p class="mv-help">Settling udhaar, printing receipts and exporting your data always keep working.</p>
+          <label class="mv-field"><span class="mv-label">Licence line</span><textarea class="mv-input gs-area gs-mono" rows="3" spellcheck="false" placeholder="MEHVAR1.…"></textarea><span class="mv-help">Paste the whole line from Mehvar, in one go.</span></label>
+          <div class="gs-save"><button type="button" class="mv-btn mv-btn--secondary" disabled="{{true}}">Install licence</button></div>
+          <p class="gs-mono gs-id">This computer: 7F3A-91C2-04DE-B6A1</p>
+        </div>
+        </sc-if>
+        <sc-if value="{{g.about}}" hint-placeholder-val="{{false}}">
+        <div class="mv-card pr-card gs-card gs-about">
+          <img class="gs-logo" src="/_blob/03aee1571535e85161cc5aaab15906e0" alt="Mehvar">
+          <h2 class="pr-h">Mehvar Pharmacy Software</h2>
+          <p class="gs-line">Version 1.0.0</p>
+          <p class="gs-mono gs-id">This computer: 7F3A-91C2-04DE-B6A1</p>
+        </div>
+        </sc-if>
+
+</sc-if>
+    </div>
+    <nav class="mv-tabbar sv-tabs" aria-label="Sections">
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4h2l2.2 10.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L20.5 8H6.2"></path><circle cx="9.5" cy="19.5" r="1.2"></circle><circle cx="17" cy="19.5" r="1.2"></circle></svg></span>Sale</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Receive</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Customers</a>
+      <a class="mv-tab" href="#"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Day</a>
+      <button type="button" class="mv-tab" aria-current="page"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="5.5" cy="12" r="1.3"></circle><circle cx="12" cy="12" r="1.3"></circle><circle cx="18.5" cy="12" r="1.3"></circle></svg></span>More</button>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"device":{"editor":"enum","options":["laptop","tablet","phone"],"default":"laptop"},"view":{"editor":"enum","options":["menu","receipt","unsaved","selling","users","adduser","failed","backup","licence","about"],"default":"receipt"},"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'laptop';
+    const view = this.props.view ?? 'receipt';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const common = {
+      phone, tablet, laptop: device === 'laptop', wide: !phone,
+      w: phone ? 375 : tablet ? 768 : 1280,
+      h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv'
+    };
+    const groupOf = { receipt: 'receipt', unsaved: 'receipt', selling: 'selling', users: 'users', adduser: 'users', failed: 'users', backup: 'backup', licence: 'licence', about: 'about', menu: phone ? 'menu' : 'receipt' };
+    const key = groupOf[view] ?? 'receipt';
+    const names = [['receipt', 'Receipt', 'Header, footer, printing'], ['selling', 'Selling', 'Discount limit, starting unit'], ['users', 'Users and PINs', 'Who can sign in'], ['backup', 'Backup and export', 'Your data, safe and yours'], ['licence', 'Licence', 'Evaluation or licensed'], ['about', 'About', 'Version and this computer']];
+    const nav = names.map((n) => ({ name: n[1], meta: n[2], cur: n[0] === key && !(phone && view === 'menu') ? 'page' : 'false' }));
+    const meta = { receipt: 'What is printed, and when.', selling: 'How a sale starts, and when the owner is needed.', users: 'Add a salesman, reset a PIN, or turn someone off.', backup: 'Your data is safe, and always yours to take.', licence: 'Whether this computer is authorised.', about: 'Which Mehvar this is.', menu: 'Only the owner sees this. Each group saves on its own.' };
+    const title = phone && view === 'menu' ? 'Settings' : names.find((n) => n[0] === key)[1];
+    const adding = view === 'adduser';
+    return Object.assign({}, common, {
+      nav, title, meta: meta[phone && view === 'menu' ? 'menu' : key],
+      showMenu: phone && view === 'menu', showGroup: !(phone && view === 'menu'), phoneGroup: phone && view !== 'menu',
+      g: { receipt: key === 'receipt', selling: key === 'selling', users: key === 'users', backup: key === 'backup', licence: key === 'licence', about: key === 'about' },
+      swPrint: 'true', swPrintWord: 'On', swPowered: 'true', swPoweredWord: 'On', swLoose: 'false', swLooseWord: 'Off',
+      saved: view === 'selling', notSaved: view === 'unsaved',
+      usersFailed: view === 'failed', usersLoaded: view !== 'failed',
+      users: [
+        { name: 'Imran', role: 'Owner', salesman: false, inactive: false },
+        { name: 'Bilal', role: 'Salesman', salesman: true, inactive: false, toggle: 'Deactivate', resetLabel: 'Reset Bilal’s PIN', toggleLabel: 'Deactivate Bilal' },
+        { name: 'Ayesha', role: 'Salesman', salesman: true, inactive: false, toggle: 'Deactivate', resetLabel: 'Reset Ayesha’s PIN', toggleLabel: 'Deactivate Ayesha' },
+        { name: 'Zahid', role: 'Salesman', salesman: true, inactive: true, toggle: 'Reactivate', resetLabel: 'Reset Zahid’s PIN', toggleLabel: 'Reactivate Zahid' }
+      ],
+      newName: adding ? 'Hamza' : '', newPin: adding ? '4829' : '', noAdd: !adding, nameCls: adding ? 'mv-input is-focus' : 'mv-input'
+    });
+  }
+}
+</script>
+</body>
+</html>

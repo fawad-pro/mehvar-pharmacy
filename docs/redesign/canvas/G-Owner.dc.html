@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Owner view</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+<link rel="stylesheet" href="settings.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="width: {{w}}px; height: {{h}}px; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+  <header class="sv-top">
+    <p class="sv-shop">Al-Shifa Pharmacy</p>
+    <div class="sv-top__end"><span class="mv-badge">Read only</span></div>
+  </header>
+
+  <sc-if value="{{wide}}" hint-placeholder-val="{{true}}">
+    <div class="sv-body"><section class="sv-main pr-main go-main" aria-label="Owner view">
+      <div class="sv-seg go-seg" role="group" aria-label="Owner view">
+        <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{c.today}}">Today</a>
+        <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{c.stock}}">Stock</a>
+        <a class="mv-btn mv-btn--secondary" href="#" aria-current="{{c.udhaar}}">Udhaar</a>
+      </div>
+      <sc-if value="{{tToday}}" hint-placeholder-val="{{true}}">        <div class="go-tiles">
+          <sc-for list="{{tiles}}" as="t" hint-placeholder-count="3"><div class="{{t.cls}}"><span class="mv-label">{{t.label}}</span><span class="go-fig">{{t.fig}}</span><span class="go-meta">{{t.meta}}</span></div></sc-for>
+        </div>
+        <sc-if value="{{quiet}}" hint-placeholder-val="{{false}}"><div class="mv-banner mv-banner--done" role="note"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="mv-banner__text"><strong>Nothing needs a look today.</strong></span></div></sc-if>
+        <sc-if value="{{incidentsShown}}" hint-placeholder-val="{{true}}">
+          <div class="mv-banner mv-banner--attention" role="note"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>2 products were sold before they arrived.</strong> Receiving the delivery or correcting the count clears them.</span></div>
+          <div class="mv-card pr-card gs-card"><h2 class="pr-h">Sold before it was received</h2>
+            <ul class="go-rows"><sc-for list="{{incidents}}" as="r" hint-placeholder-count="2"><li class="go-row"><span class="go-row__nm">{{r.name}}</span><span class="go-row__v go-warn">{{r.amount}}</span></li></sc-for></ul>
+          </div>
+        </sc-if>
+</sc-if>
+      <sc-if value="{{tStock}}" hint-placeholder-val="{{false}}">        <div class="mv-card pr-card gs-card"><div class="go-h"><h2 class="pr-h">Expiring within 30 days</h2><span class="mv-badge mv-badge--attention">3</span></div>
+          <ul class="go-rows"><sc-for list="{{expiring}}" as="r" hint-placeholder-count="3"><li class="go-row"><span class="go-row__main"><span class="go-row__nm">{{r.name}}</span><span class="go-row__sub">{{r.amount}} · {{r.date}}</span></span><sc-if value="{{r.expired}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if><sc-if value="{{r.soon}}" hint-placeholder-val="{{true}}"><span class="go-row__v go-warn">{{r.when}}</span></sc-if></li></sc-for></ul>
+        </div>
+        <div class="mv-card pr-card gs-card"><div class="go-h"><h2 class="pr-h">Running low</h2><span class="mv-badge mv-badge--attention">3</span></div>
+          <ul class="go-rows"><sc-for list="{{low}}" as="r" hint-placeholder-count="3"><li class="go-row"><span class="go-row__main"><span class="go-row__nm">{{r.name}}</span><span class="go-row__sub">On hand</span></span><span class="go-row__v">{{r.hand}}</span></li></sc-for></ul>
+        </div>
+</sc-if>
+      <sc-if value="{{tUdhaar}}" hint-placeholder-val="{{false}}">        <div class="go-tiles go-tiles--one"><div class="go-tile go-tile--owed"><span class="mv-label">Owed to you</span><span class="go-fig">Rs 18,350</span><span class="go-meta">all time, 23 customers</span></div></div>
+        <div class="mv-card pr-card gs-card"><h2 class="pr-h">Largest first</h2>
+          <ul class="go-rows"><sc-for list="{{people}}" as="r" hint-placeholder-count="9"><li class="go-row"><span class="go-row__main"><span class="go-row__nm">{{r.name}}</span><span class="go-row__sub">{{r.phone}}</span></span><span class="{{r.cls}}">{{r.pos}}</span></li></sc-for></ul>
+        </div>
+</sc-if>
+    </section></div>
+  </sc-if>
+
+  <sc-if value="{{phone}}" hint-placeholder-val="{{false}}">
+    <div class="sv-scroll" style="padding-bottom: 88px;">
+      <div class="sp-head"><h1 class="mv-title pr-title">{{title}}</h1><p class="sp-meta">{{meta}}</p></div>
+      <sc-if value="{{tToday}}" hint-placeholder-val="{{true}}">        <div class="go-tiles">
+          <sc-for list="{{tiles}}" as="t" hint-placeholder-count="3"><div class="{{t.cls}}"><span class="mv-label">{{t.label}}</span><span class="go-fig">{{t.fig}}</span><span class="go-meta">{{t.meta}}</span></div></sc-for>
+        </div>
+        <sc-if value="{{quiet}}" hint-placeholder-val="{{false}}"><div class="mv-banner mv-banner--done" role="note"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M5.5 9.2l2.3 2.3 4.7-4.9" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path></svg><span class="mv-banner__text"><strong>Nothing needs a look today.</strong></span></div></sc-if>
+        <sc-if value="{{incidentsShown}}" hint-placeholder-val="{{true}}">
+          <div class="mv-banner mv-banner--attention" role="note"><svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 1.8L17 15.6H1z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"></path><path d="M9 6.8v4.2M9 12.9v.3" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg><span class="mv-banner__text"><strong>2 products were sold before they arrived.</strong> Receiving the delivery or correcting the count clears them.</span></div>
+          <div class="mv-card pr-card gs-card"><h2 class="pr-h">Sold before it was received</h2>
+            <ul class="go-rows"><sc-for list="{{incidents}}" as="r" hint-placeholder-count="2"><li class="go-row"><span class="go-row__nm">{{r.name}}</span><span class="go-row__v go-warn">{{r.amount}}</span></li></sc-for></ul>
+          </div>
+        </sc-if>
+</sc-if>
+      <sc-if value="{{tStock}}" hint-placeholder-val="{{false}}">        <div class="mv-card pr-card gs-card"><div class="go-h"><h2 class="pr-h">Expiring within 30 days</h2><span class="mv-badge mv-badge--attention">3</span></div>
+          <ul class="go-rows"><sc-for list="{{expiring}}" as="r" hint-placeholder-count="3"><li class="go-row"><span class="go-row__main"><span class="go-row__nm">{{r.name}}</span><span class="go-row__sub">{{r.amount}} · {{r.date}}</span></span><sc-if value="{{r.expired}}" hint-placeholder-val="{{false}}"><span class="mv-badge mv-badge--refused">Expired</span></sc-if><sc-if value="{{r.soon}}" hint-placeholder-val="{{true}}"><span class="go-row__v go-warn">{{r.when}}</span></sc-if></li></sc-for></ul>
+        </div>
+        <div class="mv-card pr-card gs-card"><div class="go-h"><h2 class="pr-h">Running low</h2><span class="mv-badge mv-badge--attention">3</span></div>
+          <ul class="go-rows"><sc-for list="{{low}}" as="r" hint-placeholder-count="3"><li class="go-row"><span class="go-row__main"><span class="go-row__nm">{{r.name}}</span><span class="go-row__sub">On hand</span></span><span class="go-row__v">{{r.hand}}</span></li></sc-for></ul>
+        </div>
+</sc-if>
+      <sc-if value="{{tUdhaar}}" hint-placeholder-val="{{false}}">        <div class="go-tiles go-tiles--one"><div class="go-tile go-tile--owed"><span class="mv-label">Owed to you</span><span class="go-fig">Rs 18,350</span><span class="go-meta">all time, 23 customers</span></div></div>
+        <div class="mv-card pr-card gs-card"><h2 class="pr-h">Largest first</h2>
+          <ul class="go-rows"><sc-for list="{{people}}" as="r" hint-placeholder-count="9"><li class="go-row"><span class="go-row__main"><span class="go-row__nm">{{r.name}}</span><span class="go-row__sub">{{r.phone}}</span></span><span class="{{r.cls}}">{{r.pos}}</span></li></sc-for></ul>
+        </div>
+</sc-if>
+    </div>
+    <nav class="mv-tabbar sv-tabs go-tabs" aria-label="Owner view">
+      <a class="mv-tab" href="#" aria-current="{{c.today}}"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg></span>Today</a>
+      <a class="mv-tab" href="#" aria-current="{{c.stock}}"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 7.5L12 3l8.5 4.5v9L12 21l-8.5-4.5z"></path><path d="M3.5 7.5L12 12l8.5-4.5M12 12v9"></path></svg></span>Stock</a>
+      <a class="mv-tab" href="#" aria-current="{{c.udhaar}}"><span class="mv-tab__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.2"></circle><path d="M3 19.5c.6-3.3 3-5 6-5s5.4 1.7 6 5"></path><path d="M15.5 4.9a3.2 3.2 0 0 1 0 6.2M17.5 14.7c1.9.6 3.1 2.2 3.5 4.8"></path></svg></span>Udhaar</a>
+    </nav>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;device&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;laptop&quot;,&quot;tablet&quot;,&quot;phone&quot;],&quot;default&quot;:&quot;phone&quot;},&quot;view&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;today&quot;,&quot;quiet&quot;,&quot;stock&quot;,&quot;udhaar&quot;],&quot;default&quot;:&quot;today&quot;},&quot;$preview&quot;:{&quot;width&quot;:375,&quot;height&quot;:812}}">
+class Component extends DCLogic {
+  renderVals() {
+    const device = this.props.device ?? 'phone';
+    const view = this.props.view ?? 'today';
+    const phone = device === 'phone', tablet = device === 'tablet';
+    const quiet = view === 'quiet';
+    const tab = view === 'quiet' ? 'today' : view;
+    const owes = 'go-row__v go-warn', ok = 'go-row__v go-ok', adv = 'go-row__v';
+    const p = (name, phone, pos, cls) => ({ name, phone, pos, cls });
+    return {
+      phone, tablet, laptop: device === 'laptop', wide: !phone, w: phone ? 375 : tablet ? 768 : 1280, h: phone ? 812 : tablet ? 1024 : 800,
+      rootClass: phone ? 'mv mv-screen sv sv--phone sv-nokbd' : tablet ? 'mv mv-screen sv sv--tablet' : 'mv mv-screen sv',
+      tToday: tab === 'today', tStock: tab === 'stock', tUdhaar: tab === 'udhaar',
+      c: { today: tab === 'today' ? 'page' : 'false', stock: tab === 'stock' ? 'page' : 'false', udhaar: tab === 'udhaar' ? 'page' : 'false' },
+      title: tab === 'today' ? 'Today' : tab === 'stock' ? 'Stock' : 'Udhaar',
+      meta: tab === 'today' ? 'Wednesday 28 October' : tab === 'stock' ? 'What is running out, and what is expiring.' : 'Who owes you, and who has paid ahead.',
+      tiles: [
+        { cls: 'go-tile', label: 'Sales', fig: quiet ? 'Rs 6,900' : 'Rs 48,210', meta: quiet ? 'today, 9 receipts, net of returns' : 'today, 62 receipts, net of returns' },
+        { cls: 'go-tile', label: 'Expected cash', fig: quiet ? 'Rs 36,900' : 'Rs 41,900', meta: 'today, in the drawer' },
+        { cls: 'go-tile go-tile--owed', label: 'Owed to you', fig: 'Rs 18,350', meta: 'all time, 23 customers' }
+      ],
+      quiet, incidentsShown: !quiet,
+      incidents: [{ name: 'Risek 20mg', amount: 'Short by 2 strip' }, { name: 'Brufen 400mg', amount: 'Short by 5 tab' }],
+      expiring: [
+        { name: 'Hydryllin syrup 120ml', amount: '3 bottle', date: '20 Oct 2026', expired: true, soon: false, when: '' },
+        { name: 'Panadol 500mg', amount: '6 strip', date: '12 Nov 2026', expired: false, soon: true, when: 'in 15 days' },
+        { name: 'Augmentin 625mg', amount: '2 box', date: '25 Nov 2026', expired: false, soon: true, when: 'in 28 days' }
+      ],
+      low: [{ name: 'Flagyl 400mg', hand: '3 box, 6 strip' }, { name: 'Augmentin 625mg', hand: '11 box' }, { name: 'Hydryllin syrup 120ml', hand: '12 bottle' }],
+      people: [
+        p('Haji Abdul Rehman', '0300 4412987', 'Owes Rs 8,450.00', owes), p('Nasreen Akhtar', '0333 2209171', 'Owes Rs 4,120.00', owes),
+        p('Tariq Mehmood', '0321 5550142', 'Owes Rs 2,010.00', owes), p('Bilal Ahmed', '0345 7781230', 'Owes Rs 1,380.00', owes),
+        p('Shabana Kausar', '0312 6049835', 'Owes Rs 640.00', owes), p('Rashid Khan', '042 3571 2208', 'Owes Rs 450.00', owes),
+        p('Imtiaz Ali', '0301 8864417', 'Settled up', ok), p('Zubair Hussain', '0322 1740096', 'Advance Rs 200.00', adv)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

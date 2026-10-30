@@ -8,6 +8,16 @@ building is a new plan-change note, raised before it is patched (CLAUDE.md,
 
 ## The sources
 
+**Local copies.** The design system and the boards for batches 4–10 are
+copied into this folder: `docs/redesign/design-system/` (README, layout
+rules, tokens, `components/bundle.css`, each primitive's README) and
+`docs/redesign/canvas/` (every `S-`, `C-`, `X-`, `P-`, `K-`, `Y-`, `G-`
+board, the page stylesheets, and `ds/mehvar/` tokens and bundle). A
+session without access to claude.ai reads these instead of the links
+below; they are the same files, saved on 2026-10-30. Boards are HTML with
+template placeholders (`{{…}}`, `sc-if`, `sc-for`) and a script at the end
+that supplies the sample values; read the markup and the script together.
+
 - **Design system:** https://claude.ai/artifact/953PukwddDp5xxwrHjg5yr.
   Read its `project/README.md` and `project/tokens.json` first (Artifact
   `read` with `path`). Its primitives are plain CSS in

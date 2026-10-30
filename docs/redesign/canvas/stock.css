@@ -1,0 +1,58 @@
+/* Stock and Adjust. Every value is a Mehvar token; layout comes from sale.css and suppliers.css, primitives from ds/mehvar/components/bundle.css. */
+.pr-main { min-height: 0; overflow: hidden; }
+.pr-title { overflow-wrap: anywhere; }
+.sv--phone .pr-title { font-size: 20px; line-height: 28px; }
+.pr-h { margin: 0; font: var(--text-heading); color: var(--navy); }
+.pr-card { gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.sv--phone .pr-card { padding: 16px; }
+.pr-nm { overflow-wrap: anywhere; }
+.pr-table td { height: 56px; }
+.pr-endbar { display: flex; justify-content: flex-end; gap: var(--space-2); align-items: center; }
+.sv--tablet .pr-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: var(--space-4); flex: none !important; }
+.sv--tablet .pr-rail .sv-pay { grid-column: 2; }
+
+/* Section heads: a title, a count, and where it fits the horizon. */
+.st-h { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.st-h .sv-seg { margin-left: auto; }
+.sv--phone .st-h .sv-seg { margin-left: 0; width: 100%; }
+.sv--phone .st-h .sv-seg .mv-btn { flex: 1; padding: 0 8px; }
+.st-wrap { box-shadow: none; background: var(--surface); }
+.st-mlist { box-shadow: none; }
+.st-ok { margin: 0; font: var(--text-body-sm); color: var(--navy); }
+.st-soon { color: var(--amber-text); font-weight: 500; }
+.st-short { color: var(--amber-text); font-weight: 600; }
+.st-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.st-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; min-height: 56px; padding: 6px 0; border-top: 1px solid var(--line); }
+.st-row:first-child { border-top: 0; }
+.st-row__main { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
+.st-row__nm { font: var(--text-control); font-weight: 600; overflow-wrap: anywhere; }
+.st-row__sub { font: var(--text-body-sm); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.st-row__sub b { font-weight: 500; color: var(--navy); }
+.st-row__btns { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.sv--phone .st-row__btns { width: 100%; }
+
+/* Adjust. */
+.ad-card { gap: var(--space-3); }
+.ad-row { display: grid; gap: var(--space-3); align-items: end; }
+.ad-row--remove { grid-template-columns: auto 120px minmax(0, 1fr); }
+.ad-row--add { grid-template-columns: auto minmax(0, 1fr); align-items: end; }
+.ad-row--money { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.sv--tablet .ad-row--remove { grid-template-columns: auto 110px minmax(0, 1fr); }
+.sv--phone .ad-row--remove, .sv--phone .ad-row--add { grid-template-columns: minmax(0, 1fr); }
+.sv--phone .ad-row--money { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sv--phone .ad-row--money .mv-field:last-child { grid-column: 1 / -1; }
+.ad-num { text-align: right; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 500; }
+.ad-counts { border: 0; margin: 0; padding: 0; min-width: 0; }
+.ad-counts legend { padding: 0; margin-bottom: 6px; }
+.ad-counts__in { display: flex; gap: var(--space-2); }
+.ad-counts__in .mv-field { width: 92px; }
+.ad-inall { margin: 0; font: var(--text-body-sm); color: var(--navy); font-variant-numeric: tabular-nums; }
+.ad-sum { gap: 4px; }
+.ad-sum__fig { margin: 0; font: var(--text-stat); color: var(--navy); overflow-wrap: anywhere; }
+.ad-sum__sub { margin: 0 0 var(--space-2); font: var(--text-body-sm); color: var(--ink-2); }
+.ad-warn { color: var(--amber-text); }
+.ad-out { color: var(--amber-text); font-weight: 500; }
+.ad-in { color: var(--navy); font-weight: 500; }
+.sp-mrow .ad-out, .sp-mrow .ad-in { font-size: 14px; }
+.sv-seg a.mv-btn { text-decoration: none; }
+.sv-seg .mv-btn[aria-current='page'] { background: var(--blue-50); border-color: var(--blue-600); color: var(--navy); font-weight: 600; position: relative; z-index: 1; }

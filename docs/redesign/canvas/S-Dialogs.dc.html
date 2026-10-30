@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice and supplier dialogs</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/mehvar/tokens.css">
+<link rel="stylesheet" href="ds/mehvar/components/bundle.css">
+<link rel="stylesheet" href="sale.css">
+<link rel="stylesheet" href="suppliers.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#0068b8}a:hover{color:#00528f}
+</style>
+</helmet>
+<div class="{{rootClass}}" style="background: transparent; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #012049;">
+<div class="{{dialogClass}}" role="dialog" aria-modal="true" aria-labelledby="sd-title">
+
+  <!-- ============ Correct one line (and its refusal) ============ -->
+  <sc-if value="{{correcting}}" hint-placeholder-val="{{true}}">
+    <h2 class="mv-dialog__title" id="sd-title">Correct {{c.name}}</h2>
+    <p class="sp-onpaper">On the invoice: <b>{{c.onPaper}}</b></p>
+
+    <sc-if value="{{refused}}" hint-placeholder-val="{{false}}">
+      <div class="mv-banner mv-banner--refused" role="alert">
+        <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+        <span class="mv-banner__text"><strong>Not saved — 17 strip have already been sold.</strong> Only the 3 strip still on the shelf can come off, so this line can go down to 17 strip, not 5. If the shelf count is wrong, record it on the Adjust screen instead.</span>
+      </div>
+    </sc-if>
+
+    <div class="sp-fields3">
+      <label class="{{qtyField}}">
+        <span class="mv-label">How many {{c.unit}}</span>
+        <input class="mv-input is-focus" inputmode="numeric" autocomplete="off" value="{{c.qty}}" aria-invalid="{{refused}}">
+        <span class="mv-help">Was {{c.wasQty}}</span>
+      </label>
+      <label class="mv-field">
+        <span class="mv-label">Free {{c.unit}}</span>
+        <input class="mv-input" inputmode="numeric" autocomplete="off" value="{{c.free}}">
+        <span class="mv-help">Was {{c.wasFree}}</span>
+      </label>
+      <label class="mv-field sp-cost">
+        <span class="mv-label">Cost of 1 {{c.unit}}</span>
+        <span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input" inputmode="decimal" autocomplete="off" value="{{c.cost}}"></span>
+        <span class="mv-help">Was {{c.cost}}</span>
+      </label>
+    </div>
+    <label class="mv-field">
+      <span class="mv-label">Why</span>
+      <input class="mv-input" autocomplete="off" value="{{c.why}}" placeholder="For example, count was wrong">
+    </label>
+
+    <sc-if value="{{ok}}" hint-placeholder-val="{{true}}">
+      <div class="sp-was" aria-label="What this changes">
+        <span class="sp-was__h"></span><span class="sp-was__h">Was</span><span class="sp-was__h">Now</span>
+        <span class="sp-was__k">Line amount</span><span class="sp-was__old">Rs 12,360.00</span><span class="sp-was__new">Rs 9,888.00</span>
+        <span class="sp-was__k">Invoice total</span><span class="sp-was__old">Rs 18,130.00</span><span class="sp-was__new">Rs 15,658.00</span>
+        <span class="sp-was__k">You owe Zafar</span><span class="sp-was__old">Rs 12,630.00</span><span class="sp-was__new sp-pos--owes">Rs 10,158.00</span>
+        <span class="sp-was__k">On the shelf</span><span class="sp-was__old">10 box</span><span class="sp-was__new">8 box</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{keys}}" hint-placeholder-val="{{true}}"><p class="mv-help" style="margin: 0;"><span class="mv-kbd">Tab</span> next field · <span class="mv-kbd">Enter</span> records it · <span class="mv-kbd">Esc</span> closes, nothing saved</p></sc-if>
+    <div class="mv-dialog__actions">
+      <button type="button" class="mv-btn mv-btn--quiet">Cancel <span class="mv-kbd">Esc</span></button>
+      <button type="button" class="mv-btn mv-btn--primary">Record correction <span class="mv-kbd">Enter</span></button>
+    </div>
+  </sc-if>
+
+  <!-- ============ Pay a supplier ============ -->
+  <sc-if value="{{pay}}" hint-placeholder-val="{{false}}">
+    <h2 class="mv-dialog__title" id="sd-title">Pay Zafar Distributors</h2>
+    <div class="sv-who">
+      <div class="sv-who__main">
+        <span class="sv-who__nm">Zafar Distributors</span>
+        <span class="sv-who__meta">0300 8452210</span>
+      </div>
+      <span class="sv-pos sv-pos--owes">You owe Rs 12,630.00</span>
+    </div>
+    <label class="mv-field">
+      <span class="mv-label">Amount paid</span>
+      <span class="mv-amount"><span class="mv-amount__unit">Rs</span><input class="mv-input is-focus" inputmode="decimal" autocomplete="off" value="5,000.00"></span>
+      <span class="mv-help">Starts at the whole Rs 12,630.00. Type less to pay part.</span>
+    </label>
+    <p class="sv-effect">After this: <strong class="sv-pos sv-pos--owes">You owe Rs 7,630.00</strong></p>
+    <div class="mv-dialog__actions">
+      <button type="button" class="mv-btn mv-btn--quiet">Cancel <span class="mv-kbd">Esc</span></button>
+      <button type="button" class="mv-btn mv-btn--primary">Record payment <span class="mv-kbd">Enter</span></button>
+    </div>
+  </sc-if>
+
+  <!-- ============ Remove a supplier ============ -->
+  <sc-if value="{{remove}}" hint-placeholder-val="{{false}}">
+    <h2 class="mv-dialog__title" id="sd-title">Remove {{r.name}}?</h2>
+    <div class="sv-who">
+      <div class="sv-who__main">
+        <span class="sv-who__nm">{{r.name}}</span>
+        <span class="sv-who__meta">{{r.phone}}</span>
+      </div>
+      <span class="{{r.posClass}}">{{r.pos}}</span>
+    </div>
+    <sc-if value="{{removeRefused}}" hint-placeholder-val="{{true}}">
+      <div class="mv-banner mv-banner--refused" role="alert">
+        <svg class="mv-banner__mark" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="8" fill="currentColor"></circle><path d="M6.2 6.2l5.6 5.6M11.8 6.2l-5.6 5.6" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round"></path></svg>
+        <span class="mv-banner__text"><strong>You still owe them Rs 12,630.00.</strong> Pay it first. A supplier can be removed only once you are settled up.</span>
+      </div>
+    </sc-if>
+    <sc-if value="{{removeOk}}" hint-placeholder-val="{{false}}">
+      <p class="sv-effect">They stop being offered when you pick a supplier. Their invoices and payments stay, and you can put them back from the suppliers list.</p>
+    </sc-if>
+    <div class="mv-dialog__actions">
+      <button type="button" class="{{r.cancelClass}}">{{r.cancel}} <span class="mv-kbd">Esc</span></button>
+      <button type="button" class="mv-btn mv-btn--primary" disabled="{{removeRefused}}">Remove supplier<sc-if value="{{removeOk}}" hint-placeholder-val="{{false}}"> <span class="mv-kbd">Enter</span></sc-if></button>
+    </div>
+  </sc-if>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"kind":{"editor":"enum","options":["correct","refused","pay","remove-refused","remove-zero"],"default":"correct"},"sheet":{"editor":"boolean","default":false},"$preview":{"width":440,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const kind = this.props.kind ?? 'correct';
+    const sheet = this.props.sheet === true || this.props.sheet === 'true';
+    const refused = kind === 'refused';
+    const zero = kind === 'remove-zero';
+    return {
+      rootClass: sheet ? 'mv sv-nokbd sp-sheetroot' : 'mv',
+      dialogClass: sheet ? 'mv-dialog sv-sheet' : 'mv-dialog',
+      keys: !sheet,
+      correcting: kind === 'correct' || refused,
+      ok: kind === 'correct',
+      refused,
+      qtyField: refused ? 'mv-field is-error' : 'mv-field',
+      c: refused
+        ? { name: 'Brufen 400mg', onPaper: '20 strip at Rs 40.00 a strip', unit: 'strip', qty: '5', wasQty: '20', free: '0', wasFree: '0', cost: '40.00', why: 'Supplier sent only 5' }
+        : { name: 'Augmentin 625mg', onPaper: '10 box + 1 box free at Rs 1,236.00 a box', unit: 'box', qty: '8', wasQty: '10', free: '1', wasFree: '1', cost: '1,236.00', why: 'Only 8 box came' },
+      pay: kind === 'pay',
+      remove: kind === 'remove-refused' || zero,
+      removeRefused: kind === 'remove-refused',
+      removeOk: zero,
+      r: zero
+        ? { name: 'Zam Zam Pharma', phone: '042 3571 9044', pos: 'Settled up', posClass: 'sv-pos sv-pos--settled', cancel: 'Cancel', cancelClass: 'mv-btn mv-btn--quiet' }
+        : { name: 'Zafar Distributors', phone: '0300 8452210', pos: 'You owe Rs 12,630.00', posClass: 'sv-pos sv-pos--owes', cancel: 'Close', cancelClass: 'mv-btn mv-btn--secondary is-focus' }
+    };
+  }
+}
+</script>
+</body>
+</html>

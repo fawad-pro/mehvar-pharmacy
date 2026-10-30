@@ -1,0 +1,106 @@
+/* Products. Every value is a Mehvar token; layout comes from sale.css and suppliers.css, primitives from ds/mehvar/components/bundle.css. */
+
+.pr-main { min-height: 0; overflow: hidden; }
+.pr-title { overflow-wrap: anywhere; }
+.sv--phone .pr-title { font-size: 20px; line-height: 28px; }
+.pr-h { margin: 0; font: var(--text-heading); color: var(--navy); }
+.pr-card { gap: var(--space-4); padding: var(--space-4) var(--space-5); }
+.sv--phone .pr-card { padding: 16px; }
+
+/* Search row, as on Customers. */
+.cu-search { display: flex; gap: var(--space-2); align-items: flex-end; flex-wrap: wrap; margin: 0; }
+.cu-search .mv-field { min-width: 0; }
+.sv--phone .cu-search { flex-wrap: wrap; }
+.sv--phone .cu-search .mv-field { flex: 1 1 100%; }
+
+/* A medicine's name and strength are never cut: they wrap. */
+.pr-nm { overflow-wrap: anywhere; }
+.pr-table td { height: 56px; }
+.pr-table .sp-what__main { flex-wrap: wrap; }
+.pr-per { display: block; font-size: 12px; line-height: 16px; color: var(--ink-2); font-weight: 400; }
+.pr-hand { color: var(--navy); }
+.pr-hand--short { color: var(--amber-text); font-weight: 600; }
+.pr-hand--none { color: var(--ink-2); }
+.pr-endbar { display: flex; justify-content: flex-end; }
+.pr-wrap .mv-row__name, .pr-wrap .mv-row__meta { white-space: normal; overflow: visible; text-overflow: clip; }
+.pr-wrap .mv-row { align-items: center; }
+.pr-rowend { flex: none; max-width: 190px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; font-size: 13px; line-height: 18px; font-variant-numeric: tabular-nums; }
+.pr-rowend__sub { font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.sv--phone .pr-rowend { max-width: 120px; }
+.pr-skip { align-self: flex-start; }
+
+/* Fields grid: six columns, so Name and Strength share a row. */
+.pr-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-3); }
+.pr-s2 { grid-column: span 2; }
+.pr-s3 { grid-column: span 3; }
+.pr-s4 { grid-column: span 4; }
+.sv--phone .pr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.sv--phone .pr-s4, .sv--phone .pr-p2 { grid-column: 1 / -1; }
+.sv--phone .pr-s2:not(.pr-p2) { grid-column: span 1; }
+
+/* The catalogue pick: the medicine is read, not retyped. */
+.pr-med { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) var(--space-5); flex-wrap: wrap; }
+.pr-med__main { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pr-med__nm { margin: 0; font: var(--text-stat); color: var(--navy); overflow-wrap: anywhere; }
+.pr-med__meta { margin: 0; font: var(--text-body-sm); color: var(--ink-2); }
+.pr-med__btns { display: flex; flex-direction: column; align-items: flex-end; margin-right: -8px; }
+.sv--phone .pr-med__btns { flex-direction: row; flex-wrap: wrap; align-items: flex-start; margin: 0 0 0 -12px; }
+
+/* Packs in the shop's words: 1 [strip] = [10] tab. */
+.pr-base { max-width: 260px; }
+.pr-packs { display: flex; flex-direction: column; gap: var(--space-2); }
+.pr-pack { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 84px minmax(36px, auto) 44px; gap: var(--space-2); align-items: center; }
+.pr-pack:not(:has(.pr-x)) { grid-template-columns: auto minmax(0, 1fr) auto 84px minmax(36px, auto); }
+.pr-pack__t { font: var(--text-control); color: var(--navy); }
+.pr-pack__n { text-align: right; font-variant-numeric: tabular-nums; }
+.pr-x { padding: 0; font-size: 20px; }
+.pr-says { margin: 0; padding: var(--space-3) var(--space-4); background: var(--page); border-radius: var(--radius-card); font: var(--text-body-sm); color: var(--navy); }
+.pr-says b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.pr-addpack { align-self: flex-start; margin-left: -12px; }
+
+/* Price. */
+.pr-prices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
+.sv--phone .pr-prices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pr-mrp { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
+.pr-mrp__amt { flex: 1 1 140px; max-width: 220px; }
+.pr-opt { display: flex; align-items: flex-end; gap: var(--space-4); flex-wrap: wrap; }
+.pr-low { flex: 0 1 200px; }
+.pr-check { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; font: var(--text-body-sm); color: var(--navy); }
+.pr-check__box { width: 20px; height: 20px; accent-color: var(--blue-600); }
+
+/* Product page rail. */
+.pr-hand { gap: 4px; }
+.pr-handfig { margin: 0; font: var(--text-stat); color: var(--navy); overflow-wrap: anywhere; }
+.pr-codes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pr-code { display: flex; align-items: center; gap: var(--space-3); min-height: 48px; border-top: 1px solid var(--line); }
+.pr-code:first-child { border-top: 0; }
+.pr-code__n { font-weight: 500; font-variant-numeric: tabular-nums; }
+.pr-code__for { font: var(--text-body-sm); color: var(--ink-2); }
+.pr-code .mv-btn { margin-left: auto; }
+.pr-scan { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); align-items: end; }
+.pr-scan__code { grid-column: 1 / -1; }
+.pr-alts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pr-alt { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 48px; border-top: 1px solid var(--line); padding: 4px 0; }
+.pr-alt:first-child { border-top: 0; }
+.pr-alt__main { display: flex; flex-direction: column; min-width: 0; }
+.pr-alt__stock { font: var(--text-body-sm); color: var(--navy); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pr-alt__stock--none { color: var(--amber-text); font-weight: 600; }
+
+/* Replace. */
+.pr-with { gap: 6px; }
+.pr-seg .mv-btn { white-space: normal; text-align: center; line-height: 1.25; }
+.sv--phone .pr-seg { flex-direction: column; }
+.sv--phone .pr-seg .mv-btn, .sv--phone .pr-seg .mv-btn:first-child, .sv--phone .pr-seg .mv-btn:last-child { border-radius: var(--radius-control); margin-left: 0; }
+.pr-split { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: var(--space-5); }
+.sv--tablet .pr-split { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+.sv--phone .pr-split { grid-template-columns: minmax(0, 1fr); }
+.pr-split__l, .pr-split__r { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.pr-batches { box-shadow: none; border: 0; background: var(--surface); }
+.pr-cnt { width: 72px; text-align: right; font-variant-numeric: tabular-nums; margin-left: auto; display: block; }
+.pr-batch { display: flex; flex-direction: column; gap: var(--space-2); padding-top: var(--space-3); border-top: 1px solid var(--line); }
+.pr-batch__in { display: grid; grid-template-columns: 1fr 1fr auto; gap: var(--space-3); align-items: end; }
+.pr-batch__tot { font-weight: 600; font-variant-numeric: tabular-nums; align-self: center; padding-top: 18px; white-space: nowrap; }
+
+/* Rail: tablet puts it in two columns under the main column. */
+.sv--tablet .pr-rail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: var(--space-4); flex: none !important; }
+.sv--tablet .pr-rail .sv-pay { grid-column: 2; }
