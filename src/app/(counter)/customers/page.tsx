@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
 import { BalanceInline } from '@/components/balance-figure';
+import { SearchInput } from '@/components/search-input';
 import { listCustomers } from '@/db/udhaar-queries';
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
@@ -54,14 +55,14 @@ export default async function CustomersPage({
       </header>
 
       <form className="flex flex-wrap items-center gap-2" action="/customers">
-        <input
+        <SearchInput
           autoComplete="off"
           name="q"
           defaultValue={params.q ?? ''}
           placeholder="Search name or phone"
           aria-label="Search customers"
-          // Arriving here is to look something up: the cursor starts in it.
-          autoFocus
+
+          // Arriving here on desktop starts the cursor in it; suppressed on mobile.
           className="border-border focus:border-blue-600 h-touch min-w-64 flex-1 rounded-control border px-3"
         />
         {showRemoved ? <input type="hidden" name="removed" value="1" /> : null}

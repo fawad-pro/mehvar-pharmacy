@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { isMobileBrowser } from '@/client/navigation/device';
 import { useCatalog } from '@/client/search/provider';
 import { parseQuantityQuery } from '@/client/search/quantity-grammar';
 import { lastSaleUnit, rememberSaleUnit } from '@/client/sale/last-unit';
@@ -252,7 +253,9 @@ export function SaleSurface() {
 
   const focusSearch = useCallback(() => {
     setSelectedLineId(null);
-    searchRef.current?.focus();
+    if (!isMobileBrowser()) {
+      searchRef.current?.focus();
+    }
   }, []);
 
   /**

@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { isMobileBrowser } from '@/client/navigation/device';
 import { paisa } from '@/lib/branded';
 import { formatPaisa } from '@/lib/money';
 
@@ -74,7 +75,9 @@ export function ReceiptsSurface({
   const enterFor = useRef<string | null>(null);
 
   useEffect(() => {
-    field.current?.focus();
+    if (!isMobileBrowser()) {
+      field.current?.focus();
+    }
   }, []);
 
   /*

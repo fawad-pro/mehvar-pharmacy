@@ -15,6 +15,7 @@ import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { GLOBAL_KEYS, type GlobalKey } from '@/client/keyboard/registry';
+import { useVirtualKeyboardOpen } from '@/client/navigation/device';
 
 import { Dialog } from './ui/dialog';
 import { TabBar, TabButton, TabLink, type TabIcon } from './ui/tab-bar';
@@ -42,6 +43,11 @@ export function PhoneTabs({
 }) {
   const pathname = usePathname();
   const [more, setMore] = useState(false);
+  const isKeyboardOpen = useVirtualKeyboardOpen();
+
+  if (isKeyboardOpen) {
+    return null;
+  }
 
   const tabbed = new Set(TABS.map((tab) => tab.href));
   const rest = keys.filter((binding) => binding.href === null || !tabbed.has(binding.href));

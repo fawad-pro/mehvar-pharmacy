@@ -17,6 +17,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { isMobileBrowser, useVirtualKeyboardOpen } from '@/client/navigation/device';
 import { ProductSearch } from '@/components/product-search';
 import { Badge } from '@/components/ui/badge';
 import { Banner } from '@/components/ui/banner';
@@ -122,6 +123,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   const [showDate, setShowDate] = useState(false);
   /** Bumped on a successful receive so the history below reloads. */
   const [receivedCount, setReceivedCount] = useState(0);
+  const isKeyboardOpen = useVirtualKeyboardOpen();
   const searchRef = useRef<HTMLInputElement | null>(null);
   const supplierRef = useRef<HTMLButtonElement>(null);
   const invoiceRefRef = useRef<HTMLInputElement>(null);
@@ -182,7 +184,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       setResumed(true);
       /* eslint-enable react-hooks/set-state-in-effect */
     }
-    (saved?.supplierId ? searchRef : supplierRef).current?.focus();
+    if (!isMobileBrowser()) {
+      (saved?.supplierId ? searchRef : supplierRef).current?.focus();
+    }
   }, [tenantId]);
 
   // Persisted on every change, so there is no "save" the operator could forget.
@@ -195,7 +199,13 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   useEffect(() => {
     if (pending) {
       // After a 1D scan the pack still has to be read: start at its expiry.
-      (pending.fromPack.expiry ? expiryRef : qtyRef).current?.focus();
+      const target = pending.fromPack.expiry ? expiryRef : qtyRef;
+      target.current?.focus();
+      if (isMobileBrowser()) {
+        setTimeout(() => {
+          target.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
     }
   }, [pending]);
 
@@ -241,7 +251,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
 
   const focusSearch = useCallback(() => {
     setPending(null);
-    searchRef.current?.focus();
+    if (!isMobileBrowser()) {
+      searchRef.current?.focus();
+    }
   }, []);
 
   /**
@@ -519,7 +531,9 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
     refresh();
     // The next invoice starts where every invoice does.
     setPending(null);
-    supplierRef.current?.focus();
+    if (!isMobileBrowser()) {
+      supplierRef.current?.focus();
+    }
   }
 
   const chosenUnit =
@@ -551,10 +565,10 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-auto px-4 py-3 md:p-6 lg:px-8">
-        <div className="flex flex-col gap-3 md:gap-4 lg:flex-row lg:items-start lg:gap-6">
-          <section aria-label="Delivery" className="flex min-w-0 flex-col gap-3 md:gap-4 lg:flex-1">
+    <div className="flex h-full min-h-0 w-full max-w-full flex-col overflow-x-hidden">
+      <div className="min-h-0 flex-1 w-full max-w-full overflow-y-auto overflow-x-hidden px-4 py-3 md:p-6 lg:px-8 pb-36 md:pb-6">
+        <div className="flex min-w-0 w-full max-w-full flex-col gap-3 md:gap-4 lg:flex-row lg:items-start lg:gap-6">
+          <section aria-label="Delivery" className="flex min-w-0 w-full max-w-full flex-col gap-3 md:gap-4 lg:flex-1">
             {resumed ? (
               <Badge role="status" className="self-start">
                 Resumed — saved as you typed
@@ -706,7 +720,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                     {/* [PCN-012] The unit it arrived in, as buttons — largest pack
                         first and pressed. Qty, bonus, cost and price all follow it. */}
                     {pending.units.length > 1 ? (
-                      <div role="group" aria-label="Arrived in" className="flex">
+                      <div role="group" aria-label="Arrived in" className="flex flex-wrap">
                         {pending.units.map((unit, index) => {
                           const chosen = unit.key === chosenUnit?.key;
                           return (
@@ -823,7 +837,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                       }}
                     />
                     <Button
-                      className="self-end max-md:col-span-2"
+                      className="self-end max-md:col-span-2 max-md:h-[52px] max-md:w-full"
                       onClick={() => {
                         addLine();
                       }}
@@ -849,7 +863,7 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                   : 'Search or scan the product to start a line. Esc returns here from any field.'}
             </p>
 
-            <div className="bg-surface shadow-card overflow-x-auto rounded-card">
+            <div className="hidden md:block bg-surface shadow-card overflow-x-auto rounded-card">
               <table className="w-full min-w-[740px] text-left">
                 <thead className="text-label text-ink-2">
                   <tr className="border-line border-b">
@@ -962,11 +976,109 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile received lines list (card format) */}
+            <div className="md:hidden flex flex-col gap-2.5">
+              {draft.lines.length === 0 ? (
+                <div className={`${cardClass} p-4 text-center text-body-sm text-ink-2`}>
+                  No lines yet. Search or scan the first product on the bill.
+                </div>
+              ) : (
+                draft.lines.map((line) => {
+                  const lineWarnings = warningsByLine.get(line.lineId) ?? [];
+                  return (
+                    <div key={line.lineId} className={`${cardClass} gap-2.5 p-3.5`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-1 min-w-0 flex-col gap-1">
+                          <span className="text-control font-semibold text-navy break-words">
+                            {line.productName}
+                          </span>
+                          {lineWarnings.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {lineWarnings.map((warning) => (
+                                <Badge key={warning.kind} tone="attention">
+                                  {warningText(warning)}
+                                </Badge>
+                              ))}
+                            </div>
+                          ) : null}
+                          <MrpOffer
+                            line={line}
+                            product={index?.products.find((product) => product.id === line.productId)}
+                            isOwner={isOwner}
+                            onRecorded={refresh}
+                          />
+                        </div>
+                        <Button
+                          kind="quiet"
+                          className="size-11 shrink-0 p-0 text-2xl text-ink-2 hover:text-red -mr-2 -mt-2"
+                          onClick={() => {
+                            removeLine(line.lineId);
+                          }}
+                          aria-label={`Remove ${line.productName}`}
+                        >
+                          ×
+                        </Button>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 border-t border-line pt-2 text-body-sm">
+                        <div className="flex justify-between">
+                          <span className="text-ink-2">Qty:</span>
+                          <span className="numeral font-medium">
+                            {line.entered
+                              ? `${line.entered.unitCount} ${line.entered.unitName}`
+                              : `${line.qtyBase} ${line.baseUnitName}`}
+                            {line.entered && line.entered.bonusUnitCount > 0
+                              ? ` (+${line.entered.bonusUnitCount})`
+                              : line.bonusQtyBase > 0
+                                ? ` (+${line.bonusQtyBase})`
+                                : ''}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-2">Cost each:</span>
+                          <span className="numeral font-medium">
+                            {formatPaisa(paisa(line.entered?.unitCostPaisa ?? line.unitCostPaisa), {
+                              withSymbol: true,
+                            })}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-2">Expiry · batch:</span>
+                          <span className="numeral font-medium">
+                            {line.expiryDate ? formatExpiry(line.expiryDate) : '—'}
+                            {line.batchNumber ? (
+                              <span className="text-ink-2"> · {line.batchNumber}</span>
+                            ) : null}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-ink-2">Sells for:</span>
+                          <span className="numeral font-medium">
+                            {formatPaisa(
+                              paisa(line.entered?.pricePaisa ?? line.priceAtReceivingPaisa),
+                              { withSymbol: true },
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-baseline justify-between border-t border-line pt-2">
+                        <span className="text-label text-ink-2">Amount</span>
+                        <span className="numeral text-control font-semibold text-navy">
+                          {formatPaisa(paisa(lineCostPaisa(line)), { withSymbol: true })}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </section>
 
           <aside
             aria-label="Invoice"
-            className="flex flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-4 lg:sticky lg:top-0 lg:flex lg:w-[340px] lg:shrink-0 lg:items-stretch"
+            className="flex min-w-0 w-full max-w-full flex-col gap-3 md:grid md:grid-cols-2 md:items-start md:gap-4 lg:sticky lg:top-0 lg:flex lg:w-[340px] lg:shrink-0 lg:items-stretch"
           >
             <div className={`${cardClass} gap-2 max-md:hidden`}>
               <span className="text-label text-ink-2">Invoice total</span>
@@ -1116,21 +1228,23 @@ export function PurchaseEntry({ tenantId, isOwner }: { tenantId: string; isOwner
       </div>
 
       {/* Phone: Receive in a bar above the tabs, the invoice total beside it. */}
-      <div className="bg-surface shadow-bar flex shrink-0 flex-col gap-1 px-4 py-3 md:hidden">
-        <p className="text-body-sm text-ink-2 m-0 flex items-baseline justify-between">
-          <span>Invoice total · {lineCountText}</span>
-          <b className="numeral text-stat text-navy font-semibold">{invoiceTotalText}</b>
-        </p>
-        <Button
-          kind="primary"
-          block
-          onClick={() => void receive()}
-          disabled={!canReceive}
-          className="h-[52px] text-[17px]"
-        >
-          {busy ? 'Receiving…' : 'Receive stock'}
-        </Button>
-      </div>
+      {!isKeyboardOpen ? (
+        <div className="bg-surface shadow-bar flex shrink-0 flex-col gap-1 px-4 py-3 md:hidden">
+          <p className="text-body-sm text-ink-2 m-0 flex items-baseline justify-between">
+            <span>Invoice total · {lineCountText}</span>
+            <b className="numeral text-stat text-navy font-semibold">{invoiceTotalText}</b>
+          </p>
+          <Button
+            kind="primary"
+            block
+            onClick={() => void receive()}
+            disabled={!canReceive}
+            className="h-[52px] text-[17px]"
+          >
+            {busy ? 'Receiving…' : 'Receive stock'}
+          </Button>
+        </div>
+      ) : null}
 
       {picking ? (
         <SupplierPicker
@@ -1200,6 +1314,7 @@ function LineField({
   attention = false,
   rupees = false,
   text = false,
+  onFocus,
   ...input
 }: Omit<React.ComponentProps<'input'>, 'autoComplete'> & {
   label: string;
@@ -1210,10 +1325,19 @@ function LineField({
   /** Words, not a figure: left-aligned. */
   text?: boolean;
 }) {
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    onFocus?.(e);
+    if (isMobileBrowser()) {
+      setTimeout(() => {
+        e.target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
+    }
+  };
   const field = (
     <input
       autoComplete="off"
       className={`${inputClass} ${text ? '' : 'numeral text-right'} ${rupees ? 'pl-11' : ''}`}
+      onFocus={handleFocus}
       {...input}
     />
   );

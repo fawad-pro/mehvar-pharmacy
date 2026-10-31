@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { isMobileBrowser } from '@/client/navigation/device';
 import type { FoundSale, ReturnableLineRow } from '@/domain/sales/return-command';
 import { refundForLine } from '@/domain/sales/return-command';
 import { useReceiptContext } from '@/client/receipt/receipt-context';
@@ -139,7 +140,9 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
             // than stranding the operator on an empty screen (P2).
             setQuery(prefillReceipt);
             setResults(found);
-            searchRef.current?.focus();
+            if (!isMobileBrowser()) {
+              searchRef.current?.focus();
+            }
           }
         },
         () => {
@@ -153,7 +156,9 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
       };
     }
     search('');
-    searchRef.current?.focus();
+    if (!isMobileBrowser()) {
+      searchRef.current?.focus();
+    }
   }, [search, prefillReceipt]);
 
   async function selectSale(found: FoundSale): Promise<void> {
@@ -209,7 +214,9 @@ export function ReturnsSurface({ prefillReceipt }: { prefillReceipt?: string }) 
     setError(null);
     setDone(null);
     search(query);
-    searchRef.current?.focus();
+    if (!isMobileBrowser()) {
+      searchRef.current?.focus();
+    }
   }
 
   const totalRefundPaisa = useMemo(() => {

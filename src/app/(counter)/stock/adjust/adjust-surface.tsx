@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { isMobileBrowser } from '@/client/navigation/device';
 import { ProductSearch } from '@/components/product-search';
 import { QuickItemForm, type QuickItemDraft } from '@/components/quick-item-form';
 import type { SearchHit } from '@/client/search/catalog-index';
@@ -413,7 +414,9 @@ export function AdjustSurface({
       setReason(null);
     }
     refresh();
-    searchRef.current?.focus();
+    if (!isMobileBrowser()) {
+      searchRef.current?.focus();
+    }
   }
 
   return (
@@ -746,7 +749,9 @@ export function AdjustSurface({
           onCancel={() => {
             quickAdd.settle(false);
             setQuickAdd(null);
-            searchRef.current?.focus();
+            if (!isMobileBrowser()) {
+              searchRef.current?.focus();
+            }
           }}
         />
       ) : null}

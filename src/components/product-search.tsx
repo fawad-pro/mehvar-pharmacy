@@ -17,6 +17,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { isMobileBrowser } from '@/client/navigation/device';
 import { useCatalog } from '@/client/search/provider';
 import { parseQuantityQuery } from '@/client/search/quantity-grammar';
 import { lastSaleUnit } from '@/client/sale/last-unit';
@@ -105,7 +106,7 @@ export function ProductSearch({
   }, []);
 
   useEffect(() => {
-    if (autoFocus) {
+    if (autoFocus && !isMobileBrowser()) {
       field.current?.focus();
     }
     // `field` is a stable ref object; re-running on it would refocus on render.

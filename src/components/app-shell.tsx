@@ -117,7 +117,7 @@ export function AppShell({
             on every screen (see the component). */}
         <ScanGuard />
 
-        <div className="bg-page flex h-dvh flex-col">
+        <div className="bg-page flex h-dvh w-full max-w-full flex-col overflow-x-hidden">
           <TopBar
             tenantName={tenantName}
             userName={userName}
@@ -133,7 +133,7 @@ export function AppShell({
           <LicenceBanner notice={licence} isOwner={userRole === 'owner'} />
 
           <UdhaarKeyProvider register={register} press={handlers.onUdhaar}>
-            <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+            <main className="min-h-0 flex-1 w-full max-w-full overflow-y-auto overflow-x-hidden">{children}</main>
           </UdhaarKeyProvider>
 
           <KeyBar role={userRole} keys={keys} onDispatch={onDispatch} />

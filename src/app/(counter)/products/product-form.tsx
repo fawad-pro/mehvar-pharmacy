@@ -8,7 +8,8 @@
  * server-action boundary (Phase 9 §1: money is integer paisa everywhere else).
  */
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
+import { isMobileBrowser } from '@/client/navigation/device';
 import { useRouter } from 'next/navigation';
 
 import { DuplicateNotice } from '@/components/duplicate-notice';
@@ -403,6 +404,13 @@ function Field({
   onChange?: (next: string) => void;
 }) {
   const hintId = `${name}-hint`;
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocus && !isMobileBrowser()) {
+      inputRef.current?.focus();
+    }
+  }, [autoFocus]);
   return (
     <div>
       <label htmlFor={name} className="text-navy block text-sm font-medium">
@@ -419,7 +427,7 @@ function Field({
         type={type}
         step={step}
         required={required}
-        autoFocus={autoFocus}
+        ref={inputRef}
         autoComplete="off"
         {...(placeholder !== undefined ? { placeholder } : {})}
         {...(hint ? { 'aria-describedby': hintId } : {})}

@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import { currentSession, scopeFor } from '@/auth/session';
+import { SearchInput } from '@/components/search-input';
 import { countNeedingCompletion, listProducts } from '@/db/catalog-queries';
 import { formatForm } from '@/domain/catalog/form';
 import { formatPackLevels } from '@/domain/catalog/product';
@@ -56,14 +57,14 @@ export default async function ProductsPage({
       </header>
 
       <form className="flex flex-wrap items-center gap-2" action="/products">
-        <input
+        <SearchInput
           autoComplete="off"
           name="q"
           defaultValue={params.q ?? ''}
           placeholder="Search name, salt or maker — or scan"
           aria-label="Search the catalog"
-          // Arriving here is to look something up: the cursor starts in it.
-          autoFocus
+
+          // Arriving here on desktop starts the cursor in it; suppressed on mobile.
           // A scan finds its product here (by barcode), including one that
           // landed with nothing in focus (the scan guard's home).
           data-scan-target=""
